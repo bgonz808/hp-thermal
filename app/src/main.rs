@@ -42,16 +42,16 @@ fn main() {
             if require_hp().is_none() {
                 return; // never elevate/install on non-HP hardware
             }
-            if !install::try_acquire_setup_lock() {
+            let Some(_lock) = install::acquire_setup_lock() else {
+                install::warn_setup_in_progress();
                 return;
-            }
+            };
             install::install();
-            if install::is_elevated() {
+            // Launch the tray once we know the service is up: immediately when we
+            // were already elevated (no child to wait on), otherwise after the
+            // elevated child has started it. `||` short-circuits the wait if elevated.
+            if install::is_elevated() || install::wait_for_service_running() {
                 install::launch_tray();
-            } else {
-                if install::wait_for_service_running() {
-                    install::launch_tray();
-                }
             }
         }
         // Internal: UAC children — do sc commands only, parent handles tray.
@@ -63,27 +63,30 @@ fn main() {
             if require_hp().is_none() {
                 return;
             }
-            if !install::try_acquire_setup_lock() {
+            let Some(_lock) = install::acquire_setup_lock() else {
+                install::warn_setup_in_progress();
                 return;
-            }
+            };
             install::stop();
         }
         Some("start" | "--start") => {
             if require_hp().is_none() {
                 return;
             }
-            if !install::try_acquire_setup_lock() {
+            let Some(_lock) = install::acquire_setup_lock() else {
+                install::warn_setup_in_progress();
                 return;
-            }
+            };
             install::start();
         }
         Some("uninstall" | "--uninstall") => {
             if require_hp().is_none() {
                 return;
             }
-            if !install::try_acquire_setup_lock() {
+            let Some(_lock) = install::acquire_setup_lock() else {
+                install::warn_setup_in_progress();
                 return;
-            }
+            };
             install::uninstall();
         }
         Some("--help" | "-h" | "help") => print_help(),
@@ -166,26 +169,28 @@ fn default_run() {
     // --- We ARE the installed copy (running from Program Files) ---
 
     if !install::is_service_installed() {
-        if !install::try_acquire_setup_lock() {
-            return;
-        }
         let content = format!("{} service is not registered. Re-install?", app::NAME);
         if !task_dialog("Install", &content, TD_INFORMATION_ICON) {
             return;
         }
+        let Some(_lock) = install::acquire_setup_lock() else {
+            install::warn_setup_in_progress();
+            return;
+        };
         install::install();
         if !install::wait_for_service_running() {
             msgbox("Service failed to start.", MB_OK | MB_ICONERROR);
             return;
         }
     } else if !install::is_service_running() {
-        if !install::try_acquire_setup_lock() {
-            return;
-        }
         let content = format!("The {} service is installed but not running.", app::NAME);
         if !task_dialog("Start Service", &content, TD_WARNING_ICON) {
             return;
         }
+        let Some(_lock) = install::acquire_setup_lock() else {
+            install::warn_setup_in_progress();
+            return;
+        };
         install::start();
         if !install::wait_for_service_running() {
             msgbox("Service failed to start.", MB_OK | MB_ICONERROR);
@@ -200,9 +205,10 @@ fn default_run() {
 /// Handles fresh install, update, or redirect to the existing installed copy.
 /// The bootstrap copy NEVER calls tray::run() — it always launches the PF copy and exits.
 fn bootstrap_run(hw: &hwinfo::HwInfo) {
-    if !install::try_acquire_setup_lock() {
-        return;
-    }
+    // Read-only decisions and user consent come FIRST — no lock. The setup lock
+    // is acquired only immediately before the mutating install/update, held for
+    // that critical section, and never across a dialog. This is what keeps a
+    // stuck/leaked lock from silently swallowing every future launch.
     if !install::is_service_installed() {
         // Fresh install
         let content = format!(
@@ -221,6 +227,10 @@ fn bootstrap_run(hw: &hwinfo::HwInfo) {
         if !task_dialog("Install", &content, TD_INFORMATION_ICON) {
             return;
         }
+        let Some(_lock) = install::acquire_setup_lock() else {
+            install::warn_setup_in_progress();
+            return;
+        };
         install::install();
         if !install::wait_for_service_running() {
             msgbox(
@@ -234,7 +244,7 @@ fn bootstrap_run(hw: &hwinfo::HwInfo) {
     }
 
     if !install::is_service_current() {
-        // Update: this copy is newer than the installed one
+        // Update: this copy differs from the installed one
         let content = format!(
             "A newer version of {} is available.\n\n\
              Update the service?",
@@ -245,6 +255,10 @@ fn bootstrap_run(hw: &hwinfo::HwInfo) {
             install::launch_tray();
             return;
         }
+        let Some(_lock) = install::acquire_setup_lock() else {
+            install::warn_setup_in_progress();
+            return;
+        };
         // The UAC child (--update-svc) stops the service, replaces the
         // binary, restarts the service, AND launches the tray. We must
         // NOT race it by polling or launching tray ourselves — the child
@@ -253,7 +267,12 @@ fn bootstrap_run(hw: &hwinfo::HwInfo) {
         return;
     }
 
-    // Installed and current — just launch the installed copy and exit
+    // Installed and current — this is a deliberately-run copy, so give feedback
+    // (rather than silently vanishing) before handing off to the installed tray.
+    msgbox(
+        &format!("{} is already installed and up to date.", app::NAME),
+        MB_OK | MB_ICONINFORMATION,
+    );
     install::launch_tray();
 }
 

@@ -3,9 +3,11 @@ use std::os::windows::process::CommandExt;
 use std::process::Command;
 
 use windows::core::{w, PCWSTR};
-use windows::Win32::Foundation::{CloseHandle, GetLastError, ERROR_ALREADY_EXISTS};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0};
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
-use windows::Win32::System::Threading::{CreateMutexW, GetCurrentProcess, OpenProcessToken};
+use windows::Win32::System::Threading::{
+    CreateMutexW, GetCurrentProcess, OpenProcessToken, ReleaseMutex, WaitForSingleObject,
+};
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
@@ -14,16 +16,71 @@ use crate::wide::wide_null;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-/// Acquire the setup mutex. Returns false if another setup operation is
-/// already running. The mutex handle is intentionally leaked so it stays
-/// held for the lifetime of this process.
-pub fn try_acquire_setup_lock() -> bool {
+/// RAII guard for the setup mutex. The lock is released (`ReleaseMutex`) and the
+/// handle closed on drop, so it is held ONLY for the mutating critical section —
+/// never across a modal dialog or for the whole process lifetime. This prevents a
+/// stuck/leaked lock from silently bricking all future installs and updates.
+pub struct SetupGuard(HANDLE);
+
+impl Drop for SetupGuard {
+    fn drop(&mut self) {
+        // SAFETY: `self.0` is a mutex handle we created and own the lock on.
+        unsafe {
+            let _ = ReleaseMutex(self.0);
+            let _ = CloseHandle(self.0);
+        }
+    }
+}
+
+/// Acquire the setup mutex around a mutating install/update/start/stop.
+///
+/// Returns `Some(guard)` on success (hold it for the critical section, then let
+/// it drop), or `None` if another setup operation is genuinely in progress. Waits
+/// briefly (3 s) because an existing holder may be mid-teardown during a restart
+/// handoff; recovers a mutex abandoned by a crashed holder (`WAIT_ABANDONED`), so
+/// a previous crash can never permanently block setup. Callers must give the user
+/// feedback on `None` (see [`warn_setup_in_progress`]) rather than exit silently.
+#[must_use]
+pub fn acquire_setup_lock() -> Option<SetupGuard> {
+    acquire_setup_lock_timeout(3000)
+}
+
+/// Core of [`acquire_setup_lock`] with an explicit wait budget (ms). Separated so
+/// tests can probe contention with a 0 ms wait instead of the production 3 s.
+#[must_use]
+fn acquire_setup_lock_timeout(timeout_ms: u32) -> Option<SetupGuard> {
     let name = wide_null(app::SETUP_MUTEX_NAME);
     // SAFETY: `name` is a valid null-terminated wide string that outlives the call.
-    // CreateMutexW + GetLastError is the documented pattern for detecting an existing mutex.
+    // Created unowned (bInitialOwner=false); ownership is taken via the wait below.
     unsafe {
-        let _ = CreateMutexW(None, true, PCWSTR(name.as_ptr()));
-        GetLastError() != ERROR_ALREADY_EXISTS
+        let h = CreateMutexW(None, false, PCWSTR(name.as_ptr())).ok()?;
+        match WaitForSingleObject(h, timeout_ms) {
+            // Acquired outright, or reclaimed from a crashed holder — we own it now.
+            WAIT_OBJECT_0 | WAIT_ABANDONED => Some(SetupGuard(h)),
+            _ => {
+                let _ = CloseHandle(h);
+                None
+            }
+        }
+    }
+}
+
+/// Tell the user a concurrent setup is in progress, instead of failing silently.
+pub fn warn_setup_in_progress() {
+    info_box(
+        "Another HP Thermal setup or update is already in progress.\n\n\
+         Please wait for it to finish, then try again.",
+        MB_OK | MB_ICONWARNING,
+    );
+}
+
+/// Minimal message box titled with the app name.
+fn info_box(text: &str, flags: MESSAGEBOX_STYLE) {
+    let title = wide_null(app::NAME);
+    let body = wide_null(text);
+    // SAFETY: both wide strings outlive the synchronous MessageBoxW call.
+    unsafe {
+        MessageBoxW(None, PCWSTR(body.as_ptr()), PCWSTR(title.as_ptr()), flags);
     }
 }
 
@@ -820,5 +877,39 @@ pub fn is_elevated() -> bool {
         );
         let _ = CloseHandle(token);
         result.is_ok() && elevation.TokenIsElevated != 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The setup lock must be mutually exclusive (a held lock blocks other
+    /// contenders) and must release cleanly so setup is never permanently
+    /// bricked. Contention is checked from another thread because a Win32 mutex
+    /// is reentrant for its owning thread. Uses a 0 ms wait so it never blocks.
+    #[test]
+    fn setup_lock_is_exclusive_and_releases() {
+        let held = acquire_setup_lock_timeout(0).expect("first acquire should succeed");
+
+        // A different thread must see the lock as contended (None), not acquire it.
+        let contended = std::thread::spawn(|| acquire_setup_lock_timeout(0).is_none())
+            .join()
+            .unwrap();
+        assert!(
+            contended,
+            "a held setup lock must be contended from another thread"
+        );
+
+        drop(held); // releases the mutex on this (owning) thread
+
+        // After release, another thread can acquire it (and drops it there).
+        let reacquired = std::thread::spawn(|| acquire_setup_lock_timeout(0).is_some())
+            .join()
+            .unwrap();
+        assert!(
+            reacquired,
+            "setup lock must be acquirable again after release"
+        );
     }
 }
