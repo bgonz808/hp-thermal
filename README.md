@@ -2,17 +2,18 @@
 
 **HP laptop thermal & performance control — without the 169 MB.**
 
-A ~180 KB tray app + Windows service that switches HP's thermal/performance modes
+A ~200 KB tray app + Windows service that switches HP's thermal/performance modes
 (Performance · Balanced · Cool · Power Saver) and Smart Sense, replacing HP Command
-Center (169 MB install, 10 s+ launch, always-on background service) for the one thing
-most people actually open it for.
+Center (169 MB on disk, slow-launching, always-on background service) for the core of
+what it's used for.
 
 > ⚠️ **Supported hardware.** This talks to an **undocumented HP BIOS-WMI interface** that
 > is *not* a stable or public API. It was reverse-engineered and validated on an
 > **HP ENVY 16 (board `8BE5`, BIOS F.25)**. On any other HP model it will detect the
 > difference and ask for explicit, remembered consent before doing anything — thermal
 > control may not work or may behave differently on untested hardware. Non-HP machines
-> are refused. See [Hardware support](#hardware-support).
+> are refused outright — before any elevation, install, or system change. See
+> [Hardware support](#hardware-support).
 
 ## What it does
 
@@ -20,12 +21,21 @@ most people actually open it for.
 - **Smart Sense** — HP's adaptive CoolSense toggle.
 - **Fn+F12** — screen on/off (and optional sleep), since the "three-diamonds" key does
   nothing without HP's software.
-- **Optional: Noise Adapt** (`--features noise-adapt`) — mic-based fan-noise measurement
-  that picks a mode by how audible the fans are in your room. Off by default.
+- **Optional, experimental: Noise Adapt** (`--features noise-adapt`) — mic-based fan-noise
+  measurement that picks a mode by how audible the fans are in your room. Off by default,
+  and experimental.
 
 It is a single `hp-thermal.exe`: the tray runs as your user, and a tiny Windows service
 runs as SYSTEM and performs the privileged BIOS/WMI calls, talking over a hardened local
 named pipe. See [SECURITY.md](SECURITY.md).
+
+**Idle cost: zero, and measured.** Both halves are event-driven, not polling. At rest
+**both the tray and the service execute 0 CPU cycles** — cycle-verified with
+`QueryProcessCycleTime` over repeated 20–30 s idle windows. The tray blocks in its message
+loop; the service waits on a **push-based WMI event sink** for the Fn+F12 hotkey, so it runs
+only when the key is actually pressed (no periodic wakeups — the earlier poll-based build
+spent ~209k cycles/s here). Versus HP Command Center's continuously-running background
+thermal daemon.
 
 ## Install
 
@@ -60,7 +70,7 @@ so it needs a specific nightly toolchain and `rust-src`:
 ```sh
 # toolchain is pinned by rust-toolchain.toml (nightly + rust-src) — rustup auto-installs it
 cd app
-cargo build --release                      # minimal build (~180 KB)
+cargo build --release                      # minimal build (~200 KB)
 cargo build --release --features noise-adapt   # with the mic-based Noise Adapt engine
 ```
 

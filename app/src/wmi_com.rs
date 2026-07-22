@@ -1,11 +1,12 @@
 use std::mem::ManuallyDrop;
 use std::ptr;
 
-use windows::core::{w, Interface, BSTR, PCWSTR};
-use windows::Win32::Foundation::E_FAIL;
+use windows::core::{implement, w, Interface, Ref, BSTR, HRESULT, PCWSTR};
+use windows::Win32::Foundation::{CloseHandle, E_FAIL, HANDLE};
 use windows::Win32::System::Com::*;
 use windows::Win32::System::Ole::*;
 use windows::Win32::System::Rpc::{RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE};
+use windows::Win32::System::Threading::SetEvent;
 use windows::Win32::System::Variant::*;
 use windows::Win32::System::Wmi::*;
 
@@ -201,25 +202,58 @@ impl WmiConnection {
         Ok(max_c.clamp(0, 255) as u8)
     }
 
-    /// Create an event listener for hpqBEvnt WMI events.
-    /// The returned listener can be moved to another thread (COM MTA is thread-safe).
-    pub fn event_listener(&self) -> Result<WmiEventListener, u8> {
-        // SAFETY: COM MTA is initialized. ExecNotificationQuery subscribes to
-        // the hpqBEvnt event class; the enumerator is thread-safe in MTA mode.
+    /// Subscribe to hpqBEvnt via a push-based async sink. Returns a live
+    /// subscription that signals `fn_key` (the auto-reset event the tray waits
+    /// on) whenever Fn+F12 (EventId 29) is pressed. Zero idle cost: WMI invokes
+    /// the sink only when an event actually fires — no polling thread. Takes
+    /// ownership of `fn_key` (released when the subscription is dropped).
+    ///
+    /// The sink is wrapped in an unsecured-apartment stub so that only WMI's
+    /// SYSTEM context can invoke the callback — closing the documented async-sink
+    /// security hole (raw async callbacks are otherwise the least-secure WMI mode).
+    pub fn subscribe_events(&self, fn_key: HANDLE) -> Result<EventSubscription, u8> {
+        // SAFETY: COM MTA is initialized on this thread (connect() ran here); all
+        // interfaces below are valid for the duration of the calls.
         unsafe {
-            let enumerator = self
-                .services
-                .ExecNotificationQuery(
-                    &BSTR::from("WQL"),
-                    &BSTR::from("SELECT * FROM hpqBEvnt"),
-                    WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-                    None,
-                )
-                .map_err(|e| {
-                    log::write(&format!("ExecNotificationQuery(hpqBEvnt) failed: {e}"));
+            let sink: IWbemObjectSink = FnKeySink {
+                fn_key: fn_key.0 as isize,
+            }
+            .into();
+
+            // Secure the callback: the stub can only be invoked by WMI (SYSTEM),
+            // not by arbitrary local processes.
+            let apartment: IUnsecuredApartment =
+                CoCreateInstance(&UnsecuredApartment, None, CLSCTX_LOCAL_SERVER).map_err(|e| {
+                    log::write(&format!("CoCreateInstance(UnsecuredApartment) failed: {e}"));
                     STATUS_WMI_ERROR
                 })?;
-            Ok(WmiEventListener { enumerator })
+            let stub_unk = apartment.CreateObjectStub(&sink).map_err(|e| {
+                log::write(&format!("CreateObjectStub failed: {e}"));
+                STATUS_WMI_ERROR
+            })?;
+            let stub: IWbemObjectSink = stub_unk.cast().map_err(|_| STATUS_WMI_ERROR)?;
+
+            self.services
+                .ExecNotificationQueryAsync(
+                    &BSTR::from("WQL"),
+                    &BSTR::from("SELECT * FROM hpqBEvnt"),
+                    WBEM_GENERIC_FLAG_TYPE(0),
+                    None,
+                    &stub,
+                )
+                .map_err(|e| {
+                    log::write(&format!("ExecNotificationQueryAsync(hpqBEvnt) failed: {e}"));
+                    STATUS_WMI_ERROR
+                })?;
+
+            log::write("event listener: hpqBEvnt async sink registered");
+            Ok(EventSubscription {
+                services: self.services.clone(),
+                stub,
+                fn_key,
+                _apartment: apartment,
+                _sink: sink,
+            })
         }
     }
 
@@ -458,37 +492,98 @@ impl WmiConnection {
 }
 
 // ---------------------------------------------------------------------------
-// hpqBEvnt event listener
+// hpqBEvnt async event sink (push-based, zero idle cost)
 // ---------------------------------------------------------------------------
 
-/// Blocking iterator over hpqBEvnt WMI events.
-/// Created by `WmiConnection::event_listener()`. Send to another thread.
-pub struct WmiEventListener {
-    enumerator: IEnumWbemClassObject,
+/// Pure predicate: which hpqBEvnt `EventId` triggers the Fn+F12 screen toggle.
+/// Extracted from the COM callback so it can be unit-tested without WMI. Only
+/// EventId 29 (the "three-diamonds" Fn+F12 key) signals; every other event
+/// (26 = camera shutter, 3 = periodic, ...) is ignored.
+pub(crate) fn should_signal_fn_key(event_id: u32) -> bool {
+    event_id == 29
 }
 
-// SAFETY: IEnumWbemClassObject is thread-safe in COM MTA mode (COINIT_MULTITHREADED).
-// The service initializes MTA before creating the listener; the event thread joins the
-// same MTA via CoInitializeEx(COINIT_MULTITHREADED).
-unsafe impl Send for WmiEventListener {}
+/// COM sink that WMI calls (on its own threadpool thread) whenever an hpqBEvnt
+/// event fires. Holds only a raw auto-reset event handle — `SetEvent` is
+/// kernel-synchronized and safe to call from any thread. `Indicate` does O(1)
+/// work with zero allocation, so an event flood coalesces into repeated
+/// `SetEvent`s (each a no-op once signaled) and cannot grow memory or a queue.
+#[implement(IWbemObjectSink)]
+struct FnKeySink {
+    fn_key: isize,
+}
 
-impl WmiEventListener {
-    /// Block up to `timeout_ms` for the next event.
-    /// Returns `Some((event_id, event_data))` or `None` on timeout.
-    pub fn poll(&self, timeout_ms: i32) -> Option<(u32, u32)> {
-        // SAFETY: COM MTA is initialized on this thread (caller's responsibility).
-        // The enumerator was created via ExecNotificationQuery on a valid IWbemServices.
-        unsafe {
-            let mut objs = [None; 1];
-            let mut returned = 0u32;
-            let _ = self.enumerator.Next(timeout_ms, &mut objs, &mut returned);
-            if returned == 0 {
-                return None;
+impl IWbemObjectSink_Impl for FnKeySink_Impl {
+    fn Indicate(
+        &self,
+        count: i32,
+        objs: *const Option<IWbemClassObject>,
+    ) -> windows::core::Result<()> {
+        if count <= 0 || objs.is_null() {
+            return Ok(());
+        }
+        // SAFETY: WMI guarantees `objs` points to `count` valid entries for the
+        // duration of this call; we only read them.
+        let batch = unsafe { std::slice::from_raw_parts(objs, count as usize) };
+        for obj in batch.iter().flatten() {
+            // SAFETY: `obj` is a valid IWbemClassObject supplied by WMI.
+            let Ok(id) = (unsafe { get_u32(obj, w!("EventId")) }) else {
+                continue;
+            };
+            if log::is_verbose() {
+                // SAFETY: same valid object.
+                let data = unsafe { get_u32(obj, w!("EventData")) }.unwrap_or(0);
+                log::write(&format!("hpqBEvnt: id={id} data=0x{data:04X}"));
             }
-            let obj = objs[0].take()?;
-            let event_id = get_u32(&obj, w!("EventId")).ok()?;
-            let event_data = get_u32(&obj, w!("EventData")).ok()?;
-            Some((event_id, event_data))
+            if should_signal_fn_key(id) {
+                let h = HANDLE(self.fn_key as *mut core::ffi::c_void);
+                // SAFETY: `fn_key` is a valid auto-reset event owned by the
+                // EventSubscription, alive until CancelAsyncCall returns.
+                unsafe {
+                    let _ = SetEvent(h);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn SetStatus(
+        &self,
+        _flags: i32,
+        _hr: HRESULT,
+        _param: &BSTR,
+        _obj: Ref<'_, IWbemClassObject>,
+    ) -> windows::core::Result<()> {
+        Ok(())
+    }
+}
+
+/// Live hpqBEvnt async subscription. Lives on the service thread for the
+/// service's lifetime; `Drop` deterministically cancels the async call (after
+/// which no callback can run) and then releases the event handle — giving a
+/// clean, race-free shutdown with a logged "cancelled" line.
+pub struct EventSubscription {
+    services: IWbemServices,
+    stub: IWbemObjectSink,
+    fn_key: HANDLE,
+    // Kept alive for the subscription's lifetime; ordering of drop is irrelevant
+    // because CancelAsyncCall (below) severs the callback path first.
+    _apartment: IUnsecuredApartment,
+    _sink: IWbemObjectSink,
+}
+
+impl Drop for EventSubscription {
+    fn drop(&mut self) {
+        // SAFETY: `services` and `stub` are valid; we pass the SAME stub we
+        // registered. CancelAsyncCall guarantees no further Indicate callbacks
+        // once it returns, so releasing `fn_key` afterward cannot race a signal.
+        unsafe {
+            let _ = self.services.CancelAsyncCall(&self.stub);
+        }
+        log::write("event listener: cancelled");
+        // SAFETY: no callback can touch fn_key after the cancel above.
+        unsafe {
+            let _ = CloseHandle(self.fn_key);
         }
     }
 }
@@ -610,4 +705,57 @@ unsafe fn get_bstr(obj: &IWbemClassObject, name: PCWSTR) -> windows::core::Resul
     let inner = &*var.Anonymous.Anonymous;
     let bstr: &ManuallyDrop<BSTR> = &inner.Anonymous.bstrVal;
     Ok((**bstr).clone())
+}
+
+// ---------------------------------------------------------------------------
+// Async-sink safety tests (no WMI/hardware required)
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use windows::Win32::Foundation::WAIT_OBJECT_0;
+    use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
+
+    /// Only EventId 29 (Fn+F12) drives the screen toggle — the whole decision the
+    /// COM callback makes, isolated so it is testable without WMI and Miri-clean.
+    #[test]
+    fn only_event_29_signals_fn_key() {
+        assert!(should_signal_fn_key(29));
+        for id in [0u32, 3, 26, 28, 30, 100, u32::MAX] {
+            assert!(!should_signal_fn_key(id), "id {id} must not signal");
+        }
+    }
+
+    /// An empty batch must be a no-op: the sink must not dereference the array
+    /// or the handle. (The `#[implement]` trait method WMI calls directly also
+    /// guards `count <= 0` and null pointers; the safe wrapper can only produce
+    /// count 0 here, which is the case that matters for the flood/idle path.)
+    #[test]
+    fn indicate_tolerates_empty_batch() {
+        let sink: IWbemObjectSink = FnKeySink { fn_key: 0 }.into();
+        // SAFETY: empty slice -> count 0 -> Indicate early-returns, touching nothing.
+        unsafe {
+            sink.Indicate(&[]).unwrap();
+        }
+    }
+
+    /// The signal primitive the sink uses: repeated `SetEvent` on an auto-reset
+    /// event coalesces to a single wake — this is why an event flood is bounded
+    /// (no queue growth) and cannot be used to spin the tray.
+    #[test]
+    fn set_event_on_auto_reset_coalesces_to_one_wake() {
+        // SAFETY: standard Win32 auto-reset event; all handles checked/closed.
+        unsafe {
+            let ev = CreateEventW(None, false, false, PCWSTR::null()).unwrap();
+            for _ in 0..1000 {
+                let _ = SetEvent(ev);
+            }
+            // One wake is available...
+            assert_eq!(WaitForSingleObject(ev, 0), WAIT_OBJECT_0);
+            // ...and it auto-reset, so the next immediate wait times out.
+            assert_ne!(WaitForSingleObject(ev, 0), WAIT_OBJECT_0);
+            let _ = CloseHandle(ev);
+        }
+    }
 }

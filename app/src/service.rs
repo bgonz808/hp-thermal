@@ -5,7 +5,6 @@ use windows::core::{w, PCWSTR, PWSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::Security::Authorization::*;
 use windows::Win32::Security::*;
-use windows::Win32::System::Com::*;
 use windows::Win32::System::Services::*;
 use windows::Win32::System::Threading::*;
 
@@ -85,8 +84,26 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         }
     };
 
-    // Spawn hpqBEvnt listener thread (non-fatal if it fails)
-    spawn_event_thread(&wmi, event);
+    // Subscribe to hpqBEvnt (push-based async sink, zero idle cost). Held for
+    // the service lifetime; dropped after the accept loop to cancel cleanly.
+    // Non-fatal: on failure the service still runs, just without the hotkey.
+    let event_sub = match create_fn_key_event() {
+        Some(fn_key) => match wmi.subscribe_events(fn_key) {
+            Ok(sub) => Some(sub),
+            Err(_) => {
+                log::write("event listener: subscription failed (hotkey disabled)");
+                // SAFETY: fn_key is a valid handle we still own on this error path.
+                unsafe {
+                    let _ = CloseHandle(fn_key);
+                }
+                None
+            }
+        },
+        None => {
+            log::write("event listener: named event creation failed (hotkey disabled)");
+            None
+        }
+    };
 
     set_status(SERVICE_RUNNING, 0);
     log::stack_sample("svc:init");
@@ -126,6 +143,10 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
 
         pipe::server_disconnect(pipe);
     }
+
+    // Cancel the async event sink before teardown: CancelAsyncCall guarantees no
+    // further callbacks, then the handle is released and "cancelled" is logged.
+    drop(event_sub);
 
     // Dump histogram on shutdown
     log::write(&log::stack_report());
@@ -412,64 +433,6 @@ fn create_fn_key_event() -> Option<HANDLE> {
             }
         }
     }
-}
-
-/// Spawn a thread that listens for hpqBEvnt WMI events and signals the named event
-/// when Fn+F12 (EventId=29) is pressed. Non-fatal: logs and returns on failure.
-fn spawn_event_thread(wmi: &WmiConnection, stop_event: HANDLE) {
-    let listener = match wmi.event_listener() {
-        Ok(l) => l,
-        Err(_) => {
-            log::write("event thread: hpqBEvnt subscription failed (hotkey disabled)");
-            return;
-        }
-    };
-
-    let fn_key_event = match create_fn_key_event() {
-        Some(h) => h,
-        None => {
-            log::write("event thread: named event creation failed (hotkey disabled)");
-            return;
-        }
-    };
-
-    let stop_raw = stop_event.0 as usize;
-    let fnkey_raw = fn_key_event.0 as usize;
-    std::thread::spawn(move || {
-        // SAFETY: Join the COM MTA (same apartment as the service main thread).
-        unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-        }
-        log::write("event thread: listening for hpqBEvnt");
-
-        loop {
-            let stop_h = HANDLE(stop_raw as *mut std::ffi::c_void);
-            // SAFETY: stop_h reconstructed from a valid event handle captured in
-            // service_main; the service process keeps it alive until shutdown.
-            if unsafe { WaitForSingleObject(stop_h, 0) } == WAIT_OBJECT_0 {
-                break;
-            }
-
-            if let Some((id, data)) = listener.poll(2000) {
-                if log::is_verbose() {
-                    log::write(&format!("hpqBEvnt: id={id} data=0x{data:04X}"));
-                }
-                if id == 29 {
-                    let fnkey_h = HANDLE(fnkey_raw as *mut std::ffi::c_void);
-                    // SAFETY: fnkey_h reconstructed from a valid auto-reset event handle.
-                    unsafe {
-                        let _ = SetEvent(fnkey_h);
-                    }
-                }
-            }
-        }
-
-        log::write("event thread: stopped");
-        // SAFETY: Balances the CoInitializeEx call above.
-        unsafe {
-            CoUninitialize();
-        }
-    });
 }
 
 #[cfg(test)]

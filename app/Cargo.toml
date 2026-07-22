@@ -54,6 +54,11 @@ features = [
     "Win32_System_Power",
 ]
 
+# Already pulled in transitively by `windows`; declared directly only so the
+# `#[implement]` macro's generated `::windows_core::` paths resolve.
+[dependencies.windows-core]
+version = "0.59"
+
 [build-dependencies]
 embed-resource = "3"
 

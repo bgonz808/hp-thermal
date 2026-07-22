@@ -482,6 +482,12 @@ pub fn uninstall() {
 /// Copy exe to Program Files, create data dir, register and start the service.
 /// Must be called elevated.
 pub fn install_service() {
+    // Defense-in-depth: never create the service on non-HP hardware, even if this
+    // elevated helper is somehow invoked directly (the user-facing paths already
+    // gate on require_hp() and show an error before elevating).
+    if !crate::hwinfo::HwInfo::read().is_hp() {
+        return;
+    }
     if let Err(e) = copy_exe_to_install_dir() {
         eprintln!("Install failed: {e}");
         return;

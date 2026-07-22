@@ -39,6 +39,9 @@ fn main() {
     match args.get(1).map(|s| s.as_str()) {
         Some("--service") => service::run(),
         Some("install" | "--install") => {
+            if require_hp().is_none() {
+                return; // never elevate/install on non-HP hardware
+            }
             if !install::try_acquire_setup_lock() {
                 return;
             }
@@ -57,18 +60,27 @@ fn main() {
         Some("--stop-svc") => install::stop_service(),
         Some("--start-svc") => install::start_service(),
         Some("stop" | "--stop") => {
+            if require_hp().is_none() {
+                return;
+            }
             if !install::try_acquire_setup_lock() {
                 return;
             }
             install::stop();
         }
         Some("start" | "--start") => {
+            if require_hp().is_none() {
+                return;
+            }
             if !install::try_acquire_setup_lock() {
                 return;
             }
             install::start();
         }
         Some("uninstall" | "--uninstall") => {
+            if require_hp().is_none() {
+                return;
+            }
             if !install::try_acquire_setup_lock() {
                 return;
             }
@@ -86,9 +98,12 @@ fn main() {
     }
 }
 
-fn default_run() {
+/// Hard manufacturer gate. Reads SMBIOS (unelevated) and rejects non-HP hardware
+/// with an error dialog BEFORE anything can elevate (UAC) or modify system state.
+/// Every command that installs, elevates, or changes the service must call this
+/// FIRST — fail early, on unsupported hardware, before any permission or change.
+fn require_hp() -> Option<hwinfo::HwInfo> {
     let hw = hwinfo::HwInfo::read();
-
     if !hw.is_hp() {
         let msg = format!(
             "This app requires an HP laptop.\n\n\
@@ -99,8 +114,15 @@ fn default_run() {
             hw.manufacturer, hw.product
         );
         msgbox(&msg, MB_OK | MB_ICONERROR);
-        return;
+        return None;
     }
+    Some(hw)
+}
+
+fn default_run() {
+    let Some(hw) = require_hp() else {
+        return;
+    };
 
     // Consent gate: run silently only on dev-validated or user-accepted hardware.
     // Firing here (before both the bootstrap and installed-copy branches) means the
