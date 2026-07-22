@@ -1,0 +1,11 @@
+[package]
+name = "xtask"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+publish = false
+description = "Cross-platform dev tooling for hp-thermal (check runner + binary hardening verifier)"
+
+# Pure std, no dependencies — runs on any OS. The app-compiling checks it invokes
+# need Windows (the app is Windows-only), but xtask itself is portable.
+[dependencies]

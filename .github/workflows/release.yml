@@ -1,0 +1,58 @@
+name: Release attestation
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+# Read-only + NO secrets, even for the release build. A hijacked tool install here can't
+# push, publish, or steal anything — the reward is bounded to a runner that can only read
+# public source. Publishing an actual GitHub Release (which needs contents: write) would
+# be a SEPARATE, elevated job; this one only builds, attests, and uploads a workflow
+# artifact for review.
+permissions:
+  contents: read
+
+jobs:
+  attest:
+    runs-on: windows-latest
+    steps:
+      # Pin to a full 40-char SHA — resolve as in ci.yml. REPLACE before enabling.
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout v4
+
+      - name: Install pinned toolchain + components
+        run: rustup toolchain install nightly-2026-02-15 --component rust-src clippy rustfmt
+
+      # Install attestation tools by IMMUTABLE git commit SHA (content-addressed), not a
+      # crates.io version number — a maintainer-account compromise can publish a new
+      # version but can't rewrite history at a pinned commit. This still BUILDS the tool
+      # (code executes), which is why the runner is kept read-only + secret-less.
+      #
+      # Resolve each <rev>, and VERIFY each git URL, with:
+      #   gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+      # >>> REPLACE the placeholder revs before enabling. (`--version X` from crates.io is
+      #     the immutable-version fallback if a git-rev is impractical.) <<<
+      - name: Install attestation tools (git-rev pinned)
+        shell: bash
+        run: |
+          cargo install cargo-deny      --locked \
+            --git https://github.com/EmbarkStudios/cargo-deny         --rev 09faadcea2d0d1742492e6872b743d1e4d151a27
+          cargo install cargo-auditable --locked \
+            --git https://github.com/rust-secure-code/cargo-auditable --rev 9dc5ff28ff204b73eae91bd96cde4413fdcb70e0
+          cargo install cargo-audit     --locked \
+            --git https://github.com/rustsec/rustsec                  --rev efcde93a237dc51f8c32d84d880bf97b442835c8
+
+      # Full tier: fmt/clippy/test + cargo-deny policy + cargo-auditable release build +
+      # `cargo audit bin` on the shipped artifact + PE hardening verification.
+      - name: Attest (deny / auditable / audit-bin / verify-hardening)
+        run: cargo run --manifest-path xtask/Cargo.toml -- ci
+
+      # First-party action, also SHA-pinned. Uploads the attested binary for review; this
+      # is NOT a GitHub Release publish (that would need elevated contents: write).
+      - name: Upload attested binary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # actions/upload-artifact v4
+        with:
+          name: hp-thermal-exe
+          path: app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
+          if-no-files-found: error

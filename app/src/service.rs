@@ -1,0 +1,667 @@
+use std::sync::atomic::{AtomicIsize, Ordering};
+use std::time::Instant;
+
+use windows::core::{w, PCWSTR, PWSTR};
+use windows::Win32::Foundation::*;
+use windows::Win32::Security::Authorization::*;
+use windows::Win32::Security::*;
+use windows::Win32::System::Com::*;
+use windows::Win32::System::Services::*;
+use windows::Win32::System::Threading::*;
+
+use crate::app;
+use crate::log;
+use crate::pipe;
+use crate::protocol::*;
+use crate::wide::wide_null;
+use crate::wmi_com::WmiConnection;
+
+static STOP_EVENT: AtomicIsize = AtomicIsize::new(0);
+static STATUS_HANDLE: AtomicIsize = AtomicIsize::new(0);
+
+pub fn run() {
+    // SAFETY: The SERVICE_TABLE_ENTRYW array is null-terminated and lives on the
+    // stack for the duration of StartServiceCtrlDispatcherW. name_buf is a
+    // null-terminated wide string that outlives the call.
+    unsafe {
+        let mut name_buf = wide_null(app::SERVICE_NAME);
+        let table = [
+            SERVICE_TABLE_ENTRYW {
+                lpServiceName: PWSTR(name_buf.as_mut_ptr()),
+                lpServiceProc: Some(service_main),
+            },
+            SERVICE_TABLE_ENTRYW {
+                lpServiceName: PWSTR(std::ptr::null_mut()),
+                lpServiceProc: None,
+            },
+        ];
+        let _ = StartServiceCtrlDispatcherW(table.as_ptr());
+    }
+}
+
+unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
+    let svc_name = wide_null(app::SERVICE_NAME);
+    let Ok(handle) = RegisterServiceCtrlHandlerW(PCWSTR(svc_name.as_ptr()), Some(ctrl_handler))
+    else {
+        return;
+    };
+    STATUS_HANDLE.store(handle.0 as isize, Ordering::SeqCst);
+
+    set_status(SERVICE_START_PENDING, 0);
+    log::init("svc");
+    log::install_stack_guard();
+    log::write("service starting");
+
+    let Ok(event) = CreateEventW(None, true, false, None) else {
+        log::write("FAIL: CreateEventW");
+        set_status(SERVICE_STOPPED, 1);
+        return;
+    };
+    STOP_EVENT.store(event.0 as isize, Ordering::SeqCst);
+
+    // Initialize WMI connection
+    let wmi = match WmiConnection::connect() {
+        Ok(w) => {
+            log::write("WMI connected");
+            w
+        }
+        Err(e) => {
+            log::write(&format!("FAIL: WMI connect error=0x{e:02X}"));
+            set_status(SERVICE_STOPPED, 2);
+            return;
+        }
+    };
+
+    // Create named pipe
+    let pipe = match pipe::server_create() {
+        Ok(p) => {
+            log::write("pipe created");
+            p
+        }
+        Err(e) => {
+            log::write(&format!("FAIL: pipe create {e:?}"));
+            set_status(SERVICE_STOPPED, 3);
+            return;
+        }
+    };
+
+    // Spawn hpqBEvnt listener thread (non-fatal if it fails)
+    spawn_event_thread(&wmi, event);
+
+    set_status(SERVICE_RUNNING, 0);
+    log::stack_sample("svc:init");
+
+    // Signal the svc-start event so the tray can detect a version mismatch
+    // (service binary updated while tray was still running in memory).
+    signal_svc_start_event();
+
+    let mut cache = CacheSet::new();
+
+    // Accept loop
+    loop {
+        if !pipe::server_wait(pipe, event) {
+            break; // stop event signaled
+        }
+
+        // Validate client identity
+        if !pipe::server_validate_client(pipe) {
+            pipe::server_disconnect(pipe);
+            continue;
+        }
+
+        // Read 4-byte request (magic prefix + command + payload)
+        if let Some(buf) = pipe::read_request(pipe) {
+            if log::is_verbose() {
+                log::write(&format!("req: 0x{:02X} 0x{:02X}", buf[0], buf[1]));
+            }
+            let response = match Request::try_from(buf) {
+                Ok(req) => dispatch(&wmi, &mut cache, &req),
+                Err(status) => [status, 0],
+            };
+            if log::is_verbose() {
+                log::write(&format!("rsp: 0x{:02X} 0x{:02X}", response[0], response[1],));
+            }
+            pipe::write2(pipe, &response);
+        }
+
+        pipe::server_disconnect(pipe);
+    }
+
+    // Dump histogram on shutdown
+    log::write(&log::stack_report());
+    let _ = CloseHandle(pipe);
+    set_status(SERVICE_STOPPED, 0);
+}
+
+/// Per-command read cache. Returns cached value with STATUS_CACHED flag
+/// when called faster than the cooldown period.
+#[derive(Clone, Copy)]
+struct ReadCache {
+    value: [u8; 2],
+    when: Instant,
+}
+
+struct CacheSet {
+    thermal: Option<ReadCache>,
+    coolsense: Option<ReadCache>,
+    temp: Option<ReadCache>,
+}
+
+// Cooldowns in milliseconds
+const COOLDOWN_THERMAL_MS: u128 = 100;
+const COOLDOWN_COOLSENSE_MS: u128 = 100;
+const COOLDOWN_TEMP_MS: u128 = 500;
+
+impl CacheSet {
+    fn new() -> Self {
+        Self {
+            thermal: None,
+            coolsense: None,
+            temp: None,
+        }
+    }
+
+    fn cached_read(
+        slot: &mut Option<ReadCache>,
+        cooldown_ms: u128,
+        fetch: impl FnOnce() -> [u8; 2],
+    ) -> [u8; 2] {
+        if let Some(c) = slot {
+            if c.when.elapsed().as_millis() < cooldown_ms && c.value[0] == STATUS_OK {
+                return [STATUS_OK | STATUS_CACHED, c.value[1]];
+            }
+        }
+        let result = fetch();
+        if result[0] == STATUS_OK {
+            *slot = Some(ReadCache {
+                value: result,
+                when: Instant::now(),
+            });
+        }
+        result
+    }
+}
+
+/// The WMI/BIOS operations `dispatch` needs, abstracted behind a trait so the
+/// command-routing and caching logic can be unit-tested with a mock in place of
+/// live COM. `WmiConnection` is the production implementation; each method here
+/// forwards to the inherent method of the same name (inherent methods take path
+/// resolution priority, so there is no recursion).
+trait ThermalOps {
+    fn read_thermal(&self) -> Result<u8, u8>;
+    fn set_thermal(&self, mode: u8) -> Result<(), u8>;
+    fn read_coolsense(&self) -> Result<u8, u8>;
+    fn set_coolsense(&self, on: u8) -> Result<(), u8>;
+    fn read_temp(&self) -> Result<u8, u8>;
+    fn read_brightness(&self) -> Result<u8, u8>;
+    fn set_brightness(&self, level: u8) -> Result<(), u8>;
+}
+
+impl ThermalOps for WmiConnection {
+    fn read_thermal(&self) -> Result<u8, u8> {
+        WmiConnection::read_thermal(self)
+    }
+    fn set_thermal(&self, mode: u8) -> Result<(), u8> {
+        WmiConnection::set_thermal(self, mode)
+    }
+    fn read_coolsense(&self) -> Result<u8, u8> {
+        WmiConnection::read_coolsense(self)
+    }
+    fn set_coolsense(&self, on: u8) -> Result<(), u8> {
+        WmiConnection::set_coolsense(self, on)
+    }
+    fn read_temp(&self) -> Result<u8, u8> {
+        WmiConnection::read_temp(self)
+    }
+    fn read_brightness(&self) -> Result<u8, u8> {
+        WmiConnection::read_brightness(self)
+    }
+    fn set_brightness(&self, level: u8) -> Result<(), u8> {
+        WmiConnection::set_brightness(self, level)
+    }
+}
+
+fn dispatch<W: ThermalOps>(wmi: &W, cache: &mut CacheSet, req: &Request) -> [u8; 2] {
+    let result = match req.command {
+        CMD_READ_THERMAL => CacheSet::cached_read(&mut cache.thermal, COOLDOWN_THERMAL_MS, || {
+            match wmi.read_thermal() {
+                Ok(mode) => [STATUS_OK, mode],
+                Err(e) => [e, 0],
+            }
+        }),
+        CMD_SET_THERMAL => {
+            log::write(&format!("set thermal mode={}", req.payload));
+            cache.thermal = None;
+            match wmi.set_thermal(req.payload) {
+                Ok(()) => [STATUS_OK, 0],
+                Err(e) => [e, 0],
+            }
+        }
+        CMD_READ_COOLSENSE => {
+            CacheSet::cached_read(&mut cache.coolsense, COOLDOWN_COOLSENSE_MS, || {
+                match wmi.read_coolsense() {
+                    Ok(state) => [STATUS_OK, state],
+                    Err(e) => [e, 0],
+                }
+            })
+        }
+        CMD_SET_COOLSENSE => {
+            log::write(&format!("set coolsense={}", req.payload));
+            cache.coolsense = None;
+            match wmi.set_coolsense(req.payload) {
+                Ok(()) => [STATUS_OK, 0],
+                Err(e) => [e, 0],
+            }
+        }
+        CMD_READ_TEMP => CacheSet::cached_read(&mut cache.temp, COOLDOWN_TEMP_MS, || {
+            match wmi.read_temp() {
+                Ok(temp) => [STATUS_OK, temp],
+                Err(e) => [e, 0],
+            }
+        }),
+        CMD_SET_LOGGING => {
+            log::set_verbose(req.payload != 0);
+            [STATUS_OK, 0]
+        }
+        CMD_SET_STACK_MONITOR => {
+            log::set_stack_monitor(req.payload != 0);
+            [STATUS_OK, 0]
+        }
+        CMD_READ_BUILD_ID => BUILD_FINGERPRINT,
+        CMD_READ_BRIGHTNESS => match wmi.read_brightness() {
+            Ok(level) => [STATUS_OK, level],
+            Err(e) => [e, 0],
+        },
+        CMD_SET_BRIGHTNESS => {
+            log::write(&format!("set brightness={}", req.payload));
+            match wmi.set_brightness(req.payload) {
+                Ok(()) => [STATUS_OK, 0],
+                Err(e) => [e, 0],
+            }
+        }
+        _ => [STATUS_INVALID_CMD, 0],
+    };
+
+    // Sample stack after WMI call (committed pages still reflect the peak depth)
+    let label = match req.command {
+        CMD_READ_THERMAL => "svc:read_thermal",
+        CMD_SET_THERMAL => "svc:set_thermal",
+        CMD_READ_COOLSENSE => "svc:read_coolsense",
+        CMD_SET_COOLSENSE => "svc:set_coolsense",
+        _ => "svc:other",
+    };
+    log::stack_sample(label);
+
+    result
+}
+
+unsafe extern "system" fn ctrl_handler(control: u32) {
+    if control == SERVICE_CONTROL_STOP || control == SERVICE_CONTROL_SHUTDOWN {
+        set_status(SERVICE_STOP_PENDING, 0);
+        let ev = HANDLE(STOP_EVENT.load(Ordering::SeqCst) as *mut std::ffi::c_void);
+        if !ev.is_invalid() {
+            let _ = SetEvent(ev);
+        }
+    }
+}
+
+fn set_status(state: SERVICE_STATUS_CURRENT_STATE, exit_code: u32) {
+    let handle =
+        SERVICE_STATUS_HANDLE(STATUS_HANDLE.load(Ordering::SeqCst) as *mut std::ffi::c_void);
+    if handle.is_invalid() {
+        return;
+    }
+    let accepts = if state == SERVICE_RUNNING {
+        SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN
+    } else {
+        SERVICE_ACCEPT_STOP
+    };
+    let status = SERVICE_STATUS {
+        dwServiceType: SERVICE_WIN32_OWN_PROCESS,
+        dwCurrentState: state,
+        dwControlsAccepted: accepts,
+        dwWin32ExitCode: if exit_code != 0 {
+            ERROR_SERVICE_SPECIFIC_ERROR.0
+        } else {
+            0
+        },
+        dwServiceSpecificExitCode: exit_code,
+        dwCheckPoint: 0,
+        dwWaitHint: 0,
+    };
+    // SAFETY: `handle` was obtained from RegisterServiceCtrlHandlerW and stored
+    // atomically; the SERVICE_STATUS struct is fully initialized on the stack.
+    unsafe {
+        let _ = SetServiceStatus(handle, &status);
+    }
+}
+
+/// Create and signal the svc-start event. The tray waits on this to detect
+/// that the service (re)started, then checks BUILD_FINGERPRINT via the pipe.
+/// Handle is intentionally leaked — lives for the service process lifetime.
+fn signal_svc_start_event() {
+    // SAFETY: Stack-allocated SD; LocalFree cleans up. Event name is a wide
+    // string that outlives CreateEventW. SetEvent on a valid handle is safe.
+    unsafe {
+        // Explicit specific rights — generic GR/GA store the generic bit in the
+        // ACE, which causes ACCESS_DENIED when the tray requests SYNCHRONIZE (a
+        // specific right) via OpenEventW.
+        // BU: SYNCHRONIZE|READ_CONTROL (0x00120000) — wait only, cannot signal
+        // SY/BA: EVENT_ALL_ACCESS (0x001F0003) — full control
+        let sddl = w!("D:(A;;0x00120000;;;BU)(A;;0x001F0003;;;SY)(A;;0x001F0003;;;BA)");
+        let mut sd: PSECURITY_DESCRIPTOR = PSECURITY_DESCRIPTOR(std::ptr::null_mut());
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, &mut sd, None).is_err() {
+            log::write("svc-start event: SDDL parse failed");
+            return;
+        }
+
+        let sa = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: sd.0,
+            bInheritHandle: false.into(),
+        };
+
+        let name = wide_null(app::SVC_START_EVENT);
+        // Auto-reset: after one waiter (the tray) is released, event resets.
+        let event = CreateEventW(Some(&sa), false, false, PCWSTR(name.as_ptr()));
+        LocalFree(Some(HLOCAL(sd.0)));
+
+        match event {
+            Ok(h) => {
+                let _ = SetEvent(h);
+                log::write("svc-start event: signaled");
+                // Handle leaked: keeps the named object alive for the process lifetime.
+                // Tray's OpenEventW resolves to this same kernel object.
+            }
+            Err(e) => {
+                log::write(&format!("svc-start event: CreateEventW failed: {e}"));
+            }
+        }
+    }
+}
+
+/// Create a named auto-reset event with a DACL allowing interactive users to wait on it.
+fn create_fn_key_event() -> Option<HANDLE> {
+    // SAFETY: Stack-allocated SD; LocalFree cleans up. Event name is a wide string
+    // that outlives the CreateEventW call.
+    unsafe {
+        // Same specific-rights DACL as signal_svc_start_event (see comment there).
+        let sddl = w!("D:(A;;0x00120000;;;BU)(A;;0x001F0003;;;SY)(A;;0x001F0003;;;BA)");
+        let mut sd: PSECURITY_DESCRIPTOR = PSECURITY_DESCRIPTOR(std::ptr::null_mut());
+        if ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, &mut sd, None).is_err() {
+            log::write("event: ConvertStringSecurityDescriptor failed");
+            return None;
+        }
+
+        let sa = SECURITY_ATTRIBUTES {
+            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
+            lpSecurityDescriptor: sd.0,
+            bInheritHandle: false.into(),
+        };
+
+        let name = wide_null(app::FNKEY_EVENT);
+        // Auto-reset (bManualReset=false): resets after one waiter is released
+        let event = CreateEventW(Some(&sa), false, false, PCWSTR(name.as_ptr()));
+        LocalFree(Some(HLOCAL(sd.0)));
+
+        match event {
+            Ok(h) => Some(h),
+            Err(e) => {
+                log::write(&format!("event: CreateEventW failed: {e}"));
+                None
+            }
+        }
+    }
+}
+
+/// Spawn a thread that listens for hpqBEvnt WMI events and signals the named event
+/// when Fn+F12 (EventId=29) is pressed. Non-fatal: logs and returns on failure.
+fn spawn_event_thread(wmi: &WmiConnection, stop_event: HANDLE) {
+    let listener = match wmi.event_listener() {
+        Ok(l) => l,
+        Err(_) => {
+            log::write("event thread: hpqBEvnt subscription failed (hotkey disabled)");
+            return;
+        }
+    };
+
+    let fn_key_event = match create_fn_key_event() {
+        Some(h) => h,
+        None => {
+            log::write("event thread: named event creation failed (hotkey disabled)");
+            return;
+        }
+    };
+
+    let stop_raw = stop_event.0 as usize;
+    let fnkey_raw = fn_key_event.0 as usize;
+    std::thread::spawn(move || {
+        // SAFETY: Join the COM MTA (same apartment as the service main thread).
+        unsafe {
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+        }
+        log::write("event thread: listening for hpqBEvnt");
+
+        loop {
+            let stop_h = HANDLE(stop_raw as *mut std::ffi::c_void);
+            // SAFETY: stop_h reconstructed from a valid event handle captured in
+            // service_main; the service process keeps it alive until shutdown.
+            if unsafe { WaitForSingleObject(stop_h, 0) } == WAIT_OBJECT_0 {
+                break;
+            }
+
+            if let Some((id, data)) = listener.poll(2000) {
+                if log::is_verbose() {
+                    log::write(&format!("hpqBEvnt: id={id} data=0x{data:04X}"));
+                }
+                if id == 29 {
+                    let fnkey_h = HANDLE(fnkey_raw as *mut std::ffi::c_void);
+                    // SAFETY: fnkey_h reconstructed from a valid auto-reset event handle.
+                    unsafe {
+                        let _ = SetEvent(fnkey_h);
+                    }
+                }
+            }
+        }
+
+        log::write("event thread: stopped");
+        // SAFETY: Balances the CoInitializeEx call above.
+        unsafe {
+            CoUninitialize();
+        }
+    });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    /// In-memory stand-in for the WMI/BIOS layer. Records read-call counts so
+    /// tests can assert the cache actually suppresses redundant WMI reads.
+    #[derive(Default)]
+    struct MockWmi {
+        thermal: Cell<u8>,
+        coolsense: Cell<u8>,
+        temp: Cell<u8>,
+        brightness: Cell<u8>,
+        fail: Cell<bool>,
+        read_thermal_calls: Cell<u32>,
+        read_coolsense_calls: Cell<u32>,
+        read_temp_calls: Cell<u32>,
+    }
+
+    impl ThermalOps for MockWmi {
+        fn read_thermal(&self) -> Result<u8, u8> {
+            self.read_thermal_calls
+                .set(self.read_thermal_calls.get() + 1);
+            if self.fail.get() {
+                Err(STATUS_WMI_ERROR)
+            } else {
+                Ok(self.thermal.get())
+            }
+        }
+        fn set_thermal(&self, mode: u8) -> Result<(), u8> {
+            self.thermal.set(mode);
+            Ok(())
+        }
+        fn read_coolsense(&self) -> Result<u8, u8> {
+            self.read_coolsense_calls
+                .set(self.read_coolsense_calls.get() + 1);
+            Ok(self.coolsense.get())
+        }
+        fn set_coolsense(&self, on: u8) -> Result<(), u8> {
+            self.coolsense.set(on);
+            Ok(())
+        }
+        fn read_temp(&self) -> Result<u8, u8> {
+            self.read_temp_calls.set(self.read_temp_calls.get() + 1);
+            Ok(self.temp.get())
+        }
+        fn read_brightness(&self) -> Result<u8, u8> {
+            Ok(self.brightness.get())
+        }
+        fn set_brightness(&self, level: u8) -> Result<(), u8> {
+            self.brightness.set(level);
+            Ok(())
+        }
+    }
+
+    fn req(cmd: u8, payload: u8) -> Request {
+        Request::try_from([cmd, payload]).expect("valid request")
+    }
+
+    #[test]
+    fn read_thermal_returns_mode_then_serves_from_cache() {
+        let wmi = MockWmi::default();
+        wmi.thermal.set(2);
+        let mut cache = CacheSet::new();
+
+        // First read hits WMI.
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0)),
+            [STATUS_OK, 2]
+        );
+        assert_eq!(wmi.read_thermal_calls.get(), 1);
+
+        // Second read within the cooldown is served from cache (flagged), no WMI.
+        let r2 = dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0));
+        assert_eq!(r2[0], STATUS_OK | STATUS_CACHED);
+        assert_eq!(r2[1], 2);
+        assert_eq!(
+            wmi.read_thermal_calls.get(),
+            1,
+            "cache must suppress the second WMI read"
+        );
+    }
+
+    #[test]
+    fn set_thermal_invalidates_the_read_cache() {
+        let wmi = MockWmi::default();
+        wmi.thermal.set(1);
+        let mut cache = CacheSet::new();
+
+        let _ = dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0)); // populate cache
+        assert_eq!(wmi.read_thermal_calls.get(), 1);
+
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_SET_THERMAL, 3)),
+            [STATUS_OK, 0]
+        );
+        assert_eq!(wmi.thermal.get(), 3);
+
+        // The next read must go back to WMI and reflect the new value.
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0)),
+            [STATUS_OK, 3]
+        );
+        assert_eq!(
+            wmi.read_thermal_calls.get(),
+            2,
+            "a write must invalidate the read cache"
+        );
+    }
+
+    #[test]
+    fn wmi_error_is_propagated_and_not_cached() {
+        let wmi = MockWmi::default();
+        wmi.fail.set(true);
+        let mut cache = CacheSet::new();
+
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0)),
+            [STATUS_WMI_ERROR, 0]
+        );
+        // An error must not populate the cache — the next call retries WMI.
+        let _ = dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0));
+        assert_eq!(wmi.read_thermal_calls.get(), 2, "errors must not be cached");
+    }
+
+    #[test]
+    fn coolsense_read_set_roundtrip_with_cache_invalidation() {
+        let wmi = MockWmi::default();
+        wmi.coolsense.set(1);
+        let mut cache = CacheSet::new();
+
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_COOLSENSE, 0)),
+            [STATUS_OK, 1]
+        );
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_SET_COOLSENSE, 0)),
+            [STATUS_OK, 0]
+        );
+        assert_eq!(wmi.coolsense.get(), 0);
+        // Set invalidated the cache, so this reflects the new value.
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_COOLSENSE, 0)),
+            [STATUS_OK, 0]
+        );
+        assert_eq!(wmi.read_coolsense_calls.get(), 2);
+    }
+
+    #[test]
+    fn temp_read_is_cached() {
+        let wmi = MockWmi::default();
+        wmi.temp.set(60);
+        let mut cache = CacheSet::new();
+
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_TEMP, 0)),
+            [STATUS_OK, 60]
+        );
+        let r2 = dispatch(&wmi, &mut cache, &req(CMD_READ_TEMP, 0));
+        assert_eq!(r2[0], STATUS_OK | STATUS_CACHED);
+        assert_eq!(r2[1], 60);
+        assert_eq!(wmi.read_temp_calls.get(), 1);
+    }
+
+    #[test]
+    fn brightness_read_and_set_are_uncached_passthroughs() {
+        let wmi = MockWmi::default();
+        wmi.brightness.set(50);
+        let mut cache = CacheSet::new();
+
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_BRIGHTNESS, 0)),
+            [STATUS_OK, 50]
+        );
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_SET_BRIGHTNESS, 80)),
+            [STATUS_OK, 0]
+        );
+        assert_eq!(wmi.brightness.get(), 80);
+    }
+
+    #[test]
+    fn read_build_id_returns_fingerprint_without_touching_wmi() {
+        let wmi = MockWmi::default();
+        let mut cache = CacheSet::new();
+
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_BUILD_ID, 0)),
+            BUILD_FINGERPRINT
+        );
+        assert_eq!(wmi.read_thermal_calls.get(), 0);
+    }
+}

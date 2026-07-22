@@ -1,0 +1,25 @@
+version: 2
+
+# Dependency vuln scanning + updates run on GitHub's infrastructure — NOT inside a
+# workflow job, so this carries no runner trust-boundary cost (no token exposure).
+# It scans Cargo.lock against the GitHub Advisory Database (which includes RustSec)
+# and opens review-able PRs.
+updates:
+  # The product crate — Cargo.lock lives in app/.
+  - package-ecosystem: cargo
+    directory: /app
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  # Keep the SHA-pinned GitHub Actions current: Dependabot proposes SHA bumps for you
+  # to review. This is the maintenance complement to pinning actions by SHA — you get
+  # immutability (the pin) AND freshness (reviewed bumps), instead of trusting a
+  # floating tag.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # experiments/ (publish=false) and xtask/ (currently zero deps) can be added here
+  # later if their dependency surfaces grow.

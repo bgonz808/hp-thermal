@@ -1,0 +1,3 @@
+# Normalize line endings to LF across platforms (the tooling is cross-platform,
+# and the shell hook must stay LF).
+* text=auto eol=lf

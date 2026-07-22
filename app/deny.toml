@@ -1,0 +1,30 @@
+# cargo-deny configuration (v0.19+)
+# https://embarkstudios.github.io/cargo-deny/
+#
+# Run: cargo deny --manifest-path <crate>/Cargo.toml check --config deny.toml
+
+[advisories]
+# vulnerability field removed in v0.19 -- all vulnerabilities always error.
+unmaintained = "workspace"  # only fail for direct deps
+yanked = "deny"
+
+[licenses]
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.8
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

@@ -1,0 +1,6 @@
+#!/bin/sh
+# Pre-commit hook: runs the FAST check tier via the Rust xtask, so the hook, CI,
+# and a developer at the terminal all execute the same logic (no drift).
+#
+# Install: git config core.hooksPath hooks   (or copy this into .git/hooks/)
+exec cargo run --manifest-path xtask/Cargo.toml -- ci --fast

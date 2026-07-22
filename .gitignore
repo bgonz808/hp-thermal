@@ -1,0 +1,24 @@
+# Rust build artifacts
+target/
+
+# Generated SBOM / audit artifacts
+*.cdx.json
+bom.json
+
+# Logs / scratch
+*.log
+
+# OS junk
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# IDE / tools
+.vs/
+.vscode/
+.idea/
+.claude/
+
+# Audio (large) — keep only the committed test fixtures
+*.wav
+!app/tests/fixtures/*.wav

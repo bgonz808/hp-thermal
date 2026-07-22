@@ -1,0 +1,29 @@
+[build]
+target = "x86_64-pc-windows-msvc"
+
+[target.x86_64-pc-windows-msvc]
+# 256KB stack reserve (default is 1MB). Actual physical memory usage is
+# unchanged — Windows demand-pages the stack regardless. This just limits
+# the virtual address space reserved and catches runaway recursion sooner.
+# Our deepest path (COM/WMI) uses ~40KB, so 256KB gives 6x headroom.
+#
+# NOTE: /OPT:REF, /OPT:ICF=3, -mergefunc-use-aliases tested — zero effect with lto=fat.
+# NOTE: -enable-machine-outliner breaks Windows SEH (.seh_startepilogue corruption).
+# control-flow-guard: emit CFG (/guard:cf) indirect-call protection. build-std
+# rebuilds std with it too, so protection is whole-binary. Verified via the PE
+# DllCharacteristics bit 0x4000.
+rustflags = [
+    "-C",
+    "control-flow-guard=checks",
+    # stack canaries at the unsafe/FFI boundary; build-std applies it to std too.
+    "-Z",
+    "stack-protector=strong",
+    "-C",
+    "link-args=/STACK:262144",
+]
+
+[unstable]
+# Rebuild std with our profile settings (opt-level=z, lto=fat).
+# Requires rust-src component (provided by rust-toolchain.toml).
+build-std = ["std", "panic_abort"]
+build-std-features = ["optimize_for_size"]

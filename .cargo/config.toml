@@ -1,0 +1,7 @@
+# Root config: enables `cargo xtask <cmd>` from the repo root.
+#
+# Deliberately ALIAS-ONLY — no [build]/[unstable] here. app/'s build-std + custom
+# target live in app/.cargo/config.toml so they stay scoped to app/ and never leak
+# onto the stable experiments/ and xtask/ crates.
+[alias]
+xtask = "run --manifest-path xtask/Cargo.toml --"

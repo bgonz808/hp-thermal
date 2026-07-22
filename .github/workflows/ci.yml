@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Read-only token, and this workflow uses NO secrets. A compromised step can't push,
+# open PRs, reach other repos, or exfiltrate credentials — the blast radius is bounded.
+permissions:
+  contents: read
+
+# PR CI is deliberately TOOLCHAIN-ONLY: fmt / clippy / test via rustup, with NO
+# third-party tool installs in this frequent path. Dependency vuln scanning runs
+# off-workflow (Dependabot, .github/dependabot.yml). Dep-policy + artifact attestation
+# live in release.yml, which installs its tools by immutable git-rev on a read-only,
+# secret-less runner.
+jobs:
+  ci:
+    runs-on: windows-latest
+    steps:
+      # Pin to a full 40-char commit SHA — resolve with `pinact run` or
+      # `gh api repos/actions/checkout/commits/<tag> --jq .sha`.
+      # >>> REPLACE the placeholder SHA before enabling this workflow. <<<
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout v4
+
+      - name: Install pinned toolchain + components
+        run: rustup toolchain install nightly-2026-02-15 --component rust-src clippy rustfmt
+
+      # Toolchain-native only — no cargo-install of third-party tools here.
+      - name: Checks (fmt / clippy / test, both feature configs)
+        run: cargo run --manifest-path xtask/Cargo.toml -- ci --fast
