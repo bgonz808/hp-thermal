@@ -62,78 +62,34 @@ pub struct Request {
     pub payload: u8,
 }
 
+/// Validate a set-command payload against its per-command maximum.
+fn validated(payload: u8, max: u8) -> Result<u8, u8> {
+    if payload > max {
+        Err(STATUS_INVALID_PAYLOAD)
+    } else {
+        Ok(payload)
+    }
+}
+
 impl TryFrom<[u8; 2]> for Request {
     type Error = u8;
 
     fn try_from(buf: [u8; 2]) -> Result<Self, u8> {
-        match buf[0] {
-            CMD_READ_THERMAL => Ok(Request {
-                command: buf[0],
-                payload: 0,
-            }),
-            CMD_SET_THERMAL => {
-                if buf[1] > 3 {
-                    return Err(STATUS_INVALID_PAYLOAD);
-                }
-                Ok(Request {
-                    command: buf[0],
-                    payload: buf[1],
-                })
-            }
-            CMD_READ_COOLSENSE => Ok(Request {
-                command: buf[0],
-                payload: 0,
-            }),
-            CMD_SET_COOLSENSE => {
-                if buf[1] > 1 {
-                    return Err(STATUS_INVALID_PAYLOAD);
-                }
-                Ok(Request {
-                    command: buf[0],
-                    payload: buf[1],
-                })
-            }
-            CMD_SET_LOGGING => {
-                if buf[1] > 1 {
-                    return Err(STATUS_INVALID_PAYLOAD);
-                }
-                Ok(Request {
-                    command: buf[0],
-                    payload: buf[1],
-                })
-            }
-            CMD_READ_BUILD_ID => Ok(Request {
-                command: buf[0],
-                payload: 0,
-            }),
-            CMD_SET_STACK_MONITOR => {
-                if buf[1] > 1 {
-                    return Err(STATUS_INVALID_PAYLOAD);
-                }
-                Ok(Request {
-                    command: buf[0],
-                    payload: buf[1],
-                })
-            }
-            CMD_READ_TEMP => Ok(Request {
-                command: buf[0],
-                payload: 0,
-            }),
-            CMD_READ_BRIGHTNESS => Ok(Request {
-                command: buf[0],
-                payload: 0,
-            }),
-            CMD_SET_BRIGHTNESS => {
-                if buf[1] > 100 {
-                    return Err(STATUS_INVALID_PAYLOAD);
-                }
-                Ok(Request {
-                    command: buf[0],
-                    payload: buf[1],
-                })
-            }
-            _ => Err(STATUS_INVALID_CMD),
-        }
+        let payload = match buf[0] {
+            // Read commands ignore the payload byte — normalized to 0 so a client
+            // can't smuggle state through an unused field.
+            CMD_READ_THERMAL | CMD_READ_COOLSENSE | CMD_READ_BUILD_ID | CMD_READ_TEMP
+            | CMD_READ_BRIGHTNESS => 0,
+            // Set commands validate the payload against a per-command maximum.
+            CMD_SET_THERMAL => validated(buf[1], 3)?,
+            CMD_SET_COOLSENSE | CMD_SET_LOGGING | CMD_SET_STACK_MONITOR => validated(buf[1], 1)?,
+            CMD_SET_BRIGHTNESS => validated(buf[1], 100)?,
+            _ => return Err(STATUS_INVALID_CMD),
+        };
+        Ok(Request {
+            command: buf[0],
+            payload,
+        })
     }
 }
 

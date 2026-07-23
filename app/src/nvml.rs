@@ -47,36 +47,39 @@ fn init() -> Option<NvmlState> {
             return None;
         }
 
+        // Resolve an NVML export and transmute it to a typed fn pointer; `?` bails
+        // out of the enclosing fn if the symbol is missing.
+        macro_rules! load_fn {
+            ($lib:expr, $sym:literal, $ty:ty) => {
+                std::mem::transmute::<unsafe extern "system" fn() -> isize, $ty>(GetProcAddress(
+                    $lib,
+                    PCSTR($sym.as_ptr().cast::<u8>()),
+                )?)
+            };
+        }
+
         Some(NvmlState {
             device,
-            get_temp: std::mem::transmute::<
-                unsafe extern "system" fn() -> isize,
-                unsafe extern "C" fn(usize, u32, *mut u32) -> u32,
-            >(GetProcAddress(
+            get_temp: load_fn!(
                 lib,
-                PCSTR(c"nvmlDeviceGetTemperature".as_ptr().cast::<u8>()),
-            )?),
-            get_power: std::mem::transmute::<
-                unsafe extern "system" fn() -> isize,
-                unsafe extern "C" fn(usize, *mut u32) -> u32,
-            >(GetProcAddress(
+                c"nvmlDeviceGetTemperature",
+                unsafe extern "C" fn(usize, u32, *mut u32) -> u32
+            ),
+            get_power: load_fn!(
                 lib,
-                PCSTR(c"nvmlDeviceGetPowerUsage".as_ptr().cast::<u8>()),
-            )?),
-            get_name: std::mem::transmute::<
-                unsafe extern "system" fn() -> isize,
-                unsafe extern "C" fn(usize, *mut u8, u32) -> u32,
-            >(GetProcAddress(
+                c"nvmlDeviceGetPowerUsage",
+                unsafe extern "C" fn(usize, *mut u32) -> u32
+            ),
+            get_name: load_fn!(
                 lib,
-                PCSTR(c"nvmlDeviceGetName".as_ptr().cast::<u8>()),
-            )?),
-            get_pstate: std::mem::transmute::<
-                unsafe extern "system" fn() -> isize,
-                unsafe extern "C" fn(usize, *mut u32) -> u32,
-            >(GetProcAddress(
+                c"nvmlDeviceGetName",
+                unsafe extern "C" fn(usize, *mut u8, u32) -> u32
+            ),
+            get_pstate: load_fn!(
                 lib,
-                PCSTR(c"nvmlDeviceGetPerformanceState".as_ptr().cast::<u8>()),
-            )?),
+                c"nvmlDeviceGetPerformanceState",
+                unsafe extern "C" fn(usize, *mut u32) -> u32
+            ),
         })
     }
 }
