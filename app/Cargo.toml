@@ -18,7 +18,7 @@ default = []
 noise-adapt = []
 
 [dependencies.windows]
-version = "0.59"
+version = "0.62"
 features = [
     "Win32_Foundation",
     "Win32_System_Com",
