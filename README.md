@@ -37,6 +37,36 @@ only when the key is actually pressed (no periodic wakeups — the earlier poll-
 spent ~209k cycles/s here). Versus HP Command Center's continuously-running background
 thermal daemon.
 
+## Measured footprint vs HP Command Center
+
+Measured on the tested HP ENVY 16 (`8BE5`), Windows 11, on **2026-07-22**, against **HP
+Command Center `AD2F1837.HPThermalControl` v1.11.60.0**. All runtime numbers come from a
+single 30 s idle window (`QueryProcessCycleTime` + `Process(*)` performance counters), so
+memory and CPU are internally consistent.
+
+| Metric (idle) | HP Command Center | hp-thermal | Ratio |
+| --- | ---: | ---: | ---: |
+| Install on disk | 168 MB | **0.19 MB** | ~885× |
+| Persistent processes | 3 | 2 | — |
+| **Private RSS** (private working set) | 141 MB | **3.2 MB** | **~44×** |
+| Total RSS (working set) | 351 MB | 28 MB | ~13× |
+| Shared RSS (WS − private) | 210 MB | 25 MB | — |
+| Commit (private bytes) | 266 MB | 4.2 MB | ~63× |
+| CPU cycles/s | ~3–6 M (continuous) | **0** | ∞ |
+
+**Reading it honestly:**
+- **Private RSS is the fair per-app cost.** Our 28 MB working set is ~88 % *shared* system
+  DLLs that every Windows process maps; our genuinely private footprint is **1.6 MB per
+  process**. HP's is mostly private managed heaps (.NET/UWP), so on private memory it holds
+  **~44× more** than us.
+- **CPU:** `% Processor Time` sits below its own counter resolution at idle for both; the
+  cycle counter is the sensitive metric. HP's `HpSystemManagement` daemon burns millions of
+  cycles/s *continuously* (~0.1–0.2 % of one core); ours is a hard **0** — the event-driven
+  design means the scheduler never wakes us.
+- **Scope:** this compares the Command Center package only. HP's broader stack (its analytics
+  service + HSA/display services, separate packages) adds roughly another 440 MB RSS at idle,
+  which this tool does not touch and does not replace.
+
 ## Install
 
 Download the release `hp-thermal.exe` and run it. It installs the background service
