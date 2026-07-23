@@ -5,6 +5,11 @@ use std::process::Command;
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0};
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+use windows::Win32::System::Services::{
+    CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatusEx, SC_MANAGER_CONNECT,
+    SC_STATUS_PROCESS_INFO, SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_STATUS_PROCESS,
+    SERVICE_STOPPED,
+};
 use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
 use windows::Win32::System::Threading::{
     CreateMutexW, GetCurrentProcess, OpenProcessToken, ReleaseMutex, WaitForSingleObject,
@@ -89,24 +94,44 @@ fn info_box(text: &str, flags: MESSAGEBOX_STYLE) {
 // Queries (no elevation needed)
 // ---------------------------------------------------------------------------
 
+/// Query the service's current state via the SCM API — no locale-dependent text
+/// parsing. Returns `SERVICE_STATUS_PROCESS.dwCurrentState`, or `None` if the
+/// service isn't installed or can't be opened. Works unelevated: our service SDDL
+/// grants `SERVICE_QUERY_STATUS` to Users.
+fn service_state() -> Option<u32> {
+    // SAFETY: standard SCM open -> query sequence; both handles closed before return.
+    unsafe {
+        let scm = OpenSCManagerW(None, None, SC_MANAGER_CONNECT).ok()?;
+        let name = wide_null(app::SERVICE_NAME);
+        let svc = match OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_QUERY_STATUS) {
+            Ok(h) => h,
+            Err(_) => {
+                let _ = CloseServiceHandle(scm);
+                return None;
+            }
+        };
+        let mut status = SERVICE_STATUS_PROCESS::default();
+        let mut needed = 0u32;
+        let buf = std::slice::from_raw_parts_mut(
+            &mut status as *mut _ as *mut u8,
+            std::mem::size_of::<SERVICE_STATUS_PROCESS>(),
+        );
+        let result = QueryServiceStatusEx(svc, SC_STATUS_PROCESS_INFO, Some(buf), &mut needed);
+        let _ = CloseServiceHandle(svc);
+        let _ = CloseServiceHandle(scm);
+        result.ok()?;
+        Some(status.dwCurrentState.0)
+    }
+}
+
 /// Check if the service is registered (doesn't need elevation).
 pub fn is_service_installed() -> bool {
-    try_sc(&["query", app::SERVICE_NAME])
+    service_state().is_some()
 }
 
-/// Run `sc query <service>` and return its stdout as text (empty on failure).
-fn sc_query_text() -> String {
-    Command::new(system32_exe("sc.exe"))
-        .args(["query", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
-        .unwrap_or_default()
-}
-
-/// Check if the service is running (STATE = 4 RUNNING).
+/// Check if the service is running (SERVICE_RUNNING).
 pub fn is_service_running() -> bool {
-    sc_query_text().contains("RUNNING")
+    service_state() == Some(SERVICE_RUNNING.0)
 }
 
 /// Check if hp-thermal.exe exists at the canonical install location.
@@ -157,26 +182,6 @@ pub fn is_service_current() -> bool {
         return false;
     }
     app::file_digest(&installed) == app::file_digest(our_exe)
-}
-
-/// Extract the service binary path from `sc qc` output.
-#[allow(dead_code)]
-fn service_exe_path() -> Option<String> {
-    let output = Command::new(system32_exe("sc.exe"))
-        .args(["qc", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .output()
-        .ok()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    for line in text.lines() {
-        let line = line.trim();
-        if let Some(rest) = line.strip_prefix("BINARY_PATH_NAME") {
-            let rest = rest.trim_start_matches([' ', ':']);
-            let path = rest.trim_matches('"').trim();
-            return Some(path.strip_suffix(" --service").unwrap_or(path).to_string());
-        }
-    }
-    None
 }
 
 // ---------------------------------------------------------------------------
@@ -395,8 +400,11 @@ pub fn wait_for_service_running() -> bool {
 /// means the process may still hold file locks.
 fn wait_for_service_stopped() {
     for _ in 0..40 {
-        if sc_query_text().contains("STOPPED") {
-            return;
+        match service_state() {
+            // Stopped, or gone entirely (== effectively stopped for our purposes).
+            Some(s) if s == SERVICE_STOPPED.0 => return,
+            None => return,
+            _ => {}
         }
         std::thread::sleep(std::time::Duration::from_millis(250));
     }
@@ -426,10 +434,9 @@ pub fn uninstall() {
 
     remove_run_key();
 
-    // Kill any tray instances first
-    let _ = silent_cmd("taskkill.exe")
-        .args(["/IM", app::EXE_NAME, "/F"])
-        .status();
+    // Close tray instances gracefully, then wait/force — native, no taskkill.
+    close_tray_windows();
+    wait_or_kill_other_instances();
 
     let _ = Command::new(system32_exe("sc.exe"))
         .args(["stop", app::SERVICE_NAME])
