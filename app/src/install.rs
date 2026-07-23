@@ -90,13 +90,7 @@ fn info_box(text: &str, flags: MESSAGEBOX_STYLE) {
 
 /// Check if the service is registered (doesn't need elevation).
 pub fn is_service_installed() -> bool {
-    Command::new("sc")
-        .args(["query", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .is_ok_and(|s| s.success())
+    try_sc(&["query", app::SERVICE_NAME])
 }
 
 /// Check if the service is running (STATE = 4 RUNNING).
@@ -541,16 +535,7 @@ pub fn install_service() {
         .creation_flags(CREATE_NO_WINDOW)
         .status();
 
-    let status = Command::new("sc")
-        .args(["start", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
-    match status {
-        Ok(s) if s.success() => eprintln!("Service started."),
-        Ok(s) => eprintln!("sc start failed: {}", s),
-        Err(e) => eprintln!("Failed to run sc: {}", e),
-    }
-
+    start_service();
     set_run_key();
 }
 
@@ -604,11 +589,7 @@ pub fn update_service() {
 
     // No delete+create — binPath is the same, just the file content changed.
     // Avoids ERROR_SERVICE_MARKED_FOR_DELETE (1072) race condition.
-    let status = Command::new("sc")
-        .args(["start", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
-    match status {
+    match sc_start_status() {
         Ok(s) if s.success() => log.write("service started"),
         Ok(s) => log.write(&format!("sc start failed: {s}")),
         Err(e) => log.write(&format!("sc start exec failed: {e}")),
@@ -788,13 +769,18 @@ pub fn start() {
     relaunch_elevated(w!("--start-svc"));
 }
 
-/// Internal: start the service (called from elevated child).
-pub fn start_service() {
-    let status = Command::new("sc")
+/// Run `sc start <service>` and return the raw status. Shared by the CLI and
+/// update paths, which report the result differently (stderr vs UpdateLog).
+fn sc_start_status() -> std::io::Result<std::process::ExitStatus> {
+    Command::new("sc")
         .args(["start", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
-        .status();
-    match status {
+        .status()
+}
+
+/// Internal: start the service (called from elevated child).
+pub fn start_service() {
+    match sc_start_status() {
         Ok(s) if s.success() => eprintln!("Service started."),
         Ok(s) => eprintln!("sc start failed: {}", s),
         Err(e) => eprintln!("Failed to run sc: {}", e),

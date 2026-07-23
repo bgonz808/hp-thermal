@@ -13,6 +13,25 @@ use crate::app;
 use crate::protocol::PIPE_MAGIC;
 use crate::wide::wide_null;
 
+/// Resolve a process's full image path from its PID via
+/// `QueryFullProcessImageNameW`. `None` if the process can't be opened or read.
+unsafe fn process_image_path(pid: u32) -> Option<String> {
+    let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+    let mut buf = [0u16; 260];
+    let mut len = buf.len() as u32;
+    let ok = QueryFullProcessImageNameW(
+        process,
+        PROCESS_NAME_WIN32,
+        PWSTR(buf.as_mut_ptr()),
+        &mut len,
+    );
+    let _ = CloseHandle(process);
+    if ok.is_err() {
+        return None;
+    }
+    Some(String::from_utf16_lossy(&buf[..len as usize]))
+}
+
 /// Create the named pipe server with a security descriptor allowing BUILTIN\Users.
 pub fn server_create() -> windows::core::Result<HANDLE> {
     // SAFETY: All Win32 calls operate on stack-allocated structs and a wide string
@@ -98,24 +117,9 @@ pub fn server_validate_client(pipe: HANDLE) -> bool {
             return false;
         }
 
-        let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, client_pid) else {
+        let Some(client_path) = process_image_path(client_pid) else {
             return false;
         };
-
-        let mut buf = [0u16; 260];
-        let mut len = buf.len() as u32;
-        let ok = QueryFullProcessImageNameW(
-            process,
-            PROCESS_NAME_WIN32,
-            PWSTR(buf.as_mut_ptr()),
-            &mut len,
-        );
-        let _ = CloseHandle(process);
-        if ok.is_err() {
-            return false;
-        }
-
-        let client_path = String::from_utf16_lossy(&buf[..len as usize]);
 
         // Client must be our exact exe: same directory AND same filename.
         // Directory check prevents random processes from connecting.
@@ -324,25 +328,12 @@ fn client_validate_server(pipe: HANDLE) -> bool {
         if GetNamedPipeServerProcessId(pipe, &mut server_pid).is_err() {
             return true; // cannot determine — defer
         }
-        let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, server_pid) else {
-            return true; // cannot open (policy/AV) — don't break the legit path
+        let Some(server_path) = process_image_path(server_pid) else {
+            return true; // cannot open/read (policy/AV) — don't break the legit path
         };
-        let mut buf = [0u16; 260];
-        let mut len = buf.len() as u32;
-        let ok = QueryFullProcessImageNameW(
-            process,
-            PROCESS_NAME_WIN32,
-            PWSTR(buf.as_mut_ptr()),
-            &mut len,
-        );
-        let _ = CloseHandle(process);
-        if ok.is_err() {
-            return true; // cannot read path — defer
-        }
 
         // Confirmed determination: the server must be our exe in our directory.
         // Program Files is admin-only-write, so a user-level squatter can't be here.
-        let server_path = String::from_utf16_lossy(&buf[..len as usize]);
         let server = std::path::Path::new(&server_path);
         let us = std::path::Path::new(app::exe_path());
         server.parent() == us.parent()
