@@ -220,21 +220,23 @@ const BIN_LABELS: [&str; STACK_NUM_BINS] = [
 /// Unlike `stack_committed()`, this fluctuates -- it goes UP during deep calls
 /// and back DOWN when they return. Use for per-operation attribution.
 pub fn stack_depth() -> usize {
-    // SAFETY: The anchor variable's address approximates the current RSP.
-    unsafe {
-        let (_, high) = stack_limits();
-        let anchor: u8 = 0;
-        let rsp = &anchor as *const u8 as usize;
-        high.saturating_sub(rsp)
-    }
+    // The anchor variable's address approximates the current RSP. Taking a
+    // reference's address and integer subtraction are safe.
+    let (_, high) = stack_limits();
+    let anchor: u8 = 0;
+    let rsp = &anchor as *const u8 as usize;
+    high.saturating_sub(rsp)
 }
 
-/// Current thread's stack (low, high) address bounds.
-unsafe fn stack_limits() -> (usize, usize) {
-    // SAFETY: GetCurrentThreadStackLimits writes to stack-allocated usizes.
+/// Current thread's stack (low, high) address bounds. Safe: no preconditions and
+/// the OS writes both out-params before return.
+fn stack_limits() -> (usize, usize) {
     let mut low: usize = 0;
     let mut high: usize = 0;
-    windows::Win32::System::Threading::GetCurrentThreadStackLimits(&mut low, &mut high);
+    // SAFETY: GetCurrentThreadStackLimits writes to two stack-allocated usizes.
+    unsafe {
+        windows::Win32::System::Threading::GetCurrentThreadStackLimits(&mut low, &mut high);
+    }
     (low, high)
 }
 

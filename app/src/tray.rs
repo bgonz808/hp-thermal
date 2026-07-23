@@ -948,35 +948,40 @@ unsafe fn append_item_disabled(hmenu: HMENU, id: u32, text: &str) {
 /// anything fails — DLL missing, index shifted on a future Windows, extraction
 /// error — it falls back to the generic application icon. It NEVER panics and
 /// NEVER returns a null icon (a null `hIcon` would show a blank/broken tray entry).
-unsafe fn load_tray_icon() -> HICON {
+fn load_tray_icon() -> HICON {
     // imageres.dll #144 = green activity/performance graph. Index can shift across
     // major Windows releases, so this is best-effort with a guaranteed fallback.
     const IMAGERES_PERF_GRAPH: i32 = 144;
 
-    // Build "<system32>\imageres.dll" so extraction doesn't depend on the current
-    // directory or DLL search path, and works regardless of the Windows drive.
-    let mut buf = [0u16; 260];
-    let len = GetSystemDirectoryW(Some(&mut buf)) as usize;
-    if len > 0 && len < buf.len() {
-        let mut path: Vec<u16> = buf[..len].to_vec();
-        path.extend(r"\imageres.dll".encode_utf16());
-        path.push(0);
-        let mut icon = HICON::default();
-        let n = ExtractIconExW(
-            PCWSTR(path.as_ptr()),
-            IMAGERES_PERF_GRAPH,
-            None,
-            Some(&mut icon),
-            1,
-        );
-        if n > 0 && !icon.is_invalid() {
-            return icon;
+    // SAFETY: GetSystemDirectoryW/ExtractIconExW/LoadIconW operate on stack and
+    // owned buffers with checked results; `path` is null-terminated. No caller
+    // preconditions — always returns a valid, non-null HICON.
+    unsafe {
+        // Build "<system32>\imageres.dll" so extraction doesn't depend on the
+        // current directory or DLL search path, and works on any Windows drive.
+        let mut buf = [0u16; 260];
+        let len = GetSystemDirectoryW(Some(&mut buf)) as usize;
+        if len > 0 && len < buf.len() {
+            let mut path: Vec<u16> = buf[..len].to_vec();
+            path.extend(r"\imageres.dll".encode_utf16());
+            path.push(0);
+            let mut icon = HICON::default();
+            let n = ExtractIconExW(
+                PCWSTR(path.as_ptr()),
+                IMAGERES_PERF_GRAPH,
+                None,
+                Some(&mut icon),
+                1,
+            );
+            if n > 0 && !icon.is_invalid() {
+                return icon;
+            }
         }
-    }
 
-    // Safe fallback: the predefined, always-available application icon. Using
-    // unwrap_or_default keeps this panic-free even in the impossible failure case.
-    LoadIconW(None, IDI_APPLICATION).unwrap_or_default()
+        // Safe fallback: the predefined, always-available application icon.
+        // unwrap_or_default keeps this panic-free even in the impossible failure case.
+        LoadIconW(None, IDI_APPLICATION).unwrap_or_default()
+    }
 }
 
 /// Open a path with the shell's default handler (ShellExecute "open").

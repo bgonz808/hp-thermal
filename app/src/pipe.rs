@@ -15,21 +15,28 @@ use crate::wide::wide_null;
 
 /// Resolve a process's full image path from its PID via
 /// `QueryFullProcessImageNameW`. `None` if the process can't be opened or read.
-unsafe fn process_image_path(pid: u32) -> Option<String> {
-    let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
-    let mut buf = [0u16; 260];
-    let mut len = buf.len() as u32;
-    let ok = QueryFullProcessImageNameW(
-        process,
-        PROCESS_NAME_WIN32,
-        PWSTR(buf.as_mut_ptr()),
-        &mut len,
-    );
-    let _ = CloseHandle(process);
-    if ok.is_err() {
-        return None;
+/// Safe: any `pid` is accepted (a bad one just yields `None`), and the process
+/// handle is always closed before return.
+fn process_image_path(pid: u32) -> Option<String> {
+    // SAFETY: OpenProcess yields a checked handle (or `None` via `?`);
+    // QueryFullProcessImageNameW writes at most `buf.len()` wchars and updates
+    // `len`; the handle is closed before return regardless of outcome.
+    unsafe {
+        let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?;
+        let mut buf = [0u16; 260];
+        let mut len = buf.len() as u32;
+        let ok = QueryFullProcessImageNameW(
+            process,
+            PROCESS_NAME_WIN32,
+            PWSTR(buf.as_mut_ptr()),
+            &mut len,
+        );
+        let _ = CloseHandle(process);
+        if ok.is_err() {
+            return None;
+        }
+        Some(String::from_utf16_lossy(&buf[..len as usize]))
     }
-    Some(String::from_utf16_lossy(&buf[..len as usize]))
 }
 
 /// Create the named pipe server with a security descriptor allowing BUILTIN\Users.
