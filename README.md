@@ -48,17 +48,21 @@ memory and CPU are internally consistent.
 | --- | ---: | ---: | ---: |
 | Install on disk | 168 MB | **0.19 MB** | ~885× |
 | Persistent processes | 3 | 2 | — |
-| **Private RSS** (private working set) | 141 MB | **3.2 MB** | **~44×** |
-| Total RSS (working set) | 351 MB | 28 MB | ~13× |
-| Shared RSS (WS − private) | 210 MB | 25 MB | — |
-| Commit (private bytes) | 266 MB | 4.2 MB | ~63× |
+| **Private working set** (private resident; Win `Working Set - Private` ≈ Linux USS) | 141 MB | **3.2 MB** | **~44×** |
+| Working set (total resident; ≈ Linux RSS) | 351 MB | 28 MB | ~13× |
+| — of which *shareable* (system DLLs etc.) | 210 MB | 25 MB | — |
+| Commit (private bytes; committed, may be paged out) | 266 MB | 4.2 MB | ~63× |
 | CPU cycles/s | ~3–6 M (continuous) | **0** | ∞ |
 
 **Reading it honestly:**
-- **Private RSS is the fair per-app cost.** Our 28 MB working set is ~88 % *shared* system
-  DLLs that every Windows process maps; our genuinely private footprint is **1.6 MB per
-  process**. HP's is mostly private managed heaps (.NET/UWP), so on private memory it holds
-  **~44× more** than us.
+- **Private working set is the fair number.** "Working set" (≈ RSS) counts *shared* pages —
+  the system DLLs every process maps — in full per process, so summing it across processes
+  double-counts them; and ~88 % of our 28 MB working set (25 MB) *is* those shared DLLs.
+  Private working set (Windows `Working Set - Private` ≈ Linux **USS**) counts only pages
+  unique to the process: no double-counting, and it's what's actually reclaimed when the
+  process exits. On that metric ours is **1.6 MB per process**, and HP — mostly private
+  .NET/UWP heaps — holds **~44× more**. (Windows has no direct PSS counter; summing private
+  working sets is the clean aggregate.)
 - **CPU:** `% Processor Time` sits below its own counter resolution at idle for both; the
   cycle counter is the sensitive metric. HP's `HpSystemManagement` daemon burns millions of
   cycles/s *continuously* (~0.1–0.2 % of one core); ours is a hard **0** — the event-driven
