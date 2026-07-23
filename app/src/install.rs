@@ -5,6 +5,7 @@ use std::process::Command;
 use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0};
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
+use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
 use windows::Win32::System::Threading::{
     CreateMutexW, GetCurrentProcess, OpenProcessToken, ReleaseMutex, WaitForSingleObject,
 };
@@ -95,7 +96,7 @@ pub fn is_service_installed() -> bool {
 
 /// Run `sc query <service>` and return its stdout as text (empty on failure).
 fn sc_query_text() -> String {
-    Command::new("sc")
+    Command::new(system32_exe("sc.exe"))
         .args(["query", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
@@ -161,7 +162,7 @@ pub fn is_service_current() -> bool {
 /// Extract the service binary path from `sc qc` output.
 #[allow(dead_code)]
 fn service_exe_path() -> Option<String> {
-    let output = Command::new("sc")
+    let output = Command::new(system32_exe("sc.exe"))
         .args(["qc", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
         .output()
@@ -287,7 +288,7 @@ fn ensure_data_dir() -> Result<(), String> {
 
     fs::create_dir_all(data_dir).map_err(|e| format!("Failed to create {data_dir}: {e}"))?;
 
-    let status = Command::new("icacls")
+    let status = Command::new(system32_exe("icacls.exe"))
         .args([data_dir, "/grant", "Users:(OI)(CI)(M)", "/T"])
         .creation_flags(CREATE_NO_WINDOW)
         .status();
@@ -439,18 +440,18 @@ pub fn uninstall() {
     remove_run_key();
 
     // Kill any tray instances first
-    let _ = silent_cmd("taskkill")
+    let _ = silent_cmd("taskkill.exe")
         .args(["/IM", app::EXE_NAME, "/F"])
         .status();
 
-    let _ = Command::new("sc")
+    let _ = Command::new(system32_exe("sc.exe"))
         .args(["stop", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
         .status();
 
     wait_for_service_stopped();
 
-    let _ = Command::new("sc")
+    let _ = Command::new(system32_exe("sc.exe"))
         .args(["delete", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
         .status();
@@ -502,7 +503,7 @@ pub fn install_service() {
     let installed = app::installed_exe();
     let bin_path = format!("\"{}\" --service", installed);
 
-    let status = Command::new("sc")
+    let status = Command::new(system32_exe("sc.exe"))
         .args([
             "create",
             app::SERVICE_NAME,
@@ -518,13 +519,13 @@ pub fn install_service() {
         Err(e) => eprintln!("Failed to run sc: {}", e),
     }
 
-    let _ = Command::new("sc")
+    let _ = Command::new(system32_exe("sc.exe"))
         .args(["description", app::SERVICE_NAME, app::SERVICE_DESC])
         .creation_flags(CREATE_NO_WINDOW)
         .status();
 
     let sddl = app::service_sddl();
-    let _ = Command::new("sc")
+    let _ = Command::new(system32_exe("sc.exe"))
         .args(["sdset", app::SERVICE_NAME, &sddl])
         .creation_flags(CREATE_NO_WINDOW)
         .status();
@@ -545,7 +546,7 @@ pub fn update_service() {
     close_tray_windows();
     log.write("posted WM_CLOSE to tray windows");
 
-    let _ = Command::new("sc")
+    let _ = Command::new(system32_exe("sc.exe"))
         .args(["stop", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
         .status();
@@ -699,7 +700,7 @@ fn who_locks_file(path: &str) -> Vec<String> {
 pub fn launch_tray() {
     let exe = app::installed_exe();
     if is_elevated() {
-        let _ = Command::new("runas")
+        let _ = Command::new(system32_exe("runas.exe"))
             .args(["/trustlevel:0x20000", &format!("\"{}\"", exe)])
             .creation_flags(CREATE_NO_WINDOW)
             .spawn();
@@ -747,7 +748,7 @@ pub fn stop() {
 
 /// Internal: stop the service (called from elevated child).
 pub fn stop_service() {
-    let _ = Command::new("sc")
+    let _ = Command::new(system32_exe("sc.exe"))
         .args(["stop", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
         .status();
@@ -766,7 +767,7 @@ pub fn start() {
 /// Run `sc start <service>` and return the raw status. Shared by the CLI and
 /// update paths, which report the result differently (stderr vs UpdateLog).
 fn sc_start_status() -> std::io::Result<std::process::ExitStatus> {
-    Command::new("sc")
+    Command::new(system32_exe("sc.exe"))
         .args(["start", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
         .status()
@@ -781,9 +782,31 @@ pub fn start_service() {
     }
 }
 
-/// A `Command` that runs without a console window and discards stdio.
+/// Absolute path to a System32 executable, e.g. `system32_exe("sc.exe")`.
+///
+/// Using an absolute path avoids the CreateProcess search order (application
+/// directory and CWD are searched *before* System32). In the elevated child,
+/// launched from wherever hp-thermal.exe lives (a user-writable Downloads folder
+/// on first run), a bare name like `"sc"` could otherwise resolve to a bundled
+/// malicious `sc.exe` and run as Administrator — a binary-planting LPE. An
+/// absolute path is not searched, closing that class entirely.
+fn system32_exe(name: &str) -> std::path::PathBuf {
+    let mut buf = [0u16; 260];
+    // SAFETY: GetSystemDirectoryW writes up to buf.len() wchars and returns the count.
+    let len = unsafe { GetSystemDirectoryW(Some(&mut buf)) } as usize;
+    let dir = if len > 0 && len < buf.len() {
+        String::from_utf16_lossy(&buf[..len])
+    } else {
+        // Last-resort fallback; %SystemRoot% is effectively always C:\Windows.
+        r"C:\Windows\System32".to_string()
+    };
+    std::path::Path::new(&dir).join(name)
+}
+
+/// A `Command` for a System32 tool that runs without a console window and
+/// discards stdio. `program` is a bare exe name, e.g. `"sc.exe"`.
 fn silent_cmd(program: &str) -> Command {
-    let mut cmd = Command::new(program);
+    let mut cmd = Command::new(system32_exe(program));
     cmd.creation_flags(CREATE_NO_WINDOW)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
@@ -792,7 +815,7 @@ fn silent_cmd(program: &str) -> Command {
 
 /// Try an sc command directly (may succeed if sdset grants rights). Returns true on success.
 fn try_sc(args: &[&str]) -> bool {
-    silent_cmd("sc")
+    silent_cmd("sc.exe")
         .args(args)
         .status()
         .is_ok_and(|s| s.success())
