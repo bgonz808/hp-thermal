@@ -156,7 +156,7 @@ pub fn is_service_current() -> bool {
     if our_meta.len() != inst_meta.len() {
         return false;
     }
-    file_hash(&installed) == file_hash(our_exe)
+    app::file_digest(&installed) == app::file_digest(our_exe)
 }
 
 /// Extract the service binary path from `sc qc` output.
@@ -177,19 +177,6 @@ fn service_exe_path() -> Option<String> {
         }
     }
     None
-}
-
-/// FNV-1a 64-bit hash of a file's contents.
-fn file_hash(path: &str) -> String {
-    let Ok(data) = fs::read(path) else {
-        return String::new();
-    };
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for &b in &data {
-        h ^= b as u64;
-        h = h.wrapping_mul(0x0100_0000_01b3);
-    }
-    format!("{h:016x}")
 }
 
 // ---------------------------------------------------------------------------
@@ -539,8 +526,8 @@ pub fn install_service() {
 pub fn update_service() {
     let log = UpdateLog::open();
     log.write("update_service started");
-    log.write(&format!("our exe: {}", app::exe_path()));
-    log.write(&format!("target:  {}", app::installed_exe()));
+    log.write(&format!("installing: {}", app::build_identity()));
+    log.write(&format!("target: {}", app::installed_exe()));
 
     // Ask tray to close gracefully (non-blocking, tray exits in background)
     close_tray_windows();
@@ -571,7 +558,13 @@ pub fn update_service() {
     }
 
     match copy_exe_to_install_dir() {
-        Ok(()) => log.write("copy succeeded"),
+        Ok(()) => {
+            log.write("copy succeeded");
+            log.write(&format!(
+                "installed digest: fnv={}",
+                app::file_digest(&app::installed_exe())
+            ));
+        }
         Err(e) => {
             log.write(&format!("COPY FAILED: {e}"));
             return;

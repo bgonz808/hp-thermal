@@ -50,6 +50,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     log::init("svc");
     log::install_stack_guard();
     log::write("service starting");
+    log::write(&format!("build: {}", app::build_identity()));
 
     let Ok(event) = CreateEventW(None, true, false, None) else {
         log::write("FAIL: CreateEventW");

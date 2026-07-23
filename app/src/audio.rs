@@ -376,8 +376,11 @@ fn sort_points(cal: &mut NoiseCal) {
 /// `GetId` is freed with `CoTaskMemFree` before returning.
 unsafe fn mic_device_hash(device: &IMMDevice) -> u64 {
     let Ok(id) = device.GetId() else { return 0 };
-    let mut hash = 0xcbf29ce484222325u64;
     let p = id.0;
+    // Collect the null-terminated wide id into bytes (little-endian per wchar),
+    // then hash with the canonical FNV-1a. Empty (null id) hashes to the FNV
+    // offset basis, matching the previous behavior.
+    let mut bytes = Vec::new();
     if !p.is_null() {
         let mut i = 0;
         loop {
@@ -385,15 +388,13 @@ unsafe fn mic_device_hash(device: &IMMDevice) -> u64 {
             if ch == 0 {
                 break;
             }
-            hash ^= (ch & 0xFF) as u64;
-            hash = hash.wrapping_mul(0x100000001b3);
-            hash ^= (ch >> 8) as u64;
-            hash = hash.wrapping_mul(0x100000001b3);
+            bytes.push((ch & 0xFF) as u8);
+            bytes.push((ch >> 8) as u8);
             i += 1;
         }
         CoTaskMemFree(Some(p as *const std::ffi::c_void));
     }
-    hash
+    crate::app::fnv1a_64(&bytes)
 }
 
 /// Read the system mic gain (0.0-1.0) via IAudioEndpointVolume.

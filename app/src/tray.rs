@@ -107,6 +107,7 @@ unsafe fn run_inner() {
     crate::log::init("tray");
     crate::log::install_stack_guard();
     crate::log::write("tray starting");
+    crate::log::write(&format!("build: {}", app::build_identity()));
 
     // Enable dark/light mode for popup menus (must be before any window creation)
     enable_system_theme_menus();

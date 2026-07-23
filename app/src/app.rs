@@ -8,6 +8,47 @@ pub const AUTHOR: &str = "bgonz808";
 pub const COPYRIGHT: &str = "MIT License";
 pub const REPO_URL: &str = "https://github.com/bgonz808/hp-thermal";
 
+// --- Build identity ---
+
+/// FNV-1a 64-bit hash of a byte slice — the one canonical implementation, used by
+/// [`file_digest`] and the audio device-id hash. (The 2-byte build fingerprint in
+/// `protocol` is a separate 32-bit *const* variant: it runs at compile time, so it
+/// can't call this, and it needs a different width for the wire.)
+pub fn fnv1a_64(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
+    for &b in bytes {
+        h ^= b as u64;
+        h = h.wrapping_mul(0x0100_0000_01b3);
+    }
+    h
+}
+
+/// FNV-1a 64-bit digest of a file's contents as hex (empty on read failure). The
+/// same digest the updater uses to compare on-disk binaries.
+pub fn file_digest(path: &str) -> String {
+    let Ok(data) = std::fs::read(path) else {
+        return String::new();
+    };
+    format!("{:016x}", fnv1a_64(&data))
+}
+
+/// One-line build identity for startup/install logs: version, build id + date,
+/// the running exe's path, and an FNV digest of that binary (so a swapped-but-
+/// same-version file is still distinguishable). Lets a log reader confirm exactly
+/// which build is running and from where.
+pub fn build_identity() -> String {
+    let exe = exe_path();
+    format!(
+        "{} {}+{} ({}) fnv={} path={}",
+        BIN_NAME,
+        env!("CARGO_PKG_VERSION"),
+        env!("BUILD_ID"),
+        env!("BUILD_DATE"),
+        file_digest(exe),
+        exe,
+    )
+}
+
 // --- Service ---
 pub const SERVICE_NAME: &str = "HpThermalService";
 pub const SERVICE_DESC: &str = "Lightweight thermal mode control for HP laptops.\nProvides WMI access for the hp-thermal tray app.\nhttps://github.com/bgonz808/hp-thermal";
