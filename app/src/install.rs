@@ -6,9 +6,10 @@ use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, HANDLE, WAIT_ABANDONED, WAIT_OBJECT_0};
 use windows::Win32::Security::{GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY};
 use windows::Win32::System::Services::{
-    CloseServiceHandle, OpenSCManagerW, OpenServiceW, QueryServiceStatusEx, SC_MANAGER_CONNECT,
-    SC_STATUS_PROCESS_INFO, SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_STATUS_PROCESS,
-    SERVICE_STOPPED,
+    CloseServiceHandle, ControlService, OpenSCManagerW, OpenServiceW, QueryServiceStatusEx,
+    StartServiceW, SC_MANAGER_CONNECT, SC_STATUS_PROCESS_INFO, SERVICE_CONTROL_STOP,
+    SERVICE_QUERY_STATUS, SERVICE_RUNNING, SERVICE_START, SERVICE_STATUS, SERVICE_STATUS_PROCESS,
+    SERVICE_STOP, SERVICE_STOPPED,
 };
 use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
 use windows::Win32::System::Threading::{
@@ -438,11 +439,7 @@ pub fn uninstall() {
     close_tray_windows();
     wait_or_kill_other_instances();
 
-    let _ = Command::new(system32_exe("sc.exe"))
-        .args(["stop", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
-
+    native_stop();
     wait_for_service_stopped();
 
     let _ = Command::new(system32_exe("sc.exe"))
@@ -540,11 +537,8 @@ pub fn update_service() {
     close_tray_windows();
     log.write("posted WM_CLOSE to tray windows");
 
-    let _ = Command::new(system32_exe("sc.exe"))
-        .args(["stop", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
-    log.write("sc stop issued");
+    native_stop();
+    log.write("stop issued");
 
     wait_for_service_stopped();
     log.write("service stopped");
@@ -584,10 +578,10 @@ pub fn update_service() {
 
     // No delete+create — binPath is the same, just the file content changed.
     // Avoids ERROR_SERVICE_MARKED_FOR_DELETE (1072) race condition.
-    match sc_start_status() {
-        Ok(s) if s.success() => log.write("service started"),
-        Ok(s) => log.write(&format!("sc start failed: {s}")),
-        Err(e) => log.write(&format!("sc start exec failed: {e}")),
+    if native_start() {
+        log.write("service started");
+    } else {
+        log.write("service start FAILED");
     }
 
     // Launch the tray from the updated PF binary. The bootstrap process that
@@ -738,8 +732,64 @@ fn elevate_or(arg: windows::core::PCWSTR, work: impl FnOnce()) {
     work();
 }
 
+/// Start the service via the SCM API. True if it started or is already running;
+/// false if we lack rights (caller should elevate) or it failed to start.
+fn native_start() -> bool {
+    if service_state() == Some(SERVICE_RUNNING.0) {
+        return true;
+    }
+    // SAFETY: standard SCM open -> StartService; handles closed before return.
+    unsafe {
+        let Ok(scm) = OpenSCManagerW(None, None, SC_MANAGER_CONNECT) else {
+            return false;
+        };
+        let name = wide_null(app::SERVICE_NAME);
+        // OpenService failure (access denied / not installed) -> caller elevates.
+        let ok = match OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_START) {
+            Ok(svc) => {
+                let ok = StartServiceW(svc, None).is_ok();
+                let _ = CloseServiceHandle(svc);
+                ok
+            }
+            Err(_) => false,
+        };
+        let _ = CloseServiceHandle(scm);
+        ok
+    }
+}
+
+/// Stop the service via the SCM API. True if it stopped / was already stopped or
+/// is absent; false if we lack rights (caller should elevate) or control failed.
+fn native_stop() -> bool {
+    match service_state() {
+        Some(s) if s == SERVICE_STOPPED.0 => return true,
+        None => return true, // not installed == nothing to stop
+        _ => {}
+    }
+    // SAFETY: standard SCM open -> ControlService(STOP); handles closed before return.
+    unsafe {
+        let Ok(scm) = OpenSCManagerW(None, None, SC_MANAGER_CONNECT) else {
+            return false;
+        };
+        let name = wide_null(app::SERVICE_NAME);
+        let ok = match OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_STOP) {
+            Ok(svc) => {
+                let mut status = SERVICE_STATUS::default();
+                let ok = ControlService(svc, SERVICE_CONTROL_STOP, &mut status).is_ok();
+                let _ = CloseServiceHandle(svc);
+                ok
+            }
+            Err(_) => false,
+        };
+        let _ = CloseServiceHandle(scm);
+        ok
+    }
+}
+
+/// Stop the service. Tries directly (our SDDL grants Users SERVICE_STOP), elevates
+/// as fallback.
 pub fn stop() {
-    if try_sc(&["stop", app::SERVICE_NAME]) {
+    if native_stop() {
         eprintln!("Service stopped.");
         return;
     }
@@ -748,37 +798,29 @@ pub fn stop() {
 
 /// Internal: stop the service (called from elevated child).
 pub fn stop_service() {
-    let _ = Command::new(system32_exe("sc.exe"))
-        .args(["stop", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status();
-    eprintln!("Service stopped.");
+    if native_stop() {
+        eprintln!("Service stopped.");
+    } else {
+        eprintln!("Service stop failed.");
+    }
 }
 
-/// Start the service. Tries directly (sdset grants rights), elevates as fallback.
+/// Start the service. Tries directly (our SDDL grants Users SERVICE_START),
+/// elevates as fallback.
 pub fn start() {
-    if try_sc(&["start", app::SERVICE_NAME]) {
+    if native_start() {
         eprintln!("Service started.");
         return;
     }
     relaunch_elevated(w!("--start-svc"));
 }
 
-/// Run `sc start <service>` and return the raw status. Shared by the CLI and
-/// update paths, which report the result differently (stderr vs UpdateLog).
-fn sc_start_status() -> std::io::Result<std::process::ExitStatus> {
-    Command::new(system32_exe("sc.exe"))
-        .args(["start", app::SERVICE_NAME])
-        .creation_flags(CREATE_NO_WINDOW)
-        .status()
-}
-
 /// Internal: start the service (called from elevated child).
 pub fn start_service() {
-    match sc_start_status() {
-        Ok(s) if s.success() => eprintln!("Service started."),
-        Ok(s) => eprintln!("sc start failed: {}", s),
-        Err(e) => eprintln!("Failed to run sc: {}", e),
+    if native_start() {
+        eprintln!("Service started.");
+    } else {
+        eprintln!("Service start failed.");
     }
 }
 
@@ -808,24 +850,6 @@ fn system32_exe(name: &str) -> std::path::PathBuf {
     }
     let dir = String::from_utf16_lossy(&buf[..len]);
     std::path::Path::new(&dir).join(name)
-}
-
-/// A `Command` for a System32 tool that runs without a console window and
-/// discards stdio. `program` is a bare exe name, e.g. `"sc.exe"`.
-fn silent_cmd(program: &str) -> Command {
-    let mut cmd = Command::new(system32_exe(program));
-    cmd.creation_flags(CREATE_NO_WINDOW)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
-    cmd
-}
-
-/// Try an sc command directly (may succeed if sdset grants rights). Returns true on success.
-fn try_sc(args: &[&str]) -> bool {
-    silent_cmd("sc.exe")
-        .args(args)
-        .status()
-        .is_ok_and(|s| s.success())
 }
 
 // ---------------------------------------------------------------------------
