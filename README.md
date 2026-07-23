@@ -29,40 +29,33 @@ It is a single `hp-thermal.exe`: the tray runs as your user, and a tiny Windows 
 runs as SYSTEM and performs the privileged BIOS/WMI calls, talking over a hardened local
 named pipe. See [SECURITY.md](SECURITY.md).
 
-**Idle cost: zero, and measured.** Both halves are event-driven, not polling. At rest
-**both the tray and the service execute 0 CPU cycles** — cycle-verified with
-`QueryProcessCycleTime` over repeated 20–30 s idle windows. The tray blocks in its message
-loop; the service waits on a **push-based WMI event sink** for the Fn+F12 hotkey, so it runs
-only when the key is actually pressed (no periodic wakeups — the earlier poll-based build
-spent ~209k cycles/s here). Versus HP Command Center's continuously-running background
-thermal daemon.
+**Idle cost: zero, and measured.** Both halves are event-driven, not polling: at rest
+**the tray and the service execute 0 CPU cycles** (verified with `QueryProcessCycleTime`
+over repeated 20–30 s idle windows). The tray blocks in its message loop; the service waits
+on a **push-based WMI event sink** for the Fn+F12 hotkey, so it wakes only when the key is
+pressed — where the earlier poll-based build spent ~209k cycles/s.
 
 ## Measured footprint vs HP Command Center
 
 Measured on the tested HP ENVY 16 (`8BE5`), Windows 11, on **2026-07-22**, against **HP
 Command Center `AD2F1837.HPThermalControl` v1.11.60.0**. All runtime numbers come from a
 single 30 s idle window (`QueryProcessCycleTime` + `Process(*)` performance counters), so
-memory and CPU are internally consistent.
+memory and CPU are internally consistent. Reproduce them yourself (run elevated):
+[`scripts/measure-footprint-vs-hpcc.ps1`](scripts/measure-footprint-vs-hpcc.ps1).
 
 | Metric (idle) | HP Command Center | hp-thermal | Ratio |
 | --- | ---: | ---: | ---: |
 | Install on disk | 168 MB | **0.19 MB** | ~885× |
 | Persistent processes | 3 | 2 | — |
 | **Private working set** (private resident; Win `Working Set - Private` ≈ Linux USS) | 141 MB | **3.2 MB** | **~44×** |
-| Working set (total resident; ≈ Linux RSS) | 351 MB | 28 MB | ~13× |
-| — of which *shareable* (system DLLs etc.) | 210 MB | 25 MB | — |
 | Commit (private bytes; committed, may be paged out) | 266 MB | 4.2 MB | ~63× |
 | CPU cycles/s | ~3–6 M (continuous) | **0** | ∞ |
 
-**Reading it honestly:**
-- **Private working set is the fair number.** "Working set" (≈ RSS) counts *shared* pages —
-  the system DLLs every process maps — in full per process, so summing it across processes
-  double-counts them; and ~88 % of our 28 MB working set (25 MB) *is* those shared DLLs.
-  Private working set (Windows `Working Set - Private` ≈ Linux **USS**) counts only pages
-  unique to the process: no double-counting, and it's what's actually reclaimed when the
-  process exits. On that metric ours is **1.6 MB per process**, and HP — mostly private
-  .NET/UWP heaps — holds **~44× more**. (Windows has no direct PSS counter; summing private
-  working sets is the clean aggregate.)
+**Notes on the numbers:**
+- **Private working set is the metric to compare on** — it counts only pages unique to the process
+  (Windows `Working Set - Private` ≈ Linux **USS**), so unlike raw RSS it doesn't
+  double-count the shared system DLLs every process maps. Ours is **1.6 MB per process**;
+  HP's mostly-private .NET/UWP heaps hold **~44× more**.
 - **CPU:** `% Processor Time` sits below its own counter resolution at idle for both; the
   cycle counter is the sensitive metric. HP's `HpSystemManagement` daemon burns millions of
   cycles/s *continuously* (~0.1–0.2 % of one core); ours is a hard **0** — the event-driven
