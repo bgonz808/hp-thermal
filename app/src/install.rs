@@ -93,15 +93,19 @@ pub fn is_service_installed() -> bool {
     try_sc(&["query", app::SERVICE_NAME])
 }
 
-/// Check if the service is running (STATE = 4 RUNNING).
-pub fn is_service_running() -> bool {
-    let output = Command::new("sc")
+/// Run `sc query <service>` and return its stdout as text (empty on failure).
+fn sc_query_text() -> String {
+    Command::new("sc")
         .args(["query", app::SERVICE_NAME])
         .creation_flags(CREATE_NO_WINDOW)
-        .output();
-    let Ok(out) = output else { return false };
-    let text = String::from_utf8_lossy(&out.stdout);
-    text.contains("RUNNING")
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+        .unwrap_or_default()
+}
+
+/// Check if the service is running (STATE = 4 RUNNING).
+pub fn is_service_running() -> bool {
+    sc_query_text().contains("RUNNING")
 }
 
 /// Check if hp-thermal.exe exists at the canonical install location.
@@ -403,15 +407,8 @@ pub fn wait_for_service_running() -> bool {
 /// means the process may still hold file locks.
 fn wait_for_service_stopped() {
     for _ in 0..40 {
-        let output = Command::new("sc")
-            .args(["query", app::SERVICE_NAME])
-            .creation_flags(CREATE_NO_WINDOW)
-            .output();
-        if let Ok(out) = output {
-            let text = String::from_utf8_lossy(&out.stdout);
-            if text.contains("STOPPED") {
-                return;
-            }
+        if sc_query_text().contains("STOPPED") {
+            return;
         }
         std::thread::sleep(std::time::Duration::from_millis(250));
     }
