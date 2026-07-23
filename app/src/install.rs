@@ -199,6 +199,28 @@ fn file_hash(path: &str) -> String {
 
 /// Register the tray in HKLM\...\Run so it auto-starts on logon for all users.
 /// Must be called elevated. Silently no-ops on failure.
+/// Open HKLM `...\Run` for `KEY_SET_VALUE` and pass the key to `f`, closing it
+/// afterward. No-op if the key can't be opened. Shared by the run-key set/remove.
+fn with_run_key(f: impl FnOnce(windows::Win32::System::Registry::HKEY)) {
+    use windows::Win32::System::Registry::*;
+    // SAFETY: subkey is a static wide literal; `key` is an out-param closed before return.
+    unsafe {
+        let mut key = HKEY::default();
+        let err = RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            w!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"),
+            None,
+            KEY_SET_VALUE,
+            &mut key,
+        );
+        if err.is_err() {
+            return;
+        }
+        f(key);
+        let _ = RegCloseKey(key);
+    }
+}
+
 fn set_run_key() {
     use windows::Win32::System::Registry::*;
 
@@ -209,46 +231,25 @@ fn set_run_key() {
     let data_bytes =
         unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 2) };
 
-    // SAFETY: subkey is a static wide string literal. key is an out-param from
-    // RegOpenKeyExW, closed before return.
-    unsafe {
-        let mut key = HKEY::default();
-        let err = RegOpenKeyExW(
-            HKEY_LOCAL_MACHINE,
-            w!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"),
-            None,
-            KEY_SET_VALUE,
-            &mut key,
-        );
-        if err.is_err() {
-            return;
+    with_run_key(|key| {
+        // SAFETY: `key` is a valid HKEY open for KEY_SET_VALUE; `data_bytes` lives
+        // for the call.
+        unsafe {
+            let _ = RegSetValueExW(key, w!("HpThermal"), None, REG_SZ, Some(data_bytes));
         }
-        let _ = RegSetValueExW(key, w!("HpThermal"), None, REG_SZ, Some(data_bytes));
-        let _ = RegCloseKey(key);
-    }
+    });
 }
 
 /// Remove the tray auto-start entry from HKLM\...\Run.
 fn remove_run_key() {
     use windows::Win32::System::Registry::*;
 
-    // SAFETY: subkey is a static wide string literal. key is an out-param,
-    // closed before return.
-    unsafe {
-        let mut key = HKEY::default();
-        let err = RegOpenKeyExW(
-            HKEY_LOCAL_MACHINE,
-            w!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run"),
-            None,
-            KEY_SET_VALUE,
-            &mut key,
-        );
-        if err.is_err() {
-            return;
+    with_run_key(|key| {
+        // SAFETY: `key` is a valid HKEY open for KEY_SET_VALUE.
+        unsafe {
+            let _ = RegDeleteValueW(key, w!("HpThermal"));
         }
-        let _ = RegDeleteValueW(key, w!("HpThermal"));
-        let _ = RegCloseKey(key);
-    }
+    });
 }
 
 // ---------------------------------------------------------------------------
@@ -428,64 +429,19 @@ fn wait_for_service_stopped() {
 
 /// Install the service. If not elevated, re-launches with UAC via --install-svc.
 pub fn install() {
-    if !is_elevated() {
-        let exe = app::exe_path();
-        let exe_w = wide_null(exe);
-        // SAFETY: `exe_w` is a valid null-terminated wide string alive for the call.
-        // "runas" verb triggers UAC elevation. SW_HIDE is a valid nShowCmd.
-        unsafe {
-            ShellExecuteW(
-                None,
-                w!("runas"),
-                windows::core::PCWSTR(exe_w.as_ptr()),
-                w!("--install-svc"),
-                None,
-                SW_HIDE,
-            );
-        }
-        return;
-    }
-    install_service();
+    elevate_or(w!("--install-svc"), install_service);
 }
 
 /// Update the service: stop → replace exe → delete → create → start.
 /// If not elevated, re-launches with UAC via --update-svc.
 pub fn update() {
-    if !is_elevated() {
-        let exe = app::exe_path();
-        let exe_w = wide_null(exe);
-        // SAFETY: Same ShellExecuteW contract as install(). `exe_w` outlives the call.
-        unsafe {
-            ShellExecuteW(
-                None,
-                w!("runas"),
-                windows::core::PCWSTR(exe_w.as_ptr()),
-                w!("--update-svc"),
-                None,
-                SW_HIDE,
-            );
-        }
-        return;
-    }
-    update_service();
+    elevate_or(w!("--update-svc"), update_service);
 }
 
 /// Uninstall the service and clean up directories. If not elevated, re-launches with UAC.
 pub fn uninstall() {
     if !is_elevated() {
-        let exe = app::exe_path();
-        let exe_w = wide_null(exe);
-        // SAFETY: Same ShellExecuteW contract as install(). `exe_w` outlives the call.
-        unsafe {
-            ShellExecuteW(
-                None,
-                w!("runas"),
-                windows::core::PCWSTR(exe_w.as_ptr()),
-                w!("uninstall"),
-                None,
-                SW_HIDE,
-            );
-        }
+        relaunch_elevated(w!("uninstall"));
         return;
     }
 
@@ -778,24 +734,40 @@ pub fn launch_tray() {
 }
 
 /// Stop the service. Tries directly (sdset grants rights), elevates as fallback.
-pub fn stop() {
-    if try_sc(&["stop", app::SERVICE_NAME]) {
-        eprintln!("Service stopped.");
-        return;
-    }
-    let exe = app::exe_path();
-    let exe_w = wide_null(exe);
-    // SAFETY: Same ShellExecuteW contract as install(). `exe_w` outlives the call.
+/// Re-launch this exe elevated (UAC) with a single internal `--*-svc` argument.
+/// Fire-and-forget: the elevated child does the privileged work.
+fn relaunch_elevated(arg: windows::core::PCWSTR) {
+    let exe_w = wide_null(app::exe_path());
+    // SAFETY: `exe_w` is a null-terminated wide string that outlives the call;
+    // `arg` is a static `w!()` literal.
     unsafe {
         ShellExecuteW(
             None,
             w!("runas"),
             windows::core::PCWSTR(exe_w.as_ptr()),
-            w!("--stop-svc"),
+            arg,
             None,
             SW_HIDE,
         );
     }
+}
+
+/// If not elevated, re-launch elevated with `arg` (UAC) and return; otherwise run
+/// `work` in-process. The relaunch-or-run preamble shared by install/update.
+fn elevate_or(arg: windows::core::PCWSTR, work: impl FnOnce()) {
+    if !is_elevated() {
+        relaunch_elevated(arg);
+        return;
+    }
+    work();
+}
+
+pub fn stop() {
+    if try_sc(&["stop", app::SERVICE_NAME]) {
+        eprintln!("Service stopped.");
+        return;
+    }
+    relaunch_elevated(w!("--stop-svc"));
 }
 
 /// Internal: stop the service (called from elevated child).
@@ -813,19 +785,7 @@ pub fn start() {
         eprintln!("Service started.");
         return;
     }
-    let exe = app::exe_path();
-    let exe_w = wide_null(exe);
-    // SAFETY: Same ShellExecuteW contract as install(). `exe_w` outlives the call.
-    unsafe {
-        ShellExecuteW(
-            None,
-            w!("runas"),
-            windows::core::PCWSTR(exe_w.as_ptr()),
-            w!("--start-svc"),
-            None,
-            SW_HIDE,
-        );
-    }
+    relaunch_elevated(w!("--start-svc"));
 }
 
 /// Internal: start the service (called from elevated child).
