@@ -794,12 +794,19 @@ fn system32_exe(name: &str) -> std::path::PathBuf {
     let mut buf = [0u16; 260];
     // SAFETY: GetSystemDirectoryW writes up to buf.len() wchars and returns the count.
     let len = unsafe { GetSystemDirectoryW(Some(&mut buf)) } as usize;
-    let dir = if len > 0 && len < buf.len() {
-        String::from_utf16_lossy(&buf[..len])
-    } else {
-        // Last-resort fallback; %SystemRoot% is effectively always C:\Windows.
-        r"C:\Windows\System32".to_string()
-    };
+    if len == 0 || len >= buf.len() {
+        // GetSystemDirectoryW is a core API that does not fail in practice. If it
+        // ever did, DO NOT guess a path for an elevated launch. Both guesses are
+        // unsafe: a hardcoded "C:\Windows\System32" is *squattable* when Windows is
+        // on another drive (the C:\ root grants Users "create folders", so a
+        // standard user could plant C:\Windows\System32\sc.exe), and %SystemRoot%
+        // is env-spoofable in the elevated child — either would run an
+        // attacker-controlled binary as Administrator, the exact class this
+        // function exists to prevent. Fail closed. (Matches app::known_folder_path.)
+        eprintln!("FATAL: GetSystemDirectoryW failed — refusing to resolve {name}");
+        std::process::exit(1);
+    }
+    let dir = String::from_utf16_lossy(&buf[..len]);
     std::path::Path::new(&dir).join(name)
 }
 
