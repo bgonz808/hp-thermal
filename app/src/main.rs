@@ -37,7 +37,14 @@ fn main() {
 
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(|s| s.as_str()) {
-        Some("--service") => service::run(),
+        Some("--service") => {
+            // Crown-jewel hardening: the SYSTEM service loads only MS-signed
+            // WMI/COM DLLs, so lock it to Microsoft-signed images only (blocks all
+            // non-MS injection/planting). Not applied to the tray (nvml + GUI
+            // third-party injection). Set before WMI/COM pulls in its DLLs.
+            mitigations::enforce_ms_signed_only();
+            service::run();
+        }
         Some("install" | "--install") => guarded_setup(|| {
             install::install();
             // Launch the tray once we know the service is up: immediately when we

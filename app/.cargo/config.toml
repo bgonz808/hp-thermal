@@ -20,6 +20,12 @@ rustflags = [
     "stack-protector=strong",
     "-C",
     "link-args=/STACK:262144",
+    # Resolve statically-imported DLLs from System32 only (0x800 =
+    # LOAD_LIBRARY_SEARCH_SYSTEM32), from the very first load — blocks DLL-planting
+    # from the app dir when the elevated installer runs from a writable folder.
+    # https://learn.microsoft.com/cpp/build/reference/dependentloadflag
+    "-C",
+    "link-arg=/DEPENDENTLOADFLAG:0x800",
 ]
 
 [unstable]
