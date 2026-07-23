@@ -53,20 +53,16 @@ impl HwInfo {
     }
 }
 
-/// CPU model string from registry (e.g. "13th Gen Intel(R) Core(TM) i7-13700H").
-pub fn cpu_name() -> String {
-    // SAFETY: Registry APIs operate on stack-allocated buffers. `key` is opened
-    // with KEY_READ and closed before return. `buf` is 256 wide chars (512 bytes);
-    // `size` is set to the buffer capacity and updated by RegQueryValueExW.
+/// Read a `REG_SZ` value under HKLM `subkey` into a string (empty on any
+/// failure). Consolidates the open / query / close / UTF-16-convert boilerplate
+/// shared by the registry readers below.
+fn read_registry_sz(subkey: windows::core::PCWSTR, value: windows::core::PCWSTR) -> String {
+    // SAFETY: Registry APIs operate on stack buffers; `key` is opened KEY_READ and
+    // closed before return. `buf` is 256 wide chars (512 bytes); `size` is set to
+    // capacity and updated by RegQueryValueExW. `subkey`/`value` outlive the call.
     unsafe {
         let mut key = HKEY::default();
-        let status = RegOpenKeyExW(
-            HKEY_LOCAL_MACHINE,
-            w!("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0"),
-            None,
-            KEY_READ,
-            &mut key,
-        );
+        let status = RegOpenKeyExW(HKEY_LOCAL_MACHINE, subkey, None, KEY_READ, &mut key);
         if status.is_err() {
             return String::new();
         }
@@ -76,7 +72,7 @@ pub fn cpu_name() -> String {
         let mut kind = REG_VALUE_TYPE::default();
         let status = RegQueryValueExW(
             key,
-            w!("ProcessorNameString"),
+            value,
             None,
             Some(&mut kind),
             Some(buf.as_mut_ptr() as *mut u8),
@@ -88,48 +84,24 @@ pub fn cpu_name() -> String {
             return String::new();
         }
 
-        let len = (size as usize / 2).saturating_sub(1);
-        String::from_utf16_lossy(&buf[..len]).trim().to_string()
-    }
-}
-
-fn read_bios_value(name: windows::core::PCWSTR) -> String {
-    // SAFETY: Same registry contract as cpu_name(); `name` is a compile-time
-    // w!() literal with static lifetime. Key is closed before return.
-    unsafe {
-        let mut key = HKEY::default();
-        let status = RegOpenKeyExW(
-            HKEY_LOCAL_MACHINE,
-            w!("HARDWARE\\DESCRIPTION\\System\\BIOS"),
-            None,
-            KEY_READ,
-            &mut key,
-        );
-        if status.is_err() {
-            return String::new();
-        }
-
-        let mut buf = [0u16; 256];
-        let mut size = (buf.len() * 2) as u32;
-        let mut kind = REG_VALUE_TYPE::default();
-        let status = RegQueryValueExW(
-            key,
-            name,
-            None,
-            Some(&mut kind),
-            Some(buf.as_mut_ptr() as *mut u8),
-            Some(&mut size),
-        );
-        let _ = RegCloseKey(key);
-
-        if status.is_err() || kind != REG_SZ {
-            return String::new();
-        }
-
-        // size is in bytes, includes null terminator
+        // size is in bytes and includes the null terminator.
         let len = (size as usize / 2).saturating_sub(1);
         String::from_utf16_lossy(&buf[..len])
     }
+}
+
+/// CPU model string from registry (e.g. "13th Gen Intel(R) Core(TM) i7-13700H").
+pub fn cpu_name() -> String {
+    read_registry_sz(
+        w!("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0"),
+        w!("ProcessorNameString"),
+    )
+    .trim()
+    .to_string()
+}
+
+fn read_bios_value(name: windows::core::PCWSTR) -> String {
+    read_registry_sz(w!("HARDWARE\\DESCRIPTION\\System\\BIOS"), name)
 }
 
 #[cfg(test)]

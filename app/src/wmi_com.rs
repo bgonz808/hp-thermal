@@ -128,30 +128,26 @@ impl WmiConnection {
         }
     }
 
+    /// Run a WQL query and return the result enumerator. DRYs the ExecQuery call
+    /// shared by every read path; iterate it with [`next_obj`].
+    unsafe fn query(&self, wql: &str) -> Result<IEnumWbemClassObject, u8> {
+        self.services
+            .ExecQuery(
+                &BSTR::from("WQL"),
+                &BSTR::from(wql),
+                WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+                None,
+            )
+            .map_err(|_| STATUS_WMI_ERROR)
+    }
+
     /// Read CPU package temp from Intel ESIF (DPTF/IPF framework).
     /// Queries EsifDeviceInformation in root\wmi — same namespace we're
     /// already connected to. Instance _3 = Package Domain (confirmed in
     /// experiment 12: tracks 56°C idle → 73°C under 20-thread stress).
     unsafe fn read_esif_temp(&self) -> Result<u8, u8> {
-        let enumerator = self
-            .services
-            .ExecQuery(
-                &BSTR::from("WQL"),
-                &BSTR::from("SELECT Temperature, InstanceName FROM EsifDeviceInformation"),
-                WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-                None,
-            )
-            .map_err(|_| STATUS_WMI_ERROR)?;
-
-        loop {
-            let mut objs = [None; 1];
-            let mut returned = 0u32;
-            let hr = enumerator.Next(WBEM_INFINITE, &mut objs, &mut returned);
-            if hr.is_err() || returned == 0 {
-                break;
-            }
-            let Some(obj) = objs[0].take() else { break };
-
+        let en = self.query("SELECT Temperature, InstanceName FROM EsifDeviceInformation")?;
+        while let Some(obj) = next_obj(&en) {
             // Instance name format: "..._N" where N is the participant index.
             // We want _3 (Package Domain).
             let Ok(name) = get_bstr(&obj, w!("InstanceName")) else {
@@ -172,25 +168,9 @@ impl WmiConnection {
 
     /// Fallback: ACPI thermal zones (max across all zones).
     unsafe fn read_acpi_temp(&self) -> Result<u8, u8> {
-        let enumerator = self
-            .services
-            .ExecQuery(
-                &BSTR::from("WQL"),
-                &BSTR::from("SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature"),
-                WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-                None,
-            )
-            .map_err(|_| STATUS_WMI_ERROR)?;
-
+        let en = self.query("SELECT CurrentTemperature FROM MSAcpi_ThermalZoneTemperature")?;
         let mut max_c: i32 = 0;
-        loop {
-            let mut objs = [None; 1];
-            let mut returned = 0u32;
-            let hr = enumerator.Next(WBEM_INFINITE, &mut objs, &mut returned);
-            if hr.is_err() || returned == 0 {
-                break;
-            }
-            let Some(obj) = objs[0].take() else { break };
+        while let Some(obj) = next_obj(&en) {
             if let Ok(raw) = get_u32(&obj, w!("CurrentTemperature")) {
                 // Value is in tenths of Kelvin
                 let c = (raw as i32 - 2732) / 10;
@@ -262,23 +242,8 @@ impl WmiConnection {
     pub fn read_brightness(&self) -> Result<u8, u8> {
         // SAFETY: COM is initialized and self.services is a valid IWbemServices.
         unsafe {
-            let enumerator = self
-                .services
-                .ExecQuery(
-                    &BSTR::from("WQL"),
-                    &BSTR::from("SELECT CurrentBrightness FROM WmiMonitorBrightness"),
-                    WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-                    None,
-                )
-                .map_err(|_| STATUS_WMI_ERROR)?;
-
-            let mut objs = [None; 1];
-            let mut returned = 0u32;
-            let _ = enumerator.Next(WBEM_INFINITE, &mut objs, &mut returned);
-            if returned == 0 {
-                return Err(STATUS_WMI_ERROR);
-            }
-            let obj = objs[0].take().ok_or(STATUS_WMI_ERROR)?;
+            let en = self.query("SELECT CurrentBrightness FROM WmiMonitorBrightness")?;
+            let obj = next_obj(&en).ok_or(STATUS_WMI_ERROR)?;
             let val = get_u32(&obj, w!("CurrentBrightness"))?;
             Ok(val.clamp(0, 100) as u8)
         }
@@ -291,23 +256,8 @@ impl WmiConnection {
         // SAFETY: COM is initialized. ExecQuery finds the instance path,
         // GetObject+GetMethod builds the input params, ExecMethod invokes.
         unsafe {
-            let enumerator = self
-                .services
-                .ExecQuery(
-                    &BSTR::from("WQL"),
-                    &BSTR::from("SELECT * FROM WmiMonitorBrightnessMethods"),
-                    WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
-                    None,
-                )
-                .map_err(|_| STATUS_WMI_ERROR)?;
-
-            let mut objs = [None; 1];
-            let mut returned = 0u32;
-            let _ = enumerator.Next(WBEM_INFINITE, &mut objs, &mut returned);
-            if returned == 0 {
-                return Err(STATUS_WMI_ERROR);
-            }
-            let inst = objs[0].take().ok_or(STATUS_WMI_ERROR)?;
+            let en = self.query("SELECT * FROM WmiMonitorBrightnessMethods")?;
+            let inst = next_obj(&en).ok_or(STATUS_WMI_ERROR)?;
             let inst_path = get_bstr(&inst, w!("__RELPATH")).map_err(|_| STATUS_WMI_ERROR)?;
 
             let mut class_def = None;
@@ -606,11 +556,20 @@ unsafe fn log_put_u32(
     })
 }
 
-unsafe fn put_bytes(obj: &IWbemClassObject, name: PCWSTR, data: &[u8]) -> Result<(), u8> {
-    let mut var = var_from_bytes(data).map_err(|_| STATUS_WMI_ERROR)?;
+/// Put a pre-built VARIANT under `name`, then clear it. Shared tail of the
+/// typed `put_*` helpers.
+unsafe fn put_variant(obj: &IWbemClassObject, name: PCWSTR, mut var: VARIANT) -> Result<(), u8> {
     obj.Put(name, 0, &var, 0).map_err(|_| STATUS_WMI_ERROR)?;
     VariantClear(&mut var).map_err(|_| STATUS_WMI_ERROR)?;
     Ok(())
+}
+
+unsafe fn put_bytes(obj: &IWbemClassObject, name: PCWSTR, data: &[u8]) -> Result<(), u8> {
+    put_variant(
+        obj,
+        name,
+        var_from_bytes(data).map_err(|_| STATUS_WMI_ERROR)?,
+    )
 }
 
 unsafe fn put_object(
@@ -618,10 +577,11 @@ unsafe fn put_object(
     name: PCWSTR,
     embedded: &IWbemClassObject,
 ) -> Result<(), u8> {
-    let mut var = var_from_object(embedded).map_err(|_| STATUS_WMI_ERROR)?;
-    obj.Put(name, 0, &var, 0).map_err(|_| STATUS_WMI_ERROR)?;
-    VariantClear(&mut var).map_err(|_| STATUS_WMI_ERROR)?;
-    Ok(())
+    put_variant(
+        obj,
+        name,
+        var_from_object(embedded).map_err(|_| STATUS_WMI_ERROR)?,
+    )
 }
 
 unsafe fn var_from_u32(val: u32) -> VARIANT {
@@ -659,10 +619,28 @@ unsafe fn var_from_object(obj: &IWbemClassObject) -> windows::core::Result<VARIA
 // VARIANT helpers — read
 // ---------------------------------------------------------------------------
 
-unsafe fn get_u32(obj: &IWbemClassObject, name: PCWSTR) -> Result<u32, u8> {
+/// Pull the next object from a WMI result enumerator, or `None` at end/error.
+/// DRYs the `Next` + `take` dance shared by every result loop.
+unsafe fn next_obj(en: &IEnumWbemClassObject) -> Option<IWbemClassObject> {
+    let mut objs = [None; 1];
+    let mut returned = 0u32;
+    let hr = en.Next(WBEM_INFINITE, &mut objs, &mut returned);
+    if hr.is_err() || returned == 0 {
+        return None;
+    }
+    objs[0].take()
+}
+
+/// Get a VARIANT under `name`. Shared head of the typed `get_*` helpers.
+unsafe fn get_variant(obj: &IWbemClassObject, name: PCWSTR) -> Result<VARIANT, u8> {
     let mut var = VARIANT::default();
     obj.Get(name, 0, &mut var, None, None)
         .map_err(|_| STATUS_WMI_ERROR)?;
+    Ok(var)
+}
+
+unsafe fn get_u32(obj: &IWbemClassObject, name: PCWSTR) -> Result<u32, u8> {
+    let var = get_variant(obj, name)?;
     let inner = &*var.Anonymous.Anonymous;
     match VARENUM(inner.vt.0) {
         VT_UI4 => Ok(inner.Anonymous.ulVal),
@@ -672,9 +650,7 @@ unsafe fn get_u32(obj: &IWbemClassObject, name: PCWSTR) -> Result<u32, u8> {
 }
 
 unsafe fn get_bytes(obj: &IWbemClassObject, name: PCWSTR) -> Result<Vec<u8>, u8> {
-    let mut var = VARIANT::default();
-    obj.Get(name, 0, &mut var, None, None)
-        .map_err(|_| STATUS_WMI_ERROR)?;
+    let var = get_variant(obj, name)?;
     let psa = (*var.Anonymous.Anonymous).Anonymous.parray;
     if psa.is_null() {
         return Err(STATUS_WMI_ERROR);
@@ -690,9 +666,7 @@ unsafe fn get_bytes(obj: &IWbemClassObject, name: PCWSTR) -> Result<Vec<u8>, u8>
 }
 
 unsafe fn get_object(obj: &IWbemClassObject, name: PCWSTR) -> Result<IWbemClassObject, u8> {
-    let mut var = VARIANT::default();
-    obj.Get(name, 0, &mut var, None, None)
-        .map_err(|_| STATUS_WMI_ERROR)?;
+    let var = get_variant(obj, name)?;
     let inner = &*var.Anonymous.Anonymous;
     let punk: &ManuallyDrop<Option<windows::core::IUnknown>> = &inner.Anonymous.punkVal;
     let unknown = punk.as_ref().ok_or(STATUS_WMI_ERROR)?.clone();

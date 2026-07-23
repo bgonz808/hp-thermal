@@ -357,60 +357,22 @@ fn set_status(state: SERVICE_STATUS_CURRENT_STATE, exit_code: u32) {
     }
 }
 
-/// Create and signal the svc-start event. The tray waits on this to detect
-/// that the service (re)started, then checks BUILD_FINGERPRINT via the pipe.
-/// Handle is intentionally leaked — lives for the service process lifetime.
-fn signal_svc_start_event() {
-    // SAFETY: Stack-allocated SD; LocalFree cleans up. Event name is a wide
-    // string that outlives CreateEventW. SetEvent on a valid handle is safe.
+/// Create a named auto-reset event with the shared DACL and return its handle
+/// (the caller keeps or leaks it). Returns None on failure.
+///
+/// Explicit specific rights — generic GR/GA store the generic bit in the ACE,
+/// which causes ACCESS_DENIED when the tray requests SYNCHRONIZE (a specific
+/// right) via OpenEventW.
+///   BU: SYNCHRONIZE|READ_CONTROL (0x00120000) — wait only, cannot signal
+///   SY/BA: EVENT_ALL_ACCESS (0x001F0003) — full control
+fn create_named_event(name: &str) -> Option<HANDLE> {
+    // SAFETY: Stack-allocated SD freed via LocalFree; the wide event name outlives
+    // the CreateEventW call.
     unsafe {
-        // Explicit specific rights — generic GR/GA store the generic bit in the
-        // ACE, which causes ACCESS_DENIED when the tray requests SYNCHRONIZE (a
-        // specific right) via OpenEventW.
-        // BU: SYNCHRONIZE|READ_CONTROL (0x00120000) — wait only, cannot signal
-        // SY/BA: EVENT_ALL_ACCESS (0x001F0003) — full control
         let sddl = w!("D:(A;;0x00120000;;;BU)(A;;0x001F0003;;;SY)(A;;0x001F0003;;;BA)");
         let mut sd: PSECURITY_DESCRIPTOR = PSECURITY_DESCRIPTOR(std::ptr::null_mut());
         if ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, &mut sd, None).is_err() {
-            log::write("svc-start event: SDDL parse failed");
-            return;
-        }
-
-        let sa = SECURITY_ATTRIBUTES {
-            nLength: std::mem::size_of::<SECURITY_ATTRIBUTES>() as u32,
-            lpSecurityDescriptor: sd.0,
-            bInheritHandle: false.into(),
-        };
-
-        let name = wide_null(app::SVC_START_EVENT);
-        // Auto-reset: after one waiter (the tray) is released, event resets.
-        let event = CreateEventW(Some(&sa), false, false, PCWSTR(name.as_ptr()));
-        LocalFree(Some(HLOCAL(sd.0)));
-
-        match event {
-            Ok(h) => {
-                let _ = SetEvent(h);
-                log::write("svc-start event: signaled");
-                // Handle leaked: keeps the named object alive for the process lifetime.
-                // Tray's OpenEventW resolves to this same kernel object.
-            }
-            Err(e) => {
-                log::write(&format!("svc-start event: CreateEventW failed: {e}"));
-            }
-        }
-    }
-}
-
-/// Create a named auto-reset event with a DACL allowing interactive users to wait on it.
-fn create_fn_key_event() -> Option<HANDLE> {
-    // SAFETY: Stack-allocated SD; LocalFree cleans up. Event name is a wide string
-    // that outlives the CreateEventW call.
-    unsafe {
-        // Same specific-rights DACL as signal_svc_start_event (see comment there).
-        let sddl = w!("D:(A;;0x00120000;;;BU)(A;;0x001F0003;;;SY)(A;;0x001F0003;;;BA)");
-        let mut sd: PSECURITY_DESCRIPTOR = PSECURITY_DESCRIPTOR(std::ptr::null_mut());
-        if ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, &mut sd, None).is_err() {
-            log::write("event: ConvertStringSecurityDescriptor failed");
+            log::write(&format!("named event {name}: SDDL parse failed"));
             return None;
         }
 
@@ -420,19 +382,38 @@ fn create_fn_key_event() -> Option<HANDLE> {
             bInheritHandle: false.into(),
         };
 
-        let name = wide_null(app::FNKEY_EVENT);
-        // Auto-reset (bManualReset=false): resets after one waiter is released
-        let event = CreateEventW(Some(&sa), false, false, PCWSTR(name.as_ptr()));
+        // Auto-reset (bManualReset=false): resets after one waiter is released.
+        let wname = wide_null(name);
+        let event = CreateEventW(Some(&sa), false, false, PCWSTR(wname.as_ptr()));
         LocalFree(Some(HLOCAL(sd.0)));
 
         match event {
             Ok(h) => Some(h),
             Err(e) => {
-                log::write(&format!("event: CreateEventW failed: {e}"));
+                log::write(&format!("named event {name}: CreateEventW failed: {e}"));
                 None
             }
         }
     }
+}
+
+/// Create and signal the svc-start event. The tray waits on this to detect that
+/// the service (re)started, then checks BUILD_FINGERPRINT via the pipe. Handle
+/// is intentionally leaked — lives for the service process lifetime, and the
+/// tray's OpenEventW resolves to this same kernel object.
+fn signal_svc_start_event() {
+    if let Some(h) = create_named_event(app::SVC_START_EVENT) {
+        // SAFETY: `h` is a valid auto-reset event handle.
+        unsafe {
+            let _ = SetEvent(h);
+        }
+        log::write("svc-start event: signaled");
+    }
+}
+
+/// Create the Fn+F12 named event the tray waits on.
+fn create_fn_key_event() -> Option<HANDLE> {
+    create_named_event(app::FNKEY_EVENT)
 }
 
 #[cfg(test)]

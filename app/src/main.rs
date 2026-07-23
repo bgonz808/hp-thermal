@@ -38,14 +38,7 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(|s| s.as_str()) {
         Some("--service") => service::run(),
-        Some("install" | "--install") => {
-            if require_hp().is_none() {
-                return; // never elevate/install on non-HP hardware
-            }
-            let Some(_lock) = install::acquire_setup_lock() else {
-                install::warn_setup_in_progress();
-                return;
-            };
+        Some("install" | "--install") => guarded_setup(|| {
             install::install();
             // Launch the tray once we know the service is up: immediately when we
             // were already elevated (no child to wait on), otherwise after the
@@ -53,42 +46,15 @@ fn main() {
             if install::is_elevated() || install::wait_for_service_running() {
                 install::launch_tray();
             }
-        }
+        }),
         // Internal: UAC children — do sc commands only, parent handles tray.
         Some("--install-svc") => install::install_service(),
         Some("--update-svc") => install::update_service(),
         Some("--stop-svc") => install::stop_service(),
         Some("--start-svc") => install::start_service(),
-        Some("stop" | "--stop") => {
-            if require_hp().is_none() {
-                return;
-            }
-            let Some(_lock) = install::acquire_setup_lock() else {
-                install::warn_setup_in_progress();
-                return;
-            };
-            install::stop();
-        }
-        Some("start" | "--start") => {
-            if require_hp().is_none() {
-                return;
-            }
-            let Some(_lock) = install::acquire_setup_lock() else {
-                install::warn_setup_in_progress();
-                return;
-            };
-            install::start();
-        }
-        Some("uninstall" | "--uninstall") => {
-            if require_hp().is_none() {
-                return;
-            }
-            let Some(_lock) = install::acquire_setup_lock() else {
-                install::warn_setup_in_progress();
-                return;
-            };
-            install::uninstall();
-        }
+        Some("stop" | "--stop") => guarded_setup(install::stop),
+        Some("start" | "--start") => guarded_setup(install::start),
+        Some("uninstall" | "--uninstall") => guarded_setup(install::uninstall),
         Some("--help" | "-h" | "help") => print_help(),
         Some("--version" | "-v" | "-V") => {
             println!("{} {VERSION}+{BUILD_ID} ({BUILD_DATE})", app::BIN_NAME);
@@ -105,6 +71,23 @@ fn main() {
 /// with an error dialog BEFORE anything can elevate (UAC) or modify system state.
 /// Every command that installs, elevates, or changes the service must call this
 /// FIRST — fail early, on unsupported hardware, before any permission or change.
+/// Run a privileged setup operation behind the two mandatory gates, in order:
+/// (1) the HP-hardware check — never elevate or touch a non-HP box; (2) the
+/// setup lock — fail closed, with user feedback on contention. The lock is held
+/// for the whole operation and released when it returns. Every install/update/
+/// start/stop/uninstall entry point must go through here so the ordering is
+/// enforced in exactly one place.
+fn guarded_setup(op: impl FnOnce()) {
+    if require_hp().is_none() {
+        return;
+    }
+    let Some(_lock) = install::acquire_setup_lock() else {
+        install::warn_setup_in_progress();
+        return;
+    };
+    op();
+}
+
 fn require_hp() -> Option<hwinfo::HwInfo> {
     let hw = hwinfo::HwInfo::read();
     if !hw.is_hp() {
