@@ -667,51 +667,7 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
                 return;
             }
             NOISE_ADAPT_RUNNING = true;
-
-            // Disable CoolSense (manual selection overrides auto)
-            pipe::client_transact(CMD_SET_COOLSENSE, 0);
-
-            let current = pipe::client_transact(CMD_READ_THERMAL, 0)
-                .map(|r| r[1])
-                .unwrap_or(1);
-
-            let hwnd_raw = hwnd.0 as usize;
-            std::thread::spawn(move || {
-                let result = crate::audio::smart_measure(
-                    current,
-                    |mode| {
-                        pipe::client_transact(CMD_SET_THERMAL, mode);
-                    },
-                    false,
-                );
-
-                let (wparam_val, lparam_val) = match result {
-                    Ok(r) => {
-                        if let Ok(mut info) = LAST_MIC_INFO.lock() {
-                            *info = (r.mic_name, r.mic_gain);
-                        }
-                        let w = r.chosen_mode as usize | if r.fast_path { 0x100 } else { 0 };
-                        let l = (r.delta_db * 10.0) as i32;
-                        (w, l)
-                    }
-                    Err(e) => {
-                        crate::log::write(&format!("noise-adapt: error: {e}"));
-                        (current as usize, 0i32)
-                    }
-                };
-
-                // SAFETY: PostMessageW is thread-safe. hwnd_raw was captured from a
-                // valid HWND on the UI thread; the window outlives this worker thread.
-                unsafe {
-                    let _ = PostMessageW(
-                        Some(HWND(hwnd_raw as *mut _)),
-                        WM_NOISE_ADAPT_DONE,
-                        WPARAM(wparam_val),
-                        LPARAM(lparam_val as isize),
-                    );
-                }
-            });
-
+            run_smart_measure_thread(hwnd, false, "noise-adapt");
             set_tooltip_text(
                 hwnd,
                 &format!("{}: Noise Adapted (measuring...)", app::NAME),
@@ -875,55 +831,12 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
                 return;
             }
             NOISE_ADAPT_RUNNING = true;
-
-            pipe::client_transact(CMD_SET_COOLSENSE, 0);
-
-            let current = pipe::client_transact(CMD_READ_THERMAL, 0)
-                .map(|r| r[1])
-                .unwrap_or(1);
-
             show_balloon(
                 hwnd,
                 "Debug Calibration",
                 "A/B test with WAV recording.\nWill open results folder when done.",
             );
-
-            let hwnd_raw = hwnd.0 as usize;
-            std::thread::spawn(move || {
-                let result = crate::audio::smart_measure(
-                    current,
-                    |mode| {
-                        pipe::client_transact(CMD_SET_THERMAL, mode);
-                    },
-                    true,
-                );
-
-                let (wparam_val, lparam_val) = match result {
-                    Ok(r) => {
-                        if let Ok(mut info) = LAST_MIC_INFO.lock() {
-                            *info = (r.mic_name, r.mic_gain);
-                        }
-                        let w = r.chosen_mode as usize | if r.fast_path { 0x100 } else { 0 };
-                        let l = (r.delta_db * 10.0) as i32;
-                        (w, l)
-                    }
-                    Err(e) => {
-                        crate::log::write(&format!("debug-cal: error: {e}"));
-                        (current as usize, 0i32)
-                    }
-                };
-
-                // SAFETY: Same PostMessageW cross-thread contract as noise-adapt above.
-                unsafe {
-                    let _ = PostMessageW(
-                        Some(HWND(hwnd_raw as *mut _)),
-                        WM_NOISE_ADAPT_DONE,
-                        WPARAM(wparam_val),
-                        LPARAM(lparam_val as isize),
-                    );
-                }
-            });
-
+            run_smart_measure_thread(hwnd, true, "debug-cal");
             set_tooltip_text(hwnd, &format!("{}: Debug Calibration...", app::NAME));
             return;
         }
@@ -956,6 +869,55 @@ unsafe fn update_tooltip(hwnd: HWND) {
     nid.uFlags = NIF_TIP;
     set_tip(&mut nid, &label);
     let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
+}
+
+/// Run a background smart-measure (noise-adapt or debug-cal) and post the result
+/// to the UI thread via `WM_NOISE_ADAPT_DONE`. `debug` selects WAV-recording A/B
+/// mode; `label` tags any error log line. Shared body of the two menu handlers.
+#[cfg(feature = "noise-adapt")]
+fn run_smart_measure_thread(hwnd: HWND, debug: bool, label: &'static str) {
+    // Disable CoolSense (a manual selection overrides auto), then capture the
+    // current mode as the measurement baseline.
+    pipe::client_transact(CMD_SET_COOLSENSE, 0);
+    let current = pipe::client_transact(CMD_READ_THERMAL, 0)
+        .map(|r| r[1])
+        .unwrap_or(1);
+    let hwnd_raw = hwnd.0 as usize;
+    std::thread::spawn(move || {
+        let result = crate::audio::smart_measure(
+            current,
+            |mode| {
+                pipe::client_transact(CMD_SET_THERMAL, mode);
+            },
+            debug,
+        );
+
+        let (wparam_val, lparam_val) = match result {
+            Ok(r) => {
+                if let Ok(mut info) = LAST_MIC_INFO.lock() {
+                    *info = (r.mic_name, r.mic_gain);
+                }
+                let w = r.chosen_mode as usize | if r.fast_path { 0x100 } else { 0 };
+                let l = (r.delta_db * 10.0) as i32;
+                (w, l)
+            }
+            Err(e) => {
+                crate::log::write(&format!("{label}: error: {e}"));
+                (current as usize, 0i32)
+            }
+        };
+
+        // SAFETY: PostMessageW is thread-safe. hwnd_raw was captured from a valid
+        // HWND on the UI thread; the window outlives this worker thread.
+        unsafe {
+            let _ = PostMessageW(
+                Some(HWND(hwnd_raw as *mut _)),
+                WM_NOISE_ADAPT_DONE,
+                WPARAM(wparam_val),
+                LPARAM(lparam_val as isize),
+            );
+        }
+    });
 }
 
 #[cfg(feature = "noise-adapt")]
@@ -1105,48 +1067,38 @@ unsafe fn enable_system_theme_menus() {
 
 const SC_MONITORPOWER: usize = 0xF170;
 
-/// Open the named event created by the service for Fn+F12 notifications.
-fn open_fn_key_event() -> Option<HANDLE> {
+/// Open a named event created by the service, for SYNCHRONIZE (wait) access.
+/// `None` if it doesn't exist yet (service not running); `what` labels log errors.
+fn open_named_event(name: &str, what: &str) -> Option<HANDLE> {
     use windows::Win32::System::Threading::SYNCHRONIZATION_ACCESS_RIGHTS;
-    let name = wide_null(app::FNKEY_EVENT);
-    // SAFETY: name is a null-terminated wide string on the stack that outlives
-    // the OpenEventW call. Returns a valid handle or fails (service not running).
+    let wname = wide_null(name);
+    // SAFETY: `wname` is a null-terminated wide string that outlives the OpenEventW
+    // call. Returns a valid handle or fails (service not running).
     let result = unsafe {
         OpenEventW(
             SYNCHRONIZATION_ACCESS_RIGHTS(0x0010_0000), // SYNCHRONIZE
             false,
-            PCWSTR(name.as_ptr()),
+            PCWSTR(wname.as_ptr()),
         )
     };
     match result {
         Ok(h) => Some(h),
         Err(e) => {
-            crate::log::write(&format!("tray: Fn+F12 event open failed: {e}"));
+            crate::log::write(&format!("tray: {what} event open failed: {e}"));
             None
         }
     }
 }
 
+/// Open the named event created by the service for Fn+F12 notifications.
+fn open_fn_key_event() -> Option<HANDLE> {
+    open_named_event(app::FNKEY_EVENT, "Fn+F12")
+}
+
 /// Open the named event signaled by the service on startup.
 /// Used for version-mismatch detection (tray restarts if stale).
 fn open_svc_start_event() -> Option<HANDLE> {
-    use windows::Win32::System::Threading::SYNCHRONIZATION_ACCESS_RIGHTS;
-    let name = wide_null(app::SVC_START_EVENT);
-    // SAFETY: Same contract as open_fn_key_event above.
-    let result = unsafe {
-        OpenEventW(
-            SYNCHRONIZATION_ACCESS_RIGHTS(0x0010_0000), // SYNCHRONIZE
-            false,
-            PCWSTR(name.as_ptr()),
-        )
-    };
-    match result {
-        Ok(h) => Some(h),
-        Err(e) => {
-            crate::log::write(&format!("tray: svc-start event open failed: {e}"));
-            None
-        }
-    }
+    open_named_event(app::SVC_START_EVENT, "svc-start")
 }
 
 /// Called when the service signals that Fn+F12 was pressed.

@@ -442,11 +442,8 @@ pub fn uninstall() {
     remove_run_key();
 
     // Kill any tray instances first
-    let _ = Command::new("taskkill")
+    let _ = silent_cmd("taskkill")
         .args(["/IM", app::EXE_NAME, "/F"])
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
         .status();
 
     let _ = Command::new("sc")
@@ -787,13 +784,19 @@ pub fn start_service() {
     }
 }
 
+/// A `Command` that runs without a console window and discards stdio.
+fn silent_cmd(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    cmd.creation_flags(CREATE_NO_WINDOW)
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+    cmd
+}
+
 /// Try an sc command directly (may succeed if sdset grants rights). Returns true on success.
 fn try_sc(args: &[&str]) -> bool {
-    Command::new("sc")
+    silent_cmd("sc")
         .args(args)
-        .creation_flags(CREATE_NO_WINDOW)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
         .status()
         .is_ok_and(|s| s.success())
 }
