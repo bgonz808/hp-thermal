@@ -21,11 +21,7 @@ pub fn init(label: &'static str) {
     // Ensure data directory exists (no-op if already present)
     let _ = std::fs::create_dir_all(crate::app::data_dir());
     let path = log_path();
-    if let Ok(f) = std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-    {
+    if let Some(f) = open_log_file(&path) {
         if let Ok(mut guard) = LOG.lock() {
             *guard = Some(f);
         }
@@ -62,6 +58,15 @@ fn timestamp() -> String {
     )
 }
 
+/// Open the log file in create + append mode (`None` on failure).
+fn open_log_file(path: &str) -> Option<std::fs::File> {
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .ok()
+}
+
 /// Truncate the log file and reopen in append mode.
 /// `set_len(0)` doesn't work here because append mode opens with
 /// FILE_APPEND_DATA (no FILE_WRITE_DATA), so we close → truncate → reopen.
@@ -70,11 +75,7 @@ pub fn clear() {
     if let Ok(mut guard) = LOG.lock() {
         *guard = None; // close old handle
         let _ = std::fs::File::create(&path); // truncate to 0
-        if let Ok(f) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&path)
-        {
+        if let Some(f) = open_log_file(&path) {
             *guard = Some(f);
         }
     }
@@ -202,16 +203,7 @@ unsafe extern "system" fn stack_overflow_handler(
 ///   bin 4: 32-64 KB     bin 5: 64-128 KB    bin 6: 128-256 KB
 ///   bin 7: 256 KB+  (overflow -- approaching stack reserve!)
 const STACK_NUM_BINS: usize = 8;
-static STACK_BINS: [AtomicU32; STACK_NUM_BINS] = [
-    AtomicU32::new(0),
-    AtomicU32::new(0),
-    AtomicU32::new(0),
-    AtomicU32::new(0),
-    AtomicU32::new(0),
-    AtomicU32::new(0),
-    AtomicU32::new(0),
-    AtomicU32::new(0),
-];
+static STACK_BINS: [AtomicU32; STACK_NUM_BINS] = [const { AtomicU32::new(0) }; STACK_NUM_BINS];
 static STACK_PEAK: AtomicUsize = AtomicUsize::new(0);
 /// Peak instantaneous depth (RSP-based). Unlike committed peak, this only
 /// captures depths at our sample points — can miss peaks between samples.
@@ -228,16 +220,22 @@ const BIN_LABELS: [&str; STACK_NUM_BINS] = [
 /// Unlike `stack_committed()`, this fluctuates -- it goes UP during deep calls
 /// and back DOWN when they return. Use for per-operation attribution.
 pub fn stack_depth() -> usize {
-    // SAFETY: GetCurrentThreadStackLimits writes to stack-allocated usizes.
-    // The anchor variable's address approximates the current RSP.
+    // SAFETY: The anchor variable's address approximates the current RSP.
     unsafe {
-        let mut low: usize = 0;
-        let mut high: usize = 0;
-        windows::Win32::System::Threading::GetCurrentThreadStackLimits(&mut low, &mut high);
+        let (_, high) = stack_limits();
         let anchor: u8 = 0;
         let rsp = &anchor as *const u8 as usize;
         high.saturating_sub(rsp)
     }
+}
+
+/// Current thread's stack (low, high) address bounds.
+unsafe fn stack_limits() -> (usize, usize) {
+    // SAFETY: GetCurrentThreadStackLimits writes to stack-allocated usizes.
+    let mut low: usize = 0;
+    let mut high: usize = 0;
+    windows::Win32::System::Threading::GetCurrentThreadStackLimits(&mut low, &mut high);
+    (low, high)
 }
 
 /// Committed stack pages (bytes). Monotonic -- reflects the all-time peak
@@ -248,9 +246,7 @@ pub fn stack_committed() -> usize {
     // SAFETY: GetCurrentThreadStackLimits provides valid low/high bounds.
     // VirtualQuery is called within those bounds; MBI is stack-allocated.
     unsafe {
-        let mut low: usize = 0;
-        let mut high: usize = 0;
-        windows::Win32::System::Threading::GetCurrentThreadStackLimits(&mut low, &mut high);
+        let (low, high) = stack_limits();
 
         let mut committed = 0usize;
         let mut addr = low;
