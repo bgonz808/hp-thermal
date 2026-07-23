@@ -5,6 +5,7 @@ use windows::Win32::System::LibraryLoader::{
     GetModuleHandleW, GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
 };
 use windows::Win32::System::Power::*;
+use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
 use windows::Win32::System::Threading::{CreateMutexW, OpenEventW, WaitForSingleObject, INFINITE};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
 use windows::Win32::UI::Shell::*;
@@ -143,7 +144,7 @@ unsafe fn run_inner() {
     let mut nid = new_nid(HWND_MAIN);
     nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
     nid.uCallbackMessage = WM_TRAYICON;
-    nid.hIcon = LoadIconW(None, IDI_APPLICATION).unwrap();
+    nid.hIcon = load_tray_icon();
     set_tip(&mut nid, app::NAME);
     let _ = Shell_NotifyIconW(NIM_ADD, &nid);
 
@@ -1001,6 +1002,44 @@ unsafe fn append_item_disabled(hmenu: HMENU, id: u32, text: &str) {
         id as usize,
         PCWSTR(wide.as_ptr()),
     );
+}
+
+/// Load the tray icon by REFERENCE from a Windows system DLL — no icon bytes are
+/// embedded in our binary, and no Microsoft asset is redistributed. Uses
+/// `imageres.dll` #144 (the green activity/performance graph) at the DPI-correct
+/// small-icon size (`ExtractIconExW` returns `SM_CXSMICON`-sized icons). If
+/// anything fails — DLL missing, index shifted on a future Windows, extraction
+/// error — it falls back to the generic application icon. It NEVER panics and
+/// NEVER returns a null icon (a null `hIcon` would show a blank/broken tray entry).
+unsafe fn load_tray_icon() -> HICON {
+    // imageres.dll #144 = green activity/performance graph. Index can shift across
+    // major Windows releases, so this is best-effort with a guaranteed fallback.
+    const IMAGERES_PERF_GRAPH: i32 = 144;
+
+    // Build "<system32>\imageres.dll" so extraction doesn't depend on the current
+    // directory or DLL search path, and works regardless of the Windows drive.
+    let mut buf = [0u16; 260];
+    let len = GetSystemDirectoryW(Some(&mut buf)) as usize;
+    if len > 0 && len < buf.len() {
+        let mut path: Vec<u16> = buf[..len].to_vec();
+        path.extend(r"\imageres.dll".encode_utf16());
+        path.push(0);
+        let mut icon = HICON::default();
+        let n = ExtractIconExW(
+            PCWSTR(path.as_ptr()),
+            IMAGERES_PERF_GRAPH,
+            None,
+            Some(&mut icon),
+            1,
+        );
+        if n > 0 && !icon.is_invalid() {
+            return icon;
+        }
+    }
+
+    // Safe fallback: the predefined, always-available application icon. Using
+    // unwrap_or_default keeps this panic-free even in the impossible failure case.
+    LoadIconW(None, IDI_APPLICATION).unwrap_or_default()
 }
 
 fn new_nid(hwnd: HWND) -> NOTIFYICONDATAW {
