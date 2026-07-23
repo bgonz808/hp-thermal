@@ -778,20 +778,7 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             return;
         }
         ID_OPEN_LOG => {
-            let path = crate::log::log_path();
-            let path_w = crate::wide::wide_null(&path);
-            // SAFETY: path_w is a null-terminated wide string on the stack;
-            // ShellExecuteW reads it synchronously before returning.
-            unsafe {
-                ShellExecuteW(
-                    None,
-                    w!("open"),
-                    PCWSTR(path_w.as_ptr()),
-                    None,
-                    None,
-                    SW_SHOW,
-                );
-            }
+            shell_open(&crate::log::log_path());
             return;
         }
         ID_CLEAR_LOG => {
@@ -810,19 +797,7 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
         }
         #[cfg(feature = "noise-adapt")]
         ID_OPEN_TSV => {
-            let path = format!("{}\\noise-capture.tsv", app::data_dir());
-            let path_w = crate::wide::wide_null(&path);
-            // SAFETY: Same ShellExecuteW contract as ID_OPEN_LOG above.
-            unsafe {
-                ShellExecuteW(
-                    None,
-                    w!("open"),
-                    PCWSTR(path_w.as_ptr()),
-                    None,
-                    None,
-                    SW_SHOW,
-                );
-            }
+            shell_open(&format!("{}\\noise-capture.tsv", app::data_dir()));
             return;
         }
         #[cfg(feature = "noise-adapt")]
@@ -1002,6 +977,23 @@ unsafe fn load_tray_icon() -> HICON {
     // Safe fallback: the predefined, always-available application icon. Using
     // unwrap_or_default keeps this panic-free even in the impossible failure case.
     LoadIconW(None, IDI_APPLICATION).unwrap_or_default()
+}
+
+/// Open a path with the shell's default handler (ShellExecute "open").
+fn shell_open(path: &str) {
+    let path_w = crate::wide::wide_null(path);
+    // SAFETY: path_w is a null-terminated wide string on the stack; ShellExecuteW
+    // reads it synchronously before returning.
+    unsafe {
+        ShellExecuteW(
+            None,
+            w!("open"),
+            PCWSTR(path_w.as_ptr()),
+            None,
+            None,
+            SW_SHOW,
+        );
+    }
 }
 
 fn new_nid(hwnd: HWND) -> NOTIFYICONDATAW {

@@ -86,32 +86,37 @@ impl WmiConnection {
         Ok(Self { services, obj_path })
     }
 
-    pub fn read_thermal(&self) -> Result<u8, u8> {
-        // SAFETY: bios_call requires valid COM state; guaranteed by connect() success.
-        // Parameters match the hpqBIOSInt4 contract (Command=1=read, CT=76).
-        let (rc, data) = unsafe { self.bios_call(1, 76, &[0, 0, 0, 0])? };
+    /// `bios_call` that also checks the return code: maps `rc != 0` to an error
+    /// and returns the 4-byte OutData on success.
+    unsafe fn bios_call_ok(
+        &self,
+        command: u32,
+        command_type: u32,
+        data: &[u8; 4],
+    ) -> Result<[u8; 4], u8> {
+        let (rc, out) = self.bios_call(command, command_type, data)?;
         if rc != 0 {
             return Err(STATUS_WMI_ERROR);
         }
-        Ok(data[0])
+        Ok(out)
+    }
+
+    pub fn read_thermal(&self) -> Result<u8, u8> {
+        // SAFETY: bios_call requires valid COM state; guaranteed by connect() success.
+        // Parameters match the hpqBIOSInt4 contract (Command=1=read, CT=76).
+        Ok(unsafe { self.bios_call_ok(1, 76, &[0, 0, 0, 0])? }[0])
     }
 
     pub fn set_thermal(&self, mode: u8) -> Result<(), u8> {
         // SAFETY: Same COM contract as read_thermal; Command=2=write, CT=76.
-        let (rc, _) = unsafe { self.bios_call(2, 76, &[mode, 0, 0, 0])? };
-        if rc != 0 {
-            return Err(STATUS_WMI_ERROR);
-        }
+        unsafe { self.bios_call_ok(2, 76, &[mode, 0, 0, 0])? };
         Ok(())
     }
 
     pub fn read_coolsense(&self) -> Result<u8, u8> {
         // SAFETY: Same COM contract as read_thermal; Command=1=read, CT=44.
-        let (rc, data) = unsafe { self.bios_call(1, 44, &[0, 0, 0, 0])? };
-        if rc != 0 {
-            return Err(STATUS_WMI_ERROR);
-        }
-        Ok(data[1]) // Data[1] = CoolSense state (0=off, 1=on)
+        // Data[1] = CoolSense state (0=off, 1=on).
+        Ok(unsafe { self.bios_call_ok(1, 44, &[0, 0, 0, 0])? }[1])
     }
 
     /// Read CPU package temperature in Celsius.
@@ -308,17 +313,11 @@ impl WmiConnection {
     }
 
     pub fn set_coolsense(&self, on: u8) -> Result<(), u8> {
-        // Must read first to preserve the flags byte (Data[0])
+        // Must read first to preserve the flags byte (Data[0]).
         // SAFETY: Same COM contract as read_coolsense; read before write to preserve flags.
-        let (rc, current) = unsafe { self.bios_call(1, 44, &[0, 0, 0, 0])? };
-        if rc != 0 {
-            return Err(STATUS_WMI_ERROR);
-        }
+        let current = unsafe { self.bios_call_ok(1, 44, &[0, 0, 0, 0])? };
         // SAFETY: Same COM contract; Command=2=write, CT=44, preserving flags byte.
-        let (rc, _) = unsafe { self.bios_call(2, 44, &[current[0], on, 0, 0])? };
-        if rc != 0 {
-            return Err(STATUS_WMI_ERROR);
-        }
+        unsafe { self.bios_call_ok(2, 44, &[current[0], on, 0, 0])? };
         Ok(())
     }
 

@@ -242,43 +242,44 @@ impl ThermalOps for WmiConnection {
     }
 }
 
+/// Map a read result to the 2-byte wire response (`[STATUS_OK, value]` / `[err, 0]`).
+fn read_result(r: Result<u8, u8>) -> [u8; 2] {
+    match r {
+        Ok(v) => [STATUS_OK, v],
+        Err(e) => [e, 0],
+    }
+}
+
+/// Map a set/write result to the 2-byte wire response.
+fn set_result(r: Result<(), u8>) -> [u8; 2] {
+    match r {
+        Ok(()) => [STATUS_OK, 0],
+        Err(e) => [e, 0],
+    }
+}
+
 fn dispatch<W: ThermalOps>(wmi: &W, cache: &mut CacheSet, req: &Request) -> [u8; 2] {
     let result = match req.command {
         CMD_READ_THERMAL => CacheSet::cached_read(&mut cache.thermal, COOLDOWN_THERMAL_MS, || {
-            match wmi.read_thermal() {
-                Ok(mode) => [STATUS_OK, mode],
-                Err(e) => [e, 0],
-            }
+            read_result(wmi.read_thermal())
         }),
         CMD_SET_THERMAL => {
             log::write(&format!("set thermal mode={}", req.payload));
             cache.thermal = None;
-            match wmi.set_thermal(req.payload) {
-                Ok(()) => [STATUS_OK, 0],
-                Err(e) => [e, 0],
-            }
+            set_result(wmi.set_thermal(req.payload))
         }
         CMD_READ_COOLSENSE => {
             CacheSet::cached_read(&mut cache.coolsense, COOLDOWN_COOLSENSE_MS, || {
-                match wmi.read_coolsense() {
-                    Ok(state) => [STATUS_OK, state],
-                    Err(e) => [e, 0],
-                }
+                read_result(wmi.read_coolsense())
             })
         }
         CMD_SET_COOLSENSE => {
             log::write(&format!("set coolsense={}", req.payload));
             cache.coolsense = None;
-            match wmi.set_coolsense(req.payload) {
-                Ok(()) => [STATUS_OK, 0],
-                Err(e) => [e, 0],
-            }
+            set_result(wmi.set_coolsense(req.payload))
         }
         CMD_READ_TEMP => CacheSet::cached_read(&mut cache.temp, COOLDOWN_TEMP_MS, || {
-            match wmi.read_temp() {
-                Ok(temp) => [STATUS_OK, temp],
-                Err(e) => [e, 0],
-            }
+            read_result(wmi.read_temp())
         }),
         CMD_SET_LOGGING => {
             log::set_verbose(req.payload != 0);
@@ -289,16 +290,10 @@ fn dispatch<W: ThermalOps>(wmi: &W, cache: &mut CacheSet, req: &Request) -> [u8;
             [STATUS_OK, 0]
         }
         CMD_READ_BUILD_ID => BUILD_FINGERPRINT,
-        CMD_READ_BRIGHTNESS => match wmi.read_brightness() {
-            Ok(level) => [STATUS_OK, level],
-            Err(e) => [e, 0],
-        },
+        CMD_READ_BRIGHTNESS => read_result(wmi.read_brightness()),
         CMD_SET_BRIGHTNESS => {
             log::write(&format!("set brightness={}", req.payload));
-            match wmi.set_brightness(req.payload) {
-                Ok(()) => [STATUS_OK, 0],
-                Err(e) => [e, 0],
-            }
+            set_result(wmi.set_brightness(req.payload))
         }
         _ => [STATUS_INVALID_CMD, 0],
     };
