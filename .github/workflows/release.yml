@@ -75,11 +75,11 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  # --- Publish + attest. Minimal elevation, ONLY on a real tag. No third-party actions
-  #     and no tool builds here -- the code-executing surface stayed in `build`.
+  # --- Attest + publish. Minimal elevation, no third-party actions / tool builds here.
+  #     Attestations run on BOTH a real tag AND a manual workflow_dispatch, so the whole
+  #     pipeline is dry-runnable; only the GitHub Release *publish* step is tag-gated.
   publish:
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: windows-latest
     permissions:
       contents: write        # create the Release + upload assets
@@ -109,6 +109,7 @@ jobs:
       # First-party gh CLI (no third-party release action). Token is the job-scoped
       # GITHUB_TOKEN with contents: write only.
       - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')   # dry-run (workflow_dispatch) attests but publishes nothing
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
