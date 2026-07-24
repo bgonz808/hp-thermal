@@ -651,13 +651,7 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             // Toggle CoolSense
             let current = pipe::client_transact(CMD_READ_COOLSENSE, 0);
             let new_val = match current {
-                Some([s, state]) if status_ok(s) => {
-                    if state != 0 {
-                        0
-                    } else {
-                        1
-                    }
-                }
+                Some([s, state]) if status_ok(s) && state != 0 => 0,
                 _ => 1,
             };
             pipe::client_transact(CMD_SET_COOLSENSE, new_val);
@@ -1157,12 +1151,11 @@ unsafe fn screen_off() {
                 Some(LPARAM(2)),
             );
         }
-        METHOD_BLACK => {
+        METHOD_BLACK
             // Fullscreen topmost black window. Useful for OLED (true black).
-            if BLACK_WINDOW.0.is_null() {
+            if BLACK_WINDOW.0.is_null() => {
                 BLACK_WINDOW = create_black_window();
             }
-        }
         _ => {}
     }
 }

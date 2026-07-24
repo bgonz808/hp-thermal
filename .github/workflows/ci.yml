@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false   # zizmor: artipacked — don't leave the token in .git
 
       - name: Install pinned toolchain + components
-        run: rustup toolchain install nightly-2026-02-15 -c rust-src -c clippy -c rustfmt
+        run: rustup toolchain install nightly-2026-07-23 -c rust-src -c clippy -c rustfmt
 
       # Toolchain-native only — no cargo-install of third-party tools here.
       - name: Checks (fmt / clippy / test, both feature configs)

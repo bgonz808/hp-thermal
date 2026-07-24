@@ -298,7 +298,7 @@ pub fn stack_sample(label: &str) {
     let bin = if kb < 4 {
         0
     } else {
-        let log2 = usize::BITS - 1 - kb.leading_zeros() as u32;
+        let log2 = usize::BITS - 1 - kb.leading_zeros();
         (log2 as usize).saturating_sub(1).min(STACK_NUM_BINS - 1)
     };
     STACK_BINS[bin].fetch_add(1, Ordering::Relaxed);

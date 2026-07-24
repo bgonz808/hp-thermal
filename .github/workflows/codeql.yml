@@ -38,7 +38,7 @@ jobs:
           build-mode: manual
 
       - name: Install pinned toolchain
-        run: rustup toolchain install nightly-2026-02-15 --component rust-src
+        run: rustup toolchain install nightly-2026-07-23 --component rust-src
 
       # NOTE: Rust CodeQL is newer, and this crate has an exotic build (build-std +
       # custom target + panic=immediate-abort). Verify it traces cleanly on a PR before
