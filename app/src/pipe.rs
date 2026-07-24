@@ -81,7 +81,8 @@ pub fn server_create() -> windows::core::Result<HANDLE> {
         if pipe.is_invalid() {
             // Preserve the real error (ERROR_ACCESS_DENIED / ERROR_PIPE_BUSY when
             // the name was squatted) so the service log shows the true cause.
-            return Err(windows::core::Error::from_win32());
+            // windows-core 0.62 renamed from_win32() -> from_thread() (captures GetLastError).
+            return Err(windows::core::Error::from_thread());
         }
         Ok(pipe)
     }

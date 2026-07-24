@@ -9,7 +9,6 @@ use std::ptr;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-use windows::Win32::Foundation::BOOL;
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::*;
@@ -20,6 +19,7 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
+use windows::core::BOOL; // 0.62: primitive types moved Win32::Foundation -> windows::core
 use windows::core::{GUID, Interface, PCWSTR, PWSTR, w};
 
 /// Result of a noise-adapt measurement.
