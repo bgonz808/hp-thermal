@@ -31,20 +31,28 @@ jobs:
       - name: Checks (fmt / clippy / test, both feature configs)
         run: cargo run --manifest-path xtask/Cargo.toml -- ci --fast
 
-  # Read-only security scanning: GitHub Actions SAST (zizmor), workflow lint
-  # (actionlint), and whole-repo secrets/misconfig/license/dep-vuln (trivy). Runs on
-  # ubuntu; scans source only — no secrets, no write scope. Each tool uses its
-  # FIRST-PARTY action, SHA-pinned AND Dependabot-tracked (github-actions ecosystem),
-  # so pins stay fresh via reviewed bumps — unlike hand-pinned image digests, which
-  # rot: a 2026-07-24 vetting pass found stale-base HIGH/CRIT CVEs in the actionlint
-  # and trivy images (Go stdlib + Alpine libcrypto/libcurl), though zizmor's Wolfi
-  # base + Rust deps were clean. Those are upstream base-image staleness; the
-  # read-only, secret-less runner bounds the residual risk until upstream rebuilds.
+  # Read-only security scanning (no secrets, no write scope, egress-audited). LAYERED
+  # by design — no single scanner or DB is complete:
+  #   harden-runner -> network-egress visibility for the third-party tools below
+  #   zizmor        -> GitHub Actions SAST
+  #   actionlint    -> workflow lint
+  #   osv-scanner   -> Rust deps via OSV.dev (RustSec-COMPLETE). trivy's GHSA-derived
+  #                    DB MISSES RustSec: it reported zizmor "0 vulns/448 pkgs" while
+  #                    OSV found 3 (incl. a HIGH). OSV enumerates the full Cargo.lock.
+  #   trivy         -> secrets / misconfig / license / OS + non-Rust deps
+  # First-party actions, SHA-pinned AND Dependabot-tracked (github-actions ecosystem)
+  # so pins stay fresh. Residual gap: native C libs behind *-sys crates aren't in
+  # Cargo.lock/RustSec (only trivy's OS scan can reach them).
   scan:
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
+      - name: Harden runner (egress audit)
+        uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
+        with:
+          egress-policy: audit   # visibility now; tighten to block + allowlist later
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
         with:
@@ -56,7 +64,14 @@ jobs:
       - name: actionlint (workflow lint)
         uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca  # v1.7.12
 
-      - name: trivy (secrets / misconfig / license / dep-vuln)
+      - name: osv-scanner (RustSec-complete Rust deps)
+        uses: google/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2  # v2.3.8
+        with:
+          scan-args: |-
+            --recursive
+            ./
+
+      - name: trivy (secrets / misconfig / license / OS)
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
         with:
           scan-type: fs
