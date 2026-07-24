@@ -10,8 +10,7 @@ on:
 
 # Default read-only, no secrets. Only the analyze job elevates, to the single scope
 # CodeQL needs (upload SARIF to the Security tab). Actions pinned to full 40-char SHAs.
-# Resolve/verify: gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
-# >>> REPLACE every placeholder SHA below before enabling. <<<
+# SHA-pinned (resolved 2026-07-24 via `gh api repos/<r>/commits/<tag> --jq .sha`).
 permissions:
   contents: read
 
@@ -26,14 +25,14 @@ jobs:
       actions: read
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
         with:
           persist-credentials: false
 
       # init + analyze are the SAME action (github/codeql-action) -> keep both on the
       # SAME pinned SHA.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@0000000000000000000000000000000000000000  # github/codeql-action v3  # REPLACE
+        uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07  # github/codeql-action v3
         with:
           languages: rust
           build-mode: manual
@@ -49,4 +48,4 @@ jobs:
         run: cargo build --locked --release
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@0000000000000000000000000000000000000000  # github/codeql-action v3  # REPLACE
+        uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07  # github/codeql-action v3
