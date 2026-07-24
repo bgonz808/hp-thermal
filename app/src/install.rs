@@ -319,13 +319,35 @@ fn close_tray_windows() {
     }
 }
 
-/// Wait for all other hp-thermal.exe processes to exit; force-kill after 3s.
+/// Full image path of a process from an OPEN handle (needs
+/// PROCESS_QUERY_LIMITED_INFORMATION). None if it can't be read.
+unsafe fn process_image_path(h: HANDLE) -> Option<String> {
+    use windows::Win32::System::Threading::{QueryFullProcessImageNameW, PROCESS_NAME_WIN32};
+    let mut buf = [0u16; 260];
+    let mut len = buf.len() as u32;
+    QueryFullProcessImageNameW(
+        h,
+        PROCESS_NAME_WIN32,
+        windows::core::PWSTR(buf.as_mut_ptr()),
+        &mut len,
+    )
+    .ok()?;
+    Some(String::from_utf16_lossy(&buf[..len as usize]))
+}
+
+/// Wait for our other installed instances to exit; force-kill after 3s.
 /// Uses Win32 toolhelp snapshot + WaitForSingleObject (proper blocking wait).
+///
+/// We run ELEVATED here, so precision matters: we only terminate a process after
+/// verifying its image path is our actual installed binary. The image name is a
+/// cheap pre-filter only — it is spoofable and PID-reuse-racy — so a non-ours
+/// process that merely happens to be named `hp-thermal.exe` is left untouched.
 fn wait_or_kill_other_instances() {
     use windows::Win32::System::Diagnostics::ToolHelp::*;
     use windows::Win32::System::Threading::*;
 
     let our_pid = std::process::id();
+    let installed = app::installed_exe();
     // SAFETY: TH32CS_SNAPPROCESS with pid=0 snapshots all processes. Always valid args.
     let Ok(snap) = (unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }) else {
         return;
@@ -346,12 +368,29 @@ fn wait_or_kill_other_instances() {
                     let end = entry.szExeFile.iter().position(|&c| c == 0).unwrap_or(0);
                     let name = String::from_utf16_lossy(&entry.szExeFile[..end]);
                     if name.eq_ignore_ascii_case(app::EXE_NAME) {
+                        // Open with query rights and VERIFY the image path is our
+                        // installed binary before adding it to the kill list.
+                        // installed_exe() lives under Program Files (admin-write-only),
+                        // so a path match authenticates the process as ours. Querying
+                        // the path on THIS handle (not the snapshot PID) also closes a
+                        // PID-reuse TOCTOU: a recycled PID whose path no longer matches
+                        // is skipped. TODO: once we sign releases, also verify the
+                        // Authenticode publisher — path is necessary, not sufficient.
                         if let Ok(h) = OpenProcess(
-                            PROCESS_TERMINATE | PROCESS_SYNCHRONIZE,
+                            PROCESS_TERMINATE
+                                | PROCESS_SYNCHRONIZE
+                                | PROCESS_QUERY_LIMITED_INFORMATION,
                             false,
                             entry.th32ProcessID,
                         ) {
-                            handles.push(h);
+                            match process_image_path(h) {
+                                Some(p) if p.eq_ignore_ascii_case(&installed) => handles.push(h),
+                                // Name-only match or unreadable path -> not verifiably
+                                // ours, so do NOT terminate it.
+                                _ => {
+                                    let _ = CloseHandle(h);
+                                }
+                            }
                         }
                     }
                 }
