@@ -35,6 +35,19 @@ jobs:
         shell: bash
         run: cargo metadata --locked --format-version 1 > /dev/null
 
+      # Windows MAX_PATH (260) blocks the deep test-snapshot paths inside some tool repos
+      # (cyclonedx-rust-cargo) during `cargo install --git`'s checkout. Enable long paths.
+      # SAFE here: the runner is EPHEMERAL (fresh VM, destroyed after the job), so this
+      # has no lasting/persistent attack surface -- long-path evasion needs a durable
+      # attacker-influenced system, which a throwaway build VM building our pinned source
+      # is not. (Would NOT do this on a workstation/server.)
+      - name: Enable long paths (ephemeral runner)
+        shell: pwsh
+        run: |
+          git config --system core.longpaths true
+          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
+            -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force | Out-Null
+
       # Immutable git-rev pins: a maintainer-account compromise can publish a new
       # crates.io version but cannot rewrite a pinned commit. These BUILD code, which is
       # why they stay on the read-only, secret-less runner.
