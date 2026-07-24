@@ -137,21 +137,26 @@ jobs:
       # workflow (--signer-workflow). A forged/mis-scoped attestation fails here and we
       # never reach `gh release create`. Runs on dispatch too, so every dry-run exercises
       # it. Negative-tested locally: a wrong --signer-workflow exits 1.
+      # Bundle paths are bound via env (NOT inlined as ${{ }} in the script) so zizmor's
+      # template-injection audit stays clean: env values are passed to the shell, never
+      # expanded into the script source, so there is no command-injection surface.
       - name: Verify attestations before publish (offline, identity-pinned)
         env:
           GH_TOKEN: ${{ github.token }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::group::provenance"
           gh attestation verify dist/hp-thermal.exe \
-            --bundle "${{ steps.provenance.outputs.bundle-path }}" \
+            --bundle "$PROVENANCE_BUNDLE" \
             --repo "${GITHUB_REPOSITORY}" \
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
           echo "::endgroup::"
           echo "::group::sbom (cyclonedx)"
           gh attestation verify dist/hp-thermal.exe \
-            --bundle "${{ steps.sbom.outputs.bundle-path }}" \
+            --bundle "$SBOM_BUNDLE" \
             --repo "${GITHUB_REPOSITORY}" \
             --predicate-type https://cyclonedx.org/bom \
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
@@ -163,11 +168,14 @@ jobs:
       # <file>` WITHOUT a live call to GitHub's attestation API / Rekor. This is the
       # enabler for the offline verify-before-promote path (updater has no network).
       - name: Stage attestation bundles as release assets
+        env:
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
         shell: bash
         run: |
           set -euo pipefail
-          cp "${{ steps.provenance.outputs.bundle-path }}" dist/hp-thermal.exe.provenance.sigstore.jsonl
-          cp "${{ steps.sbom.outputs.bundle-path }}"       dist/hp-thermal.exe.sbom.sigstore.jsonl
+          cp "$PROVENANCE_BUNDLE" dist/hp-thermal.exe.provenance.sigstore.jsonl
+          cp "$SBOM_BUNDLE"       dist/hp-thermal.exe.sbom.sigstore.jsonl
           ls -l dist/*.sigstore.jsonl
 
       # First-party gh CLI (no third-party release action). Token is the job-scoped

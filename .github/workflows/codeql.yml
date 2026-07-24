@@ -17,8 +17,9 @@ permissions:
 jobs:
   analyze:
     name: Analyze (rust)
-    # windows-latest to match the x86_64-pc-windows-msvc build CodeQL traces.
-    runs-on: windows-latest
+    # Rust's CodeQL extractor reads SOURCE (build-mode: none) -- no compile/trace -- so
+    # the OS is irrelevant; ubuntu-latest is faster/cheaper than a Windows runner.
+    runs-on: ubuntu-latest
     permissions:
       security-events: write   # upload the SARIF results
       contents: read
@@ -31,21 +32,15 @@ jobs:
 
       # init + analyze are the SAME action (github/codeql-action) -> keep both on the
       # SAME pinned SHA.
+      # Rust's extractor ONLY supports build-mode: none (manual/autobuild are rejected:
+      # "Rust does not support the manual build mode"). none analyzes source directly, so
+      # it sidesteps this crate's exotic build entirely (build-std + custom target +
+      # panic=immediate-abort) -- no toolchain install or build step needed.
       - name: Initialize CodeQL
         uses: github/codeql-action/init@4187e74d05793876e9989daffde9c3e66b4acd07  # github/codeql-action v3
         with:
           languages: rust
-          build-mode: manual
-
-      - name: Install pinned toolchain
-        run: rustup toolchain install nightly-2026-07-23 --component rust-src
-
-      # NOTE: Rust CodeQL is newer, and this crate has an exotic build (build-std +
-      # custom target + panic=immediate-abort). Verify it traces cleanly on a PR before
-      # relying on it -- the build step may need tweaks (or CodeQL a specific version).
-      - name: Build (traced by CodeQL)
-        working-directory: app
-        run: cargo build --locked --release
+          build-mode: none
 
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07  # github/codeql-action v3
