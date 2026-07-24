@@ -23,6 +23,8 @@ jobs:
       # Dependabot (github-actions) proposes reviewed bumps.
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false   # zizmor: artipacked — don't leave the token in .git
 
       - name: Install pinned toolchain + components
         run: rustup toolchain install nightly-2026-02-15 -c rust-src -c clippy -c rustfmt
@@ -48,13 +50,12 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Harden runner (egress audit)
+      - name: Harden runner (egress blocked)
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
         with:
-          # AUDIT first: observe real egress, then flip to `block` once the candidate
-          # allowlist below is reconciled against the run insights (block on a wrong
-          # list fails the job). Audit ignores allowed-endpoints; it's staged for block.
-          egress-policy: audit
+          # BLOCK: allowlist reconciled against a real audit run (2026-07-24) — every
+          # endpoint the job actually contacts is listed, so nothing else can egress.
+          egress-policy: block
           disable-sudo: true
           allowed-endpoints: >
             github.com:443

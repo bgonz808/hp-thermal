@@ -11,6 +11,8 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    cooldown:
+      default-days: 7   # soak: don't adopt <7-day-old releases (zizmor: dependabot-cooldown)
 
   # Keep the SHA-pinned GitHub Actions current: Dependabot proposes SHA bumps for you
   # to review. This is the maintenance complement to pinning actions by SHA — you get
@@ -20,6 +22,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
 
   # experiments/ (publish=false) and xtask/ (currently zero deps) can be added here
   # later if their dependency surfaces grow.
