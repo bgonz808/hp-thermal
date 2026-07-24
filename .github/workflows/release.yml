@@ -3,7 +3,13 @@ name: Release
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:   # dry-run: builds + attests, publishes nothing (see publish `if:`)
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry run: build + attest, but publish NOTHING. Default true — must be
+          explicitly unset to publish via dispatch. A tag push ignores this and publishes."
+        type: boolean
+        default: true
 
 # Default to read-only, no secrets. Only the publish job opts into the minimum extra
 # scopes it needs, and only on a real tag. All actions are pinned to a full 40-char
@@ -90,7 +96,8 @@ jobs:
 
   # --- Attest + publish. Minimal elevation, no third-party actions / tool builds here.
   #     Attestations run on BOTH a real tag AND a manual workflow_dispatch, so the whole
-  #     pipeline is dry-runnable; only the GitHub Release *publish* step is tag-gated.
+  #     pipeline is dry-runnable. Only the GitHub Release *publish* step is gated, behind
+  #     TWO conditions (v* tag AND dry_run != true) -- see that step's comment.
   publish:
     needs: build
     runs-on: windows-latest
@@ -113,16 +120,24 @@ jobs:
         with:
           subject-path: dist/hp-thermal.exe
 
+      # attest-sbom was folded into the general-purpose actions/attest (attest-sbom is
+      # deprecated). `sbom-path` still auto-detects CycloneDX/SPDX and emits the same
+      # https://cyclonedx.org/bom predicate — verified identical to the prior output.
       - name: Attest SBOM
-        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e  # actions/attest-sbom v4.1.0
+        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6  # actions/attest v4.2.0
         with:
           subject-path: dist/hp-thermal.exe
           sbom-path: dist/hp-thermal.cdx.json
 
       # First-party gh CLI (no third-party release action). Token is the job-scoped
       # GITHUB_TOKEN with contents: write only.
+      # TWO independent conditions must BOTH hold to publish (defense in depth):
+      #   1. ref is a v* tag        -> a bare dispatch on main can never publish
+      #   2. dry_run is not true    -> closes the dispatch-on-a-TAG hole: even selecting a
+      #      tag ref in the dispatch UI stays inert unless dry_run is explicitly unset.
+      # A real `push: tags` has no inputs context (inputs.dry_run == null != true) -> publishes.
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')   # dry-run (workflow_dispatch) attests but publishes nothing
+        if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
