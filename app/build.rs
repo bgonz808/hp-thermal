@@ -16,11 +16,30 @@ fn main() {
     };
     println!("cargo:rustc-env=BUILD_ID={build_id}");
 
-    // --- Build timestamp (UTC) ---
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default();
-    let (y, mo, d, hh, mm, ss) = epoch_to_utc(now.as_secs());
+    // --- Build timestamp (UTC), reproducible ---
+    // Source the timestamp deterministically so the SAME commit builds the SAME bytes:
+    //   1. SOURCE_DATE_EPOCH (reproducible-builds.org convention; CI/packagers set it),
+    //   2. else the HEAD commit's committer time (ties the date to the commit),
+    //   3. else wall-clock (only for a git-less build; not reproducible, a last resort).
+    // Uniqueness-per-source-change comes from BUILD_ID (commit hash + -dirty) and the
+    // compiled code itself, NOT this label — so pinning the date to the commit is exactly
+    // what lets a third party rebuild a tag and get a byte-identical exe to verify.
+    println!("cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH");
+    let epoch = std::env::var("SOURCE_DATE_EPOCH")
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .or_else(|| {
+            run("git", &["log", "-1", "--format=%ct"])
+                .parse::<u64>()
+                .ok()
+        })
+        .unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs()
+        });
+    let (y, mo, d, hh, mm, ss) = epoch_to_utc(epoch);
     let build_date = format!("{y:04}{mo:02}{d:02}.{hh:02}{mm:02}{ss:02}");
     println!("cargo:rustc-env=BUILD_DATE={build_date}");
 
