@@ -1,0 +1,52 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "27 6 * * 1"   # weekly
+
+# Default read-only, no secrets. Only the analyze job elevates, to the single scope
+# CodeQL needs (upload SARIF to the Security tab). Actions pinned to full 40-char SHAs.
+# Resolve/verify: gh api repos/<owner>/<repo>/commits/<tag> --jq .sha
+# >>> REPLACE every placeholder SHA below before enabling. <<<
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (rust)
+    # windows-latest to match the x86_64-pc-windows-msvc build CodeQL traces.
+    runs-on: windows-latest
+    permissions:
+      security-events: write   # upload the SARIF results
+      contents: read
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout v4
+        with:
+          persist-credentials: false
+
+      # init + analyze are the SAME action (github/codeql-action) -> keep both on the
+      # SAME pinned SHA.
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@0000000000000000000000000000000000000000  # github/codeql-action v3  # REPLACE
+        with:
+          languages: rust
+          build-mode: manual
+
+      - name: Install pinned toolchain
+        run: rustup toolchain install nightly-2026-02-15 --component rust-src
+
+      # NOTE: Rust CodeQL is newer, and this crate has an exotic build (build-std +
+      # custom target + panic=immediate-abort). Verify it traces cleanly on a PR before
+      # relying on it -- the build step may need tweaks (or CodeQL a specific version).
+      - name: Build (traced by CodeQL)
+        working-directory: app
+        run: cargo build --locked --release
+
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@0000000000000000000000000000000000000000  # github/codeql-action v3  # REPLACE
