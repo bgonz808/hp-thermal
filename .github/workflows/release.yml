@@ -157,6 +157,19 @@ jobs:
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
           echo "::endgroup::"
 
+      # Export the signed Sigstore bundles as release ASSETS so verification works
+      # OFFLINE: the bundle carries the DSSE-signed attestation + Fulcio cert + Rekor
+      # inclusion proof, so a consumer verifies with `gh attestation verify --bundle
+      # <file>` WITHOUT a live call to GitHub's attestation API / Rekor. This is the
+      # enabler for the offline verify-before-promote path (updater has no network).
+      - name: Stage attestation bundles as release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp "${{ steps.provenance.outputs.bundle-path }}" dist/hp-thermal.exe.provenance.sigstore.jsonl
+          cp "${{ steps.sbom.outputs.bundle-path }}"       dist/hp-thermal.exe.sbom.sigstore.jsonl
+          ls -l dist/*.sigstore.jsonl
+
       # First-party gh CLI (no third-party release action). Token is the job-scoped
       # GITHUB_TOKEN with contents: write only.
       # TWO independent conditions must BOTH hold to publish (defense in depth):
@@ -172,6 +185,9 @@ jobs:
         run: |
           gh release create "${GITHUB_REF_NAME}" \
             dist/hp-thermal.exe dist/hp-thermal.cdx.json dist/SHA256SUMS \
+            dist/hp-thermal.exe.provenance.sigstore.jsonl \
+            dist/hp-thermal.exe.sbom.sigstore.jsonl \
             --repo "${GITHUB_REPOSITORY}" \
             --title "${GITHUB_REF_NAME}" \
-            --notes "Verify: gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY}"
+            --notes "Verify online:  gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY}
+          Verify offline: gh attestation verify hp-thermal.exe --bundle hp-thermal.exe.provenance.sigstore.jsonl --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release.yml"
