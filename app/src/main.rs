@@ -46,6 +46,14 @@ fn main() {
             service::run();
         }
         Some("install" | "--install") => guarded_setup(|| {
+            // Already installed → this is an update, not a fresh install. Route to
+            // update() so the RUNNING service+tray are replaced (stop, swap exe,
+            // restart, relaunch tray) rather than only overwriting the on-disk file
+            // and leaving the old code executing. update_service launches the tray.
+            if install::is_service_installed() {
+                install::update();
+                return;
+            }
             install::install();
             // Launch the tray once we know the service is up: immediately when we
             // were already elevated (no child to wait on), otherwise after the

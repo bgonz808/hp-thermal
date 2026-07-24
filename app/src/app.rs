@@ -11,7 +11,7 @@ pub const REPO_URL: &str = "https://github.com/bgonz808/hp-thermal";
 // --- Build identity ---
 
 /// FNV-1a 64-bit hash of a byte slice — the one canonical implementation, used by
-/// [`file_digest`] and the audio device-id hash. (The 2-byte build fingerprint in
+/// [`file_fnv`] and the audio device-id hash. (The 2-byte build fingerprint in
 /// `protocol` is a separate 32-bit *const* variant: it runs at compile time, so it
 /// can't call this, and it needs a different width for the wire.)
 pub fn fnv1a_64(bytes: &[u8]) -> u64 {
@@ -23,28 +23,47 @@ pub fn fnv1a_64(bytes: &[u8]) -> u64 {
     h
 }
 
-/// FNV-1a 64-bit digest of a file's contents as hex (empty on read failure). The
-/// same digest the updater uses to compare on-disk binaries.
-pub fn file_digest(path: &str) -> String {
+/// FNV-1a 64-bit hash of a file's contents as hex (empty on read failure). The
+/// name calls out the algorithm on purpose: FNV-1a is a fast **non-cryptographic**
+/// hash — good for "did these bytes change?", useless for tamper/authenticity
+/// (collisions are trivially constructible; that is Authenticode/signing's job).
+/// LIVE: reads `path` on every call, so it reflects whatever bytes are there
+/// *now*. Use it for "what is currently on disk" (e.g. verifying a freshly-copied
+/// binary) — NOT for "what am I running", which [`exe_fnv_at_init`] answers.
+pub fn file_fnv(path: &str) -> String {
     let Ok(data) = std::fs::read(path) else {
         return String::new();
     };
     format!("{:016x}", fnv1a_64(&data))
 }
 
+/// [`file_fnv`] of THIS process's own executable, read from disk ONCE at init and
+/// then cached for the process lifetime. The honest identity of the *running*
+/// image: unlike a live [`file_fnv`] re-read, it is not fooled by an on-disk swap
+/// — an update replaces the installed `.exe` while this process keeps executing
+/// the old bytes, so a live re-read would report the *new* file, not what we are
+/// actually running. First call wins the cache, so it is taken during startup
+/// (via [`build_identity`], before any self-update can swap the file). Non-crypto
+/// (see [`file_fnv`]): a build-change signal, not tamper-evidence.
+pub fn exe_fnv_at_init() -> &'static str {
+    EXE_FNV_AT_INIT.get_or_init(|| file_fnv(exe_path()))
+}
+
 /// One-line build identity for startup/install logs: version, build id + date,
-/// the running exe's path, and an FNV digest of that binary (so a swapped-but-
-/// same-version file is still distinguishable). Lets a log reader confirm exactly
-/// which build is running and from where.
+/// the running exe's path, and the init-time FNV of that binary (so a
+/// swapped-but-same-version file is still distinguishable). The `exe-fnv@init`
+/// label names both the algorithm (FNV, non-crypto) and the timing (snapshotted
+/// at process init, not a live re-read), so it stays truthful about the running
+/// build even after an update swaps the on-disk file.
 pub fn build_identity() -> String {
     let exe = exe_path();
     format!(
-        "{} {}+{} ({}) fnv={} path={}",
+        "{} {}+{} ({}) exe-fnv@init={} path={}",
         BIN_NAME,
         env!("CARGO_PKG_VERSION"),
         env!("BUILD_ID"),
         env!("BUILD_DATE"),
-        file_digest(exe),
+        exe_fnv_at_init(),
         exe,
     )
 }
@@ -107,6 +126,7 @@ static EXE_PATH: OnceLock<String> = OnceLock::new();
 static EXE_DIR: OnceLock<String> = OnceLock::new();
 static INSTALL_DIR: OnceLock<String> = OnceLock::new();
 static DATA_DIR: OnceLock<String> = OnceLock::new();
+static EXE_FNV_AT_INIT: OnceLock<String> = OnceLock::new();
 
 /// Full path to the running executable. Computed once via GetModuleFileNameW.
 pub fn exe_path() -> &'static str {

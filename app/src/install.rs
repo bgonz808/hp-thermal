@@ -148,41 +148,33 @@ pub fn is_installed_copy() -> bool {
     us.eq_ignore_ascii_case(&installed)
 }
 
-/// Check if the installed service matches our build. No UAC needed.
+/// Is the RUNNING service our exact build? No UAC needed.
 ///
-/// 1. Quick: ask running service for BUILD_FINGERPRINT — match = current.
-/// 2. Mismatch or pipe unavailable: compare installed binary on disk.
-///    (Running service may be stale while the on-disk binary is already current.)
+/// Authoritative on the *running* service, NOT the on-disk file. We ask the live
+/// service for its compiled-in [`BUILD_FINGERPRINT`] (baked into the running image,
+/// so it reflects the code actually executing) and compare it to ours. A stale
+/// service running old bytes reports the old fingerprint even after the on-disk
+/// `.exe` has already been replaced — so "current" means the running code matches,
+/// which is what an update must guarantee.
+///
+/// We deliberately do NOT fall back to a disk-digest compare: that reported a
+/// stale-but-running service as "current" whenever the file was already swapped
+/// (disk ahead of the running process), silently skipping the very update needed.
+/// A mismatch — or an unreachable pipe (running build unconfirmable) — is treated
+/// as not-current so the update/restart proceeds.
 pub fn is_service_current() -> bool {
     use crate::pipe;
     use crate::protocol::*;
 
-    let installed = app::installed_exe();
-    let our_exe = app::exe_path();
-
-    // Same path → current by definition
-    if installed.eq_ignore_ascii_case(our_exe) {
+    // We ARE the installed copy → current by definition.
+    if app::installed_exe().eq_ignore_ascii_case(app::exe_path()) {
         return true;
     }
 
-    // Fast path: if running service fingerprint matches, skip disk I/O
-    if let Some(resp) = pipe::client_transact(CMD_READ_BUILD_ID, 0) {
-        if resp == BUILD_FINGERPRINT {
-            return true;
-        }
-    }
-
-    // Pipe mismatch or unavailable — compare installed binary on disk
-    let Ok(our_meta) = fs::metadata(our_exe) else {
-        return false;
-    };
-    let Ok(inst_meta) = fs::metadata(&installed) else {
-        return false;
-    };
-    if our_meta.len() != inst_meta.len() {
-        return false;
-    }
-    app::file_digest(&installed) == app::file_digest(our_exe)
+    matches!(
+        pipe::client_transact(CMD_READ_BUILD_ID, 0),
+        Some(resp) if resp == BUILD_FINGERPRINT
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -562,8 +554,8 @@ pub fn update_service() {
         Ok(()) => {
             log.write("copy succeeded");
             log.write(&format!(
-                "installed digest: fnv={}",
-                app::file_digest(&app::installed_exe())
+                "installed exe-fnv={}",
+                app::file_fnv(&app::installed_exe())
             ));
         }
         Err(e) => {
