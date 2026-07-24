@@ -23,7 +23,7 @@ jobs:
       # `gh api repos/actions/checkout/commits/<tag> --jq .sha`.
       # >>> REPLACE the placeholder SHA before enabling this workflow. <<<
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
 
       - name: Install pinned toolchain + components
         run: rustup toolchain install nightly-2026-02-15 --component rust-src clippy rustfmt
@@ -45,7 +45,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # actions/checkout v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
         with:
           persist-credentials: false
 
