@@ -19,9 +19,41 @@ permissions:
   contents: read
 
 jobs:
+  # --- S2 source-integrity gate: a release may fire ONLY from a commit whose required
+  #     checks (ci, scan, CodeQL) concluded success. Closes the seam where a tag push
+  #     triggered a release regardless of whether the commit ever passed CI/scan. On a
+  #     real tag it is enforced fail-closed; on workflow_dispatch (dry-run) it is skipped
+  #     so dry-runs still exercise the pipeline. This complements branch protection +
+  #     tag rulesets: even if a tag is somehow placed on a non-green commit, no build runs.
+  source-gate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Require the tagged commit to be CI-green
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs" > checks.json
+          fail=0
+          for name in "ci" "scan" "Analyze (rust)"; do
+            concl=$(jq -r --arg n "$name" \
+              '[.check_runs[] | select(.name==$n)] | (sort_by(.started_at) | last | .conclusion) // "missing"' \
+              checks.json)
+            echo "required check '$name' => $concl"
+            [ "$concl" = "success" ] || { echo "::error::required check '$name' is '$concl' (need success)"; fail=1; }
+          done
+          [ "$fail" -eq 0 ] || { echo "Source-integrity gate FAILED: tag is not on a CI-green commit."; exit 1; }
+          echo "Source-integrity gate PASSED."
+
   # --- Build on a READ-ONLY, secret-less runner. Tool installs execute code, so this
   #     job is bounded to reading public source: it cannot push, publish, or exfiltrate.
   build:
+    needs: source-gate
     runs-on: windows-latest
     permissions:
       contents: read
