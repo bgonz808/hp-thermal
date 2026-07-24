@@ -38,6 +38,21 @@ fn main() {
     let repository = ascii_safe(&env("CARGO_PKG_REPOSITORY"));
     let license = ascii_safe(&env("CARGO_PKG_LICENSE"));
 
+    // Version-resource identity strings. These carry the author's name IN THE BINARY
+    // (File > Properties > Details) and -- via FileDescription -- in the UAC consent
+    // dialog's app-name line. This is a human-readable CLAIM only: unsigned, Windows
+    // still shows "Publisher: Unknown"; cryptographic proof is Authenticode/SLSA
+    // provenance. Use "(C)" not the Unicode (c) glyph -- the .rc stays ASCII.
+    let author = authors
+        .split('<')
+        .next()
+        .unwrap_or(&authors)
+        .trim()
+        .to_string();
+    let product = "HP Thermal Control";
+    let file_description = format!("{product} by {author}");
+    let legal_copyright = format!("(C) {y} {author}. {license} License.");
+
     // --- Generate .rc with VERSIONINFO + manifest ---
     let manifest_path = std::path::Path::new(&env("CARGO_MANIFEST_DIR"))
         .join("app.manifest")
@@ -64,14 +79,14 @@ BEGIN
     BEGIN
         BLOCK "040904B0"
         BEGIN
-            VALUE "Comments", "{repository}\0"
-            VALUE "CompanyName", "{authors}\0"
-            VALUE "FileDescription", "{description}\0"
+            VALUE "Comments", "{description} - {repository}\0"
+            VALUE "CompanyName", "{author}\0"
+            VALUE "FileDescription", "{file_description}\0"
             VALUE "FileVersion", "{full_version}\0"
             VALUE "InternalName", "hp-thermal\0"
-            VALUE "LegalCopyright", "{license}\0"
+            VALUE "LegalCopyright", "{legal_copyright}\0"
             VALUE "OriginalFilename", "hp-thermal.exe\0"
-            VALUE "ProductName", "HP Thermal Control\0"
+            VALUE "ProductName", "{product}\0"
             VALUE "ProductVersion", "{full_version} ({build_date})\0"
         END
     END
