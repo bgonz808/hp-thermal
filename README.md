@@ -91,6 +91,39 @@ hp-thermal start|stop   Start / stop the service
 hp-thermal --version    Version + build id
 ```
 
+## Verifying your download
+
+Every release is built by a public GitHub Actions workflow and carries cryptographic
+**build provenance** (SLSA) and an **SBOM** attestation, so you can prove the `.exe` was
+built from this repo's source by that workflow — not tampered with in transit.
+
+With the [GitHub CLI](https://cli.github.com), pinning the signer to this repo's release
+workflow (the identity check is what makes verification meaningful):
+
+```sh
+gh attestation verify hp-thermal.exe \
+  --repo bgonz808/hp-thermal \
+  --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
+```
+
+**Offline** (air-gapped) — using the `*.sigstore.jsonl` bundles attached to the release,
+no network required:
+
+```sh
+gh attestation verify hp-thermal.exe \
+  --bundle hp-thermal.exe.provenance.sigstore.jsonl \
+  --repo bgonz808/hp-thermal \
+  --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
+```
+
+The provenance/SBOM attestation is the real integrity anchor. `SHA256SUMS` is also
+attached as a low-tech convenience, but a bare checksum only proves the file matches
+*that* file — the attestation proves it came from *us*.
+
+> Not yet Authenticode-signed, so Windows still shows "Publisher: Unknown" on the UAC
+> prompt. Publisher signing is planned; until then, the attestation above is the
+> cryptographic proof of origin.
+
 ## Hardware support
 
 | Tier | Behavior |
