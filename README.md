@@ -2,10 +2,10 @@
 
 **HP laptop thermal & performance control — without the 169 MB.**
 
-A ~200 KB tray app + Windows service that switches HP's thermal/performance modes
-(Performance · Balanced · Cool · Power Saver) and Smart Sense, replacing HP Command
-Center (169 MB on disk, slow-launching, always-on background service) for the core of
-what it's used for.
+A ~200 KB tray app + Windows service that reproduces the core of HP Command Center's
+**System Control → Device Mode** — its thermal/performance/cooling presets
+(Performance · Balanced · Cool · Power Saver) and Smart Sense — replacing all 169 MB of
+HP Command Center for the settings most people actually use.
 
 > ⚠️ **Supported hardware.** This talks to an **undocumented HP BIOS-WMI interface** that
 > is *not* a stable or public API. It was reverse-engineered and validated on an
@@ -25,23 +25,32 @@ what it's used for.
   measurement that picks a mode by how audible the fans are in your room. Off by default,
   and experimental.
 
+**Scope.** HP describes that page as adjusting "the performance, temperature, and cooling
+preferences for your PC along with settings for Smart Sense and Focus Mode." hp-thermal
+covers the thermal/cooling presets and Smart Sense — **not** Focus Mode, and not HP CC's
+other pages (camera privacy, Network Booster, display controls, etc.). It neither replaces
+nor disables those; they aren't thermal control. The Fn+F12 remap is a small extra of ours,
+not part of HP's System Control.
+
 It is a single `hp-thermal.exe`: the tray runs as your user, and a tiny Windows service
 runs as SYSTEM and performs the privileged BIOS/WMI calls, talking over a hardened local
 named pipe. See [SECURITY.md](SECURITY.md).
 
-**Idle cost: zero, and measured.** Both halves are event-driven, not polling: at rest
-**the tray and the service execute 0 CPU cycles** (verified with `QueryProcessCycleTime`
-over repeated 20–30 s idle windows). The tray blocks in its message loop; the service waits
-on a **push-based WMI event sink** for the Fn+F12 hotkey, so it wakes only when the key is
-pressed — where the earlier poll-based build spent ~209k cycles/s.
+**Idle cost: zero, and measured.** Both halves are event-driven, not polling: over
+5-minute per-second cycle probes, **the service and the tray each recorded 0 CPU cycles in
+300/300 one-second bins** — a literal 100 % idle. The tray blocks in its message loop; the
+service waits on a **push-based WMI event sink** for the Fn+F12 hotkey, filtered
+`WHERE EventId = 29` server-side so WMI drops the BIOS provider's ~2 s heartbeat before it
+ever reaches our process. Versus HP Command Center's continuously-running thermal daemon.
 
 ## Measured footprint vs HP Command Center
 
-Measured on the tested HP ENVY 16 (`8BE5`), Windows 11, on **2026-07-22**, against **HP
-Command Center `AD2F1837.HPThermalControl` v1.11.60.0**. All runtime numbers come from a
-single 30 s idle window (`QueryProcessCycleTime` + `Process(*)` performance counters), so
-memory and CPU are internally consistent. Reproduce them yourself (run elevated):
-[`scripts/measure-footprint-vs-hpcc.ps1`](scripts/measure-footprint-vs-hpcc.ps1).
+Memory and disk measured on the tested HP ENVY 16 (`8BE5`), Windows 11, on **2026-07-22**,
+against **HP Command Center `AD2F1837.HPThermalControl` v1.11.60.0** — from a single 30 s
+idle window (`QueryProcessCycleTime` + `Process(*)` counters), reproducible with
+[`scripts/measure-footprint-vs-hpcc.ps1`](scripts/measure-footprint-vs-hpcc.ps1) (run
+elevated). Our idle-CPU **0** was verified separately (2026-07-24) with a dedicated
+per-second cycle probe — separate by necessity; see the CPU note.
 
 | Metric (idle) | HP Command Center | hp-thermal | Ratio |
 | --- | ---: | ---: | ---: |
@@ -49,20 +58,25 @@ memory and CPU are internally consistent. Reproduce them yourself (run elevated)
 | Persistent processes | 3 | 2 | — |
 | **Private working set** (private resident; Win `Working Set - Private` ≈ Linux USS) | 141 MB | **3.2 MB** | **~44×** |
 | Commit (private bytes; committed, may be paged out) | 266 MB | 4.2 MB | ~63× |
-| CPU cycles/s | ~3–6 M (continuous) | **0** | ∞ |
+| CPU cycles/s (idle) | ~3–6 M (continuous) | **0** † | ∞ |
 
 **Notes on the numbers:**
 - **Private working set is the metric to compare on** — it counts only pages unique to the process
   (Windows `Working Set - Private` ≈ Linux **USS**), so unlike raw RSS it doesn't
   double-count the shared system DLLs every process maps. Ours is **1.6 MB per process**;
   HP's mostly-private .NET/UWP heaps hold **~44× more**.
-- **CPU:** `% Processor Time` sits below its own counter resolution at idle for both; the
-  cycle counter is the sensitive metric. HP's `HpSystemManagement` daemon burns millions of
-  cycles/s *continuously* (~0.1–0.2 % of one core); ours is a hard **0** — the event-driven
-  design means the scheduler never wakes us.
-- **Scope:** this compares the Command Center package only. HP's broader stack (its analytics
-  service + HSA/display services, separate packages) adds roughly another 440 MB RSS at idle,
-  which this tool does not touch and does not replace.
+- **CPU (the † above):** at idle `% Processor Time` is below its counter resolution for both,
+  so cycles are the sensitive metric. HP's `HpSystemManagement` daemon burns millions of
+  cycles/s *continuously* (~0.1–0.2 % of one core). Ours is a literal **0** — over 5-minute
+  per-second probes the service and tray each recorded 0 cycles in **300/300** one-second
+  bins. The service gets there because its WMI subscription filters `WHERE EventId = 29`
+  server-side, so WMI drops the BIOS provider's ~2 s heartbeat before it reaches our process.
+  The footprint script itself *can't* show this: its own WMI enumeration perturbs our
+  WMI-adjacent service to a few tens of thousands of cycles/s in-window — an observer effect,
+  not real idle cost — which is why the true 0 comes from a clean, no-WMI probe.
+- **Broader HP stack:** this compares the Command Center package only. HP's wider install (its
+  analytics service + HSA/display services, separate packages) adds roughly another 440 MB
+  RSS at idle, which this tool does not touch or replace.
 
 ## Install
 
