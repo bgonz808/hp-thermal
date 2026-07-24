@@ -171,8 +171,20 @@ fn epoch_to_utc(secs: u64) -> (u64, u64, u64, u64, u64, u64) {
 }
 
 fn run(cmd: &str, args: &[&str]) -> String {
-    std::process::Command::new(cmd)
-        .args(args)
+    let mut c = std::process::Command::new(cmd);
+    // Harden the git calls against config-driven code execution at build time: a hostile
+    // checkout's .git/config (or a poisoned global/system config) can set core.fsmonitor
+    // or core.pager to run a program when git executes. Ignore system+global config and
+    // blank those keys. (rev-list/rev-parse/status don't run hooks.) A PATH-planted `git`
+    // stays a build-env trust assumption — build.rs + build-deps already run arbitrary
+    // code at build, so that's the actual boundary.
+    if cmd == "git" {
+        c.env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .args(["-c", "core.fsmonitor=", "-c", "core.pager=cat"]);
+    }
+    c.args(args)
         .output()
         .ok()
         .filter(|o| o.status.success())
