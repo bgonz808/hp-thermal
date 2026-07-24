@@ -3,7 +3,7 @@ cargo-features = ["panic-immediate-abort"]
 [package]
 name = "hp-thermal"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 authors = ["Robert J Gonzales"]
 description = "HP laptop thermal mode control - without the bloat"
 repository = "https://github.com/bgonz808/hp-thermal"

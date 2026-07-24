@@ -180,7 +180,10 @@ fn run(cmd: &str, args: &[&str]) -> String {
     // code at build, so that's the actual boundary.
     if cmd == "git" {
         c.env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", if cfg!(windows) { "NUL" } else { "/dev/null" })
+            .env(
+                "GIT_CONFIG_GLOBAL",
+                if cfg!(windows) { "NUL" } else { "/dev/null" },
+            )
             .env("GIT_TERMINAL_PROMPT", "0")
             .args(["-c", "core.fsmonitor=", "-c", "core.pager=cat"]);
     }

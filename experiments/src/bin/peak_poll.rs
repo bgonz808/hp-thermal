@@ -15,13 +15,13 @@
 //!   cargo run --example peak_poll --release -- 10 > peak_data.tsv
 
 use std::time::Instant;
-use windows::core::{Interface, GUID, PWSTR};
 use windows::Win32::Foundation::PROPERTYKEY;
 use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioMeterInformation};
 use windows::Win32::Media::Audio::*;
 use windows::Win32::System::Com::*;
 use windows::Win32::System::Variant::VT_LPWSTR;
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
+use windows::core::{GUID, Interface, PWSTR};
 
 const PKEY_DEVICE_FRIENDLY_NAME: PROPERTYKEY = PROPERTYKEY {
     fmtid: GUID {
@@ -34,21 +34,23 @@ const PKEY_DEVICE_FRIENDLY_NAME: PROPERTYKEY = PROPERTYKEY {
 };
 
 unsafe fn device_name(device: &IMMDevice) -> String {
-    let Ok(store): Result<IPropertyStore, _> = device.OpenPropertyStore(STGM(0)) else {
-        return "??".into();
-    };
-    let Ok(prop) = store.GetValue(&PKEY_DEVICE_FRIENDLY_NAME) else {
-        return "??".into();
-    };
-    let vt = prop.Anonymous.Anonymous.vt;
-    if vt == VT_LPWSTR {
-        let pwsz: PWSTR = prop.Anonymous.Anonymous.Anonymous.pwszVal;
-        if !pwsz.0.is_null() {
-            let len = (0..).take_while(|&i| *pwsz.0.add(i) != 0).count();
-            return String::from_utf16_lossy(std::slice::from_raw_parts(pwsz.0, len));
+    unsafe {
+        let Ok(store): Result<IPropertyStore, _> = device.OpenPropertyStore(STGM(0)) else {
+            return "??".into();
+        };
+        let Ok(prop) = store.GetValue(&PKEY_DEVICE_FRIENDLY_NAME) else {
+            return "??".into();
+        };
+        let vt = prop.Anonymous.Anonymous.vt;
+        if vt == VT_LPWSTR {
+            let pwsz: PWSTR = prop.Anonymous.Anonymous.Anonymous.pwszVal;
+            if !pwsz.0.is_null() {
+                let len = (0..).take_while(|&i| *pwsz.0.add(i) != 0).count();
+                return String::from_utf16_lossy(std::slice::from_raw_parts(pwsz.0, len));
+            }
         }
+        "??".into()
     }
-    "??".into()
 }
 
 fn main() {

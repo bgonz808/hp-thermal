@@ -1,5 +1,5 @@
-use windows::core::w;
 use windows::Win32::System::Registry::*;
+use windows::core::w;
 
 /// Hardware info read from SMBIOS via registry (no elevation needed).
 pub struct HwInfo {

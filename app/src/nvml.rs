@@ -1,8 +1,8 @@
 use std::sync::OnceLock;
-use windows::core::{w, PCSTR};
 use windows::Win32::System::LibraryLoader::{
-    GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
+    GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
 };
+use windows::core::{PCSTR, w};
 
 struct NvmlState {
     device: usize, // nvmlDevice_t

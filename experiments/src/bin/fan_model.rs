@@ -474,7 +474,9 @@ fn main() {
             // The model correctly shows that Cool and Quiet are perceptually
             // similar because fan noise is masked by ambient at low RPM.
             pass += 1;
-            eprintln!("  PASS (expected): Cool ~= Quiet ({delta_cool_quiet:+.1} dB) -- ambient masks both");
+            eprintln!(
+                "  PASS (expected): Cool ~= Quiet ({delta_cool_quiet:+.1} dB) -- ambient masks both"
+            );
         }
     }
 

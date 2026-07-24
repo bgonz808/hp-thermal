@@ -1,12 +1,12 @@
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::time::Instant;
 
-use windows::core::{w, PCWSTR, PWSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::Security::Authorization::*;
 use windows::Win32::Security::*;
 use windows::Win32::System::Services::*;
 use windows::Win32::System::Threading::*;
+use windows::core::{PCWSTR, PWSTR, w};
 
 use crate::app;
 use crate::log;
@@ -188,10 +188,11 @@ impl CacheSet {
         cooldown_ms: u128,
         fetch: impl FnOnce() -> [u8; 2],
     ) -> [u8; 2] {
-        if let Some(c) = slot {
-            if c.when.elapsed().as_millis() < cooldown_ms && c.value[0] == STATUS_OK {
-                return [STATUS_OK | STATUS_CACHED, c.value[1]];
-            }
+        if let Some(c) = slot
+            && c.when.elapsed().as_millis() < cooldown_ms
+            && c.value[0] == STATUS_OK
+        {
+            return [STATUS_OK | STATUS_CACHED, c.value[1]];
         }
         let result = fetch();
         if result[0] == STATUS_OK {

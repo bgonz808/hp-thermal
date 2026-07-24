@@ -7,7 +7,7 @@
 //! the impact regardless. See SECURITY.md.
 
 use windows::Win32::System::LibraryLoader::{
-    SetDefaultDllDirectories, LOAD_LIBRARY_SEARCH_SYSTEM32,
+    LOAD_LIBRARY_SEARCH_SYSTEM32, SetDefaultDllDirectories,
 };
 use windows::Win32::System::SystemServices::{
     PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY, PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY,

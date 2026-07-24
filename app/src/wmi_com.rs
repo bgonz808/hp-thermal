@@ -1,7 +1,6 @@
 use std::mem::ManuallyDrop;
 use std::ptr;
 
-use windows::core::{implement, w, Interface, Ref, BSTR, HRESULT, PCWSTR};
 use windows::Win32::Foundation::{CloseHandle, E_FAIL, HANDLE};
 use windows::Win32::System::Com::*;
 use windows::Win32::System::Ole::*;
@@ -9,6 +8,7 @@ use windows::Win32::System::Rpc::{RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE};
 use windows::Win32::System::Threading::SetEvent;
 use windows::Win32::System::Variant::*;
 use windows::Win32::System::Wmi::*;
+use windows::core::{BSTR, HRESULT, Interface, PCWSTR, Ref, implement, w};
 
 use crate::log;
 use crate::protocol::*;

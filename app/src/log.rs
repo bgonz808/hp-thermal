@@ -1,8 +1,8 @@
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicUsize, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicUsize, Ordering};
 
-use windows::core::PCWSTR;
 use windows::Win32::Foundation::HANDLE;
+use windows::core::PCWSTR;
 
 static LOG: Mutex<Option<std::fs::File>> = Mutex::new(None);
 static VERBOSE: AtomicBool = AtomicBool::new(false);
@@ -21,10 +21,10 @@ pub fn init(label: &'static str) {
     // Ensure data directory exists (no-op if already present)
     let _ = std::fs::create_dir_all(crate::app::data_dir());
     let path = log_path();
-    if let Some(f) = open_log_file(&path) {
-        if let Ok(mut guard) = LOG.lock() {
-            *guard = Some(f);
-        }
+    if let Some(f) = open_log_file(&path)
+        && let Ok(mut guard) = LOG.lock()
+    {
+        *guard = Some(f);
     }
     // Restore verbose state from sentinel file
     if std::path::Path::new(&verbose_sentinel_path()).exists() {
@@ -36,15 +36,15 @@ pub fn init(label: &'static str) {
 /// Formats the entire line first, then writes in a single `write_all` call
 /// so that concurrent appends from service + tray don't interleave.
 pub fn write(msg: &str) {
-    if let Ok(mut guard) = LOG.lock() {
-        if let Some(f) = guard.as_mut() {
-            use std::io::Write;
-            let ts = timestamp();
-            let label = LABEL.lock().map(|g| *g).unwrap_or("???");
-            let line = format!("[{ts}] [{label}] {msg}\n");
-            let _ = f.write_all(line.as_bytes());
-            let _ = f.flush();
-        }
+    if let Ok(mut guard) = LOG.lock()
+        && let Some(f) = guard.as_mut()
+    {
+        use std::io::Write;
+        let ts = timestamp();
+        let label = LABEL.lock().map(|g| *g).unwrap_or("???");
+        let line = format!("[{ts}] [{label}] {msg}\n");
+        let _ = f.write_all(line.as_bytes());
+        let _ = f.flush();
     }
 }
 

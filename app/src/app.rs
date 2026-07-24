@@ -247,10 +247,10 @@ mod tests {
         // Prove the string we ship actually parses into a security descriptor,
         // not just that it looks well-formed. Catches a bad rights token that
         // would otherwise only surface at install time.
-        use windows::core::PCWSTR;
         use windows::Win32::Foundation::*;
         use windows::Win32::Security::Authorization::*;
         use windows::Win32::Security::*;
+        use windows::core::PCWSTR;
 
         let sddl_w = crate::wide::wide_null(&service_sddl());
         let mut sd = PSECURITY_DESCRIPTOR(std::ptr::null_mut());

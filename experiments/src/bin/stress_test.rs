@@ -9,8 +9,8 @@
 //!   cargo run --example stress_test --release -- 30    # 30 seconds
 //!   cargo run --example stress_test --release -- 60 4  # 60 seconds, 4 threads only
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 use windows::Win32::System::SystemInformation::{GetSystemInfo, SYSTEM_INFO};

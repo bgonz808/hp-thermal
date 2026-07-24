@@ -6,10 +6,9 @@
 //! decisions; slow path (A/B test) accumulates points for future fast paths.
 
 use std::ptr;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
-use windows::core::{w, Interface, GUID, PCWSTR, PWSTR};
 use windows::Win32::Foundation::BOOL;
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::*;
@@ -21,6 +20,7 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
 use windows::Win32::UI::Shell::ShellExecuteW;
 use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
+use windows::core::{GUID, Interface, PCWSTR, PWSTR, w};
 
 /// Result of a noise-adapt measurement.
 #[allow(dead_code)]
@@ -561,12 +561,11 @@ unsafe fn select_capture_device(
     // Each device is sampled ~20 times; we keep the max peak per device.
     for _ in 0..20 {
         for (i, meter_opt) in meters.iter().enumerate() {
-            if let Some(meter) = meter_opt {
-                if let Ok(p) = meter.GetPeakValue() {
-                    if p > candidates[i].peak {
-                        candidates[i].peak = p;
-                    }
-                }
+            if let Some(meter) = meter_opt
+                && let Ok(p) = meter.GetPeakValue()
+                && p > candidates[i].peak
+            {
+                candidates[i].peak = p;
             }
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -1374,10 +1373,10 @@ fn slow_path(
         stream.write_continuous_tsv_to(&tsv_path, dev_gain, perf_power, bal_power);
         stream.write_debug_wav(&format!("{dir}\\capture.wav"));
 
-        if let Some(handle) = telem_handle {
-            if let Ok(readings) = handle.join() {
-                write_telemetry_tsv(&readings, &format!("{dir}\\telemetry.tsv"));
-            }
+        if let Some(handle) = telem_handle
+            && let Ok(readings) = handle.join()
+        {
+            write_telemetry_tsv(&readings, &format!("{dir}\\telemetry.tsv"));
         }
 
         // Open the directory in Explorer
@@ -1944,7 +1943,7 @@ impl CaptureStream {
             label_data.extend_from_slice(&id.to_le_bytes());
             label_data.extend_from_slice(text);
             label_data.push(0); // NUL terminator
-                                // Pad to even if needed
+            // Pad to even if needed
             if labl_size & 1 != 0 {
                 label_data.push(0);
             }
@@ -4675,9 +4674,9 @@ mod tests {
             // that stand ≥1.5× above their local floor (relative prominence).
             // This filters broadband noise ripple while retaining true tonal peaks.
             let mut peaks: Vec<(f32, f32)> = Vec::new(); // (freq_hz, magnitude)
-                                                         // Prominence filter radius: at 32K FFT (1.46 Hz/bin), tonal peaks
-                                                         // spread over ~5 bins from FM wobble, so use ±16 bin neighborhood
-                                                         // to compute a stable local floor estimate.
+            // Prominence filter radius: at 32K FFT (1.46 Hz/bin), tonal peaks
+            // spread over ~5 bins from FM wobble, so use ±16 bin neighborhood
+            // to compute a stable local floor estimate.
             let prom_radius = 16usize;
             for k in (lo_bin.max(prom_radius + 1))
                 ..hi_bin
@@ -4747,7 +4746,7 @@ mod tests {
                 let strongest = peaks
                     .iter()
                     .enumerate()
-                    .max_by(|a, b| a.1 .1.partial_cmp(&b.1 .1).unwrap())
+                    .max_by(|a, b| a.1.1.partial_cmp(&b.1.1).unwrap())
                     .unwrap()
                     .0;
                 let mut indices = vec![false; peaks.len()];

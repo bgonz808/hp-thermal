@@ -4,7 +4,7 @@
 //! need Windows (the app is Windows-only); the artifact checks (deny/audit) and
 //! `verify-hardening` (byte-level PE parsing) run anywhere.
 
-use std::process::{exit, Command};
+use std::process::{Command, exit};
 
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).

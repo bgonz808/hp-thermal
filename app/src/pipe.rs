@@ -1,13 +1,13 @@
 use std::ptr;
 
-use windows::core::{w, PCWSTR, PWSTR};
 use windows::Win32::Foundation::*;
 use windows::Win32::Security::Authorization::*;
 use windows::Win32::Security::*;
 use windows::Win32::Storage::FileSystem::*;
+use windows::Win32::System::IO::*;
 use windows::Win32::System::Pipes::*;
 use windows::Win32::System::Threading::*;
-use windows::Win32::System::IO::*;
+use windows::core::{PCWSTR, PWSTR, w};
 
 use crate::app;
 use crate::protocol::PIPE_MAGIC;

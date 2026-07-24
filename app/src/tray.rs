@@ -1,15 +1,15 @@
-use windows::core::{w, PCSTR, PCWSTR};
 use windows::Win32::Foundation::*;
-use windows::Win32::Graphics::Gdi::{GetStockObject, BLACK_BRUSH, HBRUSH};
+use windows::Win32::Graphics::Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH};
 use windows::Win32::System::LibraryLoader::{
-    GetModuleHandleW, GetProcAddress, LoadLibraryExW, LOAD_LIBRARY_SEARCH_SYSTEM32,
+    GetModuleHandleW, GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
 };
 use windows::Win32::System::Power::*;
 use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
-use windows::Win32::System::Threading::{CreateMutexW, OpenEventW, WaitForSingleObject, INFINITE};
+use windows::Win32::System::Threading::{CreateMutexW, INFINITE, OpenEventW, WaitForSingleObject};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
 use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
+use windows::core::{PCSTR, PCWSTR, w};
 
 use crate::app;
 use crate::pipe;
@@ -1135,10 +1135,11 @@ unsafe fn screen_off() {
             // Save current brightness, then set to 0 via WMI (no power state change).
             // Also overlay a black window -- brightness=0 kills the backlight PWM,
             // black window kills LCD pixel leakage. Together = darkest without DPMS.
-            if let Some([s, level]) = pipe::client_transact(CMD_READ_BRIGHTNESS, 0) {
-                if status_ok(s) && level > 0 {
-                    SAVED_BRIGHTNESS.store(level, Ordering::Relaxed);
-                }
+            if let Some([s, level]) = pipe::client_transact(CMD_READ_BRIGHTNESS, 0)
+                && status_ok(s)
+                && level > 0
+            {
+                SAVED_BRIGHTNESS.store(level, Ordering::Relaxed);
             }
             pipe::client_transact(CMD_SET_BRIGHTNESS, 0);
             if BLACK_WINDOW.0.is_null() {
@@ -1292,10 +1293,10 @@ fn load_fnkey_settings() {
             FNKEY_SCREEN_ON.store(byte & 0x01 != 0, Ordering::Relaxed);
             FNKEY_SLEEP_ON.store(byte & 0x02 != 0, Ordering::Relaxed);
         }
-        if let Some(&method) = data.get(1) {
-            if method <= METHOD_BLACK {
-                SCREEN_METHOD.store(method, Ordering::Relaxed);
-            }
+        if let Some(&method) = data.get(1)
+            && method <= METHOD_BLACK
+        {
+            SCREEN_METHOD.store(method, Ordering::Relaxed);
         }
         crate::log::write(&format!(
             "fnkey: loaded screen={} sleep={} method={}",
