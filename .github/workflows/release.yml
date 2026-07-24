@@ -116,6 +116,7 @@ jobs:
       # THIS commit". Anyone verifies with:
       #   gh attestation verify hp-thermal.exe --repo <owner>/<repo>
       - name: Attest build provenance
+        id: provenance
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # actions/attest-build-provenance v4.1.1
         with:
           subject-path: dist/hp-thermal.exe
@@ -124,10 +125,37 @@ jobs:
       # deprecated). `sbom-path` still auto-detects CycloneDX/SPDX and emits the same
       # https://cyclonedx.org/bom predicate — verified identical to the prior output.
       - name: Attest SBOM
+        id: sbom
         uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6  # actions/attest v4.2.0
         with:
           subject-path: dist/hp-thermal.exe
           sbom-path: dist/hp-thermal.cdx.json
+
+      # FAIL-CLOSED self-verification BEFORE publish (closes the "attest but never verify"
+      # seam). Verify each just-created bundle OFFLINE (--bundle = the step's own output,
+      # so no attestation-API propagation race) AND pin the signer to THIS repo's release
+      # workflow (--signer-workflow). A forged/mis-scoped attestation fails here and we
+      # never reach `gh release create`. Runs on dispatch too, so every dry-run exercises
+      # it. Negative-tested locally: a wrong --signer-workflow exits 1.
+      - name: Verify attestations before publish (offline, identity-pinned)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::group::provenance"
+          gh attestation verify dist/hp-thermal.exe \
+            --bundle "${{ steps.provenance.outputs.bundle-path }}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          echo "::endgroup::"
+          echo "::group::sbom (cyclonedx)"
+          gh attestation verify dist/hp-thermal.exe \
+            --bundle "${{ steps.sbom.outputs.bundle-path }}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --predicate-type https://cyclonedx.org/bom \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          echo "::endgroup::"
 
       # First-party gh CLI (no third-party release action). Token is the job-scoped
       # GITHUB_TOKEN with contents: write only.
