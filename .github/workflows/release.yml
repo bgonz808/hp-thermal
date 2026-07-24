@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain + components
-        run: rustup toolchain install nightly-2026-02-15 --component rust-src clippy rustfmt
+        run: rustup toolchain install nightly-2026-02-15 -c rust-src -c clippy -c rustfmt
 
       # Enforce dependency locking: fails if Cargo.lock is stale / would change. Nothing
       # gets built or published against an unpinned dependency graph.

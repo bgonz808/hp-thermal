@@ -25,7 +25,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
 
       - name: Install pinned toolchain + components
-        run: rustup toolchain install nightly-2026-02-15 --component rust-src clippy rustfmt
+        run: rustup toolchain install nightly-2026-02-15 -c rust-src -c clippy -c rustfmt
 
       # Toolchain-native only — no cargo-install of third-party tools here.
       - name: Checks (fmt / clippy / test, both feature configs)
@@ -48,14 +48,14 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Harden runner (egress blocked)
+      - name: Harden runner (egress audit)
         uses: step-security/harden-runner@bf7454d06d71f1098171f2acdf0cd4708d7b5920  # v2.20.0
         with:
-          egress-policy: block
+          # AUDIT first: observe real egress, then flip to `block` once the candidate
+          # allowlist below is reconciled against the run insights (block on a wrong
+          # list fails the job). Audit ignores allowed-endpoints; it's staged for block.
+          egress-policy: audit
           disable-sudo: true
-          # STARTING allowlist. VALIDATE against one audit-mode run first — harden-runner
-          # posts the exact recommended policy in its run insights; reconcile + tighten
-          # before trusting block (a missing endpoint fails the job, which is the point).
           allowed-endpoints: >
             github.com:443
             api.github.com:443
@@ -89,7 +89,7 @@ jobs:
         uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca  # v1.7.12
 
       - name: osv-scanner (RustSec-complete Rust deps)
-        uses: google/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2  # v2.3.8
+        uses: google/osv-scanner-action/osv-scanner-action@9a498708959aeaef5ef730655706c5a1df1edbc2  # v2.3.8
         with:
           scan-args: |-
             --recursive
