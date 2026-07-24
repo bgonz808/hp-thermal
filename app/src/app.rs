@@ -10,15 +10,21 @@ pub const REPO_URL: &str = "https://github.com/bgonz808/hp-thermal";
 
 // --- Build identity ---
 
-/// FNV-1a 64-bit hash of a byte slice — the one canonical implementation, used by
-/// [`file_fnv`] and the audio device-id hash. (The 2-byte build fingerprint in
-/// `protocol` is a separate 32-bit *const* variant: it runs at compile time, so it
-/// can't call this, and it needs a different width for the wire.)
-pub fn fnv1a_64(bytes: &[u8]) -> u64 {
-    let mut h: u64 = 0xcbf2_9ce4_8422_2325;
-    for &b in bytes {
-        h ^= b as u64;
+/// FNV-1a 64-bit hash — the one canonical implementation, used by [`file_fnv`],
+/// the audio device-id hash, and (via [`fnv1a_64_cont`]) the 2-byte build
+/// fingerprint in `protocol`. `const fn`, so it also runs at compile time.
+pub const fn fnv1a_64(bytes: &[u8]) -> u64 {
+    fnv1a_64_cont(0xcbf2_9ce4_8422_2325, bytes)
+}
+
+/// FNV-1a continued from a running hash — lets callers stream several slices
+/// (e.g. BUILD_ID then BUILD_DATE) through the one algorithm.
+pub const fn fnv1a_64_cont(mut h: u64, bytes: &[u8]) -> u64 {
+    let mut i = 0;
+    while i < bytes.len() {
+        h ^= bytes[i] as u64;
         h = h.wrapping_mul(0x0100_0000_01b3);
+        i += 1;
     }
     h
 }

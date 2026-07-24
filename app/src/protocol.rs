@@ -24,22 +24,13 @@ pub const CMD_SET_BRIGHTNESS: u8 = 0x0A;
 pub const BUILD_FINGERPRINT: [u8; 2] = build_fingerprint();
 
 const fn build_fingerprint() -> [u8; 2] {
-    // Hash BUILD_ID + BUILD_DATE together — unique per compile
-    let mut h: u32 = 0x811c_9dc5;
-    let id = env!("BUILD_ID").as_bytes();
-    let date = env!("BUILD_DATE").as_bytes();
-    let mut i = 0;
-    while i < id.len() {
-        h ^= id[i] as u32;
-        h = h.wrapping_mul(0x0100_0193);
-        i += 1;
-    }
-    i = 0;
-    while i < date.len() {
-        h ^= date[i] as u32;
-        h = h.wrapping_mul(0x0100_0193);
-        i += 1;
-    }
+    // Stream BUILD_ID then BUILD_DATE through the one canonical FNV-1a
+    // (crate::app), then take the low 2 bytes for the wire. Unique per compile;
+    // no duplicate hash impl or constants.
+    let h = crate::app::fnv1a_64_cont(
+        crate::app::fnv1a_64(env!("BUILD_ID").as_bytes()),
+        env!("BUILD_DATE").as_bytes(),
+    );
     [(h >> 8) as u8, h as u8]
 }
 
