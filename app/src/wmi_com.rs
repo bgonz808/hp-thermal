@@ -189,9 +189,13 @@ impl WmiConnection {
 
     /// Subscribe to hpqBEvnt via a push-based async sink. Returns a live
     /// subscription that signals `fn_key` (the auto-reset event the tray waits
-    /// on) whenever Fn+F12 (EventId 29) is pressed. Zero idle cost: WMI invokes
-    /// the sink only when an event actually fires — no polling thread. Takes
-    /// ownership of `fn_key` (released when the subscription is dropped).
+    /// on) whenever Fn+F12 (EventId 29) is pressed. Takes ownership of `fn_key`
+    /// (released when the subscription is dropped).
+    ///
+    /// Zero idle cost: the query filters `WHERE EventId = 29` server-side, so WMI
+    /// drops the provider's ~2 s periodic heartbeat (and all other ids) before the
+    /// cross-process marshal — the sink is invoked only on a real Fn+F12 press, and
+    /// the service burns no cycles at rest.
     ///
     /// The sink is wrapped in an unsecured-apartment stub so that only WMI's
     /// SYSTEM context can invoke the callback — closing the documented async-sink
@@ -218,10 +222,16 @@ impl WmiConnection {
             })?;
             let stub: IWbemObjectSink = stub_unk.cast().map_err(|_| STATUS_WMI_ERROR)?;
 
+            // Server-side filter: WMI evaluates `WHERE EventId = 29` in the (already
+            // running) event infrastructure and drops every non-matching event —
+            // notably the ~2 s periodic heartbeat — BEFORE the cross-process marshal.
+            // Our sink is then woken only on a real Fn+F12 press (0 idle cost). Built
+            // from FN_KEY_EVENT_ID so it can't drift from should_signal_fn_key.
+            let wql = format!("SELECT * FROM hpqBEvnt WHERE EventId = {FN_KEY_EVENT_ID}");
             self.services
                 .ExecNotificationQueryAsync(
                     &BSTR::from("WQL"),
-                    &BSTR::from("SELECT * FROM hpqBEvnt"),
+                    &BSTR::from(wql.as_str()),
                     WBEM_GENERIC_FLAG_TYPE(0),
                     None,
                     &stub,
@@ -444,12 +454,21 @@ impl WmiConnection {
 // hpqBEvnt async event sink (push-based, zero idle cost)
 // ---------------------------------------------------------------------------
 
-/// Pure predicate: which hpqBEvnt `EventId` triggers the Fn+F12 screen toggle.
-/// Extracted from the COM callback so it can be unit-tested without WMI. Only
-/// EventId 29 (the "three-diamonds" Fn+F12 key) signals; every other event
-/// (26 = camera shutter, 3 = periodic, ...) is ignored.
-pub(crate) fn should_signal_fn_key(event_id: u32) -> bool {
-    event_id == 29
+/// The one hpqBEvnt `EventId` we act on: 29 = the "three-diamonds" Fn+F12 key.
+/// Single source of truth — the server-side WQL filter in
+/// [`WmiSession::subscribe_events`] and the client-side [`should_signal_fn_key`]
+/// backstop are both derived from this constant, so they cannot drift. Every
+/// other event (26 = camera shutter, 3 = the ~2 s periodic heartbeat, ...) is
+/// filtered out by WMI before it is ever marshaled to us.
+pub(crate) const FN_KEY_EVENT_ID: u32 = 29;
+
+/// Pure predicate: does this hpqBEvnt `EventId` trigger the Fn+F12 screen toggle?
+/// Extracted from the COM callback so it can be unit-tested without WMI. With the
+/// server-side `WHERE EventId = {FN_KEY_EVENT_ID}` filter in place this is a
+/// correctness backstop — WMI should only ever deliver matching events — and both
+/// sides read the same constant.
+pub(crate) const fn should_signal_fn_key(event_id: u32) -> bool {
+    event_id == FN_KEY_EVENT_ID
 }
 
 /// COM sink that WMI calls (on its own threadpool thread) whenever an hpqBEvnt
@@ -694,8 +713,13 @@ mod tests {
     /// COM callback makes, isolated so it is testable without WMI and Miri-clean.
     #[test]
     fn only_event_29_signals_fn_key() {
-        assert!(should_signal_fn_key(29));
+        assert!(should_signal_fn_key(FN_KEY_EVENT_ID));
+        assert_eq!(
+            FN_KEY_EVENT_ID, 29,
+            "Fn+F12 EventId is 29 (three-diamonds key)"
+        );
         for id in [0u32, 3, 26, 28, 30, 100, u32::MAX] {
+            assert_ne!(id, FN_KEY_EVENT_ID);
             assert!(!should_signal_fn_key(id), "id {id} must not signal");
         }
     }
