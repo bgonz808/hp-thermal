@@ -13,6 +13,10 @@ target = "x86_64-pc-windows-msvc"
 # rebuilds std with it too, so protection is whole-binary. Verified via the PE
 # DllCharacteristics bit 0x4000.
 rustflags = [
+    # Statically link the CRT: self-contained exe (no vcruntime140.dll / VC++ redist
+    # dependency), and one fewer DLL to search/plant. Measured size delta in commit msg.
+    "-C",
+    "target-feature=+crt-static",
     "-C",
     "control-flow-guard=checks",
     # stack canaries at the unsafe/FFI boundary; build-std applies it to std too.
