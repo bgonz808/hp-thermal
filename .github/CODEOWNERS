@@ -1,0 +1,25 @@
+# Code owners for hp-thermal.
+#
+# STATUS: solo today (@bgonz808). This file is Tier-A groundwork -- it documents who
+# must review which paths and ACTIVATES automatically the moment branch protection is
+# given `require_code_owner_reviews: true` (which itself needs a second maintainer, since
+# a solo dev cannot approve their own PR). Until then it is advisory.
+#
+# Ordering matters: the LAST matching pattern wins, so specific security-critical paths
+# come after the catch-all.
+
+# Default owner for everything.
+*                       @bgonz808
+
+# Supply-chain / CI-CD surface: workflows, this file, and dependency policy. A PR that
+# touches these can alter what runs, who is trusted, or the release itself -- so once
+# reviews are enforced, these REQUIRE a code-owner approval independent of the author.
+/.github/               @bgonz808
+/.github/CODEOWNERS     @bgonz808
+/.github/workflows/     @bgonz808
+/deny.toml              @bgonz808
+
+# Privilege boundaries: the build script (runs at compile time) and the install/update
+# path (runs as SYSTEM, promotes binaries). Highest-blast-radius source files.
+/app/build.rs           @bgonz808
+/app/src/install.rs     @bgonz808
