@@ -237,6 +237,93 @@ fn remove_run_key() {
 }
 
 // ---------------------------------------------------------------------------
+// Add/Remove Programs entry — "Installed apps" (elevated)
+// ---------------------------------------------------------------------------
+
+/// The Uninstall subkey. A STABLE name (not versioned) so install and update write the
+/// same entry: a newer version updates it in place, never a duplicate, no drift.
+const UNINSTALL_SUBKEY: windows::core::PCWSTR =
+    w!("SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\HpThermal");
+
+/// Write (or refresh) the Windows "Installed apps" entry so the app is uninstallable from
+/// Settings, not only the CLI. Idempotent; called from both install and update. Must be
+/// called elevated (HKLM). No-op on failure.
+fn write_uninstall_entry() {
+    use windows::Win32::System::Registry::*;
+
+    let installed = app::installed_exe();
+    let uninstall_cmd = format!("\"{installed}\" uninstall");
+    let est_kb = fs::metadata(&installed)
+        .map(|m| (m.len() / 1024) as u32)
+        .unwrap_or(0);
+
+    // SAFETY: UNINSTALL_SUBKEY is a static wide literal; `key` is closed before return;
+    // each value buffer outlives its RegSetValueExW call.
+    unsafe {
+        let mut key = HKEY::default();
+        let err = RegCreateKeyExW(
+            HKEY_LOCAL_MACHINE,
+            UNINSTALL_SUBKEY,
+            None,
+            windows::core::PCWSTR::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            None,
+            &mut key,
+            None,
+        );
+        if err.is_err() {
+            return;
+        }
+        reg_set_sz(key, w!("DisplayName"), app::NAME);
+        reg_set_sz(key, w!("DisplayVersion"), env!("CARGO_PKG_VERSION"));
+        reg_set_sz(key, w!("Publisher"), env!("CARGO_PKG_AUTHORS"));
+        reg_set_sz(key, w!("InstallLocation"), app::install_dir());
+        reg_set_sz(key, w!("DisplayIcon"), &installed);
+        reg_set_sz(key, w!("UninstallString"), &uninstall_cmd);
+        reg_set_dword(key, w!("EstimatedSize"), est_kb);
+        reg_set_dword(key, w!("NoModify"), 1);
+        reg_set_dword(key, w!("NoRepair"), 1);
+        let _ = RegCloseKey(key);
+    }
+}
+
+/// Remove the "Installed apps" entry. Must be called elevated. No-op on failure.
+fn remove_uninstall_entry() {
+    use windows::Win32::System::Registry::*;
+    // SAFETY: static wide literal subkey; the key holds only values, no child subkeys.
+    unsafe {
+        let _ = RegDeleteKeyW(HKEY_LOCAL_MACHINE, UNINSTALL_SUBKEY);
+    }
+}
+
+/// Write a REG_SZ value into an open key.
+/// # Safety
+/// `key` must be a valid HKEY open for `KEY_SET_VALUE`.
+unsafe fn reg_set_sz(
+    key: windows::Win32::System::Registry::HKEY,
+    name: windows::core::PCWSTR,
+    val: &str,
+) {
+    use windows::Win32::System::Registry::*;
+    let data: Vec<u16> = val.encode_utf16().chain(std::iter::once(0)).collect();
+    let bytes = std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 2);
+    let _ = RegSetValueExW(key, name, None, REG_SZ, Some(bytes));
+}
+
+/// Write a REG_DWORD value into an open key.
+/// # Safety
+/// `key` must be a valid HKEY open for `KEY_SET_VALUE`.
+unsafe fn reg_set_dword(
+    key: windows::Win32::System::Registry::HKEY,
+    name: windows::core::PCWSTR,
+    val: u32,
+) {
+    use windows::Win32::System::Registry::*;
+    let _ = RegSetValueExW(key, name, None, REG_DWORD, Some(&val.to_le_bytes()));
+}
+
+// ---------------------------------------------------------------------------
 // File operations (elevated)
 // ---------------------------------------------------------------------------
 
@@ -264,6 +351,47 @@ fn copy_exe_to_install_dir() -> Result<(), String> {
 
     let _ = fs::remove_file(&old); // best-effort cleanup
     Ok(())
+}
+
+/// If the running exe lives inside the install dir, move it out to %TEMP% so the install
+/// dir can be deleted. Windows locks a running image in place, so `remove_dir_all` would
+/// otherwise leave `hp-thermal.exe` behind. NTFS allows renaming a running image within
+/// the same volume (Program Files and %TEMP% are both on C:), so this is a move, not a
+/// copy; the relocated copy is then scheduled for delete-on-reboot. No-op if we are not
+/// running from the install dir (e.g. uninstall launched from a downloaded copy).
+fn relocate_self_for_deletion() {
+    let exe = match std::env::current_exe() {
+        Ok(p) => p,
+        Err(_) => return,
+    };
+    if !exe.starts_with(app::install_dir()) {
+        return;
+    }
+    let target = std::env::temp_dir().join(format!("hp-thermal-old-{}.exe", std::process::id()));
+    if fs::rename(&exe, &target).is_ok() {
+        schedule_delete_on_reboot(&target);
+    }
+}
+
+/// `MoveFileExW(path, NULL, MOVEFILE_DELAY_UNTIL_REBOOT)`: register the path for deletion
+/// on next boot (via HKLM PendingFileRenameOperations — needs the elevation uninstall
+/// already holds).
+fn schedule_delete_on_reboot(path: &std::path::Path) {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::Win32::Storage::FileSystem::{MOVEFILE_DELAY_UNTIL_REBOOT, MoveFileExW};
+    let wide: Vec<u16> = path
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: `wide` is a valid null-terminated path; a null new-name = delete-on-reboot.
+    unsafe {
+        let _ = MoveFileExW(
+            windows::core::PCWSTR(wide.as_ptr()),
+            windows::core::PCWSTR::null(),
+            MOVEFILE_DELAY_UNTIL_REBOOT,
+        );
+    }
 }
 
 /// Create C:\ProgramData\HpThermal\ and grant Users modify access.
@@ -465,6 +593,7 @@ pub fn uninstall() {
     }
 
     remove_run_key();
+    remove_uninstall_entry();
 
     // Close tray instances gracefully, then wait/force — native, no taskkill.
     close_tray_windows();
@@ -478,9 +607,11 @@ pub fn uninstall() {
         .creation_flags(CREATE_NO_WINDOW)
         .status();
 
-    // Remove install directory (C:\Program Files\HpThermal)
+    // Remove install directory (C:\Program Files\HpThermal). If this process IS the
+    // installed exe, move it out of the way first so the directory deletes cleanly.
     let install_dir = app::install_dir();
     if std::path::Path::new(install_dir).exists() {
+        relocate_self_for_deletion();
         match fs::remove_dir_all(install_dir) {
             Ok(()) => eprintln!("Removed {install_dir}"),
             Err(e) => eprintln!("Failed to remove {install_dir}: {e}"),
@@ -554,6 +685,7 @@ pub fn install_service() {
 
     start_service();
     set_run_key();
+    write_uninstall_entry();
 }
 
 /// Stop, replace exe, delete old registration, recreate, start.
@@ -606,6 +738,8 @@ pub fn update_service() {
     if let Err(e) = ensure_data_dir() {
         log.write(&format!("data dir setup failed: {e}"));
     }
+
+    write_uninstall_entry(); // refresh the "Installed apps" entry (DisplayVersion, etc.)
 
     // No delete+create — binPath is the same, just the file content changed.
     // Avoids ERROR_SERVICE_MARKED_FOR_DELETE (1072) race condition.
