@@ -106,16 +106,6 @@ gh attestation verify hp-thermal.exe \
   --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
 ```
 
-**Offline** (air-gapped) — using the `*.sigstore.jsonl` bundles attached to the release,
-no network required:
-
-```sh
-gh attestation verify hp-thermal.exe \
-  --bundle hp-thermal.exe.provenance.sigstore.jsonl \
-  --repo bgonz808/hp-thermal \
-  --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
-```
-
 The provenance/SBOM attestation is the real integrity anchor. `SHA256SUMS` is also
 attached as a low-tech convenience, but a bare checksum only proves the file matches
 *that* file — the attestation proves it came from *us*.
