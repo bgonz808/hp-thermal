@@ -680,6 +680,70 @@ fn wait_for_service_stopped() {
 // Install / Update / Uninstall — UAC entry points
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Start Menu shortcut — all-users, launchable/searchable from Start (elevated)
+// ---------------------------------------------------------------------------
+
+/// Path to the all-users Start Menu shortcut: `...\Programs\HP Thermal Control.lnk`.
+fn start_menu_shortcut() -> Option<String> {
+    use std::ffi::c_void;
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{
+        FOLDERID_CommonPrograms, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
+    };
+    // SAFETY: SHGetKnownFolderPath returns a CoTaskMem-allocated wide string we read then free.
+    unsafe {
+        let p = SHGetKnownFolderPath(&FOLDERID_CommonPrograms, KF_FLAG_DEFAULT, None).ok()?;
+        let dir = p.to_string().ok()?;
+        CoTaskMemFree(Some(p.0 as *const c_void));
+        Some(format!("{dir}\\{}.lnk", app::NAME))
+    }
+}
+
+/// Create/refresh the Start Menu shortcut pointing at the installed exe. Must be called
+/// elevated (writes under %ProgramData%). No-op on failure.
+fn create_start_menu_shortcut() {
+    use windows::Win32::System::Com::{
+        CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
+        CoUninitialize, IPersistFile,
+    };
+    use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
+    use windows::core::Interface;
+
+    let Some(lnk) = start_menu_shortcut() else {
+        return;
+    };
+    let exe: Vec<u16> = app::installed_exe()
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let lnk_w: Vec<u16> = lnk.encode_utf16().chain(std::iter::once(0)).collect();
+
+    // SAFETY: COM create/save with valid null-terminated wide strings. We only CoUninitialize
+    // when THIS call initialized COM (S_OK/S_FALSE), never on RPC_E_CHANGED_MODE.
+    unsafe {
+        let inited = CoInitializeEx(None, COINIT_APARTMENTTHREADED).is_ok();
+        if let Ok(link) = CoCreateInstance::<_, IShellLinkW>(&ShellLink, None, CLSCTX_INPROC_SERVER)
+        {
+            let _ = link.SetPath(PCWSTR(exe.as_ptr()));
+            let _ = link.SetIconLocation(PCWSTR(exe.as_ptr()), 0);
+            if let Ok(file) = link.cast::<IPersistFile>() {
+                let _ = file.Save(PCWSTR(lnk_w.as_ptr()), true);
+            }
+        }
+        if inited {
+            CoUninitialize();
+        }
+    }
+}
+
+/// Remove the Start Menu shortcut. Must be called elevated. No-op if absent.
+fn remove_start_menu_shortcut() {
+    if let Some(lnk) = start_menu_shortcut() {
+        let _ = fs::remove_file(&lnk);
+    }
+}
+
 /// Install the service. If not elevated, re-launches with UAC via --install-svc.
 pub fn install() {
     elevate_or(w!("--install-svc"), install_service);
@@ -700,6 +764,7 @@ pub fn uninstall() {
 
     remove_run_key();
     remove_uninstall_entry();
+    remove_start_menu_shortcut();
 
     // Close tray instances gracefully, then wait/force — native, no taskkill.
     close_tray_windows();
@@ -792,6 +857,7 @@ pub fn install_service() {
     start_service();
     set_run_key();
     write_uninstall_entry();
+    create_start_menu_shortcut();
 }
 
 /// Stop, replace exe, delete old registration, recreate, start.
@@ -846,6 +912,7 @@ pub fn update_service() {
     }
 
     write_uninstall_entry(); // refresh the "Installed apps" entry (DisplayVersion, etc.)
+    create_start_menu_shortcut(); // refresh the Start Menu shortcut too
 
     // No delete+create — binPath is the same, just the file content changed.
     // Avoids ERROR_SERVICE_MARKED_FOR_DELETE (1072) race condition.

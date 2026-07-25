@@ -18,6 +18,12 @@ use crate::wide::wide_null;
 
 const WM_TRAYICON: u32 = WM_USER + 1;
 const ID_SMART_SENSE: u32 = 100;
+
+// NVML idle-unload sweep: armed when the GPU menu loads NVML, fires once the library has
+// gone idle, then kills itself so the tray returns to zero idle cost. Period matches
+// `nvml::IDLE_TIMEOUT` (10 s).
+const NVML_TIMER_ID: usize = 1;
+const NVML_SWEEP_MS: u32 = 10_000;
 const ID_PERFORMANCE: u32 = 101;
 const ID_BALANCED: u32 = 102;
 const ID_COOL: u32 = 103;
@@ -243,6 +249,14 @@ unsafe extern "system" fn wnd_proc(
         WM_COMMAND => {
             let id = (wparam.0 as u32) & 0xFFFF;
             handle_menu(hwnd, id);
+            LRESULT(0)
+        }
+        WM_TIMER => {
+            // NVML idle sweep: once the dGPU library has gone idle, unload it and stop the
+            // timer, so the tray drops back to zero idle cost until the menu is used again.
+            if wparam.0 == NVML_TIMER_ID && crate::nvml::unload_if_idle() {
+                let _ = KillTimer(Some(hwnd), NVML_TIMER_ID);
+            }
             LRESULT(0)
         }
         WM_DESTROY => {
@@ -643,6 +657,12 @@ unsafe fn show_context_menu(hwnd: HWND) {
     let _ = PostMessageW(Some(hwnd), WM_NULL, WPARAM(0), LPARAM(0));
 
     let _ = DestroyMenu(hmenu);
+
+    // If building the menu loaded NVML (a dGPU is present), (re)arm the idle sweep. Each
+    // menu use resets the period; when it finally lapses the sweep unloads NVML and stops.
+    if crate::nvml::is_loaded() {
+        let _ = SetTimer(Some(hwnd), NVML_TIMER_ID, NVML_SWEEP_MS, None);
+    }
 }
 
 unsafe fn handle_menu(hwnd: HWND, id: u32) {
