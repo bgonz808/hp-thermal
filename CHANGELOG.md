@@ -20,6 +20,10 @@ First tagged release.
   directory at system integrity, and refuses to operate otherwise.
 - Uninstall from **Windows Settings → Apps** (Add/Remove Programs entry), in addition to
   `hp-thermal uninstall`.
+- Launch from the **Start Menu** (all-users shortcut), created at install and removed at
+  uninstall.
+- The NVIDIA GPU library (NVML) loads only while its menu row is shown and unloads when
+  idle, so it doesn't sit in memory.
 
 ### Supply chain & release integrity
 - **Verifiable releases**: every artifact carries a SLSA build-provenance attestation
