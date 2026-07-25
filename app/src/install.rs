@@ -427,7 +427,9 @@ fn image_write_restricted_at(path: &str) -> bool {
         let count = (*dacl).AceCount;
         for i in 0..count {
             let mut ace: *mut c_void = std::ptr::null_mut();
-            if GetAce(dacl, i as u32, &mut ace).is_err() {
+            // A successful GetAce guarantees a valid `ace`; the explicit null guard makes
+            // that provable to the reader and the analyzer, and fails closed if it ever isn't.
+            if GetAce(dacl, i as u32, &mut ace).is_err() || ace.is_null() {
                 restricted = false;
                 break;
             }
