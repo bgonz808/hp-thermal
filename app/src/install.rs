@@ -375,6 +375,12 @@ pub fn running_from_install_dir() -> bool {
 /// Fail-CLOSED: any read failure, a NULL DACL (everyone-full), or a single write-granting
 /// ACE to a non-privileged SID returns false.
 pub fn image_write_restricted() -> bool {
+    image_write_restricted_at(&app::installed_exe())
+}
+
+/// Core of [`image_write_restricted`], parameterized by path so it can be unit-tested
+/// against a temp file with a controlled ACL (no service/admin required).
+fn image_write_restricted_at(path: &str) -> bool {
     use std::ffi::c_void;
     use windows::Win32::Foundation::{HLOCAL, LocalFree};
     use windows::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
@@ -389,8 +395,7 @@ pub fn image_write_restricted() -> bool {
         | 0x4000_0000                   // GENERIC_WRITE
         | 0x1000_0000; // GENERIC_ALL
 
-    let exe = app::installed_exe();
-    let wide: Vec<u16> = exe.encode_utf16().chain(std::iter::once(0)).collect();
+    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
 
     // SAFETY: `wide` is a valid null-terminated path. GetNamedSecurityInfoW allocates the
     // security descriptor, freed via LocalFree before every return. `dacl` points into that
@@ -1144,6 +1149,40 @@ pub fn is_elevated() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The footing check must actually DETECT a loosened image ACL, not merely pass. Point
+    /// it at a temp file whose ACL we control (re-ACLing a file we own needs no admin) and
+    /// toggle write for the Users group. SIDs are used verbatim so it is locale-independent.
+    #[test]
+    fn image_write_restricted_detects_users_write() {
+        let path = std::env::temp_dir().join(format!("hpt-acl-{}.tmp", std::process::id()));
+        std::fs::write(&path, b"x").expect("create temp file");
+        let p = path.to_str().unwrap();
+        let icacls = |args: &[&str]| {
+            std::process::Command::new("icacls")
+                .args(args)
+                .output()
+                .expect("run icacls");
+        };
+
+        // Lock down to SYSTEM (S-1-5-18) + Administrators (S-1-5-32-544) only -> restricted.
+        icacls(&[p, "/inheritance:r"]);
+        icacls(&[p, "/grant:r", "*S-1-5-18:(F)", "*S-1-5-32-544:(F)"]);
+        assert!(
+            image_write_restricted_at(p),
+            "SYSTEM+Administrators-only ACL must read as restricted"
+        );
+
+        // Grant Users (S-1-5-32-545) write -> must be detected as NOT restricted.
+        icacls(&[p, "/grant", "*S-1-5-32-545:(M)"]);
+        assert!(
+            !image_write_restricted_at(p),
+            "a Users:write ACE must be detected"
+        );
+
+        icacls(&[p, "/reset"]); // re-inherit so the owner regains delete for cleanup
+        let _ = std::fs::remove_file(&path);
+    }
 
     /// The setup lock must be mutually exclusive (a held lock blocks other
     /// contenders) and must release cleanly so setup is never permanently
