@@ -16,6 +16,8 @@ First tagged release.
 - Consent gate for untested HP hardware, fingerprinted by board + BIOS + EC so a
   firmware update re-asks.
 - Hardened binary: Control Flow Guard, stack canaries, ASLR/DEP; ~180 KB minimal.
+- SYSTEM service verifies at startup that it runs from the write-restricted install
+  directory at system integrity, and refuses to operate otherwise.
 - Uninstall from **Windows Settings → Apps** (Add/Remove Programs entry), in addition to
   `hp-thermal uninstall`.
 
