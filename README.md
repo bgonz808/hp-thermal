@@ -106,32 +106,6 @@ Because the underlying interface is undocumented and can change across firmware,
 consent is keyed to your exact board + BIOS + EC version — a firmware update re-asks.
 Help expand support: see [Contributing](#contributing).
 
-## Building from source
-
-This is **not** a normal `cargo install` crate — it rebuilds `std` for a minimal binary,
-so it needs a specific nightly toolchain and `rust-src`:
-
-```sh
-# toolchain is pinned by rust-toolchain.toml (nightly + rust-src) — rustup auto-installs it
-cd app
-cargo build --release                      # minimal build (~200 KB)
-cargo build --release --features noise-adapt   # with the mic-based Noise Adapt engine
-```
-
-- Target: `x86_64-pc-windows-msvc` (Windows only).
-- `cargo install hp-thermal` will **not** work — the `build-std` + custom-target setup
-  requires building from the repo.
-
-### Dev tooling
-
-Cross-platform Rust tooling lives in `xtask/`:
-
-```sh
-cargo xtask ci --fast          # fmt, clippy -D warnings, tests — the PR + pre-commit tier
-cargo xtask ci                 # + cargo-deny, cargo-auditable build, audit bin, verify-hardening
-cargo xtask verify-hardening <exe>   # check the PE exploit-mitigation flags (CFG/ASLR/DEP)
-```
-
 ## Security
 
 Security is a first-class goal — a hardened IPC threat model, exploit-mitigated binary
@@ -141,10 +115,8 @@ via GitHub Security Advisories.
 
 ## Contributing
 
-Expanding verified hardware coverage is especially welcome. If you run an HP model other
-than the tested one, the planned **`hp-thermal export-info`** command (and a matching tray
-menu item) will export a hardware/capability report you can attach to an issue — helping map
-which models this interface actually supports.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for building from source, the dev tooling, and how to
+submit changes. Expanding verified hardware coverage is especially welcome.
 
 ## License
 
