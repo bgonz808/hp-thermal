@@ -10,6 +10,26 @@ Report privately via **GitHub Security Advisories** ("Report a vulnerability" on
 *Security* tab), not a public issue. Please state clearly if you believe a finding escapes
 the bounded-impact ceiling described below — those are prioritized.
 
+## Verifying a release
+
+Every release is built by a public GitHub Actions workflow and carries a **SLSA build
+provenance** attestation and an **SBOM** attestation, so you can prove the `.exe` was built
+from this repo's source by that workflow and was not altered in transit.
+
+With the [GitHub CLI](https://cli.github.com), pinning the signer to this repo's release
+workflow (the identity check is what makes verification meaningful):
+
+```sh
+gh attestation verify hp-thermal.exe \
+  --repo bgonz808/hp-thermal \
+  --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
+```
+
+The attestation is the real integrity anchor. `SHA256SUMS` is attached as a convenience, but
+a bare checksum only proves a file matches itself; the attestation proves it came from this
+build. The binary is not yet Authenticode-signed, so Windows shows "Publisher: Unknown" on
+the UAC prompt — until that lands (see Roadmap), the attestation is the proof of origin.
+
 ## Threat model (tray ↔ service IPC)
 
 The single `hp-thermal.exe` runs in two roles: a **tray** (interactive user, Medium
@@ -128,6 +148,6 @@ verification but **bounded reward**: least privilege + no secrets + minimal in-r
 
 ## Roadmap
 
-Authenticode signing, SLSA build provenance, `/CETCOMPAT`, formal (Kani) proof of the input
-parser, and Miri UB-checking of the pure-logic tests — the last unblocked by extracting the
+Authenticode signing, `/CETCOMPAT`, formal (Kani) proof of the input parser, and Miri
+UB-checking of the pure-logic tests — the last unblocked by extracting the
 pure logic into a stable `core` crate (which also removes the `build-std` sysroot conflict).
