@@ -25,6 +25,18 @@ gh attestation verify hp-thermal.exe \
   --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
 ```
 
+For the strongest check, also pin the **immutable numeric IDs**. A username or repo *name*
+can be renamed and re-registered by someone else; the account ID (`3029651`) and repo ID
+(`1309177800`) never change, so pinning them defeats a future rename or typosquat of the path:
+
+```sh
+gh attestation verify hp-thermal.exe --repo bgonz808/hp-thermal \
+  --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml \
+  --format json \
+| jq -e '.[].verificationResult.statement.predicate.buildDefinition.internalParameters.github
+    | .repository_owner_id == "3029651" and .repository_id == "1309177800"'
+```
+
 The attestation is the real integrity anchor. `SHA256SUMS` is attached as a convenience, but
 a bare checksum only proves a file matches itself; the attestation proves it came from this
 build. The binary is not yet Authenticode-signed, so Windows shows "Publisher: Unknown" on
