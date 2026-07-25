@@ -214,8 +214,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Notes built with echo lines (GITHUB_* are shell env vars, not ${{ }} interpolation,
-          # so this is zizmor/actionlint clean). The 4-space indent renders as a code block.
+          # Notes built with echo lines (GITHUB_* are shell env vars, not GitHub-expression
+          # interpolation), so this is zizmor/actionlint clean. 4-space indent = code block.
           {
             echo "## hp-thermal ${GITHUB_REF_NAME}"
             echo
