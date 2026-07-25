@@ -52,6 +52,27 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     log::write("service starting");
     log::write(&format!("build: {}", app::build_identity()));
 
+    // Fail-closed footing check. The SYSTEM service must run from its admin-only-write
+    // install directory (Program Files) AND at System/High integrity. If either is false,
+    // the trust model (a lower-privileged user cannot tamper the image or stand in for the
+    // service) no longer holds, so refuse to do any privileged WMI work.
+    if !crate::install::running_from_install_dir() {
+        log::write("REFUSING: not running from the install directory");
+        set_status(SERVICE_STOPPED, 4);
+        return;
+    }
+    if !crate::install::image_write_restricted() {
+        log::write("REFUSING: install image is writable by a non-privileged principal");
+        set_status(SERVICE_STOPPED, 5);
+        return;
+    }
+    if !crate::pipe::own_process_is_privileged() {
+        log::write("REFUSING: not at System/High integrity");
+        set_status(SERVICE_STOPPED, 6);
+        return;
+    }
+    log::write("footing verified: install dir + write-restricted image + privileged");
+
     let Ok(event) = CreateEventW(None, true, false, None) else {
         log::write("FAIL: CreateEventW");
         set_status(SERVICE_STOPPED, 1);

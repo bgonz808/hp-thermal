@@ -216,6 +216,27 @@ unsafe fn token_integrity_rid(token: HANDLE) -> Option<u32> {
     Some(*rid_ptr)
 }
 
+/// The RID for the High mandatory integrity level (0x3000); System is 0x4000.
+const SECURITY_MANDATORY_HIGH_RID: u32 = 0x3000;
+
+/// True if THIS process runs at High or System integrity — the SYSTEM service's expected
+/// footing. Fail-CLOSED on read failure (a service that cannot prove its own privilege must
+/// not do privileged work) — the opposite of the client check, which defers.
+pub(crate) fn own_process_is_privileged() -> bool {
+    use windows::Win32::Security::TOKEN_QUERY;
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+    // SAFETY: open our own process token for query only; closed right after reading the RID.
+    unsafe {
+        let mut token = HANDLE::default();
+        if OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token).is_err() {
+            return false;
+        }
+        let rid = token_integrity_rid(token);
+        let _ = CloseHandle(token);
+        matches!(rid, Some(r) if r >= SECURITY_MANDATORY_HIGH_RID)
+    }
+}
+
 /// Read exactly 2 bytes from the pipe.
 fn read2(handle: HANDLE) -> Option<[u8; 2]> {
     // SAFETY: `handle` is a valid pipe handle; `buf` is a 2-byte stack buffer

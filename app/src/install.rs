@@ -353,6 +353,110 @@ fn copy_exe_to_install_dir() -> Result<(), String> {
     Ok(())
 }
 
+/// True if the running exe IS the canonical installed binary in Program Files — the only
+/// admin-only-write location. The service refuses to run from anywhere else: elsewhere, the
+/// assumption that a lower-privileged user cannot tamper the image no longer holds.
+pub fn running_from_install_dir() -> bool {
+    let Ok(exe) = std::env::current_exe() else {
+        return false;
+    };
+    let expected = std::path::PathBuf::from(app::installed_exe());
+    // Canonicalize both to normalize 8.3 names, casing, and symlinks before comparing.
+    match (
+        std::fs::canonicalize(&exe),
+        std::fs::canonicalize(&expected),
+    ) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => false,
+    }
+}
+
+/// True if the installed binary's DACL grants write/delete to ONLY SYSTEM and
+/// Administrators — i.e. no lower-privileged principal can tamper the SYSTEM image. This
+/// re-checks at runtime what install set at install time: an ACL loosened afterward (an
+/// admin slip, or malware that briefly held admin) is caught here, and the service refuses.
+/// Fail-CLOSED: any read failure, a NULL DACL (everyone-full), or a single write-granting
+/// ACE to a non-privileged SID returns false.
+pub fn image_write_restricted() -> bool {
+    image_write_restricted_at(&app::installed_exe())
+}
+
+/// Core of [`image_write_restricted`], parameterized by path so it can be unit-tested
+/// against a temp file with a controlled ACL (no service/admin required).
+fn image_write_restricted_at(path: &str) -> bool {
+    use std::ffi::c_void;
+    use windows::Win32::Foundation::{HLOCAL, LocalFree};
+    use windows::Win32::Security::Authorization::{GetNamedSecurityInfoW, SE_FILE_OBJECT};
+    use windows::Win32::Security::*;
+
+    // Write/tamper-relevant rights: overwrite, append, delete, re-ACL, take ownership, or all.
+    const WRITE_MASK: u32 = 0x0002      // FILE_WRITE_DATA
+        | 0x0004                        // FILE_APPEND_DATA
+        | 0x0001_0000                   // DELETE
+        | 0x0004_0000                   // WRITE_DAC
+        | 0x0008_0000                   // WRITE_OWNER
+        | 0x4000_0000                   // GENERIC_WRITE
+        | 0x1000_0000; // GENERIC_ALL
+
+    let wide: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
+
+    // SAFETY: `wide` is a valid null-terminated path. GetNamedSecurityInfoW allocates the
+    // security descriptor, freed via LocalFree before every return. `dacl` points into that
+    // descriptor and is only read while it is alive. ACE pointers are validated by GetAce.
+    unsafe {
+        let mut dacl: *mut ACL = std::ptr::null_mut();
+        let mut sd = PSECURITY_DESCRIPTOR::default();
+        let err = GetNamedSecurityInfoW(
+            windows::core::PCWSTR(wide.as_ptr()),
+            SE_FILE_OBJECT,
+            DACL_SECURITY_INFORMATION,
+            None,
+            None,
+            Some(&mut dacl),
+            None,
+            &mut sd,
+        );
+        if err.is_err() {
+            return false; // can't read the ACL -> fail closed
+        }
+        if dacl.is_null() {
+            let _ = LocalFree(Some(HLOCAL(sd.0)));
+            return false; // NULL DACL = everyone full access
+        }
+        let mut restricted = true;
+        let count = (*dacl).AceCount;
+        for i in 0..count {
+            let mut ace: *mut c_void = std::ptr::null_mut();
+            if GetAce(dacl, i as u32, &mut ace).is_err() {
+                restricted = false;
+                break;
+            }
+            let header = &*(ace as *const ACE_HEADER);
+            // Only ALLOW ACEs grant; inherit-only ACEs don't apply to this object.
+            const ACCESS_ALLOWED: u8 = 0; // ACCESS_ALLOWED_ACE_TYPE
+            if header.AceType != ACCESS_ALLOWED {
+                continue;
+            }
+            if header.AceFlags & (INHERIT_ONLY_ACE.0 as u8) != 0 {
+                continue;
+            }
+            let allow = &*(ace as *const ACCESS_ALLOWED_ACE);
+            if allow.Mask & WRITE_MASK == 0 {
+                continue; // no write/tamper right granted
+            }
+            let sid = PSID(&allow.SidStart as *const u32 as *mut c_void);
+            let privileged = IsWellKnownSid(sid, WinLocalSystemSid).as_bool()
+                || IsWellKnownSid(sid, WinBuiltinAdministratorsSid).as_bool();
+            if !privileged {
+                restricted = false; // a lower-privileged principal can tamper the image
+                break;
+            }
+        }
+        let _ = LocalFree(Some(HLOCAL(sd.0)));
+        restricted
+    }
+}
+
 /// If the running exe lives inside the install dir, move it out to %TEMP% so the install
 /// dir can be deleted. Windows locks a running image in place, so `remove_dir_all` would
 /// otherwise leave `hp-thermal.exe` behind. NTFS allows renaming a running image within
@@ -1048,6 +1152,71 @@ pub fn is_elevated() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The footing check must actually DETECT a loosened image ACL, not merely pass. Point
+    /// it at a temp file whose ACL we control (re-ACLing a file we own needs no admin) and
+    /// toggle write for the Users group. SIDs are used verbatim so it is locale-independent.
+    #[test]
+    fn image_write_restricted_detects_users_write() {
+        use std::process::Command;
+        let path = std::env::temp_dir().join(format!("hpt-acl-{}.tmp", std::process::id()));
+        std::fs::write(&path, b"x").expect("create temp file");
+        let p = path.to_str().unwrap();
+        let icacls = |args: &[&str]| {
+            Command::new("icacls")
+                .args(args)
+                .output()
+                .expect("run icacls");
+        };
+
+        // The OS grants the file's creator an explicit ACE that `/inheritance:r` does NOT
+        // strip, so the "restricted" case would otherwise carry a non-privileged writer and
+        // be environment-dependent (passed locally as a standard user; failed on the admin
+        // CI runner). Capture the creator SID to remove it below.
+        let user_sid = Command::new("whoami")
+            .args(["/user", "/fo", "csv", "/nh"])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .and_then(|s| s.rsplit(',').next().map(str::to_string))
+            .map(|s| {
+                s.trim_matches(|c: char| c == '"' || c.is_whitespace())
+                    .to_string()
+            })
+            .unwrap_or_default();
+
+        // Lock down to SYSTEM (S-1-5-18) + Administrators (S-1-5-32-544) only.
+        icacls(&[p, "/inheritance:r"]);
+        icacls(&[p, "/grant:r", "*S-1-5-18:(F)", "*S-1-5-32-544:(F)"]);
+        // Strip any lingering non-privileged writers: CreatorOwner, Everyone, Authenticated
+        // Users, Interactive, Users, and this process's own (creator) SID.
+        for g in [
+            "*S-1-3-0",
+            "*S-1-1-0",
+            "*S-1-5-11",
+            "*S-1-5-4",
+            "*S-1-5-32-545",
+        ] {
+            icacls(&[p, "/remove:g", g]);
+        }
+        if !user_sid.is_empty() {
+            icacls(&[p, "/remove:g", &format!("*{user_sid}")]);
+        }
+        assert!(
+            image_write_restricted_at(p),
+            "SYSTEM+Administrators-only ACL must read as restricted"
+        );
+
+        // Grant Users (S-1-5-32-545) write -> must be detected as NOT restricted.
+        icacls(&[p, "/grant", "*S-1-5-32-545:(M)"]);
+        assert!(
+            !image_write_restricted_at(p),
+            "a Users:write ACE must be detected"
+        );
+
+        icacls(&[p, "/reset"]); // re-inherit so the owner regains delete for cleanup
+        let _ = std::fs::remove_file(&path);
+    }
 
     /// The setup lock must be mutually exclusive (a held lock blocks other
     /// contenders) and must release cleanly so setup is never permanently
