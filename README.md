@@ -1,10 +1,10 @@
 # hp-thermal
 
-**Thermal & performance control for HP laptops — a tiny tray app + Windows service.**
+**Thermal and performance control for your HP laptop, in a tiny tray app.**
 
-A single ~200 KB binary with the same core functionality as HP Command Center's 169 MB
-package. **System Control → Device Mode** picks a performance profile that matches your
-thermal, noise, and performance requirements.
+It does the same core job as HP Command Center's 169 MB package, from a single ~200 KB
+binary. Open the tray (**System Control → Device Mode**) and pick a profile that balances
+heat, noise, and speed the way you want.
 
 > ⚠️ **Supported hardware.** This talks to an **undocumented HP BIOS-WMI interface** that
 > is *not* a stable or public API. It was reverse-engineered from C# and validated on an
@@ -108,15 +108,15 @@ gh attestation verify hp-thermal.exe \
   --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
 ```
 
-**Offline / air-gapped.** `gh` normally fetches the Sigstore trust root over the network,
-so fetch the trust material *once* from a machine you trust, then verify with no network:
+**Offline / air-gapped.** `gh` still fetches the Sigstore trust root over the network, so
+grab the trust material once on a trusted machine, then verify offline:
 
 ```sh
-# on a trusted, networked machine — one time
+# once, on a trusted machine with network
 gh attestation trusted-root > trusted_root.jsonl
-gh attestation download hp-thermal.exe --repo bgonz808/hp-thermal   # writes the bundle
+gh attestation download hp-thermal.exe --repo bgonz808/hp-thermal
 
-# on the air-gapped machine — no network
+# on the air-gapped machine
 gh attestation verify hp-thermal.exe \
   --bundle <downloaded-bundle>.jsonl \
   --custom-trusted-root trusted_root.jsonl \
@@ -124,13 +124,11 @@ gh attestation verify hp-thermal.exe \
   --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
 ```
 
-The trust root comes from *your* `gh`, not from this release — an independent anchor, which
-is what makes offline verification meaningful (a root shipped alongside the artifact it
-vouches for proves nothing).
+The root comes from *your* `gh`, not this release. A root shipped beside the artifact it
+vouches for proves nothing.
 
-`SHA256SUMS` is also attached as a low-tech convenience, but a bare checksum only proves the
-file matches *that* file — the attestation is the real anchor: it proves the file came from
-*us*.
+`SHA256SUMS` is a convenience; the attestation is the real anchor. A checksum only proves a
+file matches itself, not that it came from us.
 
 > Not yet Authenticode-signed, so Windows still shows "Publisher: Unknown" on the UAC
 > prompt. Publisher signing is planned; until then, the attestation above is the
