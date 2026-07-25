@@ -62,6 +62,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0   # full history so build.rs `git rev-list --count HEAD` is accurate
 
       - name: Install pinned toolchain + components
         run: rustup toolchain install nightly-2026-07-23 -c rust-src -c clippy -c rustfmt
@@ -194,21 +195,13 @@ jobs:
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
           echo "::endgroup::"
 
-      # Export the signed Sigstore bundles as release ASSETS so verification works
-      # OFFLINE: the bundle carries the DSSE-signed attestation + Fulcio cert + Rekor
-      # inclusion proof, so a consumer verifies with `gh attestation verify --bundle
-      # <file>` WITHOUT a live call to GitHub's attestation API / Rekor. This is the
-      # enabler for the offline verify-before-promote path (updater has no network).
-      - name: Stage attestation bundles as release assets
-        env:
-          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
-          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cp "$PROVENANCE_BUNDLE" dist/hp-thermal.exe.provenance.sigstore.jsonl
-          cp "$SBOM_BUNDLE"       dist/hp-thermal.exe.sbom.sigstore.jsonl
-          ls -l dist/*.sigstore.jsonl
+      # NOTE: the attestations are still CREATED and self-verified above; we just don't
+      # attach the *.sigstore bundle files as release assets. They live in GitHub's
+      # attestation store (queryable by `gh attestation verify`), so shipping them would
+      # only add cryptic files a user can't identify -- and a trust root shipped next to
+      # the artifact it vouches for isn't an independent anchor. The offline path is
+      # documented in the README (fetch the root from your own gh). We reattach the
+      # bundle only when the offline updater actually consumes it.
 
       # First-party gh CLI (no third-party release action). Token is the job-scoped
       # GITHUB_TOKEN with contents: write only.
@@ -223,11 +216,34 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
+          set -euo pipefail
+          # Build release notes via echo lines (no heredoc/backtick pitfalls; the 4-space
+          # indent renders the verify command as a Markdown code block). GITHUB_* are shell
+          # env vars, not ${{ }} interpolation, so this stays zizmor template-injection clean.
+          {
+            echo "## hp-thermal ${GITHUB_REF_NAME}"
+            echo
+            echo "Minimal HP laptop thermal & performance control -- a tray app + Windows service, ~200 KB."
+            echo "README and CHANGELOG: https://github.com/${GITHUB_REPOSITORY}"
+            echo
+            echo "### Install"
+            echo "Download hp-thermal.exe and run it (one-time UAC prompt). Not yet Authenticode-signed,"
+            echo "so Windows shows \"Publisher: Unknown\" -- verify with the command below instead."
+            echo
+            echo "### Verify"
+            echo "Every artifact carries SLSA build provenance and an SBOM attestation. With the GitHub CLI:"
+            echo
+            echo "    gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+            echo
+            echo "Offline / air-gapped verification: see the README."
+            echo
+            echo "### Files"
+            echo "- hp-thermal.exe -- the application"
+            echo "- hp-thermal.cdx.json -- CycloneDX SBOM"
+            echo "- SHA256SUMS -- checksums (convenience; the attestation is the real integrity anchor)"
+          } > notes.md
           gh release create "${GITHUB_REF_NAME}" \
             dist/hp-thermal.exe dist/hp-thermal.cdx.json dist/SHA256SUMS \
-            dist/hp-thermal.exe.provenance.sigstore.jsonl \
-            dist/hp-thermal.exe.sbom.sigstore.jsonl \
             --repo "${GITHUB_REPOSITORY}" \
-            --title "${GITHUB_REF_NAME}" \
-            --notes "Verify online:  gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY}
-          Verify offline: gh attestation verify hp-thermal.exe --bundle hp-thermal.exe.provenance.sigstore.jsonl --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+            --title "hp-thermal ${GITHUB_REF_NAME}" \
+            --notes-file notes.md

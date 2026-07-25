@@ -1,18 +1,17 @@
 # hp-thermal
 
-**HP laptop thermal & performance control — without the 169 MB.**
+**Thermal & performance control for HP laptops — a tiny tray app + Windows service.**
 
-A ~200 KB tray app + Windows service that reproduces the core of HP Command Center's
-**System Control → Device Mode** — its thermal/performance/cooling presets
-(Performance · Balanced · Cool · Power Saver) and Smart Sense — replacing all 169 MB of
-HP Command Center for the settings most people actually use.
+A single ~200 KB binary with the same core functionality as HP Command Center's 169 MB
+package. **System Control → Device Mode** picks a performance profile that matches your
+thermal, noise, and performance requirements.
 
 > ⚠️ **Supported hardware.** This talks to an **undocumented HP BIOS-WMI interface** that
-> is *not* a stable or public API. It was reverse-engineered and validated on an
+> is *not* a stable or public API. It was reverse-engineered from C# and validated on an
 > **HP ENVY 16 (board `8BE5`, BIOS F.25)**. On any other HP model it will detect the
-> difference and ask for explicit, remembered consent before doing anything — thermal
+> difference and ask for explicit, remembered consent before doing anything. Thermal
 > control may not work or may behave differently on untested hardware. Non-HP machines
-> are refused outright — before any elevation, install, or system change. See
+> are refused outright before any elevation, install, or system change. See
 > [Hardware support](#hardware-support).
 
 ## What it does
@@ -21,27 +20,28 @@ HP Command Center for the settings most people actually use.
 - **Smart Sense** — HP's adaptive CoolSense toggle.
 - **Fn+F12** — screen on/off (and optional sleep), since the "three-diamonds" key does
   nothing without HP's software.
-- **Optional, experimental: Noise Adapt** (`--features noise-adapt`) — mic-based fan-noise
-  measurement that picks a mode by how audible the fans are in your room. Off by default,
-  and experimental.
+- **Optional, experimental: Noise Adapt** (`--features noise-adapt`) — an acoustically
+  informed read on whether you'd even hear the fans in Performance mode versus Balanced
+  (quieter, but slower, and possibly hotter depending on workload or environment).
 
 **Scope.** HP describes that page as adjusting "the performance, temperature, and cooling
 preferences for your PC along with settings for Smart Sense and Focus Mode." hp-thermal
 covers the thermal/cooling presets and Smart Sense — **not** Focus Mode, and not HP CC's
 other pages (camera privacy, Network Booster, display controls, etc.). It neither replaces
 nor disables those; they aren't thermal control. The Fn+F12 remap is a small extra of ours,
-not part of HP's System Control.
+not part of HP's System Control, because on some machines 0% brightness in Windows still
+isn't fully dark.
 
 It is a single `hp-thermal.exe`: the tray runs as your user, and a tiny Windows service
 runs as SYSTEM and performs the privileged BIOS/WMI calls, talking over a hardened local
 named pipe. See [SECURITY.md](SECURITY.md).
 
-**Idle cost: zero, and measured.** Both halves are event-driven, not polling: over
-5-minute per-second cycle probes, **the service and the tray each recorded 0 CPU cycles in
-300/300 one-second bins** — a literal 100 % idle. The tray blocks in its message loop; the
-service waits on a **push-based WMI event sink** for the Fn+F12 hotkey, filtered
-`WHERE EventId = 29` server-side so WMI drops the BIOS provider's ~2 s heartbeat before it
-ever reaches our process. Versus HP Command Center's continuously-running thermal daemon.
+**Idle cost: zero, and measured.** Both halves are event-driven, not polling. Over a 5-minute
+audit, **the service and the tray each recorded 0 CPU cycles**. The tray blocks in its message
+loop; the service waits on a **push-based WMI event sink** for the Fn+F12 hotkey, filtered
+`WHERE EventId = 29` server-side, so an HP BIOS heartbeat never wakes the process. Compare
+that to HP Command Center's continuously-active daemon, which does more than thermal
+management.
 
 ## Measured footprint vs HP Command Center
 
@@ -81,7 +81,9 @@ per-second cycle probe — separate by necessity; see the CPU note.
 ## Install
 
 Download the release `hp-thermal.exe` and run it. It installs the background service
-(one-time UAC prompt) and starts the tray. `hp-thermal uninstall` removes it cleanly.
+(one-time UAC prompt) and starts the tray. `hp-thermal uninstall` stops and removes the
+service, run it from a copy **outside** `C:\Program Files\HpThermal\` so it can delete the
+installed files (Windows locks a running executable).
 
 ```
 hp-thermal              Launch the tray (installs the service if needed)
@@ -95,7 +97,7 @@ hp-thermal --version    Version + build id
 
 Every release is built by a public GitHub Actions workflow and carries cryptographic
 **build provenance** (SLSA) and an **SBOM** attestation, so you can prove the `.exe` was
-built from this repo's source by that workflow — not tampered with in transit.
+built from this repo's source by that workflow and not tampered with in transit.
 
 With the [GitHub CLI](https://cli.github.com), pinning the signer to this repo's release
 workflow (the identity check is what makes verification meaningful):
@@ -106,19 +108,29 @@ gh attestation verify hp-thermal.exe \
   --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
 ```
 
-**Offline** (air-gapped) — using the `*.sigstore.jsonl` bundles attached to the release,
-no network required:
+**Offline / air-gapped.** `gh` normally fetches the Sigstore trust root over the network,
+so fetch the trust material *once* from a machine you trust, then verify with no network:
 
 ```sh
+# on a trusted, networked machine — one time
+gh attestation trusted-root > trusted_root.jsonl
+gh attestation download hp-thermal.exe --repo bgonz808/hp-thermal   # writes the bundle
+
+# on the air-gapped machine — no network
 gh attestation verify hp-thermal.exe \
-  --bundle hp-thermal.exe.provenance.sigstore.jsonl \
+  --bundle <downloaded-bundle>.jsonl \
+  --custom-trusted-root trusted_root.jsonl \
   --repo bgonz808/hp-thermal \
   --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
 ```
 
-The provenance/SBOM attestation is the real integrity anchor. `SHA256SUMS` is also
-attached as a low-tech convenience, but a bare checksum only proves the file matches
-*that* file — the attestation proves it came from *us*.
+The trust root comes from *your* `gh`, not from this release — an independent anchor, which
+is what makes offline verification meaningful (a root shipped alongside the artifact it
+vouches for proves nothing).
+
+`SHA256SUMS` is also attached as a low-tech convenience, but a bare checksum only proves the
+file matches *that* file — the attestation is the real anchor: it proves the file came from
+*us*.
 
 > Not yet Authenticode-signed, so Windows still shows "Publisher: Unknown" on the UAC
 > prompt. Publisher signing is planned; until then, the attestation above is the
@@ -164,10 +176,12 @@ cargo xtask verify-hardening <exe>   # check the PE exploit-mitigation flags (CF
 
 ## Security
 
-Security is a first-class goal — a hardened IPC threat model, exploit-mitigated binary
-(CFG + stack canaries + ASLR/DEP), and a fully-scanned, attested dependency surface. The
-full posture and threat model are in **[SECURITY.md](SECURITY.md)**. Report vulnerabilities
-via GitHub Security Advisories.
+Security is a first-class goal. I use a hardened IPC threat model, exploit-mitigated binary
+(CFG + stack canaries + ASLR/DEP), and a fully-scanned, attested dependency surface. Dependencies
+are as minimal as can be, with digest pinning for rust crates and GHA. The full posture and threat
+model are in **[SECURITY.md](SECURITY.md)**.
+
+Report vulnerabilities via GitHub Security Advisories.
 
 ## Contributing
 
