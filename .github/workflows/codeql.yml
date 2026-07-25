@@ -43,4 +43,4 @@ jobs:
           build-mode: none
 
       - name: Perform CodeQL analysis
-        uses: github/codeql-action/analyze@4187e74d05793876e9989daffde9c3e66b4acd07  # github/codeql-action v3
+        uses: github/codeql-action/analyze@7188fc363630916deb702c7fdcf4e481b751f97a  # github/codeql-action v4.37.1
