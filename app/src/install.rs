@@ -362,7 +362,10 @@ pub fn running_from_install_dir() -> bool {
     };
     let expected = std::path::PathBuf::from(app::installed_exe());
     // Canonicalize both to normalize 8.3 names, casing, and symlinks before comparing.
-    match (std::fs::canonicalize(&exe), std::fs::canonicalize(&expected)) {
+    match (
+        std::fs::canonicalize(&exe),
+        std::fs::canonicalize(&expected),
+    ) {
         (Ok(a), Ok(b)) => a == b,
         _ => false,
     }
@@ -1155,19 +1158,50 @@ mod tests {
     /// toggle write for the Users group. SIDs are used verbatim so it is locale-independent.
     #[test]
     fn image_write_restricted_detects_users_write() {
+        use std::process::Command;
         let path = std::env::temp_dir().join(format!("hpt-acl-{}.tmp", std::process::id()));
         std::fs::write(&path, b"x").expect("create temp file");
         let p = path.to_str().unwrap();
         let icacls = |args: &[&str]| {
-            std::process::Command::new("icacls")
+            Command::new("icacls")
                 .args(args)
                 .output()
                 .expect("run icacls");
         };
 
-        // Lock down to SYSTEM (S-1-5-18) + Administrators (S-1-5-32-544) only -> restricted.
+        // The OS grants the file's creator an explicit ACE that `/inheritance:r` does NOT
+        // strip, so the "restricted" case would otherwise carry a non-privileged writer and
+        // be environment-dependent (passed locally as a standard user; failed on the admin
+        // CI runner). Capture the creator SID to remove it below.
+        let user_sid = Command::new("whoami")
+            .args(["/user", "/fo", "csv", "/nh"])
+            .output()
+            .ok()
+            .map(|o| String::from_utf8_lossy(&o.stdout).into_owned())
+            .and_then(|s| s.rsplit(',').next().map(str::to_string))
+            .map(|s| {
+                s.trim_matches(|c: char| c == '"' || c.is_whitespace())
+                    .to_string()
+            })
+            .unwrap_or_default();
+
+        // Lock down to SYSTEM (S-1-5-18) + Administrators (S-1-5-32-544) only.
         icacls(&[p, "/inheritance:r"]);
         icacls(&[p, "/grant:r", "*S-1-5-18:(F)", "*S-1-5-32-544:(F)"]);
+        // Strip any lingering non-privileged writers: CreatorOwner, Everyone, Authenticated
+        // Users, Interactive, Users, and this process's own (creator) SID.
+        for g in [
+            "*S-1-3-0",
+            "*S-1-1-0",
+            "*S-1-5-11",
+            "*S-1-5-4",
+            "*S-1-5-32-545",
+        ] {
+            icacls(&[p, "/remove:g", g]);
+        }
+        if !user_sid.is_empty() {
+            icacls(&[p, "/remove:g", &format!("*{user_sid}")]);
+        }
         assert!(
             image_write_restricted_at(p),
             "SYSTEM+Administrators-only ACL must read as restricted"
