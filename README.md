@@ -15,6 +15,21 @@ HP Command Center for the settings most people actually use.
 > are refused outright — before any elevation, install, or system change. See
 > [Hardware support](#hardware-support).
 
+## What installing does
+
+Running `hp-thermal.exe` (one UAC prompt) creates the following, and `hp-thermal uninstall`
+(or **Settings → Apps**) removes all of it:
+
+- **`C:\Program Files\HpThermal\hp-thermal.exe`** — the binary (admin-only-writable)
+- **Windows service `HpThermalService`** — runs as SYSTEM, makes the BIOS/WMI calls,
+  auto-starts at boot
+- **`C:\ProgramData\HpThermal\`** — logs and the hardware-consent record (Users-writable)
+- **Auto-start** — `HKLM\...\CurrentVersion\Run\HpThermal`, so the tray starts at logon
+- **Apps entry** — `HKLM\...\CurrentVersion\Uninstall\HpThermal`, listing it in Settings → Apps
+- **Start Menu** — `%ProgramData%\Microsoft\Windows\Start Menu\Programs\HP Thermal Control.lnk`
+
+Nothing else is created: no other files, services, or registry keys.
+
 ## What it does
 
 - **Thermal modes** — Performance / Balanced / Cool / Power Saver, from the tray menu.
