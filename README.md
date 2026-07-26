@@ -2,7 +2,7 @@
 
 **Minimalist HP laptop thermal & performance control. Just that.**
 
-A ~200 KB tray app + Windows service that reproduces the core of HP Command Center's
+A ~300 KB tray app + Windows service that reproduces the core of HP Command Center's
 **System Control → Device Mode** — its thermal/performance/cooling presets
 (Performance · Balanced · Cool · Power Saver) and Smart Sense. It accomplishes the same
 critical feature of the heavyweight HP Command Center collateral without eating your
@@ -63,7 +63,7 @@ elevated).
 
 | Metric | HP Command Center | hp-thermal | Ratio |
 | --- | ---: | ---: | ---: |
-| Install on disk | 170 MB | **0.2 MB** | **~850×** |
+| Install on disk | 170 MB | **0.3 MB** | **~580×** |
 | Private working set (Windows `Working Set - Private`) | 140 MB | **3 MB** | **~40×** |
 | Commit (private bytes; committed, may be paged out) | 270 MB | **4 MB** | **~60×** |
 | CPU cycles/s, at idle | 3M to 6M (continuous) | **0** | **∞** |
@@ -78,6 +78,8 @@ elevated).
 - Power profile had no impact on HP Command Center startup time, equally slow to start whether
   Balanced or Performance
 - Startup too fast to measure with a stopwatch on the Rust app (iykyk)
+- The 0.3 MB is self-contained: the C runtime is statically linked, so it needs no Visual C++
+  redistributable and just runs on any supported Windows
 
 ## Hardware support
 

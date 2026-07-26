@@ -11,7 +11,7 @@ it needs a specific nightly toolchain and `rust-src`, both pinned by `rust-toolc
 
 ```sh
 cd app
-cargo build --release                          # minimal build (~200 KB)
+cargo build --release                          # minimal build (~300 KB)
 cargo build --release --features noise-adapt   # with the mic-based Noise Adapt engine
 ```
 
