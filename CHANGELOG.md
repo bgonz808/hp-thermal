@@ -4,7 +4,7 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-07-24
+## [0.1.0] - 2026-07-26
 
 First tagged release.
 
