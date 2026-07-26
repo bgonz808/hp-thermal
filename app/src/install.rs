@@ -158,11 +158,10 @@ pub fn is_installed_copy() -> bool {
 /// `.exe` has already been replaced — so "current" means the running code matches,
 /// which is what an update must guarantee.
 ///
-/// We deliberately do NOT fall back to a disk-digest compare: that reported a
-/// stale-but-running service as "current" whenever the file was already swapped
-/// (disk ahead of the running process), silently skipping the very update needed.
-/// A mismatch — or an unreachable pipe (running build unconfirmable) — is treated
-/// as not-current so the update/restart proceeds.
+/// Not a disk-digest compare: with the disk ahead of the running process (file already
+/// swapped), that reports a stale-but-running service as "current" and skips the very update
+/// needed. A mismatch — or an unreachable pipe — is treated as not-current so the update
+/// proceeds.
 pub fn is_service_current() -> bool {
     use crate::pipe;
     use crate::protocol::*;
@@ -652,8 +651,8 @@ fn wait_or_kill_other_instances() {
                         // so a path match authenticates the process as ours. Querying
                         // the path on THIS handle (not the snapshot PID) also closes a
                         // PID-reuse TOCTOU: a recycled PID whose path no longer matches
-                        // is skipped. TODO: once we sign releases, also verify the
-                        // Authenticode publisher — path is necessary, not sufficient.
+                        // is skipped. TODO(#22): also verify the Authenticode publisher
+                        // once releases are signed — path is necessary, not sufficient.
                         if let Ok(h) = OpenProcess(
                             PROCESS_TERMINATE
                                 | PROCESS_SYNCHRONIZE

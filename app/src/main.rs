@@ -1,10 +1,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![deny(clippy::undocumented_unsafe_blocks)]
-// Edition 2024's unsafe_op_in_unsafe_fn would require wrapping every FFI `unsafe fn`
-// body in an explicit `unsafe {}`. For this FFI-dense crate the whole function IS the
-// unsafe boundary (documented at the fn + call sites), so we keep the fn-level scope
-// rather than adding ~40 boilerplate SAFETY blocks. Per-op SAFETY docs are a possible
-// future hardening; the deny above still forces SAFETY on every standalone unsafe block.
+// `unsafe_op_in_unsafe_fn` is allowed: this FFI-dense crate documents SAFETY at the fn
+// boundary rather than per-op. The `deny` above still forces SAFETY on every standalone
+// unsafe block. Per-op SAFETY blocks are tracked as future work — see #25.
 #![allow(unsafe_op_in_unsafe_fn)]
 
 #[allow(dead_code)]
