@@ -219,7 +219,7 @@ jobs:
           {
             echo "## hp-thermal ${GITHUB_REF_NAME}"
             echo
-            echo "HP laptop thermal and performance control. A ~200 KB tray app plus Windows service."
+            echo "HP laptop thermal and performance control. A ~300 KB tray app plus Windows service."
             echo
             echo "Verify this download (SLSA provenance + SBOM):"
             echo
