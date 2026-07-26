@@ -104,6 +104,10 @@ reachability alone does not imply impact.
 | [CWE-494](https://cwe.mitre.org/data/definitions/494.html) Download of code without integrity check | Build attestation; signing + verify-before-promote planned | [#21](https://github.com/bgonz808/hp-thermal/issues/21), [#23](https://github.com/bgonz808/hp-thermal/issues/23) |
 | [CWE-732](https://cwe.mitre.org/data/definitions/732.html) Incorrect permission assignment | Program Files admin-only ACL + service SDDL; data-dir ACL | partial · [#27](https://github.com/bgonz808/hp-thermal/issues/27) |
 
+*Open work per weakness class is tracked on issues — filter by the `CWE-###` label
+(e.g. [`CWE-732`](https://github.com/bgonz808/hp-thermal/issues?q=is%3Aissue+label%3ACWE-732)).
+The labels are the live ledger; this table is the curated class-level summary.*
+
 ## Binary hardening
 
 Exploit-mitigation flags on the shipped `.exe` (verify with `cargo xtask verify-hardening`):
