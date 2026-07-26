@@ -19,6 +19,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::core::{PCWSTR, w};
 
 use crate::app;
+use crate::onboarding::Choices;
 use crate::wide::wide_null;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -285,6 +286,49 @@ fn write_uninstall_entry() {
         reg_set_dword(key, w!("NoModify"), 1);
         reg_set_dword(key, w!("NoRepair"), 1);
         let _ = RegCloseKey(key);
+    }
+}
+
+/// The `DisplayVersion` recorded in the "Installed apps" entry, if present — used to
+/// show the version delta on an update prompt. HKLM read, no elevation needed; `None`
+/// if the entry or value is missing.
+pub fn installed_version() -> Option<String> {
+    use windows::Win32::System::Registry::*;
+    // SAFETY: UNINSTALL_SUBKEY is a static wide literal; `key` is closed before return;
+    // `buf` is a stack buffer and `len` is its size in bytes for RegQueryValueExW.
+    unsafe {
+        let mut key = HKEY::default();
+        if RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            UNINSTALL_SUBKEY,
+            None,
+            KEY_QUERY_VALUE,
+            &mut key,
+        )
+        .is_err()
+        {
+            return None;
+        }
+        let mut buf = [0u16; 64];
+        let mut len = (buf.len() * 2) as u32; // bytes
+        let r = RegQueryValueExW(
+            key,
+            w!("DisplayVersion"),
+            None,
+            None,
+            Some(buf.as_mut_ptr() as *mut u8),
+            Some(&mut len),
+        );
+        let _ = RegCloseKey(key);
+        if r.is_err() {
+            return None;
+        }
+        let n = (len as usize / 2).min(buf.len());
+        let s = String::from_utf16_lossy(&buf[..n])
+            .trim_end_matches('\0')
+            .trim()
+            .to_string();
+        (!s.is_empty()).then_some(s)
     }
 }
 
@@ -700,9 +744,26 @@ fn start_menu_shortcut() -> Option<String> {
     }
 }
 
-/// Create/refresh the Start Menu shortcut pointing at the installed exe. Must be called
-/// elevated (writes under %ProgramData%). No-op on failure.
-fn create_start_menu_shortcut() {
+/// Path to the all-users Desktop shortcut: `<Public Desktop>\HP Thermal Control.lnk`.
+fn desktop_shortcut() -> Option<String> {
+    use std::ffi::c_void;
+    use windows::Win32::System::Com::CoTaskMemFree;
+    use windows::Win32::UI::Shell::{
+        FOLDERID_PublicDesktop, KF_FLAG_DEFAULT, SHGetKnownFolderPath,
+    };
+    // SAFETY: SHGetKnownFolderPath returns a CoTaskMem-allocated wide string we read then free.
+    unsafe {
+        let p = SHGetKnownFolderPath(&FOLDERID_PublicDesktop, KF_FLAG_DEFAULT, None).ok()?;
+        let dir = p.to_string().ok()?;
+        CoTaskMemFree(Some(p.0 as *const c_void));
+        Some(format!("{dir}\\{}.lnk", app::NAME))
+    }
+}
+
+/// Write (or overwrite) a `.lnk` at `lnk` pointing at the installed exe. Must be called
+/// elevated (writes under all-users locations). No-op on failure. Shared by the
+/// Start Menu and Desktop shortcut creators.
+fn write_shortcut(lnk: &str) {
     use windows::Win32::System::Com::{
         CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
         CoUninitialize, IPersistFile,
@@ -710,14 +771,19 @@ fn create_start_menu_shortcut() {
     use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
     use windows::core::Interface;
 
-    let Some(lnk) = start_menu_shortcut() else {
-        return;
-    };
     let exe: Vec<u16> = app::installed_exe()
         .encode_utf16()
         .chain(std::iter::once(0))
         .collect();
     let lnk_w: Vec<u16> = lnk.encode_utf16().chain(std::iter::once(0)).collect();
+    // Point the shortcut icon at the same System32 imageres.dll #144 the tray uses,
+    // so the Start Menu/Desktop icon matches the tray (our exe embeds no icon).
+    let icon = system32_exe(app::ICON_DLL);
+    let icon_w: Vec<u16> = icon
+        .to_string_lossy()
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
 
     // SAFETY: COM create/save with valid null-terminated wide strings. We only CoUninitialize
     // when THIS call initialized COM (S_OK/S_FALSE), never on RPC_E_CHANGED_MODE.
@@ -726,7 +792,7 @@ fn create_start_menu_shortcut() {
         if let Ok(link) = CoCreateInstance::<_, IShellLinkW>(&ShellLink, None, CLSCTX_INPROC_SERVER)
         {
             let _ = link.SetPath(PCWSTR(exe.as_ptr()));
-            let _ = link.SetIconLocation(PCWSTR(exe.as_ptr()), 0);
+            let _ = link.SetIconLocation(PCWSTR(icon_w.as_ptr()), app::ICON_INDEX);
             if let Ok(file) = link.cast::<IPersistFile>() {
                 let _ = file.Save(PCWSTR(lnk_w.as_ptr()), true);
             }
@@ -737,6 +803,13 @@ fn create_start_menu_shortcut() {
     }
 }
 
+/// Create/refresh the Start Menu shortcut pointing at the installed exe. Elevated.
+fn create_start_menu_shortcut() {
+    if let Some(lnk) = start_menu_shortcut() {
+        write_shortcut(&lnk);
+    }
+}
+
 /// Remove the Start Menu shortcut. Must be called elevated. No-op if absent.
 fn remove_start_menu_shortcut() {
     if let Some(lnk) = start_menu_shortcut() {
@@ -744,27 +817,52 @@ fn remove_start_menu_shortcut() {
     }
 }
 
-/// Install the service. If not elevated, re-launches with UAC via --install-svc.
-pub fn install() {
-    elevate_or(w!("--install-svc"), install_service);
+/// Create/refresh the all-users Desktop shortcut. Elevated.
+fn create_desktop_shortcut() {
+    if let Some(lnk) = desktop_shortcut() {
+        write_shortcut(&lnk);
+    }
+}
+
+/// Remove the Desktop shortcut. Must be called elevated. No-op if absent.
+fn remove_desktop_shortcut() {
+    if let Some(lnk) = desktop_shortcut() {
+        let _ = fs::remove_file(&lnk);
+    }
+}
+
+/// Install the service with the user's onboarding choices. If not elevated,
+/// re-launches with UAC via `--install-svc [--startup] [--start-menu] [--desktop]`;
+/// the elevated child parses the same flags. The choice dialog already ran (in the
+/// non-elevated launcher), so the privileged window stays minimal — the child only
+/// does the work and exits.
+pub fn install(choices: Choices) {
+    let flags = choices.to_args();
+    let arg = if flags.is_empty() {
+        "--install-svc".to_string()
+    } else {
+        format!("--install-svc {flags}")
+    };
+    elevate_or(&arg, move || install_service(choices));
 }
 
 /// Update the service: stop → replace exe → delete → create → start.
 /// If not elevated, re-launches with UAC via --update-svc.
 pub fn update() {
-    elevate_or(w!("--update-svc"), update_service);
+    elevate_or("--update-svc", update_service);
 }
 
 /// Uninstall the service and clean up directories. If not elevated, re-launches with UAC.
 pub fn uninstall() {
     if !is_elevated() {
-        relaunch_elevated(w!("uninstall"));
+        relaunch_elevated("uninstall");
         return;
     }
 
     remove_run_key();
     remove_uninstall_entry();
     remove_start_menu_shortcut();
+    remove_desktop_shortcut();
 
     // Close tray instances gracefully, then wait/force — native, no taskkill.
     close_tray_windows();
@@ -805,9 +903,9 @@ pub fn uninstall() {
 // Internal elevated operations (called from --install-svc / --update-svc)
 // ---------------------------------------------------------------------------
 
-/// Copy exe to Program Files, create data dir, register and start the service.
-/// Must be called elevated.
-pub fn install_service() {
+/// Copy exe to Program Files, create data dir, register and start the service,
+/// then apply the user's optional choices. Must be called elevated.
+pub fn install_service(choices: Choices) {
     // Defense-in-depth: never create the service on non-HP hardware, even if this
     // elevated helper is somehow invoked directly (the user-facing paths already
     // gate on require_hp() and show an error before elevating).
@@ -855,9 +953,18 @@ pub fn install_service() {
         .status();
 
     start_service();
-    set_run_key();
-    write_uninstall_entry();
-    create_start_menu_shortcut();
+    write_uninstall_entry(); // required — the Settings > Apps entry, always written
+
+    // Optional extras, per the onboarding choices.
+    if choices.run_at_startup {
+        set_run_key();
+    }
+    if choices.start_menu {
+        create_start_menu_shortcut();
+    }
+    if choices.desktop {
+        create_desktop_shortcut();
+    }
 }
 
 /// Stop, replace exe, delete old registration, recreate, start.
@@ -912,14 +1019,28 @@ pub fn update_service() {
     }
 
     write_uninstall_entry(); // refresh the "Installed apps" entry (DisplayVersion, etc.)
-    create_start_menu_shortcut(); // refresh the Start Menu shortcut too
+    // Shortcuts and the Run key are NOT touched on update: their target is a stable
+    // path across versions, so there's nothing to refresh — and leaving them alone
+    // preserves the user's install-time choices (e.g. a shortcut they declined).
 
     // No delete+create — binPath is the same, just the file content changed.
     // Avoids ERROR_SERVICE_MARKED_FOR_DELETE (1072) race condition.
     if native_start() {
-        log.write("service started");
+        log.write("service start requested");
     } else {
         log.write("service start FAILED");
+    }
+
+    // Wait for the service to actually reach RUNNING before launching the tray.
+    // native_start() only ACCEPTS the request (the service is START_PENDING when it
+    // returns); without this wait the freshly-launched tray races startup, sees the
+    // service as not-running, and pops a spurious "Start Service" prompt. The fresh-
+    // install path waits in the non-elevated parent for exactly this reason — the
+    // update path launches the tray itself here, so the wait has to live here too.
+    if wait_for_service_running() {
+        log.write("service running");
+    } else {
+        log.write("service did NOT reach running within timeout");
     }
 
     // Launch the tray from the updated PF binary. The bootstrap process that
@@ -1041,30 +1162,30 @@ pub fn launch_tray() {
     }
 }
 
-/// Stop the service. Tries directly (sdset grants rights), elevates as fallback.
-/// Re-launch this exe elevated (UAC) with a single internal `--*-svc` argument.
-/// Fire-and-forget: the elevated child does the privileged work.
-fn relaunch_elevated(arg: windows::core::PCWSTR) {
+/// Re-launch this exe elevated (UAC) with an internal argument string (e.g.
+/// `--install-svc 5`). Fire-and-forget: the elevated child does the privileged
+/// work and exits; the non-elevated parent continues (e.g. waits + launches tray).
+fn relaunch_elevated(args: &str) {
     let exe_w = wide_null(app::exe_path());
-    // SAFETY: `exe_w` is a null-terminated wide string that outlives the call;
-    // `arg` is a static `w!()` literal.
+    let args_w = wide_null(args);
+    // SAFETY: both wide strings are null-terminated and outlive the call.
     unsafe {
         ShellExecuteW(
             None,
             w!("runas"),
             windows::core::PCWSTR(exe_w.as_ptr()),
-            arg,
+            windows::core::PCWSTR(args_w.as_ptr()),
             None,
             SW_HIDE,
         );
     }
 }
 
-/// If not elevated, re-launch elevated with `arg` (UAC) and return; otherwise run
+/// If not elevated, re-launch elevated with `args` (UAC) and return; otherwise run
 /// `work` in-process. The relaunch-or-run preamble shared by install/update.
-fn elevate_or(arg: windows::core::PCWSTR, work: impl FnOnce()) {
+fn elevate_or(args: &str, work: impl FnOnce()) {
     if !is_elevated() {
-        relaunch_elevated(arg);
+        relaunch_elevated(args);
         return;
     }
     work();
@@ -1131,7 +1252,7 @@ pub fn stop() {
         eprintln!("Service stopped.");
         return;
     }
-    relaunch_elevated(w!("--stop-svc"));
+    relaunch_elevated("--stop-svc");
 }
 
 /// Internal: stop the service (called from elevated child).
@@ -1150,7 +1271,7 @@ pub fn start() {
         eprintln!("Service started.");
         return;
     }
-    relaunch_elevated(w!("--start-svc"));
+    relaunch_elevated("--start-svc");
 }
 
 /// Internal: start the service (called from elevated child).

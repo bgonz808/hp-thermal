@@ -17,6 +17,7 @@ mod install;
 mod log;
 mod mitigations;
 mod nvml;
+mod onboarding;
 mod pipe;
 mod protocol;
 mod service;
@@ -24,9 +25,10 @@ mod tray;
 mod wide;
 mod wmi_com;
 
+use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
 use windows::Win32::UI::Controls::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
-use windows::core::PCWSTR;
+use windows::core::{HRESULT, PCWSTR};
 
 use crate::wide::wide_null;
 
@@ -51,31 +53,61 @@ fn main() {
             mitigations::enforce_ms_signed_only();
             service::run();
         }
-        Some("install" | "--install") => guarded_setup(|| {
-            // Already installed → this is an update, not a fresh install. Route to
-            // update() so the RUNNING service+tray are replaced (stop, swap exe,
-            // restart, relaunch tray) rather than only overwriting the on-disk file
-            // and leaving the old code executing. update_service launches the tray.
-            if install::is_service_installed() {
-                install::update();
+        Some("install" | "--install") => {
+            // HP gate first (never elevate on non-HP). Then split update vs fresh
+            // install. The onboarding dialog (fresh install only) runs HERE, in the
+            // non-elevated launcher, BEFORE the setup lock and BEFORE UAC — so cancel
+            // means no lock, no prompt, nothing.
+            if require_hp().is_none() {
                 return;
             }
-            install::install();
-            // Launch the tray once we know the service is up: immediately when we
-            // were already elevated (no child to wait on), otherwise after the
-            // elevated child has started it. `||` short-circuits the wait if elevated.
-            if install::is_elevated() || install::wait_for_service_running() {
-                install::launch_tray();
+            if install::is_service_installed() {
+                // Update: no dialog; existing choices are preserved.
+                let Some(_lock) = install::acquire_setup_lock() else {
+                    install::warn_setup_in_progress();
+                    return;
+                };
+                install::update();
+            } else if let Some(choices) = onboarding::prompt() {
+                let Some(_lock) = install::acquire_setup_lock() else {
+                    install::warn_setup_in_progress();
+                    return;
+                };
+                install::install(choices);
+                // Launch the tray once the service is up: immediately if we were
+                // already elevated (no child to wait on), else after the child starts it.
+                if install::is_elevated() || install::wait_for_service_running() {
+                    install::launch_tray();
+                }
             }
-        }),
+        }
         // Internal: UAC children — do sc commands only, parent handles tray.
-        Some("--install-svc") => install::install_service(),
-        Some("--update-svc") => install::update_service(),
+        // `--install-svc [--startup] [--start-menu] [--desktop]` carries the onboarding
+        // choices as readable flags. from_args presence-scans the WHOLE argv (the exe
+        // path and `--install-svc` can't match a flag), so there's no positional index
+        // to drift; unknown/extra args are ignored.
+        //
+        // CIG here too: the elevated install/update child may run from a user-writable
+        // dir (e.g. Downloads) on first install, so lock it to Microsoft-signed images
+        // to block DLL planting/injection into the admin process. Safe because it loads
+        // only MS-signed system DLLs — nvml (NVIDIA, non-MS) is tray-only, never loaded
+        // on this path. Set before install_service pulls in shell/COM for shortcuts.
+        Some("--install-svc") => {
+            mitigations::enforce_ms_signed_only();
+            install::install_service(onboarding::Choices::from_args(&args));
+        }
+        Some("--update-svc") => {
+            mitigations::enforce_ms_signed_only();
+            install::update_service();
+        }
         Some("--stop-svc") => install::stop_service(),
         Some("--start-svc") => install::start_service(),
         Some("stop" | "--stop") => guarded_setup(install::stop),
         Some("start" | "--start") => guarded_setup(install::start),
         Some("uninstall" | "--uninstall") => guarded_setup(install::uninstall),
+        // Dev preview: pop the fresh-install onboarding dialog and report the
+        // choices. Pure UI — no hardware check, no elevation, no system change.
+        Some("--preview-onboarding") => report_choices(onboarding::prompt()),
         Some("--help" | "-h" | "help") => print_help(),
         Some("--version" | "-v" | "-V") => {
             println!("{} {VERSION}+{BUILD_ID} ({BUILD_DATE})", app::BIN_NAME);
@@ -158,7 +190,7 @@ fn default_run() {
                 hw.bios_version,
             )
         };
-        if !task_dialog("Enable", &content, TD_WARNING_ICON) {
+        if !task_dialog("Enable", &content, TD_WARNING_ICON, false) {
             return;
         }
         consent::record_acceptance(&hw);
@@ -166,29 +198,30 @@ fn default_run() {
 
     // If we're NOT the installed copy, act as a bootstrap installer/launcher.
     if !install::is_installed_copy() {
-        bootstrap_run(&hw);
+        bootstrap_run();
         return;
     }
 
     // --- We ARE the installed copy (running from Program Files) ---
 
     if !install::is_service_installed() {
-        let content = format!("{} service is not registered. Re-install?", app::NAME);
-        if !task_dialog("Install", &content, TD_INFORMATION_ICON) {
+        // Installed copy, but the service is missing (repair). Onboarding is the
+        // confirmation + options, shown pre-lock / pre-UAC. Cancel = nothing.
+        let Some(choices) = onboarding::prompt() else {
             return;
-        }
+        };
         let Some(_lock) = install::acquire_setup_lock() else {
             install::warn_setup_in_progress();
             return;
         };
-        install::install();
+        install::install(choices);
         if !install::wait_for_service_running() {
             msgbox("Service failed to start.", MB_OK | MB_ICONERROR);
             return;
         }
     } else if !install::is_service_running() {
         let content = format!("The {} service is installed but not running.", app::NAME);
-        if !task_dialog("Start Service", &content, TD_WARNING_ICON) {
+        if !task_dialog("Start Service", &content, TD_WARNING_ICON, false) {
             return;
         }
         let Some(_lock) = install::acquire_setup_lock() else {
@@ -208,34 +241,22 @@ fn default_run() {
 /// Called when running from a non-installed location (Desktop, Downloads, etc.).
 /// Handles fresh install, update, or redirect to the existing installed copy.
 /// The bootstrap copy NEVER calls tray::run() — it always launches the PF copy and exits.
-fn bootstrap_run(hw: &hwinfo::HwInfo) {
+fn bootstrap_run() {
     // Read-only decisions and user consent come FIRST — no lock. The setup lock
     // is acquired only immediately before the mutating install/update, held for
     // that critical section, and never across a dialog. This is what keeps a
     // stuck/leaked lock from silently swallowing every future launch.
     if !install::is_service_installed() {
-        // Fresh install
-        let content = format!(
-            "Detected hardware:\n  \
-             Manufacturer: {}\n  \
-             Model: {}\n  \
-             Board: {}\n\n\
-             {} needs to install a background service \
-             to manage thermal modes.\n\n\
-             This requires one-time administrator access.",
-            hw.manufacturer,
-            hw.product,
-            hw.board,
-            app::NAME
-        );
-        if !task_dialog("Install", &content, TD_INFORMATION_ICON) {
+        // Fresh install: the onboarding dialog is the confirmation + options, shown
+        // here in the non-elevated launcher BEFORE the lock or UAC. Cancel = nothing.
+        let Some(choices) = onboarding::prompt() else {
             return;
-        }
+        };
         let Some(_lock) = install::acquire_setup_lock() else {
             install::warn_setup_in_progress();
             return;
         };
-        install::install();
+        install::install(choices);
         if !install::wait_for_service_running() {
             msgbox(
                 "Service failed to start. Try running install from an admin prompt.",
@@ -248,13 +269,19 @@ fn bootstrap_run(hw: &hwinfo::HwInfo) {
     }
 
     if !install::is_service_current() {
-        // Update: this copy differs from the installed one
+        // Update: this copy differs from the installed one. Show the version delta
+        // (if we can read the installed version) and reassure that choices are kept.
+        let new = env!("CARGO_PKG_VERSION");
+        let head = match install::installed_version() {
+            Some(old) if old != new => format!("Update from v{old} to v{new}?"),
+            _ => format!("Reinstall {} v{new}?", app::NAME),
+        };
         let content = format!(
-            "A newer version of {} is available.\n\n\
-             Update the service?",
-            app::NAME
+            "{head}\n\n\
+             This replaces the background service.\n\
+             Your settings and shortcuts are kept."
         );
-        if !task_dialog("Update", &content, TD_WARNING_ICON) {
+        if !task_dialog("Update", &content, TD_WARNING_ICON, true) {
             // User declined — launch existing installed copy anyway
             install::launch_tray();
             return;
@@ -280,9 +307,10 @@ fn bootstrap_run(hw: &hwinfo::HwInfo) {
     install::launch_tray();
 }
 
-/// Show a TaskDialog with a custom action button + Cancel.
+/// Show a TaskDialog with a custom action button + Cancel. When `shield` is set, the
+/// action button wears the UAC shield (it elevates on click).
 /// Returns true if the user clicked the action button, false for Cancel/X.
-fn task_dialog(action_label: &str, content: &str, icon: PCWSTR) -> bool {
+fn task_dialog(action_label: &str, content: &str, icon: PCWSTR, shield: bool) -> bool {
     let title = wide_null(app::NAME);
     let content_w = wide_null(content);
     let action_w = wide_null(action_label);
@@ -307,6 +335,7 @@ fn task_dialog(action_label: &str, content: &str, icon: PCWSTR) -> bool {
         cButtons: buttons.len() as u32,
         pButtons: buttons.as_ptr(),
         nDefaultButton: BTN_ACTION,
+        pfCallback: if shield { Some(td_shield_cb) } else { None },
         ..Default::default()
     };
 
@@ -317,12 +346,49 @@ fn task_dialog(action_label: &str, content: &str, icon: PCWSTR) -> bool {
     ok.is_ok() && pressed == BTN_ACTION
 }
 
+/// TaskDialog callback: once the dialog is created, stamp the UAC shield on the
+/// action button (it triggers elevation on click).
+unsafe extern "system" fn td_shield_cb(
+    hwnd: HWND,
+    msg: TASKDIALOG_NOTIFICATIONS,
+    _wparam: WPARAM,
+    _lparam: LPARAM,
+    _ref_data: isize,
+) -> HRESULT {
+    if msg == TDN_CREATED {
+        SendMessageW(
+            hwnd,
+            TDM_SET_BUTTON_ELEVATION_REQUIRED_STATE.0 as u32,
+            Some(WPARAM(BTN_ACTION as usize)),
+            Some(LPARAM(1)),
+        );
+    }
+    HRESULT(0) // S_OK
+}
+
 fn msgbox(text: &str, flags: MESSAGEBOX_STYLE) -> MESSAGEBOX_RESULT {
     let title = wide_null(app::NAME);
     let body = wide_null(text);
     // SAFETY: `title` and `body` are null-terminated wide strings on the stack
     // that outlive the synchronous MessageBoxW call.
     unsafe { MessageBoxW(None, PCWSTR(body.as_ptr()), PCWSTR(title.as_ptr()), flags) }
+}
+
+/// Report the choices returned by an onboarding dialog (dev preview).
+/// Cancel/close is silent — it just exits, as the real install will.
+fn report_choices(choices: Option<onboarding::Choices>) {
+    if let Some(c) = choices {
+        msgbox(
+            &format!(
+                "Install clicked.\n\n\
+                 Run at startup: {}\n\
+                 Start Menu shortcut: {}\n\
+                 Desktop shortcut: {}",
+                c.run_at_startup, c.start_menu, c.desktop
+            ),
+            MB_OK | MB_ICONINFORMATION,
+        );
+    }
 }
 
 fn print_help() {

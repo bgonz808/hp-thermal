@@ -964,9 +964,9 @@ unsafe fn append_item_disabled(hmenu: HMENU, id: u32, text: &str) {
 /// error — it falls back to the generic application icon. It NEVER panics and
 /// NEVER returns a null icon (a null `hIcon` would show a blank/broken tray entry).
 fn load_tray_icon() -> HICON {
-    // imageres.dll #144 = green activity/performance graph. Index can shift across
+    // Icon source is shared with the shortcuts via app::ICON_DLL / app::ICON_INDEX
+    // (imageres.dll #144, the activity/performance graph). Index can shift across
     // major Windows releases, so this is best-effort with a guaranteed fallback.
-    const IMAGERES_PERF_GRAPH: i32 = 144;
 
     // SAFETY: GetSystemDirectoryW/ExtractIconExW/LoadIconW operate on stack and
     // owned buffers with checked results; `path` is null-terminated. No caller
@@ -978,12 +978,13 @@ fn load_tray_icon() -> HICON {
         let len = GetSystemDirectoryW(Some(&mut buf)) as usize;
         if len > 0 && len < buf.len() {
             let mut path: Vec<u16> = buf[..len].to_vec();
-            path.extend(r"\imageres.dll".encode_utf16());
+            path.push(b'\\' as u16);
+            path.extend(app::ICON_DLL.encode_utf16());
             path.push(0);
             let mut icon = HICON::default();
             let n = ExtractIconExW(
                 PCWSTR(path.as_ptr()),
-                IMAGERES_PERF_GRAPH,
+                app::ICON_INDEX,
                 None,
                 Some(&mut icon),
                 1,
