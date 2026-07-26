@@ -956,18 +956,12 @@ unsafe fn append_item_disabled(hmenu: HMENU, id: u32, text: &str) {
     );
 }
 
-/// Load the tray icon by REFERENCE from a Windows system DLL — no icon bytes are
-/// embedded in our binary, and no Microsoft asset is redistributed. Uses
-/// `imageres.dll` #144 (the green activity/performance graph) at the DPI-correct
-/// small-icon size (`ExtractIconExW` returns `SM_CXSMICON`-sized icons). If
-/// anything fails — DLL missing, index shifted on a future Windows, extraction
-/// error — it falls back to the generic application icon. It NEVER panics and
-/// NEVER returns a null icon (a null `hIcon` would show a blank/broken tray entry).
+/// Load the tray icon by REFERENCE from a Windows system DLL — `app::ICON_DLL` #`ICON_INDEX`
+/// (shared with the shortcuts), so no icon bytes are embedded and no Microsoft asset is
+/// redistributed. `ExtractIconExW` returns a DPI-correct small icon. On any failure — DLL
+/// missing, index shifted on a future Windows, extraction error — it falls back to the
+/// generic application icon; it NEVER panics and NEVER returns a null icon.
 fn load_tray_icon() -> HICON {
-    // Icon source is shared with the shortcuts via app::ICON_DLL / app::ICON_INDEX
-    // (imageres.dll #144, the activity/performance graph). Index can shift across
-    // major Windows releases, so this is best-effort with a guaranteed fallback.
-
     // SAFETY: GetSystemDirectoryW/ExtractIconExW/LoadIconW operate on stack and
     // owned buffers with checked results; `path` is null-terminated. No caller
     // preconditions — always returns a valid, non-null HICON.

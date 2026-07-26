@@ -68,12 +68,12 @@ elevated).
 | Commit (private bytes; committed, may be paged out) | 270 MB | **4 MB** | **~60×** |
 | CPU cycles/s, at idle | 3M to 6M (continuous) | **0** | **∞** |
 | CPU percentage, at idle | 0.1 to 0.2% (continuous) | **0%** | **∞** |
-| Startup time | 11.5 seconds | **<0.30s** | **>>30x** |
+| Startup time | 11.5 seconds | **<0.30s** | **>>30×** |
 | I/O usage, at idle | none | none | no change |
 
 **Notes on the numbers:**
 
-- Tested on a fairly powerful HP laptop: Intel i9-13900H, nVidia RTX 4060, Performance profile,
+- Tested on a fairly powerful HP laptop: Intel i9-13900H, NVIDIA RTX 4060, Performance profile,
   NVMe SSD, DDR5 SODIMM, on AC power
 - Power profile had no impact on HP Command Center startup time, equally slow to start whether
   Balanced or Performance

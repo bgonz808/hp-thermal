@@ -35,11 +35,9 @@ pub fn apply() {
     restrict_dll_search();
     restrict_image_loads();
     disable_extension_points();
-    // NOTE: ProcessDynamicCodePolicy (ProhibitDynamicCode) is the strongest
-    // anti-shellcode mitigation, but it can break in-process components that
-    // generate code — and this process hosts COM/WMI (service) and WASAPI/COM
-    // (tray). Enabling it is deferred until validated end-to-end that WMI still
-    // connects and the tray still functions with it on. Documented in SECURITY.md.
+    // ProcessDynamicCodePolicy (ProhibitDynamicCode) — the strongest anti-shellcode
+    // mitigation — is deferred: it can break in-process code generators, and this
+    // process hosts COM/WMI (service) and WASAPI/COM (tray). See #24.
 }
 
 /// Restrict runtime `LoadLibrary` (calls without their own search flags) to
@@ -73,15 +71,19 @@ fn restrict_image_loads() {
     }
 }
 
-/// Enforce Code Integrity Guard on the SYSTEM service: only Microsoft-signed DLLs
-/// may load into the process (a one-way ratchet — cannot be disabled once set).
+/// Enforce Code Integrity Guard (only Microsoft-signed DLLs may load; a one-way
+/// ratchet that cannot be disabled once set).
 ///
-/// The service loads only Windows WMI/COM DLLs — the HP WMI provider runs
-/// out-of-process in WmiPrvSE, and nvml.dll (NVIDIA) is loaded only by the tray —
-/// so this has no functional cost while blocking every non-MS DLL injection or
-/// plant. Call ONLY from the `--service` path; the tray loads nvml and hosts
-/// third-party GUI injection (AV/overlays), so it stays at the search + image-load
-/// tier. Best-effort: ignored on older Windows.
+/// Applied to the `--service` role AND the elevated install/update child: both load
+/// only MS-signed system DLLs (WMI/COM for the service — the HP WMI provider runs
+/// out-of-process in WmiPrvSE; shell/COM for the installer), so there is no functional
+/// cost while every non-MS DLL injection or plant is blocked.
+///
+/// NOT applied to the tray: it deliberately loads `nvml.dll` (NVIDIA, non-MS-signed)
+/// for the GPU readout, which CIG would block. (As a GUI process the tray is also a
+/// common injection *target* for third-party software — AV/EDR, input hooks — that
+/// CIG would fight; but nvml is the concrete blocker.) The tray stays at the search +
+/// image-load tier. Best-effort: ignored on older Windows.
 /// https://learn.microsoft.com/windows/win32/secbp/mitigation-guard
 pub fn enforce_ms_signed_only() {
     // SAFETY: `policy` is a zeroed struct; we set MicrosoftSignedOnly (bit 0) via

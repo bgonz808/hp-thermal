@@ -51,24 +51,16 @@ pub fn file_fnv(path: &str) -> String {
     format!("{:016x}", fnv1a_64(&data))
 }
 
-/// [`file_fnv`] of THIS process's own executable, read from disk ONCE at init and
-/// then cached for the process lifetime. The honest identity of the *running*
-/// image: unlike a live [`file_fnv`] re-read, it is not fooled by an on-disk swap
-/// — an update replaces the installed `.exe` while this process keeps executing
-/// the old bytes, so a live re-read would report the *new* file, not what we are
-/// actually running. First call wins the cache, so it is taken during startup
-/// (via [`build_identity`], before any self-update can swap the file). Non-crypto
-/// (see [`file_fnv`]): a build-change signal, not tamper-evidence.
+/// Cached-at-init [`file_fnv`] of THIS process's own executable — the honest identity of the
+/// *running* image. Unlike a live [`file_fnv`] re-read (which a post-update on-disk swap would
+/// fool into reporting the new file), this is snapshotted once at startup, before any
+/// self-update can replace the binary.
 pub fn exe_fnv_at_init() -> &'static str {
     EXE_FNV_AT_INIT.get_or_init(|| file_fnv(exe_path()))
 }
 
-/// One-line build identity for startup/install logs: version, build id + date,
-/// the running exe's path, and the init-time FNV of that binary (so a
-/// swapped-but-same-version file is still distinguishable). The `exe-fnv@init`
-/// label names both the algorithm (FNV, non-crypto) and the timing (snapshotted
-/// at process init, not a live re-read), so it stays truthful about the running
-/// build even after an update swaps the on-disk file.
+/// One-line build identity for startup/install logs: version, build id + date, the running
+/// exe's path, and its [`exe_fnv_at_init`].
 pub fn build_identity() -> String {
     let exe = exe_path();
     format!(
@@ -109,7 +101,7 @@ const ACE_ADMINS: &str = "(A;;CCDCLCSWRPWPDTLOCRSDRCWDWO;;;BA)";
 /// Default IU rights + RP (start) + WP (stop) — the key addition.
 const ACE_USER: &str = "(A;;CCLCSWRPWPLOCRRC;;;IU)";
 
-// Concatenated at runtime (once, during install). Could be const with nightly, but not worth it.
+// Concatenated at runtime (once, during install).
 pub fn service_sddl() -> String {
     format!("D:{ACE_SYSTEM}{ACE_ADMINS}{ACE_USER}")
 }
