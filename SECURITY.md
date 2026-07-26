@@ -12,7 +12,7 @@ the bounded-impact ceiling described below — those are prioritized.
 
 ## Verifying a release
 
-Every release is built by a public GitHub Actions workflow and carries a **SLSA build
+Every release is built by a public GitHub Actions workflow and carries a **[SLSA](https://slsa.dev) build
 provenance** attestation and an **SBOM** attestation, so you can prove the `.exe` was built
 from this repo's source by that workflow and was not altered in transit.
 
@@ -27,7 +27,7 @@ gh attestation verify hp-thermal.exe \
 
 The attestation is the real integrity anchor. `SHA256SUMS` is attached as a convenience, but
 a bare checksum only proves a file matches itself; the attestation proves it came from this
-build. The binary is not yet Authenticode-signed, so Windows shows "Publisher: Unknown" on
+build. The binary is not yet [Authenticode](https://learn.microsoft.com/windows-hardware/drivers/install/authenticode)-signed, so Windows shows "Publisher: Unknown" on
 the UAC prompt — until that lands (see Roadmap), the attestation is the proof of origin.
 
 ## Threat model (tray ↔ service IPC)
@@ -75,7 +75,7 @@ tray ↔ service path.
   disk needs Program Files write (admin); in memory needs SYSTEM's memory. A non-admin
   can't; an admin gains nothing new.
 - **Runtime integrity vs. load-time authenticity — two independent axes.** The self-checks
-  (footing check, CIG, image-load policy, pipe integrity-level checks, `require_hp`,
+  (footing check, [CIG](https://learn.microsoft.com/windows/win32/secbp/mitigation-guard), image-load policy, pipe integrity-level checks, `require_hp`,
   anti-rollback) harden *runtime* integrity: they resist in-memory tampering of a genuine
   process, applied at startup before injected code could act. But they are **self-imposed**,
   so they hold only *assuming the as-built binary is what ran* — a tampered build omits them,
@@ -83,6 +83,26 @@ tray ↔ service path.
   assumption — load-time authenticity — is discharged only by Authenticode signing (Roadmap):
   the OS won't run a tampered image as our publisher. So the self-checks are
   tamper-*resistant*; signing is what makes them tamper-*evident*.
+
+### Weaknesses addressed ([CWE](https://cwe.mitre.org))
+
+Design decisions mapped to the weakness *classes* they hold down — illustrative, not exhaustive.
+A CWE is a standing **invariant**, not a one-time fix: a new feature can reintroduce any of these,
+so each is only as durable as what enforces it (by construction > CI lint > convention; see #28).
+`Status` is current posture — `held` = "no known instances, mechanism in place," not "solved
+forever"; a ticket points at a known open gap. Residual risk is bounded by the OS privilege
+boundary and the pipe's blast radius (a compromised client can only toggle a thermal mode), so
+reachability alone does not imply impact.
+
+| Weakness | Closed by | Status |
+| --- | --- | --- |
+| [CWE-20](https://cwe.mitre.org/data/definitions/20.html) Improper input validation | Bounded 2-byte pipe command set, range-checked | held |
+| [CWE-269](https://cwe.mitre.org/data/definitions/269.html) Improper privilege management | SYSTEM service + least-privilege tray; startup footing check | held |
+| [CWE-367](https://cwe.mitre.org/data/definitions/367.html) TOCTOU race | Verify image path on the process handle, not the snapshot PID | held |
+| [CWE-426](https://cwe.mitre.org/data/definitions/426.html) Untrusted search path | Absolute System32 paths for `sc` / `icacls` / `runas` | held |
+| [CWE-427](https://cwe.mitre.org/data/definitions/427.html) Uncontrolled DLL search path | `SetDefaultDllDirectories(System32)` + image-load policy + `/DEPENDENTLOADFLAG` | held |
+| [CWE-494](https://cwe.mitre.org/data/definitions/494.html) Download of code without integrity check | Build attestation; signing + verify-before-promote planned | [#21](https://github.com/bgonz808/hp-thermal/issues/21), [#23](https://github.com/bgonz808/hp-thermal/issues/23) |
+| [CWE-732](https://cwe.mitre.org/data/definitions/732.html) Incorrect permission assignment | Program Files admin-only ACL + service SDDL; data-dir ACL | partial · [#27](https://github.com/bgonz808/hp-thermal/issues/27) |
 
 ## Binary hardening
 
