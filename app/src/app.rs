@@ -8,6 +8,14 @@ pub const AUTHOR: &str = "bgonz808";
 pub const COPYRIGHT: &str = "MIT License";
 pub const REPO_URL: &str = "https://github.com/bgonz808/hp-thermal";
 
+/// Shortcut / tray icon: `imageres.dll` #144 (the activity/performance graph).
+/// Referenced by index from a Windows system DLL — no icon bytes are embedded in our
+/// binary and no Microsoft asset is redistributed. The index can shift across major
+/// Windows releases, so callers treat it as best-effort with a fallback. Shared so the
+/// tray and the Start Menu/Desktop shortcuts always show the same icon.
+pub const ICON_DLL: &str = "imageres.dll";
+pub const ICON_INDEX: i32 = 144;
+
 // --- Build identity ---
 
 /// FNV-1a 64-bit hash — the one canonical implementation, used by [`file_fnv`],

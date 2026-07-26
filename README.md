@@ -1,11 +1,12 @@
 # hp-thermal
 
-**HP laptop thermal & performance control — without the 169 MB.**
+**Minimalist HP laptop thermal & performance control. Just that.**
 
 A ~200 KB tray app + Windows service that reproduces the core of HP Command Center's
 **System Control → Device Mode** — its thermal/performance/cooling presets
-(Performance · Balanced · Cool · Power Saver) and Smart Sense — replacing all 169 MB of
-HP Command Center for the settings most people actually use.
+(Performance · Balanced · Cool · Power Saver) and Smart Sense. It accomplishes the same
+critical feature of the heavyweight HP Command Center collateral without eating your
+RAM or disk space.
 
 > ⚠️ **Supported hardware.** This talks to an **undocumented HP BIOS-WMI interface** that
 > is *not* a stable or public API. It was reverse-engineered and validated on an
@@ -15,84 +16,68 @@ HP Command Center for the settings most people actually use.
 > are refused outright — before any elevation, install, or system change. See
 > [Hardware support](#hardware-support).
 
-## What it does
-
-- **Thermal modes** — Performance / Balanced / Cool / Power Saver, from the tray menu.
-- **Smart Sense** — HP's adaptive CoolSense toggle.
-- **Fn+F12** — screen on/off (and optional sleep), since the "three-diamonds" key does
-  nothing without HP's software.
-- **Optional, experimental: Noise Adapt** (`--features noise-adapt`) — mic-based fan-noise
-  measurement that picks a mode by how audible the fans are in your room. Off by default,
-  and experimental.
-
-**Scope.** HP describes that page as adjusting "the performance, temperature, and cooling
-preferences for your PC along with settings for Smart Sense and Focus Mode." hp-thermal
-covers the thermal/cooling presets and Smart Sense — **not** Focus Mode, and not HP CC's
-other pages (camera privacy, Network Booster, display controls, etc.). It neither replaces
-nor disables those; they aren't thermal control. The Fn+F12 remap is a small extra of ours,
-not part of HP's System Control.
-
-It is a single `hp-thermal.exe`: the tray runs as your user, and a tiny Windows service
-runs as SYSTEM and performs the privileged BIOS/WMI calls, talking over a hardened local
-named pipe. See [SECURITY.md](SECURITY.md).
-
-**Idle cost: zero, and measured.** Both halves are event-driven, not polling: over
-5-minute per-second cycle probes, **the service and the tray each recorded 0 CPU cycles in
-300/300 one-second bins** — a literal 100 % idle. The tray blocks in its message loop; the
-service waits on a **push-based WMI event sink** for the Fn+F12 hotkey, filtered
-`WHERE EventId = 29` server-side so WMI drops the BIOS provider's ~2 s heartbeat before it
-ever reaches our process. Versus HP Command Center's continuously-running thermal daemon.
-
-## Measured footprint vs HP Command Center
-
-Memory and disk measured on the tested HP ENVY 16 (`8BE5`), Windows 11, on **2026-07-22**,
-against **HP Command Center `AD2F1837.HPThermalControl` v1.11.60.0** — from a single 30 s
-idle window (`QueryProcessCycleTime` + `Process(*)` counters), reproducible with
-[`scripts/measure-footprint-vs-hpcc.ps1`](scripts/measure-footprint-vs-hpcc.ps1) (run
-elevated). Our idle-CPU **0** was verified separately (2026-07-24) with a dedicated
-per-second cycle probe — separate by necessity; see the CPU note.
-
-| Metric (idle) | HP Command Center | hp-thermal | Ratio |
-| --- | ---: | ---: | ---: |
-| Install on disk | 168 MB | **0.19 MB** | ~885× |
-| Persistent processes | 3 | 2 | — |
-| **Private working set** (private resident; Win `Working Set - Private` ≈ Linux USS) | 141 MB | **3.2 MB** | **~44×** |
-| Commit (private bytes; committed, may be paged out) | 266 MB | 4.2 MB | ~63× |
-| CPU cycles/s (idle) | ~3–6 M (continuous) | **0** † | ∞ |
-
-**Notes on the numbers:**
-- **Private working set is the metric to compare on** — it counts only pages unique to the process
-  (Windows `Working Set - Private` ≈ Linux **USS**), so unlike raw RSS it doesn't
-  double-count the shared system DLLs every process maps. Ours is **1.6 MB per process**;
-  HP's mostly-private .NET/UWP heaps hold **~44× more**.
-- **CPU (the † above):** at idle `% Processor Time` is below its counter resolution for both,
-  so cycles are the sensitive metric. HP's `HpSystemManagement` daemon burns millions of
-  cycles/s *continuously* (~0.1–0.2 % of one core). Ours is a literal **0** — over 5-minute
-  per-second probes the service and tray each recorded 0 cycles in **300/300** one-second
-  bins. The service gets there because its WMI subscription filters `WHERE EventId = 29`
-  server-side, so WMI drops the BIOS provider's ~2 s heartbeat before it reaches our process.
-  The footprint script itself *can't* show this: its own WMI enumeration perturbs our
-  WMI-adjacent service to a few tens of thousands of cycles/s in-window — an observer effect,
-  not real idle cost — which is why the true 0 comes from a clean, no-WMI probe.
-- **Broader HP stack:** this compares the Command Center package only. HP's wider install (its
-  analytics service + HSA/display services, separate packages) adds roughly another 440 MB
-  RSS at idle, which this tool does not touch or replace.
-
 ## Install
 
-Download the release `hp-thermal.exe` and run it. It installs the background service
-(one-time UAC prompt) and starts the tray. `hp-thermal uninstall` removes it cleanly.
-
-```
-hp-thermal              Launch the tray (installs the service if needed)
-hp-thermal install      Install and start the background service
-hp-thermal uninstall    Stop and remove the service
-hp-thermal start|stop   Start / stop the service
-hp-thermal --version    Version + build id
-```
+Download and run `hp-thermal.exe`. With your consent, it installs the background service
+(one-time elevated UAC prompt) and starts the service and tray. SYSTEM service handles
+the privileged BIOS/WMI operations, talking over a hardened local named pipe. The tray
+client is reduced privilege, and handles the settings menu. See [SECURITY.md](SECURITY.md).
 
 Every release is cryptographically verifiable (SLSA provenance + SBOM). To check a download
 before running it, see [Verifying a release](SECURITY.md#verifying-a-release).
+I am working towards Authenticode signing so SmartScreen and UAC don't look scary to new users.
+
+Is easily uninstallable via **Settings → Apps** or `hp-thermal uninstall`
+
+- **`C:\Program Files\HpThermal\hp-thermal.exe`** — the binary (admin-only-writable)
+- **Windows service `HpThermalService`** — runs as SYSTEM, makes the BIOS/WMI calls,
+  auto-starts at boot
+- **`C:\ProgramData\HpThermal\`** — logs and the hardware-consent record (Users-writable)
+- **Auto-start** — `HKLM\...\CurrentVersion\Run\HpThermal`, so the tray starts at logon
+- **Apps entry** — `HKLM\...\CurrentVersion\Uninstall\HpThermal`, listing it in Settings → Apps
+- **Start Menu** — `%ProgramData%\Microsoft\Windows\Start Menu\Programs\HP Thermal Control.lnk`
+
+## What it does
+
+- **Thermal modes** — Performance / Balanced / Cool / Power Saver, from the tray menu.
+- **Smart Sense** — HP's adaptive CoolSense toggle. I don't use it, tbh.
+- **Fn+F12** — screen on/off (and optional sleep), since the "three-diamonds" key does
+  nothing without HP's software. Also minimum brightness in Windows is not **fully** dim.
+- **Optional, experimental: Noise Adapt** (`--features noise-adapt`) — One-shot mic-based
+  calibration checks environment vs fan noise levels. If Performance mode is perceptibly
+  louder than Balanced, choose Balanced, else environment too loud to notice fans anyway,
+  just use Performance.
+
+**Scope.** NOT a full replacement for HPCC. Just what I care about, frustration-free
+laptop thermals and performance. I might consider enhancements, if it achieves simplicity,
+performance, convenience, and maybe more debloating?
+
+## Measured footprint vs HP Command Center
+
+**Idle cost: zero, and measured.** Both halves are event-driven, not polling.
+
+Memory and disk measured on the tested HP ENVY 16 (`8BE5`), Windows 11,
+against **HP Command Center `AD2F1837.HPThermalControl` v1.11.60.0**; reproducible with
+[`scripts/measure-footprint-vs-hpcc.ps1`](scripts/measure-footprint-vs-hpcc.ps1) (run
+elevated).
+
+| Metric | HP Command Center | hp-thermal | Ratio |
+| --- | ---: | ---: | ---: |
+| Install on disk | 170 MB | **0.2 MB** | **~850×** |
+| Private working set (Windows `Working Set - Private`) | 140 MB | **3 MB** | **~40×** |
+| Commit (private bytes; committed, may be paged out) | 270 MB | **4 MB** | **~60×** |
+| CPU cycles/s, at idle | 3M to 6M (continuous) | **0** | **∞** |
+| CPU percentage, at idle | 0.1 to 0.2% (continuous) | **0%** | **∞** |
+| Startup time | 11.5 seconds | **<0.30s** | **>>30x** |
+| I/O usage, at idle | none | none | no change |
+
+**Notes on the numbers:**
+
+- Tested on a fairly powerful HP laptop: Intel i9-13900H, nVidia RTX 4060, Performance profile,
+  NVMe SSD, DDR5 SODIMM, on AC power
+- Power profile had no impact on HP Command Center startup time, equally slow to start whether
+  Balanced or Performance
+- Startup too fast to measure with a stopwatch on the Rust app (iykyk)
 
 ## Hardware support
 
@@ -103,7 +88,7 @@ before running it, see [Verifying a release](SECURITY.md#verifying-a-release).
 | **Non-HP** | Refused |
 
 Because the underlying interface is undocumented and can change across firmware, the
-consent is keyed to your exact board + BIOS + EC version — a firmware update re-asks.
+consent is keyed to your exact board + BIOS + EC version. A firmware update re-asks.
 Help expand support: see [Contributing](#contributing).
 
 ## Security
