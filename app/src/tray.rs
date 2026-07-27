@@ -84,6 +84,17 @@ static mut BLACK_WINDOW: HWND = HWND(std::ptr::null_mut());
 static LAST_MIC_INFO: std::sync::Mutex<(String, f32)> = std::sync::Mutex::new((String::new(), 0.0));
 
 pub fn run() {
+    // #54 backstop (defense in depth): the tray must never run above Medium IL. main()
+    // already refuses the elevated no-arg role (with a dialog) before any I/O, so this is
+    // only reachable if a FUTURE code path reaches tray::run() elevated off that guarded
+    // path — a developer-error backstop, not a user-facing path. Exit silently: no file
+    // I/O at High IL (an elevated log::init would leave an admin-owned log, CWE-732), and
+    // no second dialog (main() owns the user-facing message). Independent re-check, not a
+    // cached value from main() — a cached bool would only be set on the guarded path.
+    if crate::install::is_elevated() {
+        return;
+    }
+
     // SAFETY: run_inner() calls Win32 UI APIs (window creation, message loop,
     // tray icon) that require a single-threaded message pump. Called once from
     // main() on the main thread.
