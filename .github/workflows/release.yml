@@ -177,9 +177,15 @@ jobs:
           $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
           if ($exe -ne $env:EXPECT_EXE) { throw "exe digest mismatch vs build output" }
           if ($pdb -ne $env:EXPECT_PDB) { throw "pdb digest mismatch vs build output" }
-          $sums = Get-Content dist/SHA256SUMS
-          if ($sums -notcontains "$exe  hp-thermal.exe") { throw "exe not in SHA256SUMS" }
-          if ($sums -notcontains "$pdb  hp-thermal.pdb") { throw "pdb not in SHA256SUMS" }
+          # Parse the manifest tolerantly (hash + name per line) instead of matching an
+          # exact formatted string — robust to spacing / line-ending drift.
+          $manifest = @{}
+          foreach ($line in Get-Content dist/SHA256SUMS) {
+            $p = $line -split '\s+', 2
+            if ($p.Count -eq 2) { $manifest[$p[1].Trim()] = $p[0].ToLower() }
+          }
+          if ($manifest['hp-thermal.exe'] -ne $exe) { throw "SHA256SUMS exe hash != computed" }
+          if ($manifest['hp-thermal.pdb'] -ne $pdb) { throw "SHA256SUMS pdb hash != computed" }
           Write-Output "digest chain OK: published bytes are byte-identical to build-verified bytes"
 
   # --- Attest + publish. Minimal elevation, no third-party actions / tool builds here.
