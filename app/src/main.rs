@@ -49,6 +49,9 @@ fn main() {
             // non-MS injection/planting). Not applied to the tray (nvml + GUI
             // third-party injection). Set before WMI/COM pulls in its DLLs.
             mitigations::enforce_ms_signed_only();
+            // The service spawns no child processes; forbid it at the OS level so even
+            // injected code cannot shell out (LOLBin/proxy exfil). Service-only (#47).
+            mitigations::prohibit_child_processes();
             service::run();
         }
         Some("install" | "--install") => {

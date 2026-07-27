@@ -10,12 +10,12 @@ use windows::Win32::System::LibraryLoader::{
     LOAD_LIBRARY_SEARCH_SYSTEM32, SetDefaultDllDirectories,
 };
 use windows::Win32::System::SystemServices::{
-    PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY, PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY,
-    PROCESS_MITIGATION_IMAGE_LOAD_POLICY,
+    PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY, PROCESS_MITIGATION_CHILD_PROCESS_POLICY,
+    PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY, PROCESS_MITIGATION_IMAGE_LOAD_POLICY,
 };
 use windows::Win32::System::Threading::{
-    ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy, ProcessSignaturePolicy,
-    SetProcessMitigationPolicy,
+    ProcessChildProcessPolicy, ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy,
+    ProcessSignaturePolicy, SetProcessMitigationPolicy,
 };
 
 // Policy `Flags` bit masks. The `windows` crate exposes these bitfields only as a
@@ -27,6 +27,8 @@ const MICROSOFT_SIGNED_ONLY: u32 = 0x1;
 // PROCESS_MITIGATION_IMAGE_LOAD_POLICY:
 //   NoRemoteImages(0) | NoLowMandatoryLabelImages(1) | PreferSystem32Images(2).
 const IMAGE_LOAD_HARDENING: u32 = 0b111;
+// PROCESS_MITIGATION_CHILD_PROCESS_POLICY: NoChildProcessCreation = bit 0.
+const NO_CHILD_PROCESS: u32 = 0x1;
 
 /// Apply process mitigation policies. Best-effort: failures are non-fatal (older
 /// Windows may not support a given policy), so a failure just means that one
@@ -95,6 +97,29 @@ pub fn enforce_ms_signed_only() {
             ProcessSignaturePolicy,
             std::ptr::addr_of!(policy) as *const std::ffi::c_void,
             std::mem::size_of::<PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY>(),
+        );
+    }
+}
+
+/// Prohibit child-process creation. Applied to the `--service` role ONLY: the SYSTEM
+/// service spawns nothing (verified — every CreateProcess/ShellExecute/spawn lives in
+/// the installer or tray, never in service.rs; its WMI/COM run in-proc or out-of-process
+/// in WmiPrvSE, launched by the SCM, not by us). This removes the LOLBin/proxy exfil path
+/// (curl/powershell/certutil/...) even from injected code — one fewer rung to the network.
+/// NOT applied to the installer/tray, which legitimately spawn (elevation, launch_tray,
+/// opening links). Integrity-conditional until signing (#21) makes it tamper-rejected;
+/// best-effort (ignored on older Windows).
+/// https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_child_process_policy
+pub fn prohibit_child_processes() {
+    // SAFETY: `policy` is a zeroed struct; we set NoChildProcessCreation (bit 0) via the
+    // Flags union member and pass its exact size. Ignored on failure.
+    unsafe {
+        let mut policy = PROCESS_MITIGATION_CHILD_PROCESS_POLICY::default();
+        policy.Anonymous.Flags = NO_CHILD_PROCESS;
+        let _ = SetProcessMitigationPolicy(
+            ProcessChildProcessPolicy,
+            std::ptr::addr_of!(policy) as *const std::ffi::c_void,
+            std::mem::size_of::<PROCESS_MITIGATION_CHILD_PROCESS_POLICY>(),
         );
     }
 }
