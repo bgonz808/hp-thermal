@@ -339,6 +339,7 @@ fn cmd_verify_artifact(exe: Option<&str>, pdb: Option<&str>) -> i32 {
     let mut ok = true;
     ok &= cmd_verify_hardening(Some(exe_path)) == 0;
     ok &= cmd_capabilities(Some(exe_path)) == 0;
+    ok &= cmd_imports_scan(exe_path) == 0;
     ok &= cmd_pdb_link(exe_path, pdb_path) == 0;
     if ok { 0 } else { 1 }
 }
@@ -382,6 +383,68 @@ fn cmd_pdb_link(exe_path: &str, pdb_path: &str) -> i32 {
             guid_str(&ge),
             guid_str(&gp)
         );
+        1
+    }
+}
+
+/// Function-level import scan. FAILS on high-risk injection/exfil primitives the tool
+/// never uses (a compromised build adding them is caught even though the DLL — kernel32/
+/// ntdll — is already allowlisted). REPORTS dynamic-resolution APIs (LoadLibrary/
+/// GetProcAddress): those are legitimate here (the tray loads nvml.dll on demand), so they
+/// are informational, not a gate. The source denylist (B4) vets *what* gets loaded; this
+/// only surfaces that dynamic resolution happens.
+fn cmd_imports_scan(exe_path: &str) -> i32 {
+    let bytes = match std::fs::read(exe_path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("imports-scan: cannot read {exe_path} ({e})");
+            return 1;
+        }
+    };
+    let Some(funcs) = pe_imported_functions(&bytes) else {
+        eprintln!("imports-scan: {exe_path} import names not walkable");
+        return 1;
+    };
+    let lower: Vec<String> = funcs.iter().map(|f| f.to_ascii_lowercase()).collect();
+    let has = |n: &str| lower.iter().any(|f| f == n);
+
+    // Injection/exfil primitives this tool never legitimately imports. (OpenProcess/
+    // OpenProcessToken are NOT here — the pipe integrity check uses them benignly.)
+    const HIGH_RISK: &[&str] = &[
+        "createremotethread",
+        "createremotethreadex",
+        "writeprocessmemory",
+        "virtualallocex",
+        "virtualprotectex",
+        "queueuserapc",
+        "ntqueueapcthread",
+        "setthreadcontext",
+        "setwindowshookexw",
+        "setwindowshookexa",
+        "ntmapviewofsection",
+        "rtlcreateuserthread",
+        "winexec",
+    ];
+    let hits: Vec<&str> = HIGH_RISK.iter().copied().filter(|n| has(n)).collect();
+
+    const DYN: &[&str] = &[
+        "loadlibraryw",
+        "loadlibrarya",
+        "loadlibraryexw",
+        "loadlibraryexa",
+        "getprocaddress",
+        "ldrloaddll",
+        "ldrgetprocedureaddress",
+    ];
+    let dyn_hits: Vec<&str> = DYN.iter().copied().filter(|n| has(n)).collect();
+    println!("imports-scan: dynamic-resolution present: {dyn_hits:?} (expected: nvml on-demand)");
+
+    if hits.is_empty() {
+        println!("imports-scan: OK — no high-risk injection/exfil imports");
+        0
+    } else {
+        eprintln!("imports-scan: FAIL — high-risk import(s): {hits:?}");
+        eprintln!("  injection/exfil primitives the tool never uses (possible tamper)");
         1
     }
 }
@@ -533,4 +596,62 @@ fn pdb_guid_age(b: &[u8]) -> Option<([u8; 16], u32)> {
     let mut guid = [0u8; 16];
     guid.copy_from_slice(s1.get(12..28)?);
     Some((guid, age))
+}
+
+/// Imported FUNCTION names across the whole import directory. Ordinal-only imports (no
+/// name) are skipped. Pure byte parsing; walks each descriptor's import-name-table thunks.
+fn pe_imported_functions(b: &[u8]) -> Option<Vec<String>> {
+    let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
+    if b.get(pe..pe + 4)? != b"PE\0\0" {
+        return None;
+    }
+    let opt = pe + 24;
+    let magic = u16::from_le_bytes(b.get(opt..opt + 2)?.try_into().ok()?);
+    let pe32plus = magic == 0x20B;
+    let datadir = opt + if pe32plus { 112 } else { 96 };
+    let import_rva =
+        u32::from_le_bytes(b.get(datadir + 8..datadir + 12)?.try_into().ok()?) as usize;
+    if import_rva == 0 {
+        return Some(Vec::new());
+    }
+    let thunk_size = if pe32plus { 8 } else { 4 };
+    let ord_bit: u64 = if pe32plus { 1 << 63 } else { 1 << 31 };
+    let mut off = pe_rva_to_off(b, import_rva)?;
+    let mut funcs = Vec::new();
+    for _ in 0..4096 {
+        let desc = b.get(off..off + 20)?;
+        if desc.iter().all(|&x| x == 0) {
+            break;
+        }
+        let orig = u32::from_le_bytes(desc[0..4].try_into().ok()?) as usize;
+        let first = u32::from_le_bytes(desc[16..20].try_into().ok()?) as usize;
+        let ilt_rva = if orig != 0 { orig } else { first };
+        if let Some(mut t) = pe_rva_to_off(b, ilt_rva) {
+            for _ in 0..16384 {
+                let val = if pe32plus {
+                    u64::from_le_bytes(b.get(t..t + 8)?.try_into().ok()?)
+                } else {
+                    u32::from_le_bytes(b.get(t..t + 4)?.try_into().ok()?) as u64
+                };
+                if val == 0 {
+                    break;
+                }
+                // Named import (ordinal-bit clear): low 31 bits = RVA to IMAGE_IMPORT_BY_NAME
+                // (a u16 hint followed by the null-terminated name).
+                if val & ord_bit == 0 {
+                    let name_rva = (val & 0x7FFF_FFFF) as usize;
+                    if let Some(no) = pe_rva_to_off(b, name_rva) {
+                        let rest = b.get(no + 2..)?;
+                        let len = rest.iter().position(|&c| c == 0).unwrap_or(rest.len());
+                        if let Ok(s) = std::str::from_utf8(&rest[..len]) {
+                            funcs.push(s.to_string());
+                        }
+                    }
+                }
+                t += thunk_size;
+            }
+        }
+        off += 20;
+    }
+    Some(funcs)
 }
