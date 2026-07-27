@@ -111,7 +111,7 @@ fn main() {
                 // Launch the tray once the service is up: immediately if we were
                 // already elevated (no child to wait on), else after the child starts it.
                 if install::is_elevated() || install::wait_for_service_running() {
-                    install::launch_tray();
+                    install::ensure_tray();
                 }
             }
         }
@@ -298,7 +298,7 @@ fn bootstrap_run() {
             );
             return;
         }
-        install::launch_tray();
+        install::ensure_tray();
         return;
     }
 
@@ -316,8 +316,9 @@ fn bootstrap_run() {
              Your settings and shortcuts are kept."
         );
         if !task_dialog("Update", &content, TD_WARNING_ICON, true) {
-            // User declined — launch existing installed copy anyway
-            install::launch_tray();
+            // User declined the update. Just exit: cancelling a setup dialog must neither
+            // launch anything nor depend on any extant tray/service. (Previously this
+            // spawned a redundant tray that blocked ~3s on the singleton wait. #59)
             return;
         }
         let Some(_lock) = install::acquire_setup_lock() else {
@@ -338,7 +339,7 @@ fn bootstrap_run() {
         &format!("{} is already installed and up to date.", app::NAME),
         MB_OK | MB_ICONINFORMATION,
     );
-    install::launch_tray();
+    install::ensure_tray();
 }
 
 /// Show a TaskDialog with a custom action button + Cancel. When `shield` is set, the

@@ -114,7 +114,7 @@ pub fn enforce_ms_signed_only() {
 /// the installer or tray, never in service.rs; its WMI/COM run in-proc or out-of-process
 /// in WmiPrvSE, launched by the SCM, not by us). This removes the LOLBin/proxy exfil path
 /// (curl/powershell/certutil/...) even from injected code — one fewer rung to the network.
-/// NOT applied to the installer/tray, which legitimately spawn (elevation, launch_tray,
+/// NOT applied to the installer/tray, which legitimately spawn (elevation, ensure_tray,
 /// opening links). Integrity-conditional until signing (#21) makes it tamper-rejected;
 /// best-effort (ignored on older Windows).
 /// https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_child_process_policy

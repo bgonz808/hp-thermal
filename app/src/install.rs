@@ -865,7 +865,7 @@ pub fn update() {
     // would terminate it. The child's exit is the definitive "privileged work done".
     if relaunch_elevated_and_wait("--update-svc") {
         wait_for_service_running();
-        launch_tray();
+        ensure_tray();
     }
 }
 
@@ -1157,20 +1157,51 @@ fn who_locks_file(path: &str) -> Vec<String> {
 
 /// Launch the tray from the INSTALLED location (Program Files).
 /// From elevated context: uses `runas /trustlevel:0x20000` to de-elevate.
-/// From non-elevated context: spawns directly.
-/// Launch the installed tray. MUST be called from a NON-elevated (Medium IL) context —
-/// the tray is the weakly-mitigated user role and must run at the user's normal integrity
-/// level. We deliberately do NOT de-elevate here: dropping High->Medium reliably needs the
-/// interactive user's token (fragile — no "correct user" guarantee; see #54 and MS
-/// guidance), and the prior runas /trustlevel attempt did not lower IL and fork-bombed the
-/// #54 guard. All normal callers are Medium (bootstrap_run, the fresh-install parent, and
-/// the post-update parent in update()). If somehow called elevated, skip — the tray comes
-/// up at next logon via the Run key rather than running elevated.
-pub fn launch_tray() {
+/// Ensure the installed tray is running (idempotent): spawn it only if one isn't already
+/// up. MUST be called from a NON-elevated (Medium IL) context — the tray is the
+/// weakly-mitigated user role and must run at the user's normal integrity level. We
+/// deliberately do NOT de-elevate here: dropping High->Medium reliably needs the interactive
+/// user's token (fragile — no "correct user" guarantee; see #54 and MS guidance), and the
+/// prior runas /trustlevel attempt did not lower IL and fork-bombed the #54 guard. All
+/// normal callers are Medium (the fresh-install parent, the post-update parent in update(),
+/// the "already up to date" path). If somehow called elevated, skip — the tray comes up at
+/// next logon via the Run key rather than running elevated.
+pub fn ensure_tray() {
     if is_elevated() {
         return;
     }
+    // Idempotent guard: if a tray already holds the singleton mutex, a second spawn would
+    // run default_run then block ~3s on the singleton wait before exiting as a duplicate (a
+    // busy cursor). Skip it. The run_inner singleton is still the correctness authority;
+    // this is the optimization that avoids the wasteful spawn. version_mismatch_restart does
+    // NOT route through here — it spawns directly and relies on that 3s handoff. #59
+    if is_tray_running() {
+        return;
+    }
     let _ = Command::new(app::installed_exe()).spawn();
+}
+
+/// True if a tray instance already holds its singleton mutex (`app::MUTEX_NAME`). A
+/// successful `OpenMutexW` proves the named object exists — i.e. a tray created it.
+fn is_tray_running() -> bool {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{OpenMutexW, SYNCHRONIZATION_ACCESS_RIGHTS};
+    let name = wide_null(app::MUTEX_NAME);
+    // SAFETY: `name` is a null-terminated wide string that outlives the call; the handle (if
+    // opened) is closed immediately. SYNCHRONIZE (0x0010_0000) suffices to test existence.
+    unsafe {
+        match OpenMutexW(
+            SYNCHRONIZATION_ACCESS_RIGHTS(0x0010_0000),
+            false,
+            windows::core::PCWSTR(name.as_ptr()),
+        ) {
+            Ok(h) => {
+                let _ = CloseHandle(h);
+                true
+            }
+            Err(_) => false,
+        }
+    }
 }
 
 /// Re-launch this exe elevated (UAC) with an internal argument string (e.g.
