@@ -84,16 +84,14 @@ static mut BLACK_WINDOW: HWND = HWND(std::ptr::null_mut());
 static LAST_MIC_INFO: std::sync::Mutex<(String, f32)> = std::sync::Mutex::new((String::new(), 0.0));
 
 pub fn run() {
-    // #54 (defense in depth): the tray is the weakly-mitigated role (nvml, win32k GUI,
-    // injection target) and must never operate above Medium IL. main() already de-elevates
-    // the no-arg role ASAP, so in the normal flow we are already user-IL here. This is an
-    // INDEPENDENT re-check, not a cached value from main(): a future caller that reaches
-    // tray::run() without passing through the main() gate would otherwise run the soft GUI
-    // elevated, and a cached bool would only be set on the guarded path. Done before
-    // run_inner() (singleton mutex + log::init) so nothing touches disk at high IL, and
-    // deliberately silent (logging would create the file we are trying not to write elevated).
+    // #54 backstop (defense in depth): the tray must never run above Medium IL. main()
+    // already refuses the elevated no-arg role (with a dialog) before any I/O, so this is
+    // only reachable if a FUTURE code path reaches tray::run() elevated off that guarded
+    // path — a developer-error backstop, not a user-facing path. Exit silently: no file
+    // I/O at High IL (an elevated log::init would leave an admin-owned log, CWE-732), and
+    // no second dialog (main() owns the user-facing message). Independent re-check, not a
+    // cached value from main() — a cached bool would only be set on the guarded path.
     if crate::install::is_elevated() {
-        crate::install::relaunch_self_unelevated();
         return;
     }
 

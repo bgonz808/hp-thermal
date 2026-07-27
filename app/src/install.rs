@@ -847,8 +847,26 @@ pub fn install(choices: Choices) {
 
 /// Update the service: stop → replace exe → delete → create → start.
 /// If not elevated, re-launches with UAC via --update-svc.
+/// Update the service binary. From a non-elevated (Medium) context — the normal case —
+/// spawn the elevated `--update-svc` child for the privileged work ONLY, WAIT for it to
+/// finish, then (still the logged-in user, Medium IL) wait for the service to come back up
+/// and launch the tray. Launching the tray here, from Medium, is what keeps it at the
+/// user's integrity level (#54) and keeps the elevated window short. If we are already
+/// elevated (e.g. `install` run as admin), do the privileged work in-process; we can't
+/// safely launch a Medium tray from here, so it starts at next logon via the Run key.
 pub fn update() {
-    elevate_or("--update-svc", update_service);
+    if is_elevated() {
+        update_service();
+        return;
+    }
+    // Wait for the child (not just poll for "running"): during an update the OLD service
+    // is briefly still RUNNING before the child stops/replaces it, so a naive poll would
+    // launch the tray into the stop/replace window, where wait_or_kill_other_instances
+    // would terminate it. The child's exit is the definitive "privileged work done".
+    if relaunch_elevated_and_wait("--update-svc") {
+        wait_for_service_running();
+        launch_tray();
+    }
 }
 
 /// Uninstall the service and clean up directories. If not elevated, re-launches with UAC.
@@ -1030,23 +1048,14 @@ pub fn update_service() {
         log.write("service start FAILED");
     }
 
-    // Wait for the service to actually reach RUNNING before launching the tray.
-    // native_start() only ACCEPTS the request (the service is START_PENDING when it
-    // returns); without this wait the freshly-launched tray races startup, sees the
-    // service as not-running, and pops a spurious "Start Service" prompt. The fresh-
-    // install path waits in the non-elevated parent for exactly this reason — the
-    // update path launches the tray itself here, so the wait has to live here too.
-    if wait_for_service_running() {
-        log.write("service running");
-    } else {
-        log.write("service did NOT reach running within timeout");
-    }
-
-    // Launch the tray from the updated PF binary. The bootstrap process that
-    // triggered this update was killed by wait_or_kill_other_instances above,
-    // so we're responsible for launching the new tray.
-    launch_tray();
-    log.write("tray launched — update complete");
+    // #54: the elevated child ENDS here — at native_start(), the last privileged op. The
+    // post-start wait for RUNNING and the tray launch are deliberately NOT done in this
+    // elevated child: the tray must be launched at Medium IL (an elevated tray fork-bombed
+    // the #54 guard), and keeping the non-privileged tail out of the elevated child also
+    // trims the elevated window (temporal least privilege). The non-elevated bootstrap
+    // parent (update(), running as the logged-in user) waits for RUNNING and launches the
+    // tray after this child exits.
+    log.write("update_service done — privileged work complete");
 }
 
 /// Append-only log to C:\ProgramData\HpThermal\update.log for diagnosing
@@ -1149,31 +1158,19 @@ fn who_locks_file(path: &str) -> Vec<String> {
 /// Launch the tray from the INSTALLED location (Program Files).
 /// From elevated context: uses `runas /trustlevel:0x20000` to de-elevate.
 /// From non-elevated context: spawns directly.
+/// Launch the installed tray. MUST be called from a NON-elevated (Medium IL) context —
+/// the tray is the weakly-mitigated user role and must run at the user's normal integrity
+/// level. We deliberately do NOT de-elevate here: dropping High->Medium reliably needs the
+/// interactive user's token (fragile — no "correct user" guarantee; see #54 and MS
+/// guidance), and the prior runas /trustlevel attempt did not lower IL and fork-bombed the
+/// #54 guard. All normal callers are Medium (bootstrap_run, the fresh-install parent, and
+/// the post-update parent in update()). If somehow called elevated, skip — the tray comes
+/// up at next logon via the Run key rather than running elevated.
 pub fn launch_tray() {
-    let exe = app::installed_exe();
     if is_elevated() {
-        let _ = Command::new(system32_exe("runas.exe"))
-            .args(["/trustlevel:0x20000", &format!("\"{}\"", exe)])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
-    } else {
-        let _ = Command::new(&exe).spawn();
+        return;
     }
-}
-
-/// Re-launch THIS exe (whatever its path or role) at basic-user trust level via
-/// `runas /trustlevel:0x20000`, shedding an elevated token, then the caller exits.
-/// Used to de-escalate the no-arg role (tray + bootstrap launcher) ASAP (#54): it is
-/// the weakly-mitigated, user-facing role and must never operate above Medium IL.
-/// Unlike launch_tray(), this targets `current_exe()`, so it also covers a not-yet-
-/// installed bootstrap copy run as admin (where the installed path may not exist).
-pub fn relaunch_self_unelevated() {
-    if let Ok(exe) = std::env::current_exe() {
-        let _ = Command::new(system32_exe("runas.exe"))
-            .args(["/trustlevel:0x20000", &format!("\"{}\"", exe.display())])
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn();
-    }
+    let _ = Command::new(app::installed_exe()).spawn();
 }
 
 /// Re-launch this exe elevated (UAC) with an internal argument string (e.g.
@@ -1203,6 +1200,44 @@ fn elevate_or(args: &str, work: impl FnOnce()) {
         return;
     }
     work();
+}
+
+/// Like `relaunch_elevated`, but WAITS for the elevated child to exit. Used by `update()`
+/// so the non-elevated parent launches the tray only AFTER the privileged child has
+/// finished stop/replace/start — otherwise the tray (the PF binary) would race the child's
+/// `wait_or_kill_other_instances` and be terminated. Returns false if the user cancelled
+/// UAC or the launch failed (nothing spawned). Uses `ShellExecuteExW` with
+/// `SEE_MASK_NOCLOSEPROCESS` to obtain the child handle to wait on.
+fn relaunch_elevated_and_wait(args: &str) -> bool {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::WaitForSingleObject;
+    use windows::Win32::UI::Shell::{SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW, ShellExecuteExW};
+
+    let exe_w = wide_null(app::exe_path());
+    let verb_w = wide_null("runas");
+    let args_w = wide_null(args);
+    // SAFETY: the three wide strings are null-terminated and outlive the call.
+    // SEE_MASK_NOCLOSEPROCESS makes ShellExecuteExW populate `hProcess`; we wait on it
+    // (bounded) and close it. On UAC cancel / failure the call returns Err and we bail.
+    unsafe {
+        let mut info = SHELLEXECUTEINFOW {
+            cbSize: std::mem::size_of::<SHELLEXECUTEINFOW>() as u32,
+            fMask: SEE_MASK_NOCLOSEPROCESS,
+            lpVerb: windows::core::PCWSTR(verb_w.as_ptr()),
+            lpFile: windows::core::PCWSTR(exe_w.as_ptr()),
+            lpParameters: windows::core::PCWSTR(args_w.as_ptr()),
+            nShow: SW_HIDE.0,
+            ..Default::default()
+        };
+        if ShellExecuteExW(&mut info).is_err() || info.hProcess.is_invalid() {
+            return false;
+        }
+        // Bounded wait: the child does service stop (<=~10s) + replace + start. 120s is a
+        // generous cap; on timeout we proceed and let the tray's own startup checks cope.
+        let _ = WaitForSingleObject(info.hProcess, 120_000);
+        let _ = CloseHandle(info.hProcess);
+        true
+    }
 }
 
 /// Start the service via the SCM API. True if it started or is already running;

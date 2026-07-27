@@ -40,16 +40,28 @@ const BTN_CANCEL: i32 = 2; // IDCANCEL
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
-    // De-escalate ASAP (#54). The no-arg role is the tray and its bootstrap launcher —
-    // the weakly-mitigated, user-facing role (loads nvml, runs a win32k GUI, common
-    // injection target). It must NEVER operate above Medium IL — the inverse of the
-    // service footing check (pipe::own_process_is_privileged, which fail-closes if the
-    // service is NOT High/System). If we were launched elevated (e.g. run-as-admin),
-    // re-launch de-elevated and exit BEFORE anything touches disk/registry/WMI at high
-    // IL — before mitigations, the hardware probe, consent, or the log file. Only
-    // --service (SCM/SYSTEM) and the UAC install children run elevated by design.
+    // #54: the no-arg role is the tray and its bootstrap installer/launcher — the
+    // weakly-mitigated, user-facing role (loads nvml, runs a win32k GUI, is a common
+    // injection target, and as the installer is a long-lived dialog from an unvetted
+    // download folder). It must NEVER run above Medium IL. We do NOT try to de-elevate:
+    // dropping High->Medium from an elevated process reliably needs the interactive
+    // user's token (fragile — no "correct user" guarantee; MS guidance is to run the
+    // launcher unelevated instead), and the prior runas /trustlevel attempt neither
+    // lowered IL nor stopped fork-bombing this guard. So refuse — with NO file I/O: an
+    // elevated log::init would leave an admin-owned log in the user data dir (CWE-732),
+    // the very thing this guard exists to prevent. This fires before mitigations, the
+    // hardware probe, consent, or the log. Normal launches (logon Run key, bootstrap, the
+    // post-update Medium parent) are already Medium, so this is a backstop against
+    // Run-as-administrator, not a happy path. Only --service (SCM/SYSTEM) and the UAC
+    // install children (install/*-svc) run elevated by design.
     if args.get(1).is_none() && install::is_elevated() {
-        install::relaunch_self_unelevated();
+        // Exit immediately and SILENTLY. A modal MessageBox here would run its own message
+        // loop inside THIS elevated process until dismissed — prolonging the High-IL
+        // lifetime and being the exact long-lived elevated message pump we avoid. A
+        // non-blocking popup can't be hosted by an elevated process either, so there is no
+        // cheap "warn and exit" (see the refuse-vs-de-elevate note where this is called).
+        // No file I/O (an elevated log::init would leave an admin-owned log, CWE-732).
+        // Normal launches are Medium; this only fires on Run-as-administrator misuse.
         return;
     }
 
@@ -308,10 +320,10 @@ fn bootstrap_run() {
             install::warn_setup_in_progress();
             return;
         };
-        // The UAC child (--update-svc) stops the service, replaces the
-        // binary, restarts the service, AND launches the tray. We must
-        // NOT race it by polling or launching tray ourselves — the child
-        // will kill us via wait_or_kill_other_instances anyway.
+        // #54: the elevated UAC child (--update-svc) does the privileged work ONLY
+        // (stop / replace binary / start) and exits. install() runs here in the
+        // logged-in-user (Medium IL) process: it waits for that child to finish, then
+        // launches the tray at Medium IL — the tray must never be launched elevated.
         install::update();
         return;
     }
