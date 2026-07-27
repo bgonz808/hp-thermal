@@ -21,7 +21,9 @@ fn main() {
             eprintln!("usage: cargo xtask <command>");
             eprintln!("  ci [--fast]              run checks (fast = fmt + clippy + test)");
             eprintln!("  verify-hardening [EXE]   check PE exploit-mitigation flags");
-            eprintln!("  capabilities [EXE]       list imported DLLs; fail on network APIs");
+            eprintln!(
+                "  capabilities [EXE]       list imports (+ delay-load); fail off the golden allowlist"
+            );
             2
         }
     };
@@ -159,12 +161,16 @@ fn cmd_verify_hardening(exe: Option<&str>) -> i32 {
     }
 }
 
-/// Capability baseline via the PE import table. hp-thermal is a LOCAL thermal tool,
-/// so it must not link networking APIs. Prints the imported DLLs (a capability
-/// manifest) and FAILS if any network-capable DLL is present — catching a
-/// supply-chain compromise that adds telemetry/exfil, which a valid signature and an
-/// up-to-date SBOM would pass (the injected code is signed and in the dep tree, but
-/// it changed what the binary can *do*).
+/// Capability baseline via the PE import table (static + delay-load). hp-thermal is a
+/// LOCAL thermal tool, so it must import ONLY a vetted set of OS DLLs. Prints the imports
+/// (a capability manifest) and FAILS on anything off the golden allowlist — catching a
+/// supply-chain compromise that adds telemetry/exfil (e.g. winhttp), which a valid
+/// signature and an up-to-date SBOM would pass: the injected code is signed and in the
+/// dep tree, but it changed what the binary can *do*.
+///
+/// The allowlist is a function of CRT linkage + feature set, NOT opt-level/LTO (those only
+/// drop imports, never add): a dynamic/hybrid CRT (#32) reintroduces ucrtbase/vcruntime/
+/// api-ms-win-crt-* and MUST update ALLOWED; `--features noise-adapt` adds audio DLLs.
 fn cmd_capabilities(exe: Option<&str>) -> i32 {
     let path = exe.unwrap_or(RELEASE_EXE);
     let bytes = match std::fs::read(path) {
@@ -178,41 +184,61 @@ fn cmd_capabilities(exe: Option<&str>) -> i32 {
         eprintln!("capabilities: {path} is not a walkable PE image");
         return 1;
     };
+    dlls.extend(pe_delay_imported_dlls(&bytes).unwrap_or_default());
     dlls.sort();
     dlls.dedup();
     println!("Imported DLLs ({}) ({path}):", dlls.len());
     for d in &dlls {
         println!("  {d}");
     }
-    // Network-capable DLLs a purely-local tool must never import. rpcrt4/ole32/combase
-    // are deliberately NOT here — COM/WMI use them locally.
-    const NET_DLLS: &[&str] = &[
-        "ws2_32.dll",
-        "wsock32.dll",
-        "mswsock.dll",
-        "winhttp.dll",
-        "wininet.dll",
-        "urlmon.dll",
-        "dnsapi.dll",
+    // Golden allowlist: the shipped static-CRT, default-features build imports ONLY these
+    // concrete OS DLLs. MS OS API-sets (api-ms-win-* / ext-ms-win-*) are allowed by prefix
+    // because their version suffix shifts across toolchain bumps but they are OS-provided.
+    const ALLOWED: &[&str] = &[
+        "advapi32.dll",
+        "combase.dll",
+        "comctl32.dll",
+        "gdi32.dll",
+        "kernel32.dll",
+        "ntdll.dll",
+        "ole32.dll",
+        "oleaut32.dll",
+        "powrprof.dll",
+        "rstrtmgr.dll",
+        "shell32.dll",
+        "user32.dll",
     ];
-    let hits: Vec<&str> = dlls
+    let allowed = |d: &str| {
+        ALLOWED.contains(&d) || d.starts_with("api-ms-win-") || d.starts_with("ext-ms-win-")
+    };
+    let off_list: Vec<&str> = dlls
         .iter()
         .map(String::as_str)
-        .filter(|d| NET_DLLS.contains(d))
+        .filter(|d| !allowed(d))
         .collect();
-    if hits.is_empty() {
-        println!("capabilities: OK — no network-capable imports");
+    if off_list.is_empty() {
+        println!(
+            "capabilities: OK — imports within the golden allowlist (no network/unknown DLLs)"
+        );
         0
     } else {
-        eprintln!("capabilities: FAIL — unexpected network import(s): {hits:?}");
-        eprintln!("  a local thermal tool must not link networking APIs (possible injection)");
+        eprintln!("capabilities: FAIL — off-allowlist import(s): {off_list:?}");
+        eprintln!("  a shipped build must import only the vetted OS set; a new entry is a");
+        eprintln!("  capability change — update ALLOWED only for a deliberate CRT/feature change.");
         1
     }
 }
 
-/// Parse the PE import directory and return the imported DLL names (lowercased).
-/// Pure byte parsing; `None` if the image can't be walked.
-fn pe_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
+/// Parse a PE import-style directory and return the referenced DLL names (lowercased).
+/// `dir_index` selects the data directory (1 = imports, 13 = delay-load); descriptors are
+/// `desc_size` bytes each with the DLL-name RVA at `name_off`. An all-zero descriptor
+/// terminates the array. Pure byte parsing; `None` if the image can't be walked.
+fn pe_import_dir_dlls(
+    b: &[u8],
+    dir_index: usize,
+    desc_size: usize,
+    name_off: usize,
+) -> Option<Vec<String>> {
     let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
     if b.get(pe..pe + 4)? != b"PE\0\0" {
         return None;
@@ -221,11 +247,12 @@ fn pe_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
     let opt_size = u16::from_le_bytes(b.get(pe + 20..pe + 22)?.try_into().ok()?) as usize;
     let opt = pe + 24;
     let magic = u16::from_le_bytes(b.get(opt..opt + 2)?.try_into().ok()?);
-    // Data directories start at opt+96 (PE32) or opt+112 (PE32+); import = entry #1.
+    // Data directories start at opt+96 (PE32) or opt+112 (PE32+); each entry is 8 bytes
+    // (RVA, size). Entry #1 = imports, #13 = delay-load.
     let datadir = opt + if magic == 0x20B { 112 } else { 96 };
-    let import_rva =
-        u32::from_le_bytes(b.get(datadir + 8..datadir + 12)?.try_into().ok()?) as usize;
-    if import_rva == 0 {
+    let entry = datadir + dir_index * 8;
+    let dir_rva = u32::from_le_bytes(b.get(entry..entry + 4)?.try_into().ok()?) as usize;
+    if dir_rva == 0 {
         return Some(Vec::new());
     }
     // Map an RVA to a file offset via the section table (follows the optional header).
@@ -243,15 +270,18 @@ fn pe_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
         }
         None
     };
-    // Walk the IMAGE_IMPORT_DESCRIPTOR array (20 bytes each; Name RVA at +12).
-    let mut off = rva_to_off(import_rva)?;
+    let mut off = rva_to_off(dir_rva)?;
     let mut dlls = Vec::new();
     for _ in 0..4096 {
-        let first_thunk = u32::from_le_bytes(b.get(off..off + 4)?.try_into().ok()?);
-        let name_rva = u32::from_le_bytes(b.get(off + 12..off + 16)?.try_into().ok()?) as usize;
-        if first_thunk == 0 && name_rva == 0 {
-            break; // null terminator
+        let desc = b.get(off..off + desc_size)?;
+        if desc.iter().all(|&x| x == 0) {
+            break; // null-terminator descriptor
         }
+        // Terminator already handled above; a real descriptor has a non-zero name RVA
+        // (and rva_to_off(0) would return None regardless, so no guard is needed).
+        let name_rva =
+            u32::from_le_bytes(b.get(off + name_off..off + name_off + 4)?.try_into().ok()?)
+                as usize;
         if let Some(no) = rva_to_off(name_rva) {
             let rest = b.get(no..)?;
             let len = rest.iter().position(|&c| c == 0).unwrap_or(rest.len());
@@ -259,9 +289,19 @@ fn pe_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
                 dlls.push(s.to_ascii_lowercase());
             }
         }
-        off += 20;
+        off += desc_size;
     }
     Some(dlls)
+}
+
+/// Statically-imported DLLs (import directory #1; 20-byte descriptors, name RVA at +12).
+fn pe_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
+    pe_import_dir_dlls(b, 1, 20, 12)
+}
+
+/// Delay-loaded DLLs (delay-import directory #13; 32-byte descriptors, name RVA at +4).
+fn pe_delay_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
+    pe_import_dir_dlls(b, 13, 32, 4)
 }
 
 /// `DllCharacteristics` sits at optional-header offset 0x46 (70) for both PE32
