@@ -34,8 +34,8 @@ const NO_CHILD_PROCESS: u32 = 0x1;
 // PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY: DisallowWin32kSystemCalls = bit 0.
 const DISALLOW_WIN32K: u32 = 0x1;
 // PROCESS_MITIGATION_DYNAMIC_CODE_POLICY: ProhibitDynamicCode = bit 0 (enforce),
-// AuditProhibitDynamicCode = bit 3 (log to Microsoft-Windows-Security-Mitigations, no kill).
-const AUDIT_PROHIBIT_DYNAMIC_CODE: u32 = 0x8;
+// AuditProhibitDynamicCode = bit 3 (log only). We enforce (bit 0) after a clean audit run.
+const PROHIBIT_DYNAMIC_CODE: u32 = 0x1;
 
 /// Apply process mitigation policies. Best-effort: failures are non-fatal (older
 /// Windows may not support a given policy), so a failure just means that one
@@ -46,8 +46,8 @@ pub fn apply() {
     disable_extension_points();
     // ProcessDynamicCodePolicy is NOT applied globally: it can break in-process code
     // generators, and this process hosts COM/WMI (service) and WASAPI/COM (tray). It is
-    // applied to the `--service` role in AUDIT mode (audit_dynamic_code, #24); enforcement
-    // (ProhibitDynamicCode) follows once a live audit run is confirmed clean.
+    // enforced on the `--service` role only (prohibit_dynamic_code, #24), validated
+    // audit-first against a clean live run.
 }
 
 /// Restrict runtime `LoadLibrary` (calls without their own search flags) to
@@ -154,22 +154,23 @@ pub fn disallow_win32k_syscalls() {
     }
 }
 
-/// AUDIT (do NOT yet enforce) ProcessDynamicCodePolicy on the `--service` role. Setting
-/// AuditProhibitDynamicCode logs — to the Microsoft-Windows-Security-Mitigations channel —
-/// every operation ProhibitDynamicCode WOULD block (allocating/modifying executable memory,
-/// mapping an image writable+executable) WITHOUT terminating the process. ProhibitDynamicCode
-/// is the strongest anti-shellcode mitigation (CWE-94: blocks JIT-style code injection), but
-/// it can break in-process code generators and the service hosts COM/WMI, so audit-first lets
-/// us confirm a clean run (WMI read/write + event sink + pipe) before flipping bit 0 to
-/// enforce. Applied to the service ONLY (the tray hosts WASAPI/COM). Best-effort — ignored on
-/// older Windows. #24.
+/// Enforce ProcessDynamicCodePolicy (ProhibitDynamicCode) on the `--service` role: the
+/// process can no longer allocate/modify executable memory or map an image writable+
+/// executable, and any such attempt TERMINATES it. This is the strongest anti-shellcode
+/// mitigation (CWE-94: blocks JIT-style code injection / dynamically-generated shellcode).
+/// It can break in-process code generators, so it was validated audit-first
+/// (AuditProhibitDynamicCode, bit 3) against a live run — WMI read/write + event sink +
+/// pipe produced ZERO dynamic-code events — before enforcing here. Once set it is a
+/// permanent one-way ratchet, so it is validated by a live service run before shipping.
+/// Applied to the service ONLY: the tray loads third-party code (nvml) and hosts WASAPI/COM,
+/// which are not audited for dynamic-code use. Best-effort — ignored on older Windows. #24.
 /// https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_dynamic_code_policy
-pub fn audit_dynamic_code() {
-    // SAFETY: `policy` is a zeroed struct; we set AuditProhibitDynamicCode (bit 3) via the
+pub fn prohibit_dynamic_code() {
+    // SAFETY: `policy` is a zeroed struct; we set ProhibitDynamicCode (bit 0) via the
     // Flags union member and pass its exact size. Ignored on failure.
     unsafe {
         let mut policy = PROCESS_MITIGATION_DYNAMIC_CODE_POLICY::default();
-        policy.Anonymous.Flags = AUDIT_PROHIBIT_DYNAMIC_CODE;
+        policy.Anonymous.Flags = PROHIBIT_DYNAMIC_CODE;
         let _ = SetProcessMitigationPolicy(
             ProcessDynamicCodePolicy,
             std::ptr::addr_of!(policy) as *const std::ffi::c_void,

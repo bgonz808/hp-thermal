@@ -81,9 +81,10 @@ fn main() {
             // Headless service has no GUI — cut off the win32k syscall surface (a major
             // kernel LPE target). Service-only; live-validated. (#48)
             mitigations::disallow_win32k_syscalls();
-            // Audit-first ProcessDynamicCodePolicy: log (do NOT enforce) any executable-memory
-            // generation the service performs, to validate before enforcing. Service-only (#24).
-            mitigations::audit_dynamic_code();
+            // Strongest anti-shellcode mitigation: forbid dynamic/executable-memory codegen
+            // (ProhibitDynamicCode). Validated audit-first (a clean live run) then enforced.
+            // Service-only; live-validated. (#24)
+            mitigations::prohibit_dynamic_code();
             service::run();
         }
         Some("install" | "--install") => {
