@@ -67,4 +67,11 @@ opt-level = "z"
 lto = "fat"
 codegen-units = 1
 panic = "immediate-abort"
-strip = "symbols"
+# PDB sidecar (#40): on MSVC debug info always externalizes to a .pdb. Emit line
+# tables only — small, enough to symbolicate a crash / analyze the binary — and keep
+# the exe's CodeView debug directory so exe<->pdb GUID/age binds (asserted by #41).
+# Deliberately DO NOT set `strip` (it suppresses the PDB on MSVC; measured: no size
+# cost here) and DO NOT set `split-debuginfo` explicitly: MSVC already packs debug
+# info into the .pdb by default, and `split-debuginfo="packed"` + `lto="fat"` is a
+# known-broken combo that silently drops the PDB (rust-lang/rust#104042).
+debug = "line-tables-only"
