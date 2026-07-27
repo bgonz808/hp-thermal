@@ -1161,6 +1161,21 @@ pub fn launch_tray() {
     }
 }
 
+/// Re-launch THIS exe (whatever its path or role) at basic-user trust level via
+/// `runas /trustlevel:0x20000`, shedding an elevated token, then the caller exits.
+/// Used to de-escalate the no-arg role (tray + bootstrap launcher) ASAP (#54): it is
+/// the weakly-mitigated, user-facing role and must never operate above Medium IL.
+/// Unlike launch_tray(), this targets `current_exe()`, so it also covers a not-yet-
+/// installed bootstrap copy run as admin (where the installed path may not exist).
+pub fn relaunch_self_unelevated() {
+    if let Ok(exe) = std::env::current_exe() {
+        let _ = Command::new(system32_exe("runas.exe"))
+            .args(["/trustlevel:0x20000", &format!("\"{}\"", exe.display())])
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+    }
+}
+
 /// Re-launch this exe elevated (UAC) with an internal argument string (e.g.
 /// `--install-svc 5`). Fire-and-forget: the elevated child does the privileged
 /// work and exits; the non-elevated parent continues (e.g. waits + launches tray).

@@ -38,10 +38,24 @@ const BTN_ACTION: i32 = 100;
 const BTN_CANCEL: i32 = 2; // IDCANCEL
 
 fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    // De-escalate ASAP (#54). The no-arg role is the tray and its bootstrap launcher —
+    // the weakly-mitigated, user-facing role (loads nvml, runs a win32k GUI, common
+    // injection target). It must NEVER operate above Medium IL — the inverse of the
+    // service footing check (pipe::own_process_is_privileged, which fail-closes if the
+    // service is NOT High/System). If we were launched elevated (e.g. run-as-admin),
+    // re-launch de-elevated and exit BEFORE anything touches disk/registry/WMI at high
+    // IL — before mitigations, the hardware probe, consent, or the log file. Only
+    // --service (SCM/SYSTEM) and the UAC install children run elevated by design.
+    if args.get(1).is_none() && install::is_elevated() {
+        install::relaunch_self_unelevated();
+        return;
+    }
+
     // Harden every role (tray, service, installer helpers) as early as possible.
     mitigations::apply();
 
-    let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(|s| s.as_str()) {
         Some("--service") => {
             // Crown-jewel hardening: the SYSTEM service loads only MS-signed
