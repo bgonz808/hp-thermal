@@ -7,7 +7,7 @@ use windows::Win32::Storage::FileSystem::*;
 use windows::Win32::System::IO::*;
 use windows::Win32::System::Pipes::*;
 use windows::Win32::System::Threading::*;
-use windows::core::{PCWSTR, PWSTR, w};
+use windows::core::{PCWSTR, PWSTR};
 
 use crate::app;
 use crate::protocol::PIPE_MAGIC;
@@ -39,17 +39,29 @@ fn process_image_path(pid: u32) -> Option<String> {
     }
 }
 
+/// Named-pipe security descriptor (SDDL). DACL: Users = read/write, SYSTEM =
+/// full, Admins = full. SACL mandatory label (`ML`) at Medium (`ME`) with
+/// no-write-up (`NW`): the kernel denies write access to any below-Medium
+/// caller (sandboxed / Low-IL / AppContainer) at the object boundary, so the
+/// integrity gate does not depend on impersonating the client. See Mandatory
+/// Integrity Control (MS Learn). Build-validated by the test below.
+const PIPE_SDDL: &str = "D:(A;;GRGW;;;BU)(A;;GA;;;SY)(A;;GA;;;BA)S:(ML;;NW;;;ME)";
+
 /// Create the named pipe server with a security descriptor allowing BUILTIN\Users.
 pub fn server_create() -> windows::core::Result<HANDLE> {
     // SAFETY: All Win32 calls operate on stack-allocated structs and a wide string
     // that outlives the entire block. The SD is freed via LocalFree before return.
     unsafe {
-        // SDDL: Users=read/write, SYSTEM=full, Admins=full
-        let sddl = w!("D:(A;;GRGW;;;BU)(A;;GA;;;SY)(A;;GA;;;BA)");
+        // Descriptor + rationale: see PIPE_SDDL. Built to a NUL-terminated wide
+        // string at runtime (a one-time small alloc) so the SDDL is a single
+        // testable constant, not an inline literal.
+        let sddl = wide_null(PIPE_SDDL);
         let mut sd: PSECURITY_DESCRIPTOR = PSECURITY_DESCRIPTOR(ptr::null_mut());
         ConvertStringSecurityDescriptorToSecurityDescriptorW(
-            sddl, 1, // SDDL_REVISION_1
-            &mut sd, None,
+            PCWSTR(sddl.as_ptr()),
+            1, // SDDL_REVISION_1
+            &mut sd,
+            None,
         )?;
 
         let sa = SECURITY_ATTRIBUTES {
@@ -147,23 +159,29 @@ pub fn server_validate_client(pipe: HANDLE) -> bool {
 }
 
 /// Integrity Level of the interactive-user tray is Medium; sandboxed / Low-IL /
-/// AppContainer processes are below it. Reject a *confirmed* below-Medium caller.
-/// Uses `ImpersonateNamedPipeClient` to read the client's token directly, which
-/// also sidesteps the PID-recycle TOCTOU of the path lookup. Returns true when
-/// the level cannot be determined (defer to the other layers — never break a
-/// legitimate client over a transient API failure).
+/// AppContainer processes are below it. The pipe's mandatory-label SACL (see
+/// `PIPE_SDDL`) already makes the kernel reject a below-Medium *writer* at the
+/// object boundary; this is the defense-in-depth code check. It reads the
+/// caller's token WITHOUT impersonation — open the client process for a limited
+/// query and read its integrity SID — so the service never runs under a client
+/// token (keeps us clear of the token-manipulation surface, MITRE ATT&CK T1134).
+/// Returns true when the level cannot be determined (defer to the label and the
+/// other layers — never break a legitimate client over a transient API failure).
 fn client_integrity_ok(pipe: HANDLE) -> bool {
-    // SAFETY: We impersonate the connected client, open the resulting thread
-    // token (OpenAsSelf=true so SYSTEM's context is used for the access check),
-    // revert immediately, then read the integrity SID from the token buffer.
-    // Every handle is closed and impersonation is always reverted.
+    // SAFETY: GetNamedPipeClientProcessId writes a u32; OpenProcess yields a
+    // checked handle (or we defer); OpenProcessToken yields a token we close;
+    // the process handle is closed before the token read. No impersonation.
     unsafe {
-        if ImpersonateNamedPipeClient(pipe).is_err() {
+        let mut client_pid: u32 = 0;
+        if GetNamedPipeClientProcessId(pipe, &mut client_pid).is_err() {
             return true; // cannot determine — defer
         }
+        let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, client_pid) else {
+            return true; // cannot open — defer
+        };
         let mut token = HANDLE::default();
-        let opened = OpenThreadToken(GetCurrentThread(), TOKEN_QUERY, true, &mut token).is_ok();
-        let _ = RevertToSelf();
+        let opened = OpenProcessToken(process, TOKEN_QUERY, &mut token).is_ok();
+        let _ = CloseHandle(process);
         if !opened {
             return true;
         }
@@ -434,5 +452,47 @@ mod tests {
         // Half-right magic is still rejected (both bytes must match).
         assert_eq!(parse_request_frame([PIPE_MAGIC[0], 0x00, 0x01, 0x00]), None);
         assert_eq!(parse_request_frame([0x00, PIPE_MAGIC[1], 0x01, 0x00]), None);
+    }
+
+    // The pipe SD is an opaque SDDL literal, so validate it at build time: a
+    // typo fails `cargo test` on CI instead of at runtime on a user's machine.
+    // Parses via the exact Win32 call server_create() uses, then round-trips
+    // (with LABEL info) and asserts the mandatory label is Medium / no-write-up.
+    #[test]
+    fn pipe_sddl_parses_and_labels_medium_no_write_up() {
+        // SAFETY: parse PIPE_SDDL into an SD, serialize it back, and free both
+        // heap allocations (the SD and the string) via LocalFree before asserting.
+        unsafe {
+            let wide = wide_null(PIPE_SDDL);
+            let mut sd = PSECURITY_DESCRIPTOR(ptr::null_mut());
+            ConvertStringSecurityDescriptorToSecurityDescriptorW(
+                PCWSTR(wide.as_ptr()),
+                1,
+                &mut sd,
+                None,
+            )
+            .expect("PIPE_SDDL must parse");
+            assert!(!sd.0.is_null());
+
+            // 0x1F = OWNER|GROUP|DACL|SACL|LABEL. LABEL is required to emit the
+            // mandatory-label ACE back into the string form.
+            let mut out = PWSTR(ptr::null_mut());
+            ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                sd,
+                1,
+                OBJECT_SECURITY_INFORMATION(0x1F),
+                &mut out,
+                None,
+            )
+            .expect("SD must serialize");
+            let round = out.to_string().expect("valid UTF-16");
+            let _ = LocalFree(Some(HLOCAL(out.0 as *mut _)));
+            let _ = LocalFree(Some(HLOCAL(sd.0)));
+
+            assert!(
+                round.contains("(ML;;NW;;;ME)"),
+                "expected a Medium / no-write-up mandatory label, got: {round}"
+            );
+        }
     }
 }
