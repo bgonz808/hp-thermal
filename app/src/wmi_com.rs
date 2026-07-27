@@ -31,6 +31,12 @@ impl WmiConnection {
     unsafe fn connect_inner() -> windows::core::Result<Self> {
         CoInitializeEx(None, COINIT_MULTITHREADED).ok()?;
 
+        // Process-wide COM security. We are a WMI *client* and register no class
+        // object, so nothing is externally activatable; EOAC_DISABLE_AAA drops
+        // activate-as-activator and EOAC_NO_CUSTOM_MARSHAL blocks custom
+        // unmarshaling (a deserialization surface). Auth level stays DEFAULT so
+        // the local WMI proxy blanket set by CoSetProxyBlanket below governs the
+        // call. Refs: EOLE_AUTHENTICATION_CAPABILITIES, Security in COM (MS Learn).
         CoInitializeSecurity(
             None,
             -1,
@@ -39,7 +45,7 @@ impl WmiConnection {
             RPC_C_AUTHN_LEVEL_DEFAULT,
             RPC_C_IMP_LEVEL_IMPERSONATE,
             None,
-            EOAC_NONE,
+            EOLE_AUTHENTICATION_CAPABILITIES(EOAC_DISABLE_AAA.0 | EOAC_NO_CUSTOM_MARSHAL.0),
             None,
         )?;
 
