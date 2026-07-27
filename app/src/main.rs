@@ -52,6 +52,9 @@ fn main() {
             // The service spawns no child processes; forbid it at the OS level so even
             // injected code cannot shell out (LOLBin/proxy exfil). Service-only (#47).
             mitigations::prohibit_child_processes();
+            // Headless service has no GUI — cut off the win32k syscall surface (a major
+            // kernel LPE target). Service-only; live-validated. (#48)
+            mitigations::disallow_win32k_syscalls();
             service::run();
         }
         Some("install" | "--install") => {

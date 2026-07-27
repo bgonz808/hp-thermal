@@ -12,10 +12,11 @@ use windows::Win32::System::LibraryLoader::{
 use windows::Win32::System::SystemServices::{
     PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY, PROCESS_MITIGATION_CHILD_PROCESS_POLICY,
     PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY, PROCESS_MITIGATION_IMAGE_LOAD_POLICY,
+    PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY,
 };
 use windows::Win32::System::Threading::{
     ProcessChildProcessPolicy, ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy,
-    ProcessSignaturePolicy, SetProcessMitigationPolicy,
+    ProcessSignaturePolicy, ProcessSystemCallDisablePolicy, SetProcessMitigationPolicy,
 };
 
 // Policy `Flags` bit masks. The `windows` crate exposes these bitfields only as a
@@ -29,6 +30,8 @@ const MICROSOFT_SIGNED_ONLY: u32 = 0x1;
 const IMAGE_LOAD_HARDENING: u32 = 0b111;
 // PROCESS_MITIGATION_CHILD_PROCESS_POLICY: NoChildProcessCreation = bit 0.
 const NO_CHILD_PROCESS: u32 = 0x1;
+// PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY: DisallowWin32kSystemCalls = bit 0.
+const DISALLOW_WIN32K: u32 = 0x1;
 
 /// Apply process mitigation policies. Best-effort: failures are non-fatal (older
 /// Windows may not support a given policy), so a failure just means that one
@@ -120,6 +123,28 @@ pub fn prohibit_child_processes() {
             ProcessChildProcessPolicy,
             std::ptr::addr_of!(policy) as *const std::ffi::c_void,
             std::mem::size_of::<PROCESS_MITIGATION_CHILD_PROCESS_POLICY>(),
+        );
+    }
+}
+
+/// Disable win32k system calls. Applied to the `--service` role ONLY: the headless SYSTEM
+/// service has no GUI and never enters win32k (MTA COM/WMI + named-pipe I/O — no window, no
+/// message pump), so cutting off the win32k syscall surface removes one of the largest kernel
+/// LPE attack surfaces from the crown-jewel process. NOT applied to the tray, which IS a GUI
+/// (win32k) process. Once set it is permanent and any win32k call terminates the process, so
+/// it is validated by a live service run (WMI read/write + event sink + pipe) before shipping.
+/// Best-effort (ignored on older Windows). runtime-mitigation (#48).
+/// https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_system_call_disable_policy
+pub fn disallow_win32k_syscalls() {
+    // SAFETY: `policy` is a zeroed struct; we set DisallowWin32kSystemCalls (bit 0) via the
+    // Flags union member and pass its exact size. Ignored on failure.
+    unsafe {
+        let mut policy = PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY::default();
+        policy.Anonymous.Flags = DISALLOW_WIN32K;
+        let _ = SetProcessMitigationPolicy(
+            ProcessSystemCallDisablePolicy,
+            std::ptr::addr_of!(policy) as *const std::ffi::c_void,
+            std::mem::size_of::<PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY>(),
         );
     }
 }
