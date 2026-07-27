@@ -10,6 +10,9 @@ use std::process::{Command, exit};
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
 const RELEASE_EXE: &str = "app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe";
+/// The linker names the PDB after the crate (underscores); release staging renames it to
+/// hp-thermal.pdb. Local checks read the build-output name.
+const RELEASE_PDB: &str = "app/target/x86_64-pc-windows-msvc/release/hp_thermal.pdb";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -17,12 +20,19 @@ fn main() {
         Some("ci") => cmd_ci(args.iter().any(|a| a == "--fast")),
         Some("verify-hardening") => cmd_verify_hardening(args.get(1).map(String::as_str)),
         Some("capabilities") => cmd_capabilities(args.get(1).map(String::as_str)),
+        Some("verify-artifact") => cmd_verify_artifact(
+            args.get(1).map(String::as_str),
+            args.get(2).map(String::as_str),
+        ),
         _ => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!("  ci [--fast]              run checks (fast = fmt + clippy + test)");
             eprintln!("  verify-hardening [EXE]   check PE exploit-mitigation flags");
             eprintln!(
                 "  capabilities [EXE]       list imports (+ delay-load); fail off the golden allowlist"
+            );
+            eprintln!(
+                "  verify-artifact [EXE] [PDB]  hardening + capabilities + exe<->pdb GUID bind"
             );
             2
         }
@@ -105,8 +115,7 @@ fn cmd_ci(fast: bool) -> i32 {
         "cargo",
         &["audit", "bin", RELEASE_EXE],
     );
-    ok &= cmd_verify_hardening(Some(RELEASE_EXE)) == 0;
-    ok &= cmd_capabilities(Some(RELEASE_EXE)) == 0;
+    ok &= cmd_verify_artifact(Some(RELEASE_EXE), Some(RELEASE_PDB)) == 0;
 
     finish(ok)
 }
@@ -318,4 +327,210 @@ fn pe_dll_characteristics(b: &[u8]) -> Option<u16> {
     }
     let off = opt + 70;
     Some(u16::from_le_bytes(b.get(off..off + 2)?.try_into().ok()?))
+}
+
+/// Consolidated artifact gate: exploit-mitigation flags + capability allowlist + the
+/// exe<->pdb CodeView GUID/age bind. The pipeline-gate half of the assurance case — it
+/// proves properties of the SHIPPED bytes (what the toolchain produced), complementing the
+/// source-side checks. Run in `ci` and by the release verify job.
+fn cmd_verify_artifact(exe: Option<&str>, pdb: Option<&str>) -> i32 {
+    let exe_path = exe.unwrap_or(RELEASE_EXE);
+    let pdb_path = pdb.unwrap_or(RELEASE_PDB);
+    let mut ok = true;
+    ok &= cmd_verify_hardening(Some(exe_path)) == 0;
+    ok &= cmd_capabilities(Some(exe_path)) == 0;
+    ok &= cmd_pdb_link(exe_path, pdb_path) == 0;
+    if ok { 0 } else { 1 }
+}
+
+/// Assert the exe and its PDB belong together: the exe's CodeView debug-directory
+/// {GUID, age} must equal the PDB info-stream {GUID, age}. Turns the debugger ecosystem's
+/// best-effort match into an enforced check. Consistency, NOT authenticity — authenticity
+/// is SHA256SUMS + the SLSA attestation.
+fn cmd_pdb_link(exe_path: &str, pdb_path: &str) -> i32 {
+    let exe = match std::fs::read(exe_path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("pdb-link: cannot read {exe_path} ({e})");
+            return 1;
+        }
+    };
+    let pdb = match std::fs::read(pdb_path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("pdb-link: cannot read {pdb_path} ({e})");
+            return 1;
+        }
+    };
+    let Some((ge, ae, name)) = pe_codeview(&exe) else {
+        eprintln!("pdb-link: {exe_path} has no CodeView debug directory (was a PDB built?)");
+        return 1;
+    };
+    let Some((gp, ap)) = pdb_guid_age(&pdb) else {
+        eprintln!("pdb-link: {pdb_path} is not a parseable PDB (MSF 7.0)");
+        return 1;
+    };
+    if ge == gp && ae == ap {
+        println!(
+            "pdb-link: OK — exe references {name}; GUID/age match ({}, age {ae})",
+            guid_str(&ge)
+        );
+        0
+    } else {
+        eprintln!(
+            "pdb-link: FAIL — exe {}/age {ae} != pdb {}/age {ap}",
+            guid_str(&ge),
+            guid_str(&gp)
+        );
+        1
+    }
+}
+
+/// Format a raw 16-byte CodeView/PDB GUID in the usual mixed-endian display form.
+fn guid_str(g: &[u8; 16]) -> String {
+    format!(
+        "{:08X}-{:04X}-{:04X}-{:02X}{:02X}-{:02X}{:02X}{:02X}{:02X}{:02X}{:02X}",
+        u32::from_le_bytes([g[0], g[1], g[2], g[3]]),
+        u16::from_le_bytes([g[4], g[5]]),
+        u16::from_le_bytes([g[6], g[7]]),
+        g[8],
+        g[9],
+        g[10],
+        g[11],
+        g[12],
+        g[13],
+        g[14],
+        g[15]
+    )
+}
+
+/// Map a PE RVA to a file offset via the section table. Self-contained (re-parses the
+/// header) so debug/import walkers can share it. `None` if the RVA is 0 or unmapped.
+fn pe_rva_to_off(b: &[u8], rva: usize) -> Option<usize> {
+    if rva == 0 {
+        return None;
+    }
+    let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
+    if b.get(pe..pe + 4)? != b"PE\0\0" {
+        return None;
+    }
+    let num_sections = u16::from_le_bytes(b.get(pe + 6..pe + 8)?.try_into().ok()?) as usize;
+    let opt_size = u16::from_le_bytes(b.get(pe + 20..pe + 22)?.try_into().ok()?) as usize;
+    let opt = pe + 24;
+    let sections = opt + opt_size;
+    for i in 0..num_sections {
+        let sh = sections + i * 40;
+        let vsz = u32::from_le_bytes(b.get(sh + 8..sh + 12)?.try_into().ok()?) as usize;
+        let va = u32::from_le_bytes(b.get(sh + 12..sh + 16)?.try_into().ok()?) as usize;
+        let raw = u32::from_le_bytes(b.get(sh + 16..sh + 20)?.try_into().ok()?) as usize;
+        let ptr = u32::from_le_bytes(b.get(sh + 20..sh + 24)?.try_into().ok()?) as usize;
+        if rva >= va && rva < va + vsz.max(raw) {
+            return Some(ptr + (rva - va));
+        }
+    }
+    None
+}
+
+/// Extract the CodeView RSDS record from the exe's debug directory (data dir #6):
+/// (GUID bytes, age, pdb name). `None` if there is no CodeView entry.
+fn pe_codeview(b: &[u8]) -> Option<([u8; 16], u32, String)> {
+    let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
+    if b.get(pe..pe + 4)? != b"PE\0\0" {
+        return None;
+    }
+    let opt = pe + 24;
+    let magic = u16::from_le_bytes(b.get(opt..opt + 2)?.try_into().ok()?);
+    let datadir = opt + if magic == 0x20B { 112 } else { 96 };
+    let dbg = datadir + 6 * 8; // debug directory = data dir entry #6
+    let dbg_rva = u32::from_le_bytes(b.get(dbg..dbg + 4)?.try_into().ok()?) as usize;
+    let dbg_size = u32::from_le_bytes(b.get(dbg + 4..dbg + 8)?.try_into().ok()?) as usize;
+    let dbg_off = pe_rva_to_off(b, dbg_rva)?;
+    // Walk IMAGE_DEBUG_DIRECTORY entries (28 bytes); find Type==2 (CODEVIEW).
+    for i in 0..(dbg_size / 28) {
+        let e = dbg_off + i * 28;
+        if u32::from_le_bytes(b.get(e + 12..e + 16)?.try_into().ok()?) != 2 {
+            continue;
+        }
+        let size = u32::from_le_bytes(b.get(e + 16..e + 20)?.try_into().ok()?) as usize;
+        let ptr = u32::from_le_bytes(b.get(e + 24..e + 28)?.try_into().ok()?) as usize;
+        let cv = b.get(ptr..ptr + size)?;
+        if cv.get(0..4)? != b"RSDS" {
+            continue;
+        }
+        let mut guid = [0u8; 16];
+        guid.copy_from_slice(cv.get(4..20)?);
+        let age = u32::from_le_bytes(cv.get(20..24)?.try_into().ok()?);
+        let name = cv.get(24..)?;
+        let len = name.iter().position(|&c| c == 0).unwrap_or(name.len());
+        return Some((
+            guid,
+            age,
+            String::from_utf8_lossy(&name[..len]).into_owned(),
+        ));
+    }
+    None
+}
+
+/// Extract {GUID, age} from a PDB (MSF 7.0) info stream (stream #1). Pure byte parsing.
+fn pdb_guid_age(b: &[u8]) -> Option<([u8; 16], u32)> {
+    const MAGIC: &[u8] = b"Microsoft C/C++ MSF 7.00\r\n\x1aDS\0\0\0";
+    if b.get(0..MAGIC.len())? != MAGIC {
+        return None;
+    }
+    let at = |o: usize| -> Option<usize> {
+        Some(u32::from_le_bytes(b.get(o..o + 4)?.try_into().ok()?) as usize)
+    };
+    let block_size = at(32)?;
+    let num_dir_bytes = at(44)?;
+    let block_map = at(52)?;
+    if block_size == 0 {
+        return None;
+    }
+    let block =
+        |idx: usize| -> Option<&[u8]> { b.get(idx * block_size..idx * block_size + block_size) };
+    // Directory block indices live at the block-map block.
+    let num_dir_blocks = num_dir_bytes.div_ceil(block_size);
+    let map = block(block_map)?;
+    let mut dir = Vec::new();
+    for i in 0..num_dir_blocks {
+        let idx = u32::from_le_bytes(map.get(i * 4..i * 4 + 4)?.try_into().ok()?) as usize;
+        dir.extend_from_slice(block(idx)?);
+    }
+    dir.truncate(num_dir_bytes);
+    // Stream directory: NumStreams, sizes[NumStreams], then per-stream block lists.
+    let d = |o: usize| -> Option<usize> {
+        Some(u32::from_le_bytes(dir.get(o..o + 4)?.try_into().ok()?) as usize)
+    };
+    let num_streams = d(0)?;
+    let mut pos = 4;
+    let mut sizes = Vec::with_capacity(num_streams);
+    for _ in 0..num_streams {
+        sizes.push(d(pos)?);
+        pos += 4;
+    }
+    let mut s1_blocks = Vec::new();
+    for (s, &size) in sizes.iter().enumerate() {
+        let nblocks = if size == u32::MAX as usize {
+            0
+        } else {
+            size.div_ceil(block_size)
+        };
+        if s == 1 {
+            for i in 0..nblocks {
+                s1_blocks.push(d(pos + i * 4)?);
+            }
+        }
+        pos += nblocks * 4;
+    }
+    let s1_size = *sizes.get(1)?;
+    let mut s1 = Vec::new();
+    for &idx in &s1_blocks {
+        s1.extend_from_slice(block(idx)?);
+    }
+    s1.truncate(s1_size);
+    // PDB info stream: Version(u32), Signature(u32), Age(u32 @8), GUID(16 @12).
+    let age = u32::from_le_bytes(s1.get(8..12)?.try_into().ok()?);
+    let mut guid = [0u8; 16];
+    guid.copy_from_slice(s1.get(12..28)?);
+    Some((guid, age))
 }
