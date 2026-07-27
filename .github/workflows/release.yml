@@ -113,9 +113,14 @@ jobs:
         run: |
           New-Item -ItemType Directory dist | Out-Null
           Copy-Item app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe dist/hp-thermal.exe
+          # Debug-symbol sidecar: the linker writes hp_thermal.pdb (Rust underscores the
+          # crate name); rename to the exe basename, which is also the name embedded in the
+          # exe's debug directory (build.rs sets /PDBALTPATH from CARGO_PKG_NAME).
+          Copy-Item app/target/x86_64-pc-windows-msvc/release/hp_thermal.pdb dist/hp-thermal.pdb
           Copy-Item app/*.cdx.json dist/hp-thermal.cdx.json
           $sums = @(
             ((Get-FileHash dist/hp-thermal.exe        -Algorithm SHA256).Hash.ToLower() + "  hp-thermal.exe"),
+            ((Get-FileHash dist/hp-thermal.pdb        -Algorithm SHA256).Hash.ToLower() + "  hp-thermal.pdb"),
             ((Get-FileHash dist/hp-thermal.cdx.json   -Algorithm SHA256).Hash.ToLower() + "  hp-thermal.cdx.json")
           )
           $sums | Out-File dist/SHA256SUMS -Encoding ascii
@@ -152,7 +157,10 @@ jobs:
         id: provenance
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373  # actions/attest-build-provenance v4.1.1
         with:
-          subject-path: dist/hp-thermal.exe
+          # Both shipped binaries are provenance subjects (one attestation, two digests).
+          subject-path: |
+            dist/hp-thermal.exe
+            dist/hp-thermal.pdb
 
       # attest-sbom was folded into the general-purpose actions/attest (attest-sbom is
       # deprecated). `sbom-path` still auto-detects CycloneDX/SPDX and emits the same
@@ -182,10 +190,12 @@ jobs:
         run: |
           set -euo pipefail
           echo "::group::provenance"
-          gh attestation verify dist/hp-thermal.exe \
-            --bundle "$PROVENANCE_BUNDLE" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          for art in dist/hp-thermal.exe dist/hp-thermal.pdb; do
+            gh attestation verify "$art" \
+              --bundle "$PROVENANCE_BUNDLE" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          done
           echo "::endgroup::"
           echo "::group::sbom (cyclonedx)"
           gh attestation verify dist/hp-thermal.exe \
@@ -225,10 +235,12 @@ jobs:
             echo
             echo "    gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release.yml"
             echo
+            echo "hp-thermal.pdb is optional debug symbols (to symbolicate a crash report); not needed to run. It is hashed in SHA256SUMS and carries the same provenance attestation as the exe."
+            echo
             echo "Details in the README and SECURITY.md. Not yet Authenticode-signed."
           } > notes.md
           gh release create "${GITHUB_REF_NAME}" \
-            dist/hp-thermal.exe dist/hp-thermal.cdx.json dist/SHA256SUMS \
+            dist/hp-thermal.exe dist/hp-thermal.pdb dist/hp-thermal.cdx.json dist/SHA256SUMS \
             --repo "${GITHUB_REPOSITORY}" \
             --title "hp-thermal ${GITHUB_REF_NAME}" \
             --notes-file notes.md
