@@ -57,6 +57,13 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
+    # Digest chain: publish the shipped bytes' SHA-256 as job outputs — an OUT-OF-BAND
+    # channel (GitHub job metadata), separate from SHA256SUMS which travels inside the
+    # artifact. The verify job re-derives and asserts both, so a swap/corruption on the
+    # build->publish hop is caught (closes the transport-trusted custody seam). See #42.
+    outputs:
+      exe_sha256: ${{ steps.stage.outputs.exe_sha256 }}
+      pdb_sha256: ${{ steps.stage.outputs.pdb_sha256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
@@ -109,6 +116,7 @@ jobs:
         run: cargo cyclonedx --format json
 
       - name: Stage artifacts + SHA-256 checksums
+        id: stage
         shell: pwsh
         run: |
           New-Item -ItemType Directory dist | Out-Null
@@ -118,12 +126,21 @@ jobs:
           # exe's debug directory (build.rs sets /PDBALTPATH from CARGO_PKG_NAME).
           Copy-Item app/target/x86_64-pc-windows-msvc/release/hp_thermal.pdb dist/hp-thermal.pdb
           Copy-Item app/*.cdx.json dist/hp-thermal.cdx.json
-          $sums = @(
-            ((Get-FileHash dist/hp-thermal.exe        -Algorithm SHA256).Hash.ToLower() + "  hp-thermal.exe"),
-            ((Get-FileHash dist/hp-thermal.pdb        -Algorithm SHA256).Hash.ToLower() + "  hp-thermal.pdb"),
-            ((Get-FileHash dist/hp-thermal.cdx.json   -Algorithm SHA256).Hash.ToLower() + "  hp-thermal.cdx.json")
-          )
-          $sums | Out-File dist/SHA256SUMS -Encoding ascii
+          $exe = (Get-FileHash dist/hp-thermal.exe      -Algorithm SHA256).Hash.ToLower()
+          $pdb = (Get-FileHash dist/hp-thermal.pdb      -Algorithm SHA256).Hash.ToLower()
+          $cdx = (Get-FileHash dist/hp-thermal.cdx.json -Algorithm SHA256).Hash.ToLower()
+          @("$exe  hp-thermal.exe", "$pdb  hp-thermal.pdb", "$cdx  hp-thermal.cdx.json") |
+            Out-File dist/SHA256SUMS -Encoding ascii
+          # Out-of-band digests for the verify job (job metadata, not inside the artifact).
+          "exe_sha256=$exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+          "pdb_sha256=$pdb" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+
+      # Validate the EXACT staged bytes that will ship (post-copy, pre-upload): import
+      # allowlist, high-risk-API scan, mitigation flags, and the exe<->pdb GUID bind. The
+      # build tier already ran verify-artifact on the target/ exe; re-checking the dist/
+      # copy means a corrupted copy cannot slip through. See #41 / #42.
+      - name: Verify staged artifact
+        run: cargo run --manifest-path xtask/Cargo.toml -- verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
@@ -132,12 +149,45 @@ jobs:
           path: dist/
           if-no-files-found: error
 
+  # --- Digest chain (#42): re-download the artifact in a FRESH job and prove it is
+  #     byte-identical to what build produced+verified, via TWO independent channels — the
+  #     out-of-band job outputs (GitHub metadata) AND the in-artifact SHA256SUMS manifest.
+  #     A swap/corruption on the build->publish hop mismatches at least one and fails here,
+  #     BEFORE publish. Pure hashing: no toolchain, no secrets.
+  verify:
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # actions/download-artifact v8.0.1
+        with:
+          name: dist
+          path: dist
+      # Digests bound via env (not inlined as ${{ }} in the script) so zizmor's
+      # template-injection audit stays clean.
+      - name: Re-verify staged digests (out-of-band + manifest)
+        shell: pwsh
+        env:
+          EXPECT_EXE: ${{ needs.build.outputs.exe_sha256 }}
+          EXPECT_PDB: ${{ needs.build.outputs.pdb_sha256 }}
+        run: |
+          $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
+          $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
+          if ($exe -ne $env:EXPECT_EXE) { throw "exe digest mismatch vs build output" }
+          if ($pdb -ne $env:EXPECT_PDB) { throw "pdb digest mismatch vs build output" }
+          $sums = Get-Content dist/SHA256SUMS
+          if ($sums -notcontains "$exe  hp-thermal.exe") { throw "exe not in SHA256SUMS" }
+          if ($sums -notcontains "$pdb  hp-thermal.pdb") { throw "pdb not in SHA256SUMS" }
+          Write-Output "digest chain OK: published bytes are byte-identical to build-verified bytes"
+
   # --- Attest + publish. Minimal elevation, no third-party actions / tool builds here.
   #     Attestations run on BOTH a real tag AND a manual workflow_dispatch, so the whole
   #     pipeline is dry-runnable. Only the GitHub Release *publish* step is gated, behind
   #     TWO conditions (v* tag AND dry_run != true) -- see that step's comment.
   publish:
-    needs: build
+    needs: verify
     runs-on: windows-latest
     permissions:
       contents: write        # create the Release + upload assets
