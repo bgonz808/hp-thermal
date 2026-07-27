@@ -11,12 +11,13 @@ use windows::Win32::System::LibraryLoader::{
 };
 use windows::Win32::System::SystemServices::{
     PROCESS_MITIGATION_BINARY_SIGNATURE_POLICY, PROCESS_MITIGATION_CHILD_PROCESS_POLICY,
-    PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY, PROCESS_MITIGATION_IMAGE_LOAD_POLICY,
-    PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY,
+    PROCESS_MITIGATION_DYNAMIC_CODE_POLICY, PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY,
+    PROCESS_MITIGATION_IMAGE_LOAD_POLICY, PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY,
 };
 use windows::Win32::System::Threading::{
-    ProcessChildProcessPolicy, ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy,
-    ProcessSignaturePolicy, ProcessSystemCallDisablePolicy, SetProcessMitigationPolicy,
+    ProcessChildProcessPolicy, ProcessDynamicCodePolicy, ProcessExtensionPointDisablePolicy,
+    ProcessImageLoadPolicy, ProcessSignaturePolicy, ProcessSystemCallDisablePolicy,
+    SetProcessMitigationPolicy,
 };
 
 // Policy `Flags` bit masks. The `windows` crate exposes these bitfields only as a
@@ -32,6 +33,9 @@ const IMAGE_LOAD_HARDENING: u32 = 0b111;
 const NO_CHILD_PROCESS: u32 = 0x1;
 // PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY: DisallowWin32kSystemCalls = bit 0.
 const DISALLOW_WIN32K: u32 = 0x1;
+// PROCESS_MITIGATION_DYNAMIC_CODE_POLICY: ProhibitDynamicCode = bit 0 (enforce),
+// AuditProhibitDynamicCode = bit 3 (log to Microsoft-Windows-Security-Mitigations, no kill).
+const AUDIT_PROHIBIT_DYNAMIC_CODE: u32 = 0x8;
 
 /// Apply process mitigation policies. Best-effort: failures are non-fatal (older
 /// Windows may not support a given policy), so a failure just means that one
@@ -40,9 +44,10 @@ pub fn apply() {
     restrict_dll_search();
     restrict_image_loads();
     disable_extension_points();
-    // ProcessDynamicCodePolicy (ProhibitDynamicCode) — the strongest anti-shellcode
-    // mitigation — is deferred: it can break in-process code generators, and this
-    // process hosts COM/WMI (service) and WASAPI/COM (tray). See #24.
+    // ProcessDynamicCodePolicy is NOT applied globally: it can break in-process code
+    // generators, and this process hosts COM/WMI (service) and WASAPI/COM (tray). It is
+    // applied to the `--service` role in AUDIT mode (audit_dynamic_code, #24); enforcement
+    // (ProhibitDynamicCode) follows once a live audit run is confirmed clean.
 }
 
 /// Restrict runtime `LoadLibrary` (calls without their own search flags) to
@@ -145,6 +150,30 @@ pub fn disallow_win32k_syscalls() {
             ProcessSystemCallDisablePolicy,
             std::ptr::addr_of!(policy) as *const std::ffi::c_void,
             std::mem::size_of::<PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY>(),
+        );
+    }
+}
+
+/// AUDIT (do NOT yet enforce) ProcessDynamicCodePolicy on the `--service` role. Setting
+/// AuditProhibitDynamicCode logs — to the Microsoft-Windows-Security-Mitigations channel —
+/// every operation ProhibitDynamicCode WOULD block (allocating/modifying executable memory,
+/// mapping an image writable+executable) WITHOUT terminating the process. ProhibitDynamicCode
+/// is the strongest anti-shellcode mitigation (CWE-94: blocks JIT-style code injection), but
+/// it can break in-process code generators and the service hosts COM/WMI, so audit-first lets
+/// us confirm a clean run (WMI read/write + event sink + pipe) before flipping bit 0 to
+/// enforce. Applied to the service ONLY (the tray hosts WASAPI/COM). Best-effort — ignored on
+/// older Windows. #24.
+/// https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_dynamic_code_policy
+pub fn audit_dynamic_code() {
+    // SAFETY: `policy` is a zeroed struct; we set AuditProhibitDynamicCode (bit 3) via the
+    // Flags union member and pass its exact size. Ignored on failure.
+    unsafe {
+        let mut policy = PROCESS_MITIGATION_DYNAMIC_CODE_POLICY::default();
+        policy.Anonymous.Flags = AUDIT_PROHIBIT_DYNAMIC_CODE;
+        let _ = SetProcessMitigationPolicy(
+            ProcessDynamicCodePolicy,
+            std::ptr::addr_of!(policy) as *const std::ffi::c_void,
+            std::mem::size_of::<PROCESS_MITIGATION_DYNAMIC_CODE_POLICY>(),
         );
     }
 }
