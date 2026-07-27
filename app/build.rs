@@ -43,6 +43,17 @@ fn main() {
     let build_date = format!("{y:04}{mo:02}{d:02}.{hh:02}{mm:02}{ss:02}");
     println!("cargo:rustc-env=BUILD_DATE={build_date}");
 
+    // --- PDB sidecar basename ---
+    // The MSVC linker names the PDB after the crate (hp_thermal.pdb); embed the
+    // package basename instead (hp-thermal.pdb) so the shipped exe and pdb basenames
+    // agree. Derived from CARGO_PKG_NAME — no duplicated literal. /PDBALTPATH also
+    // strips the absolute build path from the exe's debug directory (path hygiene +
+    // reproducibility). https://learn.microsoft.com/cpp/build/reference/pdbaltpath
+    println!(
+        "cargo:rustc-link-arg-bins=/PDBALTPATH:{}.pdb",
+        env("CARGO_PKG_NAME")
+    );
+
     // --- Parse version from Cargo.toml ---
     let version = env("CARGO_PKG_VERSION");
     let parts: Vec<&str> = version.split('.').collect();

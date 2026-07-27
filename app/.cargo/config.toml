@@ -30,6 +30,14 @@ rustflags = [
     # https://learn.microsoft.com/cpp/build/reference/dependentloadflag
     "-C",
     "link-arg=/DEPENDENTLOADFLAG:0x800",
+    # NOTE: /PDBALTPATH is set in build.rs (derived from CARGO_PKG_NAME, not hardcoded
+    # here) so the embedded pdb name matches the exe basename. See build.rs.
+    # Deterministic link: content-hash the PE timestamp AND the PDB signature (GUID)
+    # instead of using random/time values. Without this a PDB gives the exe a fresh
+    # random debug-directory GUID every link, breaking byte-for-byte reproducibility
+    # ("same tag -> same bytes"). https://learn.microsoft.com/cpp/build/reference/brepro
+    "-C",
+    "link-arg=/Brepro",
 ]
 
 [unstable]
