@@ -73,6 +73,29 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     }
     log::write("footing verified: install dir + write-restricted image + privileged");
 
+    // #2: enforce the least-privilege token at runtime — a backstop to the DECLARATIVE
+    // SERVICE_REQUIRED_PRIVILEGES (#39). Remove anything beyond the intended set, then assert
+    // none survive. Normal case: the SCM already applied the required-privileges set, so this
+    // removes 0. A non-zero `extras` means the token could not be reduced to the intended set
+    // (a broken/tampered install running over-privileged) — refuse, consistent with the
+    // fail-closed footing checks above.
+    {
+        let keep = [
+            w!("SeChangeNotifyPrivilege"),
+            w!("SeCreateGlobalPrivilege"),
+            w!("SeImpersonatePrivilege"),
+        ];
+        let (removed, extras) = crate::mitigations::strip_token_privileges_except(&keep);
+        log::write(&format!(
+            "token self-assert: removed {removed} extra privilege(s), {extras} beyond-set remain"
+        ));
+        if extras > 0 {
+            log::write("REFUSING: token retains privileges beyond the least-privilege set");
+            set_status(SERVICE_STOPPED, 7);
+            return;
+        }
+    }
+
     let Ok(event) = CreateEventW(None, true, false, None) else {
         log::write("FAIL: CreateEventW");
         set_status(SERVICE_STOPPED, 1);

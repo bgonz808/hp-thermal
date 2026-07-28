@@ -6,6 +6,11 @@
 //! integrity level + Program Files ACL), and the pipe's bounded command set caps
 //! the impact regardless. See SECURITY.md.
 
+use windows::Win32::Foundation::{CloseHandle, HANDLE, LUID};
+use windows::Win32::Security::{
+    AdjustTokenPrivileges, GetTokenInformation, LUID_AND_ATTRIBUTES, LookupPrivilegeValueW,
+    SE_PRIVILEGE_REMOVED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY, TokenPrivileges,
+};
 use windows::Win32::System::Diagnostics::Debug::{EXCEPTION_POINTERS, SetUnhandledExceptionFilter};
 use windows::Win32::System::LibraryLoader::{
     LOAD_LIBRARY_SEARCH_SYSTEM32, SetDefaultDllDirectories,
@@ -16,10 +21,11 @@ use windows::Win32::System::SystemServices::{
     PROCESS_MITIGATION_IMAGE_LOAD_POLICY, PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY,
 };
 use windows::Win32::System::Threading::{
-    GetCurrentProcess, ProcessChildProcessPolicy, ProcessDynamicCodePolicy,
+    GetCurrentProcess, OpenProcessToken, ProcessChildProcessPolicy, ProcessDynamicCodePolicy,
     ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy, ProcessSignaturePolicy,
     ProcessSystemCallDisablePolicy, SetProcessMitigationPolicy, TerminateProcess,
 };
+use windows::core::PCWSTR;
 
 // Policy `Flags` bit masks. The `windows` crate exposes these bitfields only as a
 // raw `Flags: u32`, so we set the documented winnt.h bits directly. Bit positions
@@ -221,5 +227,107 @@ fn disable_extension_points() {
             std::ptr::addr_of!(policy) as *const std::ffi::c_void,
             std::mem::size_of::<PROCESS_MITIGATION_EXTENSION_POINT_DISABLE_POLICY>(),
         );
+    }
+}
+
+/// Read the LUIDs of every privilege currently in `token`. Empty on any failure.
+///
+/// # Safety
+/// `token` must be a valid access-token handle opened with `TOKEN_QUERY`.
+unsafe fn token_privilege_luids(token: HANDLE) -> Vec<LUID> {
+    // Two-call size-then-fill of the variable-length TOKEN_PRIVILEGES.
+    let mut len = 0u32;
+    // SAFETY: sizing call — a null buffer is expected to "fail" while setting `len`.
+    let _ = unsafe { GetTokenInformation(token, TokenPrivileges, None, 0, &mut len) };
+    if len == 0 {
+        return Vec::new();
+    }
+    let mut buf = vec![0u8; len as usize];
+    // SAFETY: `buf` is `len` bytes; on success it holds a TOKEN_PRIVILEGES header + array.
+    if unsafe {
+        GetTokenInformation(
+            token,
+            TokenPrivileges,
+            Some(buf.as_mut_ptr() as *mut _),
+            len,
+            &mut len,
+        )
+    }
+    .is_err()
+    {
+        return Vec::new();
+    }
+    // SAFETY: the buffer starts with a TOKEN_PRIVILEGES whose `PrivilegeCount` bounds the
+    // trailing LUID_AND_ATTRIBUTES array (typed `[_; 1]` by the crate) within `buf`.
+    unsafe {
+        let header = &*(buf.as_ptr() as *const TOKEN_PRIVILEGES);
+        let count = header.PrivilegeCount as usize;
+        std::slice::from_raw_parts(header.Privileges.as_ptr(), count)
+            .iter()
+            .map(|p| p.Luid)
+            .collect()
+    }
+}
+
+/// Permanently REMOVE (`SE_PRIVILEGE_REMOVED`) every privilege in THIS process's token whose
+/// name is not in `keep`. Returns `(removed, extras_remaining)` — `extras_remaining` counts
+/// non-kept privileges still present afterward (should be 0; a non-zero value is an anomaly a
+/// caller may fail-closed on). This is the runtime, in-code counterpart to the service's
+/// declarative `SERVICE_REQUIRED_PRIVILEGES` (#39) — and the same enforcement for the tray —
+/// so a token is right-sized to exactly what its role needs regardless of install config.
+/// Best-effort: it resolves/removes each privilege independently and never panics.
+pub fn strip_token_privileges_except(keep: &[PCWSTR]) -> (u32, u32) {
+    // SAFETY: standard OpenProcessToken -> enumerate -> AdjustTokenPrivileges on our own token;
+    // the handle is closed before every return and each FFI arg is an owned local / checked ptr.
+    unsafe {
+        let mut token = HANDLE::default();
+        if OpenProcessToken(
+            GetCurrentProcess(),
+            TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES,
+            &mut token,
+        )
+        .is_err()
+        {
+            return (0, 0);
+        }
+
+        // Resolve the LUIDs we KEEP.
+        let mut keep_luids: Vec<LUID> = Vec::with_capacity(keep.len());
+        for name in keep {
+            let mut luid = LUID::default();
+            if LookupPrivilegeValueW(None, *name, &mut luid).is_ok() {
+                keep_luids.push(luid);
+            }
+        }
+        let is_kept = |l: &LUID| {
+            keep_luids
+                .iter()
+                .any(|k| k.LowPart == l.LowPart && k.HighPart == l.HighPart)
+        };
+
+        let mut removed = 0u32;
+        for luid in token_privilege_luids(token) {
+            if is_kept(&luid) {
+                continue;
+            }
+            let adj = TOKEN_PRIVILEGES {
+                PrivilegeCount: 1,
+                Privileges: [LUID_AND_ATTRIBUTES {
+                    Luid: luid,
+                    Attributes: SE_PRIVILEGE_REMOVED,
+                }],
+            };
+            if AdjustTokenPrivileges(token, false, Some(&adj as *const _), 0, None, None).is_ok() {
+                removed += 1;
+            }
+        }
+
+        // Authoritative recount: how many non-kept privileges survived the strip.
+        let extras = token_privilege_luids(token)
+            .iter()
+            .filter(|l| !is_kept(l))
+            .count() as u32;
+        let _ = CloseHandle(token);
+        (removed, extras)
     }
 }

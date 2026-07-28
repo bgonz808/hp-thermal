@@ -1431,99 +1431,22 @@ unsafe extern "system" fn black_wnd_proc(
     }
 }
 
-/// Enable SE_SHUTDOWN_NAME privilege (required by SetSuspendState).
-/// Harmless no-op if already enabled (the default for interactive users).
-/// Right-size the tray's own token: permanently REMOVE every privilege the tray never uses,
-/// keeping only SeChangeNotify (path traversal / normal file access) and SeShutdown (Fn+F12
-/// sleep, enabled on demand by `enable_shutdown_privilege`). `SE_PRIVILEGE_REMOVED` is
-/// irreversible for the process lifetime — that's the point: injected code can't re-add what
-/// the token no longer holds. Enumerate-and-remove (not a hardcoded list) so it adapts to
-/// whatever the user's token carries. Best-effort: on any failure the tray still runs, it just
-/// keeps a privilege it doesn't use. Symmetric to the service-token strip (#39/#66).
-unsafe fn strip_unneeded_privileges() {
-    use windows::Win32::Foundation::LUID;
-    use windows::Win32::Security::*;
-    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
-
-    let mut token = windows::Win32::Foundation::HANDLE::default();
-    if OpenProcessToken(
-        GetCurrentProcess(),
-        TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES,
-        &mut token,
-    )
-    .is_err()
-    {
-        return;
-    }
-
-    // Resolve the LUIDs we KEEP. If either can't be resolved, do nothing rather than risk
-    // removing a privilege the tray needs.
-    let mut keep = [LUID::default(); 2];
-    let mut resolved = true;
-    for (slot, name) in keep
-        .iter_mut()
-        .zip([w!("SeChangeNotifyPrivilege"), w!("SeShutdownPrivilege")])
-    {
-        resolved &= LookupPrivilegeValueW(None, name, slot).is_ok();
-    }
-    if !resolved {
-        let _ = CloseHandle(token);
-        return;
-    }
-
-    // Enumerate the token's current privileges (size, then fill).
-    let mut len = 0u32;
-    let _ = GetTokenInformation(token, TokenPrivileges, None, 0, &mut len);
-    if len == 0 {
-        let _ = CloseHandle(token);
-        return;
-    }
-    let mut buf = vec![0u8; len as usize];
-    if GetTokenInformation(
-        token,
-        TokenPrivileges,
-        Some(buf.as_mut_ptr() as *mut _),
-        len,
-        &mut len,
-    )
-    .is_err()
-    {
-        let _ = CloseHandle(token);
-        return;
-    }
-
-    // TOKEN_PRIVILEGES is a count followed by a variable-length LUID_AND_ATTRIBUTES array;
-    // the crate types the array as `[_; 1]`, so read `count` entries from the filled buffer.
-    let header = &*(buf.as_ptr() as *const TOKEN_PRIVILEGES);
-    let count = header.PrivilegeCount as usize;
-    let privs = std::slice::from_raw_parts(header.Privileges.as_ptr(), count);
-
-    let mut removed = 0u32;
-    for p in privs {
-        let luid = p.Luid;
-        let kept = keep
-            .iter()
-            .any(|k| k.LowPart == luid.LowPart && k.HighPart == luid.HighPart);
-        if kept {
-            continue;
-        }
-        let adj = TOKEN_PRIVILEGES {
-            PrivilegeCount: 1,
-            Privileges: [LUID_AND_ATTRIBUTES {
-                Luid: luid,
-                Attributes: SE_PRIVILEGE_REMOVED,
-            }],
-        };
-        if AdjustTokenPrivileges(token, false, Some(&adj as *const _), 0, None, None).is_ok() {
-            removed += 1;
-        }
-    }
+/// Right-size the tray's own token: permanently drop every privilege the tray never uses,
+/// keeping only SeChangeNotify (path traversal / file access) and SeShutdown (Fn+F12 sleep,
+/// enabled on demand by `enable_shutdown_privilege`). Delegates to the shared, SSoT enforcement
+/// in `mitigations` — the same helper the service uses (#2).
+fn strip_unneeded_privileges() {
+    let (removed, _extras) = crate::mitigations::strip_token_privileges_except(&[
+        w!("SeChangeNotifyPrivilege"),
+        w!("SeShutdownPrivilege"),
+    ]);
     crate::log::write(&format!(
         "tray: token right-sized ({removed} unused privilege(s) removed)"
     ));
-    let _ = CloseHandle(token);
 }
 
+/// Enable SE_SHUTDOWN_NAME privilege (required by SetSuspendState).
+/// Harmless no-op if already enabled (the default for interactive users).
 unsafe fn enable_shutdown_privilege() {
     use windows::Win32::Security::*;
     use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
