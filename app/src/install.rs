@@ -972,6 +972,8 @@ pub fn install_service(choices: Choices) {
 
     // #39: drop the service token to least privilege before it first starts.
     set_required_privileges();
+    // #4: add the per-service SID (NT SERVICE\HpThermalService) to the token for DACL scoping.
+    set_service_sid_type();
     // #38: opt the installed exe out of WER — no crash dump egress (all crash paths).
     exclude_from_wer();
 
@@ -1043,6 +1045,41 @@ fn set_required_privileges() {
             let _ = ChangeServiceConfig2W(
                 svc,
                 SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO,
+                Some(&info as *const _ as *const std::ffi::c_void),
+            );
+            let _ = CloseServiceHandle(svc);
+        }
+        let _ = CloseServiceHandle(scm);
+    }
+}
+
+/// #4: give the service its own per-service SID (`NT SERVICE\HpThermalService`). Sets
+/// `SERVICE_SID_TYPE_UNRESTRICTED` via `ChangeServiceConfig2W`, which adds the name-derived,
+/// upgrade-stable service SID to the process token at the next start. UNRESTRICTED (not
+/// RESTRICTED) so it only ADDS the SID for use in DACLs — it does NOT yet write-restrict the
+/// token (that is the C5 endgame). Foundational: lets us later scope the pipe / data-dir /
+/// event DACLs to *this* service rather than to any SYSTEM process. Effective at the next
+/// start; needs SERVICE_CHANGE_CONFIG (elevated install/update child). Idempotent.
+/// https://learn.microsoft.com/windows/win32/api/winsvc/ns-winsvc-service_sid_info
+fn set_service_sid_type() {
+    use windows::Win32::System::Services::{
+        ChangeServiceConfig2W, SERVICE_CHANGE_CONFIG, SERVICE_CONFIG_SERVICE_SID_INFO,
+        SERVICE_SID_INFO, SERVICE_SID_TYPE_UNRESTRICTED,
+    };
+    // SAFETY: standard SCM open -> ChangeServiceConfig2W with a stack-allocated SERVICE_SID_INFO
+    // that outlives the call; both service handles are closed before return.
+    unsafe {
+        let Ok(scm) = OpenSCManagerW(None, None, SC_MANAGER_CONNECT) else {
+            return;
+        };
+        let name = wide_null(app::SERVICE_NAME);
+        if let Ok(svc) = OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_CHANGE_CONFIG) {
+            let info = SERVICE_SID_INFO {
+                dwServiceSidType: SERVICE_SID_TYPE_UNRESTRICTED,
+            };
+            let _ = ChangeServiceConfig2W(
+                svc,
+                SERVICE_CONFIG_SERVICE_SID_INFO,
                 Some(&info as *const _ as *const std::ffi::c_void),
             );
             let _ = CloseServiceHandle(svc);
@@ -1135,7 +1172,9 @@ pub fn update_service() {
     // #39: (re)apply least-privilege on update — covers installs created before #39 and
     // refreshes if the set ever changes. Takes effect at the restart below.
     set_required_privileges();
-    log.write("required privileges set");
+    // #4: (re)apply the per-service SID type — covers installs created before #4.
+    set_service_sid_type();
+    log.write("required privileges + service SID set");
     // #38: (re)apply the WER exclusion on update — covers installs created before #38.
     exclude_from_wer();
 
