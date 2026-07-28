@@ -483,6 +483,22 @@ mod tests {
     }
 
     #[test]
+    fn wire_envelope_is_frozen() {
+        // Cross-version safety rests on this envelope NEVER changing: a 4-byte request with a
+        // 2-byte magic prefix (and a 2-byte response, enforced by write2/read2's types). All
+        // versioning lives in command codes + BUILD_FINGERPRINT, not frame shape — an old and
+        // a new build can only interoperate safely if the envelope never drifts. If this test
+        // fails you are breaking cross-version compatibility; add a protocol-version handshake
+        // (negotiate/refuse) BEFORE changing the wire.
+        assert_eq!(
+            build_request_frame(0, 0).len(),
+            4,
+            "request frame is 4 bytes"
+        );
+        assert_eq!(PIPE_MAGIC.len(), 2, "magic prefix is 2 bytes");
+    }
+
+    #[test]
     fn parse_accepts_correct_magic_and_extracts_command_payload() {
         let frame = [PIPE_MAGIC[0], PIPE_MAGIC[1], 0x07, 0x2A];
         assert_eq!(parse_request_frame(frame), Some([0x07, 0x2A]));

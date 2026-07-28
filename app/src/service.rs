@@ -301,6 +301,27 @@ fn dispatch<W: ThermalOps>(wmi: &W, cache: &mut CacheSet, req: &Request) -> [u8;
             cache.coolsense = None;
             set_result(wmi.set_coolsense(req.payload))
         }
+        CMD_READ_STATE => {
+            // #69: thermal + coolsense in ONE response. Each still honors its own
+            // cache/cooldown; both must succeed. The cached bit is set only when BOTH
+            // reads were served from cache (informational; status_ok ignores it).
+            let t = CacheSet::cached_read(&mut cache.thermal, COOLDOWN_THERMAL_MS, || {
+                read_result(wmi.read_thermal())
+            });
+            let c = CacheSet::cached_read(&mut cache.coolsense, COOLDOWN_COOLSENSE_MS, || {
+                read_result(wmi.read_coolsense())
+            });
+            if status_ok(t[0]) && status_ok(c[0]) {
+                [
+                    STATUS_OK | (t[0] & c[0] & STATUS_CACHED),
+                    pack_state(t[1], c[1]),
+                ]
+            } else if !status_ok(t[0]) {
+                [t[0], 0]
+            } else {
+                [c[0], 0]
+            }
+        }
         CMD_READ_TEMP => CacheSet::cached_read(&mut cache.temp, COOLDOWN_TEMP_MS, || {
             read_result(wmi.read_temp())
         }),
@@ -327,6 +348,7 @@ fn dispatch<W: ThermalOps>(wmi: &W, cache: &mut CacheSet, req: &Request) -> [u8;
         CMD_SET_THERMAL => "svc:set_thermal",
         CMD_READ_COOLSENSE => "svc:read_coolsense",
         CMD_SET_COOLSENSE => "svc:set_coolsense",
+        CMD_READ_STATE => "svc:read_state",
         _ => "svc:other",
     };
     log::stack_sample(label);
@@ -514,6 +536,33 @@ mod tests {
             wmi.read_thermal_calls.get(),
             1,
             "cache must suppress the second WMI read"
+        );
+    }
+
+    #[test]
+    fn read_state_batches_thermal_and_coolsense() {
+        let wmi = MockWmi::default();
+        wmi.thermal.set(2);
+        wmi.coolsense.set(1);
+        let mut cache = CacheSet::new();
+
+        let r = dispatch(&wmi, &mut cache, &req(CMD_READ_STATE, 0));
+        assert!(status_ok(r[0]), "batched read should succeed");
+        assert_eq!(unpack_state(r[1]), (2, 1), "packed thermal=2, coolsense=1");
+        // One WMI read of each, combined into a single response.
+        assert_eq!(wmi.read_thermal_calls.get(), 1);
+        assert_eq!(wmi.read_coolsense_calls.get(), 1);
+    }
+
+    #[test]
+    fn read_state_propagates_wmi_error() {
+        let wmi = MockWmi::default();
+        wmi.fail.set(true); // read_thermal fails
+        let mut cache = CacheSet::new();
+        assert_eq!(
+            dispatch(&wmi, &mut cache, &req(CMD_READ_STATE, 0)),
+            [STATUS_WMI_ERROR, 0],
+            "a failed sub-read propagates as an error, not a partial packed value",
         );
     }
 

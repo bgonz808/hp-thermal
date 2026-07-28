@@ -17,6 +17,10 @@ pub const CMD_SET_STACK_MONITOR: u8 = 0x07;
 pub const CMD_READ_TEMP: u8 = 0x08;
 pub const CMD_READ_BRIGHTNESS: u8 = 0x09;
 pub const CMD_SET_BRIGHTNESS: u8 = 0x0A;
+/// Batched read (#69): thermal mode + coolsense in ONE round trip. The response `result`
+/// byte is [`pack_state`]-encoded (bits 0-1 = mode, bit 2 = coolsense). Halves the tray's
+/// cache-warm cost (one pipe connect + WMI round trip instead of two).
+pub const CMD_READ_STATE: u8 = 0x0B;
 
 /// Compile-time fingerprint of the build. Both tray and service are compiled
 /// from the same source, so this value matches when they're the same build.
@@ -48,6 +52,18 @@ pub fn status_ok(s: u8) -> bool {
     s & !STATUS_CACHED == STATUS_OK
 }
 
+/// Pack thermal mode (0-3) + coolsense (0/1) into one CMD_READ_STATE response byte:
+/// bits 0-1 = mode, bit 2 = coolsense. Out-of-range inputs are masked, never smuggled.
+/// Shared by both sides so the wire layout can't drift.
+pub fn pack_state(thermal: u8, coolsense: u8) -> u8 {
+    (thermal & 0x03) | ((coolsense & 0x01) << 2)
+}
+
+/// Inverse of [`pack_state`]: returns (thermal 0-3, coolsense 0/1).
+pub fn unpack_state(b: u8) -> (u8, u8) {
+    (b & 0x03, (b >> 2) & 0x01)
+}
+
 pub struct Request {
     pub command: u8,
     pub payload: u8,
@@ -70,7 +86,7 @@ impl TryFrom<[u8; 2]> for Request {
             // Read commands ignore the payload byte — normalized to 0 so a client
             // can't smuggle state through an unused field.
             CMD_READ_THERMAL | CMD_READ_COOLSENSE | CMD_READ_BUILD_ID | CMD_READ_TEMP
-            | CMD_READ_BRIGHTNESS => 0,
+            | CMD_READ_BRIGHTNESS | CMD_READ_STATE => 0,
             // Set commands validate the payload against a per-command maximum.
             CMD_SET_THERMAL => validated(buf[1], 3)?,
             CMD_SET_COOLSENSE | CMD_SET_LOGGING | CMD_SET_STACK_MONITOR => validated(buf[1], 1)?,
@@ -102,6 +118,7 @@ mod tests {
             CMD_READ_BUILD_ID,
             CMD_READ_TEMP,
             CMD_READ_BRIGHTNESS,
+            CMD_READ_STATE,
         ] {
             let req = parse(cmd, 0xFF).expect("read command should parse");
             assert_eq!(req.command, cmd);
@@ -154,8 +171,8 @@ mod tests {
 
     #[test]
     fn unknown_commands_are_rejected() {
-        // 0x00 (below range), 0x0B (just past the table), and high bytes.
-        for cmd in [0x00u8, 0x0B, 0x40, 0x7F, 0xFF] {
+        // 0x00 (below range), 0x0C (just past the table), and high bytes.
+        for cmd in [0x00u8, 0x0C, 0x40, 0x7F, 0xFF] {
             assert_eq!(
                 parse(cmd, 0).err(),
                 Some(STATUS_INVALID_CMD),
@@ -173,6 +190,18 @@ mod tests {
         assert!(!status_ok(STATUS_WMI_ERROR));
         // A cached *error* is still an error — the cached bit must not mask it.
         assert!(!status_ok(STATUS_WMI_ERROR | STATUS_CACHED));
+    }
+
+    #[test]
+    fn state_pack_unpack_roundtrips() {
+        for t in 0..=3u8 {
+            for c in 0..=1u8 {
+                assert_eq!(unpack_state(pack_state(t, c)), (t, c));
+            }
+        }
+        // Out-of-range inputs are masked to the valid ranges, never smuggled through.
+        assert_eq!(unpack_state(pack_state(0xFF, 0xFF)), (3, 1));
+        assert_eq!(unpack_state(pack_state(0, 0)), (0, 0));
     }
 
     #[test]
