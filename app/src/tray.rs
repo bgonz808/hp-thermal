@@ -453,17 +453,16 @@ fn maybe_warm() {
         return; // another trigger won the race; let it do the read
     }
     std::thread::spawn(|| {
-        // 0xFF = unknown (service down / slow / bad status).
-        let thermal = pipe::client_transact(CMD_READ_THERMAL, 0)
-            .and_then(|r| if status_ok(r[0]) { Some(r[1]) } else { None })
-            .unwrap_or(0xFF);
-        let coolsense = match pipe::client_transact(CMD_READ_COOLSENSE, 0) {
-            Some(r) if status_ok(r[0]) => (r[1] != 0) as u8,
-            _ => 0xFF,
+        // #69: one batched read (thermal + coolsense) instead of two round trips. 0xFF =
+        // unknown (service down / slow / bad status).
+        let (thermal, coolsense) = match pipe::client_transact(CMD_READ_STATE, 0) {
+            Some(r) if status_ok(r[0]) => unpack_state(r[1]),
+            _ => (0xFF, 0xFF),
         };
         CACHED_THERMAL.store(thermal, Ordering::Release);
         CACHED_COOLSENSE.store(coolsense, Ordering::Release);
-        // SAFETY: as above. Stamp even on unknowns so a down service is throttled, not hammered.
+        // SAFETY: GetTickCount64 has no preconditions. Stamp even on unknowns so a down
+        // service is throttled, not hammered.
         CACHE_STAMP.store(unsafe { GetTickCount64() }, Ordering::Release);
         WARM_IN_FLIGHT.store(false, Ordering::Release);
     });
@@ -1009,15 +1008,21 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
 }
 
 unsafe fn update_tooltip(hwnd: HWND) {
-    let thermal = pipe::client_transact(CMD_READ_THERMAL, 0);
-    let cs = pipe::client_transact(CMD_READ_COOLSENSE, 0);
-
-    let mode = match (cs, thermal) {
-        (Some([s, 1]), _) if status_ok(s) => "Smart Sense",
-        (_, Some([s, 0])) if status_ok(s) => "Performance",
-        (_, Some([s, 1])) if status_ok(s) => "Balanced",
-        (_, Some([s, 2])) if status_ok(s) => "Cool",
-        (_, Some([s, 3])) if status_ok(s) => "Power Saver",
+    // #69: one batched read (thermal + coolsense) instead of two round trips.
+    let mode = match pipe::client_transact(CMD_READ_STATE, 0) {
+        Some([s, r]) if status_ok(s) => {
+            let (t, c) = unpack_state(r);
+            if c == 1 {
+                "Smart Sense"
+            } else {
+                match t {
+                    0 => "Performance",
+                    1 => "Balanced",
+                    2 => "Cool",
+                    _ => "Power Saver", // unpack_state masks t to 0-3
+                }
+            }
+        }
         _ => "(unavailable)",
     };
     let label = format!("{}: {mode}", app::NAME);
