@@ -880,6 +880,7 @@ pub fn uninstall() {
     remove_uninstall_entry();
     remove_start_menu_shortcut();
     remove_desktop_shortcut();
+    unexclude_from_wer(); // #38: leave no WER exclusion behind
 
     // Close tray instances gracefully, then wait/force — native, no taskkill.
     close_tray_windows();
@@ -971,6 +972,8 @@ pub fn install_service(choices: Choices) {
 
     // #39: drop the service token to least privilege before it first starts.
     set_required_privileges();
+    // #38: opt the installed exe out of WER — no crash dump egress (all crash paths).
+    exclude_from_wer();
 
     start_service();
     write_uninstall_entry(); // required — the Settings > Apps entry, always written
@@ -1048,6 +1051,31 @@ fn set_required_privileges() {
     }
 }
 
+/// #38 no-egress: exclude the installed exe from Windows Error Reporting entirely, so
+/// WerFault.exe never collects/uploads a crash dump — covering the `__fastfail` paths
+/// (stack-cookie / CFG) that the top-level exception filter cannot intercept. Writes HKLM
+/// (all users), so it must run elevated. Removed by unexclude_from_wer() on uninstall.
+/// Idempotent. https://learn.microsoft.com/windows/win32/api/werapi/nf-werapi-weraddexcludedapplication
+fn exclude_from_wer() {
+    use windows::Win32::System::ErrorReporting::WerAddExcludedApplication;
+    let name = wide_null(app::EXE_NAME);
+    // SAFETY: `name` is a null-terminated wide string outliving the call. `true` = all users
+    // (HKLM), which needs admin — this runs only from the elevated install/update child.
+    unsafe {
+        let _ = WerAddExcludedApplication(PCWSTR(name.as_ptr()), true);
+    }
+}
+
+/// Undo exclude_from_wer() (#38) on uninstall — leave no WER config behind.
+fn unexclude_from_wer() {
+    use windows::Win32::System::ErrorReporting::WerRemoveExcludedApplication;
+    let name = wide_null(app::EXE_NAME);
+    // SAFETY: `name` is a null-terminated wide string outliving the call; all-users (HKLM).
+    unsafe {
+        let _ = WerRemoveExcludedApplication(PCWSTR(name.as_ptr()), true);
+    }
+}
+
 /// Stop, replace exe, delete old registration, recreate, start.
 /// Must be called elevated.
 pub fn update_service() {
@@ -1108,6 +1136,8 @@ pub fn update_service() {
     // refreshes if the set ever changes. Takes effect at the restart below.
     set_required_privileges();
     log.write("required privileges set");
+    // #38: (re)apply the WER exclusion on update — covers installs created before #38.
+    exclude_from_wer();
 
     // No delete+create — binPath is the same, just the file content changed.
     // Avoids ERROR_SERVICE_MARKED_FOR_DELETE (1072) race condition.
