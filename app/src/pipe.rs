@@ -255,20 +255,67 @@ pub(crate) fn own_process_is_privileged() -> bool {
     }
 }
 
-/// Read exactly 2 bytes from the pipe.
-fn read2(handle: HANDLE) -> Option<[u8; 2]> {
-    // SAFETY: `handle` is a valid pipe handle; `buf` is a 2-byte stack buffer
-    // and `read` count is checked to equal 2 before returning data.
-    unsafe {
-        let mut buf = [0u8; 2];
-        let mut read = 0u32;
-        let ok = ReadFile(handle, Some(&mut buf), Some(&mut read), None);
-        if ok.is_ok() && read == 2 {
-            Some(buf)
-        } else {
-            None
+/// Client pipe I/O timeout (#64). The client handle is opened FILE_FLAG_OVERLAPPED so every
+/// client read/write is bounded — a slow or hung service can never pin the caller (the tray's
+/// UI thread) inside a blocking pipe read, which was the menu/F12 lockout. Generous vs a
+/// healthy round-trip (<100ms) so a working-but-slow call is never spuriously failed, but it
+/// caps a hang at ~1s per op instead of forever.
+const CLIENT_IO_TIMEOUT_MS: u32 = 1000;
+
+/// Overlapped pipe read/write with a bounded wait (CLIENT side; #64). Returns `Some(bytes)`
+/// on success, `None` on error OR timeout. On timeout the pending I/O is cancelled and
+/// drained so no kernel I/O is still touching `buf` when we return. The `handle` MUST be
+/// opened `FILE_FLAG_OVERLAPPED` (see `client_connect`).
+unsafe fn io_with_timeout(
+    handle: HANDLE,
+    buf: &mut [u8],
+    write: bool,
+    timeout_ms: u32,
+) -> Option<u32> {
+    // SAFETY: `buf` is caller-owned and outlives the call; we never return while an I/O is
+    // still pending against it — on timeout we CancelIoEx + GetOverlappedResult(bwait=true)
+    // to force the kernel to finish with `buf` first. `event` is closed before return.
+    let Ok(event) = CreateEventW(None, true, false, None) else {
+        return None;
+    };
+    let mut ov = OVERLAPPED {
+        hEvent: event,
+        ..Default::default()
+    };
+    let ov_ptr: *mut OVERLAPPED = &mut ov;
+    let started = if write {
+        WriteFile(handle, Some(&*buf), None, Some(ov_ptr))
+    } else {
+        ReadFile(handle, Some(buf), None, Some(ov_ptr))
+    };
+    let mut transferred = 0u32;
+    let result = match started {
+        Ok(()) => GetOverlappedResult(handle, ov_ptr, &mut transferred, false)
+            .ok()
+            .map(|()| transferred),
+        Err(e) if e.code() == ERROR_IO_PENDING.to_hresult() => {
+            if WaitForSingleObject(event, timeout_ms) == WAIT_OBJECT_0 {
+                GetOverlappedResult(handle, ov_ptr, &mut transferred, false)
+                    .ok()
+                    .map(|()| transferred)
+            } else {
+                let _ = CancelIoEx(handle, Some(ov_ptr as *const OVERLAPPED));
+                let _ = GetOverlappedResult(handle, ov_ptr, &mut transferred, true);
+                None
+            }
         }
-    }
+        Err(_) => None,
+    };
+    let _ = CloseHandle(event);
+    result
+}
+
+/// Read exactly 2 bytes from the pipe (client side), bounded by `CLIENT_IO_TIMEOUT_MS`.
+fn read2(handle: HANDLE) -> Option<[u8; 2]> {
+    let mut buf = [0u8; 2];
+    // SAFETY: valid overlapped client handle from client_connect; `buf` outlives the call.
+    let n = unsafe { io_with_timeout(handle, &mut buf, false, CLIENT_IO_TIMEOUT_MS) }?;
+    (n == 2).then_some(buf)
 }
 
 /// Validate the magic prefix of a 4-byte frame and extract [command, payload].
@@ -306,14 +353,12 @@ pub fn read_request(handle: HANDLE) -> Option<[u8; 2]> {
     }
 }
 
-/// Write a 4-byte pipe request: magic prefix + command + payload.
+/// Write a 4-byte pipe request (client side), bounded by `CLIENT_IO_TIMEOUT_MS`.
 fn write_request(handle: HANDLE, cmd: u8, payload: u8) -> bool {
-    let data = build_request_frame(cmd, payload);
-    // SAFETY: `handle` is a valid pipe handle; data is a 4-byte stack array.
-    unsafe {
-        let mut written = 0u32;
-        WriteFile(handle, Some(&data), Some(&mut written), None).is_ok() && written == 4
-    }
+    let mut data = build_request_frame(cmd, payload);
+    // SAFETY: valid overlapped client handle from client_connect; `data` outlives the call.
+    let n = unsafe { io_with_timeout(handle, &mut data, true, CLIENT_IO_TIMEOUT_MS) };
+    n == Some(4)
 }
 
 /// Write exactly 2 bytes to the pipe (used for server responses).
@@ -339,26 +384,25 @@ pub fn server_disconnect(pipe: HANDLE) {
 /// Connect to the pipe as a client (from the tray app).
 /// Retries briefly if the server is between disconnect and re-listen.
 pub fn client_connect() -> Option<HANDLE> {
-    // SAFETY: `name` is a null-terminated wide string on the stack that outlives
-    // each CreateFileW call. Returned handle is valid or the call is retried.
+    // SAFETY: `name` is a null-terminated wide string on the stack that outlives the calls.
     unsafe {
         let name = wide_null(app::PIPE_NAME);
-        for _ in 0..5 {
-            let handle = CreateFileW(
-                PCWSTR(name.as_ptr()),
-                GENERIC_READ.0 | GENERIC_WRITE.0,
-                FILE_SHARE_NONE,
-                None,
-                OPEN_EXISTING,
-                FILE_FLAGS_AND_ATTRIBUTES(0),
-                None,
-            );
-            if let Ok(h) = handle {
-                return Some(h);
-            }
-            std::thread::sleep(std::time::Duration::from_millis(50));
-        }
-        None
+        // Event-driven (no sleep-retry poll): WaitNamedPipeW blocks until a server instance is
+        // available, covering the brief server disconnect->re-listen gap. Returns quickly if the
+        // pipe is absent (service down) — then CreateFileW fails and we return None.
+        let _ = WaitNamedPipeW(PCWSTR(name.as_ptr()), CLIENT_IO_TIMEOUT_MS);
+        CreateFileW(
+            PCWSTR(name.as_ptr()),
+            GENERIC_READ.0 | GENERIC_WRITE.0,
+            FILE_SHARE_NONE,
+            None,
+            OPEN_EXISTING,
+            // #64: overlapped so the client's read/write can be time-bounded (io_with_timeout)
+            // and a slow/hung service never pins the tray's UI thread.
+            FILE_FLAG_OVERLAPPED,
+            None,
+        )
+        .ok()
     }
 }
 
