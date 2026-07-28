@@ -992,13 +992,24 @@ pub fn install_service(choices: Choices) {
 
 /// #39: least-privilege set for the SYSTEM service token. The SCM strips every LocalSystem
 /// default NOT listed here when the service starts — dropping the dangerous ones (SeDebug,
-/// SeTcb, SeLoadDriver, SeImpersonate/SeAssignPrimaryToken token theft, SeBackup/SeRestore/
-/// SeTakeOwnership, ...). Effective at the next service start.
+/// SeTcb, SeLoadDriver, SeAssignPrimaryToken, SeBackup/SeRestore/SeTakeOwnership, ...).
+/// Effective at the next service start.
 ///   SeChangeNotifyPrivilege - bypass traverse checking (file/path access; near-universal)
 ///   SeCreateGlobalPrivilege - create Global\ named objects (svc-start / Fn-key events)
+///   SeImpersonatePrivilege  - REQUIRED for the DCOM/WMI calls to the HP BIOS provider:
+///     WmiPrvSE impersonates the caller to service each read/write AND the async Fn+F12
+///     event sink. Dropping it did NOT break function but forced a slow COM-security path
+///     (~2-5s per WMI round-trip) — a UX regression that also widened a shared-WMI-connection
+///     lockup race (#65). It IS itself an LPE primitive (T1134 token theft), kept out of
+///     necessity; the blast radius is contained by CIG + no-child-process (#47) +
+///     ProhibitDynamicCode (#24) + win32k-off (#48). Verified on the ENVY: with it WMI is
+///     instant, without it ~2-5s. LESSON: verify latency, not just function, when tightening.
 /// https://learn.microsoft.com/windows/win32/services/service-security-and-access-rights
-const SERVICE_REQUIRED_PRIVILEGES: &[&str] =
-    &["SeChangeNotifyPrivilege", "SeCreateGlobalPrivilege"];
+const SERVICE_REQUIRED_PRIVILEGES: &[&str] = &[
+    "SeChangeNotifyPrivilege",
+    "SeCreateGlobalPrivilege",
+    "SeImpersonatePrivilege",
+];
 
 /// Apply the least-privilege token restriction (#39) via the native SCM API —
 /// `ChangeServiceConfig2W(SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO)`, no `sc.exe` shell-out.
