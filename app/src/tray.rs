@@ -4,7 +4,7 @@ use windows::Win32::System::LibraryLoader::{
     GetModuleHandleW, GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
 };
 use windows::Win32::System::Power::*;
-use windows::Win32::System::SystemInformation::GetSystemDirectoryW;
+use windows::Win32::System::SystemInformation::{GetSystemDirectoryW, GetTickCount64};
 use windows::Win32::System::Threading::{CreateMutexW, INFINITE, OpenEventW, WaitForSingleObject};
 use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
 use windows::Win32::UI::Shell::*;
@@ -56,6 +56,20 @@ const ID_METHOD_DPMS: u32 = 320;
 const ID_METHOD_BLACK: u32 = 321;
 const WM_SCREEN_ON: u32 = WM_USER + 4;
 
+// Notification-area (NOTIFYICON_VERSION_4) event codes, delivered in LOWORD(lParam) of the
+// WM_TRAYICON callback. Not all are exported by the windows crate; the values are stable
+// (shellapi.h, = WM_USER + n). We warm the cache on any hover/select signal. NIN_KEYSELECT
+// shares WM_TRAYICON's numeric value (both WM_USER+1) but lives in a different parameter, so
+// there is no collision. https://learn.microsoft.com/windows/win32/shell/notification-area
+const NIN_SELECT: u32 = WM_USER; // 0x0400 — activate (Enter/left-click)
+const NIN_KEYSELECT: u32 = WM_USER + 1; // 0x0401 — keyboard activate
+const NIN_POPUPOPEN: u32 = WM_USER + 6; // 0x0406 — hover/focus (tooltip opening)
+
+/// #64: how long a warmed thermal/coolsense cache entry stays "fresh" before a trigger
+/// re-reads. Tunable. Because hover warms the cache right before the menu opens, the
+/// displayed value is almost always <1s old regardless — this only gates re-reads.
+const CACHE_FRESH_MS: u64 = 5_000;
+
 const METHOD_DPMS: u8 = 0;
 const METHOD_BRIGHTNESS: u8 = 1;
 const METHOD_BLACK: u8 = 2;
@@ -67,7 +81,7 @@ static mut STACK_MONITOR_ON: bool = false;
 static mut NOISE_ADAPT_RUNNING: bool = false;
 #[cfg(feature = "noise-adapt")]
 static mut CALIBRATING: bool = false;
-use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 
 static FNKEY_SCREEN_ON: AtomicBool = AtomicBool::new(true);
 static FNKEY_SLEEP_ON: AtomicBool = AtomicBool::new(false);
@@ -77,6 +91,19 @@ static SCREEN_IS_ON: AtomicBool = AtomicBool::new(true);
 static SCREEN_METHOD: AtomicU8 = AtomicU8::new(0);
 /// Saved brightness level (1-100) to restore on screen-on.
 static SAVED_BRIGHTNESS: AtomicU8 = AtomicU8::new(0);
+/// #64 menu-state cache. Warmed OFF the UI thread (tray hover / keyboard-select / menu-open
+/// backstop — all via `maybe_warm`) and read synchronously when the menu is built, so the
+/// menu opens with correct checkmarks and the UI thread never blocks on the pipe. 0xFF =
+/// unknown (nothing warmed yet, or the service was unreachable).
+static CACHED_THERMAL: AtomicU8 = AtomicU8::new(0xFF);
+/// Smart Sense / CoolSense: 0 = off, 1 = on, 0xFF = unknown.
+static CACHED_COOLSENSE: AtomicU8 = AtomicU8::new(0xFF);
+/// `GetTickCount64` (monotonic ms, sleep-inclusive) at the last warm attempt; 0 = never.
+/// Recency = `now - stamp`. Stamped even on a failed read so a down service is throttled to
+/// one attempt per `CACHE_FRESH_MS`, not hammered on every hover event.
+static CACHE_STAMP: AtomicU64 = AtomicU64::new(0);
+/// True while a warm worker is reading — gates duplicate reads so `maybe_warm` is idempotent.
+static WARM_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
 static mut BLACK_WINDOW: HWND = HWND(std::ptr::null_mut());
 
 /// Last mic info from noise-adapt or calibration thread (stashed for UI display).
@@ -160,14 +187,28 @@ unsafe fn run_inner() {
 
     // Add tray icon
     let mut nid = new_nid(HWND_MAIN);
-    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;
+    // NIF_SHOWTIP: keep the standard hover tooltip. NOTIFYICON_VERSION_4 (set below) suppresses
+    // it by default, expecting an app-drawn popup — we want the classic tip, so opt back in.
+    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP | NIF_SHOWTIP;
     nid.uCallbackMessage = WM_TRAYICON;
     nid.hIcon = load_tray_icon();
     set_tip(&mut nid, app::NAME);
     let _ = Shell_NotifyIconW(NIM_ADD, &nid);
 
+    // Opt into NOTIFYICON_VERSION_4: richer, accessible callbacks — WM_CONTEXTMENU (fires for
+    // BOTH mouse right-click and keyboard/AT invocation, e.g. Win+B -> Menu key, and carries
+    // the anchor point) plus NIN_* hover/select signals. This is what makes the tray reachable
+    // and correctly positioned for keyboard/screen-reader users. NOTE: v4 changes the
+    // WM_TRAYICON wParam/lParam encoding (decoded in wnd_proc).
+    nid.Anonymous.uVersion = NOTIFYICON_VERSION_4;
+    let _ = Shell_NotifyIconW(NIM_SETVERSION, &nid);
+
     // Immediately read current mode and update tooltip
     update_tooltip(HWND_MAIN);
+
+    // Warm the menu-state cache in the background so the first menu open shows correct checks
+    // (idempotent + throttled; a no-op if already warm or a read is in flight).
+    maybe_warm();
 
     // Load Fn+F12 settings
     load_fnkey_settings();
@@ -251,9 +292,22 @@ unsafe extern "system" fn wnd_proc(
 ) -> LRESULT {
     match msg {
         WM_TRAYICON => {
+            // NOTIFYICON_VERSION_4 encoding: LOWORD(lParam) = event code, and the anchor point
+            // is packed into wParam (GET_X/Y_LPARAM). WM_CONTEXTMENU covers BOTH mouse
+            // right-click AND keyboard/AT invocation and carries the correct anchor, so the
+            // menu is positioned by the icon for keyboard users. Hover/select events are just
+            // extra places to warm the cache before the menu opens.
             let event = (lparam.0 as u32) & 0xFFFF;
-            if event == WM_RBUTTONUP {
-                show_context_menu(hwnd);
+            match event {
+                WM_CONTEXTMENU => {
+                    let x = (wparam.0 & 0xFFFF) as i16 as i32;
+                    let y = ((wparam.0 >> 16) & 0xFFFF) as i16 as i32;
+                    show_context_menu(hwnd, x, y);
+                }
+                // maybe_warm is idempotent + throttled, so listing several trigger sites is
+                // free — each is just another chance to have the state ready by open time.
+                WM_MOUSEMOVE | NIN_POPUPOPEN | NIN_SELECT | NIN_KEYSELECT => maybe_warm(),
+                _ => {}
             }
             LRESULT(0)
         }
@@ -376,26 +430,108 @@ unsafe extern "system" fn wnd_proc(
     }
 }
 
-unsafe fn show_context_menu(hwnd: HWND) {
+/// Warm the menu-state cache OFF the UI thread — idempotent + throttled (#64). Cheapest gates
+/// first so the per-event cost on the UI thread is a couple of atomics: skip if a read is
+/// already in flight; skip if the cache is still fresh (monotonic tick); else claim the slot
+/// (CAS) and do the ONE expensive thing — the pipe/WMI read — in a short-lived worker. Safe to
+/// call from any trigger (tray hover, keyboard select, menu-open backstop, startup); duplicate
+/// callers are free because the gates make them no-ops.
+fn maybe_warm() {
+    if WARM_IN_FLIGHT.load(Ordering::Acquire) {
+        return; // a read is already coming
+    }
+    // SAFETY: GetTickCount64 has no preconditions (reads shared user-mode data).
+    let now = unsafe { GetTickCount64() };
+    let stamp = CACHE_STAMP.load(Ordering::Acquire);
+    if stamp != 0 && now.wrapping_sub(stamp) < CACHE_FRESH_MS {
+        return; // cache still fresh
+    }
+    if WARM_IN_FLIGHT
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return; // another trigger won the race; let it do the read
+    }
+    std::thread::spawn(|| {
+        // 0xFF = unknown (service down / slow / bad status).
+        let thermal = pipe::client_transact(CMD_READ_THERMAL, 0)
+            .and_then(|r| if status_ok(r[0]) { Some(r[1]) } else { None })
+            .unwrap_or(0xFF);
+        let coolsense = match pipe::client_transact(CMD_READ_COOLSENSE, 0) {
+            Some(r) if status_ok(r[0]) => (r[1] != 0) as u8,
+            _ => 0xFF,
+        };
+        CACHED_THERMAL.store(thermal, Ordering::Release);
+        CACHED_COOLSENSE.store(coolsense, Ordering::Release);
+        // SAFETY: as above. Stamp even on unknowns so a down service is throttled, not hammered.
+        CACHE_STAMP.store(unsafe { GetTickCount64() }, Ordering::Release);
+        WARM_IN_FLIGHT.store(false, Ordering::Release);
+    });
+}
+
+/// Optimistically update the menu-state cache after we issue a set, so the NEXT menu open
+/// reflects it with no round trip (#64) — this is what "saves the round trip". Refreshes the
+/// recency stamp. `None` leaves that field unchanged (a Smart Sense toggle doesn't touch the
+/// thermal mode).
+fn cache_store(thermal: Option<u8>, coolsense: Option<u8>) {
+    if let Some(t) = thermal {
+        CACHED_THERMAL.store(t, Ordering::Release);
+    }
+    if let Some(c) = coolsense {
+        CACHED_COOLSENSE.store(c, Ordering::Release);
+    }
+    // SAFETY: GetTickCount64 has no preconditions.
+    CACHE_STAMP.store(unsafe { GetTickCount64() }, Ordering::Release);
+}
+
+unsafe fn show_context_menu(hwnd: HWND, anchor_x: i32, anchor_y: i32) {
     let debug = (GetKeyState(0x10) as u16 & 0x8000) != 0; // VK_SHIFT = 0x10
 
-    // Read current state from the service
-    let thermal = pipe::client_transact(CMD_READ_THERMAL, 0);
-    let coolsense = pipe::client_transact(CMD_READ_COOLSENSE, 0);
-    crate::log::stack_sample("tray:menu_query");
+    // #64: menu STRUCTURE (normal vs "service unavailable" + Restart) is decided by a fast
+    // LOCAL service-liveness check — SCM QueryServiceStatusEx — NOT a WMI/pipe transact.
+    // That distinction is the whole point: the old `connected` came from two synchronous
+    // WMI reads on the UI thread (the menu lockout); this is a sub-ms local RPC that never
+    // touches the HP BIOS provider, so a dead service still shows Restart without the block.
+    let connected = crate::install::is_service_running();
 
-    let current_mode: Option<u8> =
-        thermal.and_then(|r| if status_ok(r[0]) { Some(r[1]) } else { None });
-    let cs_on: Option<bool> = coolsense.and_then(|r| {
-        if status_ok(r[0]) {
-            Some(r[1] != 0)
-        } else {
-            None
-        }
-    });
+    // Menu VALUES: the debug view reads inline (live diagnostics; each read is bounded by the
+    // #64 client timeout). The normal menu reads the warm CACHE synchronously — no pipe I/O on
+    // the UI thread — so it opens with correct checks; the cache is kept warm by maybe_warm on
+    // hover/select and refreshed by the backstop below.
+    let (thermal, coolsense) = if debug {
+        let t = pipe::client_transact(CMD_READ_THERMAL, 0);
+        let c = pipe::client_transact(CMD_READ_COOLSENSE, 0);
+        crate::log::stack_sample("tray:menu_query");
+        (t, c)
+    } else {
+        (None, None)
+    };
+
+    let (current_mode, cs_on): (Option<u8>, Option<bool>) = if debug {
+        (
+            thermal.and_then(|r| if status_ok(r[0]) { Some(r[1]) } else { None }),
+            coolsense.and_then(|r| {
+                if status_ok(r[0]) {
+                    Some(r[1] != 0)
+                } else {
+                    None
+                }
+            }),
+        )
+    } else {
+        let t = CACHED_THERMAL.load(Ordering::Acquire);
+        let c = CACHED_COOLSENSE.load(Ordering::Acquire);
+        (
+            if t <= 3 { Some(t) } else { None }, // 0xFF unknown -> no check
+            match c {
+                0 => Some(false),
+                1 => Some(true),
+                _ => None,
+            },
+        )
+    };
 
     let hmenu = CreatePopupMenu().unwrap();
-    let connected = thermal.is_some() || coolsense.is_some();
 
     // Smart Sense item
     if connected {
@@ -436,7 +572,8 @@ unsafe fn show_context_menu(hwnd: HWND) {
         let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
     }
 
-    // Thermal mode items
+    // Thermal mode items. When connected, rows are enabled and the selected one is checked
+    // async (normal path) or now (debug path); Smart Sense ON suppresses the mode check.
     let modes = [
         (ID_PERFORMANCE, "Performance", 0u8),
         (ID_BALANCED, "Balanced", 1),
@@ -452,6 +589,8 @@ unsafe fn show_context_menu(hwnd: HWND) {
         }
     }
 
+    // Service down: restore the dead-service affordance (#64) — disabled rows above, plus
+    // an explicit unavailable marker and a Restart action (needs no UAC; see handle_menu).
     if !connected {
         let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
         append_item_disabled(hmenu, ID_DEBUG_HEADER + 9, "Service unavailable");
@@ -652,15 +791,30 @@ unsafe fn show_context_menu(hwnd: HWND) {
         append_item(hmenu, ID_CLEAR_LOG, "Clear Log", false);
     }
 
-    // KB Q135788: SetForegroundWindow before TrackPopupMenu
-    let mut pt = POINT::default();
-    let _ = GetCursorPos(&mut pt);
+    // Backstop warm (#64): refresh the cache for the NEXT open. Idempotent + throttled, so a
+    // no-op if a hover already warmed it or a read is in flight. This covers the cold path — a
+    // keyboard-invoked menu with no prior hover: this open shows honest "unknown", the next is
+    // correct. Skip when the service is down (SCM says nothing to read).
+    if connected {
+        maybe_warm();
+    }
+
+    // Position at the anchor the shell gave us in WM_CONTEXTMENU — correct for BOTH mouse and
+    // keyboard/AT invocation. Fall back to the cursor only if the anchor is unset. KB Q135788:
+    // SetForegroundWindow before TrackPopupMenu so the menu dismisses on click-away.
+    let (x, y) = if anchor_x == 0 && anchor_y == 0 {
+        let mut pt = POINT::default();
+        let _ = GetCursorPos(&mut pt);
+        (pt.x, pt.y)
+    } else {
+        (anchor_x, anchor_y)
+    };
     let _ = SetForegroundWindow(hwnd);
     let _ = TrackPopupMenu(
         hmenu,
         TPM_LEFTALIGN | TPM_RIGHTBUTTON,
-        pt.x,
-        pt.y,
+        x,
+        y,
         Some(0),
         hwnd,
         None,
@@ -686,6 +840,7 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
                 _ => 1,
             };
             pipe::client_transact(CMD_SET_COOLSENSE, new_val);
+            cache_store(None, Some(new_val)); // optimistic: next open reflects the toggle
         }
         #[cfg(feature = "noise-adapt")]
         ID_NOISE_ADAPTED => {
@@ -760,6 +915,7 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             // Selecting a specific mode implicitly disables Smart Sense (CoolSense)
             pipe::client_transact(CMD_SET_COOLSENSE, 0);
             pipe::client_transact(CMD_SET_THERMAL, mode);
+            cache_store(Some(mode), Some(0)); // optimistic: mode on, Smart Sense off
         }
         ID_RESTART_SVC => {
             // sdset grants interactive users start rights — no UAC needed
@@ -867,7 +1023,7 @@ unsafe fn update_tooltip(hwnd: HWND) {
     let label = format!("{}: {mode}", app::NAME);
 
     let mut nid = new_nid(hwnd);
-    nid.uFlags = NIF_TIP;
+    nid.uFlags = NIF_TIP | NIF_SHOWTIP; // NIF_SHOWTIP: keep the standard tip under v4
     set_tip(&mut nid, &label);
     let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
@@ -924,7 +1080,7 @@ fn run_smart_measure_thread(hwnd: HWND, debug: bool, label: &'static str) {
 #[cfg(feature = "noise-adapt")]
 unsafe fn set_tooltip_text(hwnd: HWND, text: &str) {
     let mut nid = new_nid(hwnd);
-    nid.uFlags = NIF_TIP;
+    nid.uFlags = NIF_TIP | NIF_SHOWTIP; // NIF_SHOWTIP: keep the standard tip under v4
     set_tip(&mut nid, text);
     let _ = Shell_NotifyIconW(NIM_MODIFY, &nid);
 }
