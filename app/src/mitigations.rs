@@ -6,6 +6,7 @@
 //! integrity level + Program Files ACL), and the pipe's bounded command set caps
 //! the impact regardless. See SECURITY.md.
 
+use windows::Win32::System::Diagnostics::Debug::{EXCEPTION_POINTERS, SetUnhandledExceptionFilter};
 use windows::Win32::System::LibraryLoader::{
     LOAD_LIBRARY_SEARCH_SYSTEM32, SetDefaultDllDirectories,
 };
@@ -15,9 +16,9 @@ use windows::Win32::System::SystemServices::{
     PROCESS_MITIGATION_IMAGE_LOAD_POLICY, PROCESS_MITIGATION_SYSTEM_CALL_DISABLE_POLICY,
 };
 use windows::Win32::System::Threading::{
-    ProcessChildProcessPolicy, ProcessDynamicCodePolicy, ProcessExtensionPointDisablePolicy,
-    ProcessImageLoadPolicy, ProcessSignaturePolicy, ProcessSystemCallDisablePolicy,
-    SetProcessMitigationPolicy,
+    GetCurrentProcess, ProcessChildProcessPolicy, ProcessDynamicCodePolicy,
+    ProcessExtensionPointDisablePolicy, ProcessImageLoadPolicy, ProcessSignaturePolicy,
+    ProcessSystemCallDisablePolicy, SetProcessMitigationPolicy, TerminateProcess,
 };
 
 // Policy `Flags` bit masks. The `windows` crate exposes these bitfields only as a
@@ -41,6 +42,7 @@ const PROHIBIT_DYNAMIC_CODE: u32 = 0x1;
 /// Windows may not support a given policy), so a failure just means that one
 /// layer is absent — the OS-level boundaries still hold.
 pub fn apply() {
+    suppress_wer();
     restrict_dll_search();
     restrict_image_loads();
     disable_extension_points();
@@ -48,6 +50,32 @@ pub fn apply() {
     // generators, and this process hosts COM/WMI (service) and WASAPI/COM (tray). It is
     // enforced on the `--service` role only (prohibit_dynamic_code, #24), validated
     // audit-first against a clean live run.
+}
+
+/// #38 top-level exception filter: on any crash that reaches it, terminate immediately so
+/// WerFault.exe never collects/uploads a dump of our process memory.
+///
+/// SAFETY: matches the LPTOP_LEVEL_EXCEPTION_FILTER ABI. `GetCurrentProcess` is a pseudo-
+/// handle (no close); `TerminateProcess` ends this process deterministically without
+/// chaining to the default handler (which is what invokes WER). We do not touch `_info`.
+unsafe extern "system" fn terminate_no_wer(_info: *const EXCEPTION_POINTERS) -> i32 {
+    let _ = TerminateProcess(GetCurrentProcess(), 1);
+    1 // EXCEPTION_EXECUTE_HANDLER — "handled, do not run WER" (fallback if the above returns)
+}
+
+/// Suppress Windows Error Reporting for THIS process (#38, all roles). Registers a
+/// top-level exception filter that terminates without chaining to WER — so a crash dump
+/// never egresses to Microsoft even though WerFault.exe runs *out-of-process* (our
+/// in-binary no-network posture cannot stop it). Covers the SEH crash paths: Rust panics
+/// (panic=immediate-abort -> ud2) and access violations. The `__fastfail` paths
+/// (stack-cookie / CFG) bypass this filter and are covered on the INSTALLED exe by
+/// WerAddExcludedApplication (install.rs). Best-effort.
+/// https://learn.microsoft.com/windows/win32/api/errhandlingapi/nf-errhandlingapi-setunhandledexceptionfilter
+pub fn suppress_wer() {
+    // SAFETY: registers a 'static filter fn pointer; returns (and we drop) the previous one.
+    unsafe {
+        SetUnhandledExceptionFilter(Some(terminate_no_wer));
+    }
 }
 
 /// Restrict runtime `LoadLibrary` (calls without their own search flags) to
