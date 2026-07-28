@@ -969,6 +969,9 @@ pub fn install_service(choices: Choices) {
         .creation_flags(CREATE_NO_WINDOW)
         .status();
 
+    // #39: drop the service token to least privilege before it first starts.
+    set_required_privileges();
+
     start_service();
     write_uninstall_entry(); // required — the Settings > Apps entry, always written
 
@@ -981,6 +984,56 @@ pub fn install_service(choices: Choices) {
     }
     if choices.desktop {
         create_desktop_shortcut();
+    }
+}
+
+/// #39: least-privilege set for the SYSTEM service token. The SCM strips every LocalSystem
+/// default NOT listed here when the service starts — dropping the dangerous ones (SeDebug,
+/// SeTcb, SeLoadDriver, SeImpersonate/SeAssignPrimaryToken token theft, SeBackup/SeRestore/
+/// SeTakeOwnership, ...). Effective at the next service start.
+///   SeChangeNotifyPrivilege - bypass traverse checking (file/path access; near-universal)
+///   SeCreateGlobalPrivilege - create Global\ named objects (svc-start / Fn-key events)
+/// https://learn.microsoft.com/windows/win32/services/service-security-and-access-rights
+const SERVICE_REQUIRED_PRIVILEGES: &[&str] =
+    &["SeChangeNotifyPrivilege", "SeCreateGlobalPrivilege"];
+
+/// Apply the least-privilege token restriction (#39) via the native SCM API —
+/// `ChangeServiceConfig2W(SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO)`, no `sc.exe` shell-out.
+/// Idempotent; takes effect at the next service start, so callers invoke it before
+/// start/restart. Needs SERVICE_CHANGE_CONFIG (DC), which our SDDL grants to Administrators
+/// only — so this runs from the elevated install/update child.
+/// https://learn.microsoft.com/windows/win32/api/winsvc/nf-winsvc-changeserviceconfig2w
+fn set_required_privileges() {
+    use windows::Win32::System::Services::{
+        ChangeServiceConfig2W, SERVICE_CHANGE_CONFIG, SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO,
+        SERVICE_REQUIRED_PRIVILEGES_INFOW,
+    };
+    // REG_MULTI_SZ: each name NUL-terminated, the whole list terminated by a final NUL.
+    let mut multi_sz: Vec<u16> = Vec::new();
+    for p in SERVICE_REQUIRED_PRIVILEGES {
+        multi_sz.extend(p.encode_utf16());
+        multi_sz.push(0);
+    }
+    multi_sz.push(0);
+    // SAFETY: standard SCM open -> ChangeServiceConfig2W with a valid REG_MULTI_SZ buffer
+    // that outlives the call; both service handles closed before return.
+    unsafe {
+        let Ok(scm) = OpenSCManagerW(None, None, SC_MANAGER_CONNECT) else {
+            return;
+        };
+        let name = wide_null(app::SERVICE_NAME);
+        if let Ok(svc) = OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_CHANGE_CONFIG) {
+            let info = SERVICE_REQUIRED_PRIVILEGES_INFOW {
+                pmszRequiredPrivileges: windows::core::PWSTR(multi_sz.as_mut_ptr()),
+            };
+            let _ = ChangeServiceConfig2W(
+                svc,
+                SERVICE_CONFIG_REQUIRED_PRIVILEGES_INFO,
+                Some(&info as *const _ as *const std::ffi::c_void),
+            );
+            let _ = CloseServiceHandle(svc);
+        }
+        let _ = CloseServiceHandle(scm);
     }
 }
 
@@ -1039,6 +1092,11 @@ pub fn update_service() {
     // Shortcuts and the Run key are NOT touched on update: their target is a stable
     // path across versions, so there's nothing to refresh — and leaving them alone
     // preserves the user's install-time choices (e.g. a shortcut they declined).
+
+    // #39: (re)apply least-privilege on update — covers installs created before #39 and
+    // refreshes if the set ever changes. Takes effect at the restart below.
+    set_required_privileges();
+    log.write("required privileges set");
 
     // No delete+create — binPath is the same, just the file content changed.
     // Avoids ERROR_SERVICE_MARKED_FOR_DELETE (1072) race condition.
