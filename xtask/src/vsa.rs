@@ -171,19 +171,15 @@ fn query_start_name(svc: ScHandle) -> Option<String> {
     }
 }
 
-/// Set the service's `ObjectName` (and password) — everything else unchanged.
-fn set_start_name(svc: ScHandle, account: &str, password: &str) -> bool {
+/// Set the service's `ObjectName` (start account) with a **NULL password** — everything else
+/// unchanged. This spike only ever targets *passwordless* accounts (the virtual account and
+/// LocalSystem), and a managed/virtual account REQUIRES a NULL password (an empty string yields
+/// ERROR_INVALID_SERVICE_ACCOUNT, 1057). There is deliberately no password parameter — nothing
+/// here handles a secret. MS Learn: ChangeServiceConfig.
+fn set_start_name(svc: ScHandle, account: &str) -> bool {
     let acct = wide(account);
-    let pass = wide(password);
-    // A managed/virtual account (NT SERVICE\...) REQUIRES a NULL password — an empty string
-    // yields ERROR_INVALID_SERVICE_ACCOUNT (1057). We only set passwordless accounts here, so
-    // map empty -> NULL (also correct for the LocalSystem revert). MS Learn: ChangeServiceConfig.
-    let pass_ptr = if password.is_empty() {
-        std::ptr::null()
-    } else {
-        pass.as_ptr()
-    };
-    // SAFETY: SERVICE_NO_CHANGE + null pointers leave all other config fields untouched.
+    // SAFETY: SERVICE_NO_CHANGE + null pointers leave all other config fields untouched; the
+    // NULL password is required for the passwordless virtual/built-in accounts we set.
     unsafe {
         let ok = ChangeServiceConfigW(
             svc,
@@ -195,7 +191,7 @@ fn set_start_name(svc: ScHandle, account: &str, password: &str) -> bool {
             std::ptr::null_mut(),
             std::ptr::null(),
             acct.as_ptr(),
-            pass_ptr,
+            std::ptr::null(), // NULL password: passwordless (virtual/built-in) account
             std::ptr::null(),
         );
         if ok == 0 {
@@ -272,7 +268,7 @@ impl RevertGuard {
         }
         self.armed = false;
         eprintln!("\nvsa-spike: reverting ObjectName -> {}", self.original);
-        set_start_name(self.svc, &self.original, "");
+        set_start_name(self.svc, &self.original);
         restart(self.svc);
         let _ = std::fs::remove_file(SNAPSHOT_PATH);
         eprintln!("vsa-spike: reverted and restarted.");
@@ -306,7 +302,7 @@ fn recover(svc: ScHandle) -> i32 {
         Ok(orig) => {
             let orig = orig.trim();
             eprintln!("vsa-spike: recovering ObjectName -> {orig}");
-            set_start_name(svc, orig, "");
+            set_start_name(svc, orig);
             restart(svc);
             let _ = std::fs::remove_file(SNAPSHOT_PATH);
             eprintln!("vsa-spike: recovered.");
@@ -366,7 +362,7 @@ pub fn run(args: &[String]) -> i32 {
     };
 
     eprintln!("vsa-spike: reconfiguring ObjectName -> {VIRTUAL_ACCOUNT}");
-    if !set_start_name(svc, VIRTUAL_ACCOUNT, "") {
+    if !set_start_name(svc, VIRTUAL_ACCOUNT) {
         guard.revert(); // undo (nothing took effect, but keep the invariant)
         close();
         return 1;
