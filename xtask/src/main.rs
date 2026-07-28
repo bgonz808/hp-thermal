@@ -6,6 +6,12 @@
 
 use std::process::{Command, exit};
 
+// DEV-ONLY (#61): reconfigures the live service to a virtual account, tests, auto-reverts.
+// Lives only in xtask (never in the release binary). Windows-only (SCM FFI), gated so xtask
+// stays cross-platform. See vsa.rs.
+#[cfg(windows)]
+mod vsa;
+
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
@@ -24,6 +30,8 @@ fn main() {
             args.get(1).map(String::as_str),
             args.get(2).map(String::as_str),
         ),
+        #[cfg(windows)]
+        Some("vsa-spike") => vsa::run(&args[1..]),
         _ => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!("  ci [--fast]              run checks (fast = fmt + clippy + test)");
@@ -33,6 +41,9 @@ fn main() {
             );
             eprintln!(
                 "  verify-artifact [EXE] [PDB]  hardening + capabilities + exe<->pdb GUID bind"
+            );
+            eprintln!(
+                "  vsa-spike [--recover]    DEV #61: test the service under a virtual account (elevated)"
             );
             2
         }
