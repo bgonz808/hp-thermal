@@ -49,28 +49,11 @@ impl WmiConnection {
             None,
         )?;
 
-        let locator: IWbemLocator = CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER)?;
-
-        let services = locator.ConnectServer(
-            &BSTR::from("root\\wmi"),
-            &BSTR::new(),
-            &BSTR::new(),
-            &BSTR::new(),
-            0,
-            &BSTR::new(),
-            None,
-        )?;
-
-        CoSetProxyBlanket(
-            &services,
-            RPC_C_AUTHN_WINNT,
-            RPC_C_AUTHZ_NONE,
-            None,
-            RPC_C_AUTHN_LEVEL_CALL,
-            RPC_C_IMP_LEVEL_IMPERSONATE,
-            None,
-            EOAC_NONE,
-        )?;
+        // Primary control connection (synchronous BIOS path). The event sink gets its OWN
+        // connection in subscribe_events (#65) via the same helper — identical proxy blanket,
+        // isolated proxy — so a long-lived async subscription never shares a connection with
+        // the latency-sensitive set_thermal/read path.
+        let services = Self::connect_services()?;
 
         // Find the singleton hpqBIntM instance path
         let enumerator = services.ExecQuery(
@@ -90,6 +73,42 @@ impl WmiConnection {
         let obj_path = get_bstr(&inst, w!("__RELPATH"))?;
 
         Ok(Self { services, obj_path })
+    }
+
+    /// Open a fresh `IWbemServices` to `root\wmi` with our standard proxy blanket. COM and the
+    /// process-wide `CoInitializeSecurity` must already be set (connect_inner does that ONCE;
+    /// re-calling CoInitializeSecurity would return RPC_E_TOO_LATE) — this does only the
+    /// per-connection `CoCreateInstance(WbemLocator)` -> `ConnectServer` -> `CoSetProxyBlanket`.
+    /// Shared by the primary control connection and the event sink's dedicated connection (#65)
+    /// so their security is provably identical.
+    unsafe fn connect_services() -> windows::core::Result<IWbemServices> {
+        let locator: IWbemLocator = CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER)?;
+
+        let services = locator.ConnectServer(
+            &BSTR::from("root\\wmi"),
+            &BSTR::new(),
+            &BSTR::new(),
+            &BSTR::new(),
+            0,
+            &BSTR::new(),
+            None,
+        )?;
+
+        // WMI returns the proxy at a weaker default; the HP provider needs IMPERSONATE to run
+        // the privileged op on our behalf — the level SeImpersonatePrivilege accelerates (#66).
+        // A weaker level on the sink connection would downgrade (or fail) the async register.
+        CoSetProxyBlanket(
+            &services,
+            RPC_C_AUTHN_WINNT,
+            RPC_C_AUTHZ_NONE,
+            None,
+            RPC_C_AUTHN_LEVEL_CALL,
+            RPC_C_IMP_LEVEL_IMPERSONATE,
+            None,
+            EOAC_NONE,
+        )?;
+
+        Ok(services)
     }
 
     /// `bios_call` that also checks the return code: maps `rc != 0` to an error
@@ -210,6 +229,15 @@ impl WmiConnection {
         // SAFETY: COM MTA is initialized on this thread (connect() ran here); all
         // interfaces below are valid for the duration of the calls.
         unsafe {
+            // #65: dedicated connection for the async subscription, isolated from the
+            // synchronous BIOS control path (`self.services`). Same namespace + proxy blanket
+            // (Self::connect_services); process-wide COM security is already set, so this does
+            // NOT re-init it. CancelAsyncCall on drop MUST use this same connection.
+            let sink_services = Self::connect_services().map_err(|e| {
+                log::write(&format!("event sink: dedicated ConnectServer failed: {e}"));
+                STATUS_WMI_ERROR
+            })?;
+
             let sink: IWbemObjectSink = FnKeySink {
                 fn_key: fn_key.0 as isize,
             }
@@ -234,7 +262,7 @@ impl WmiConnection {
             // Our sink is then woken only on a real Fn+F12 press (0 idle cost). Built
             // from FN_KEY_EVENT_ID so it can't drift from should_signal_fn_key.
             let wql = format!("SELECT * FROM hpqBEvnt WHERE EventId = {FN_KEY_EVENT_ID}");
-            self.services
+            sink_services
                 .ExecNotificationQueryAsync(
                     &BSTR::from("WQL"),
                     &BSTR::from(wql.as_str()),
@@ -247,9 +275,9 @@ impl WmiConnection {
                     STATUS_WMI_ERROR
                 })?;
 
-            log::write("event listener: hpqBEvnt async sink registered");
+            log::write("event listener: hpqBEvnt async sink registered (dedicated connection)");
             Ok(EventSubscription {
-                services: self.services.clone(),
+                services: sink_services,
                 stub,
                 fn_key,
                 _apartment: apartment,
@@ -537,6 +565,8 @@ impl IWbemObjectSink_Impl for FnKeySink_Impl {
 /// which no callback can run) and then releases the event handle — giving a
 /// clean, race-free shutdown with a logged "cancelled" line.
 pub struct EventSubscription {
+    /// The DEDICATED sink connection (#65), not the control connection. CancelAsyncCall in
+    /// Drop must be issued on the same IWbemServices that called ExecNotificationQueryAsync.
     services: IWbemServices,
     stub: IWbemObjectSink,
     fn_key: HANDLE,
