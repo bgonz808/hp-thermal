@@ -206,7 +206,7 @@ fn save_cal(cal: &NoiseCal) {
         )
     };
     if let Err(e) = std::fs::write(cal_path(), bytes) {
-        crate::log::write(&format!("noise-adapt: cache write failed: {e}"));
+        crate::log::warn(&format!("noise-adapt: cache write failed: {e}"));
     }
 }
 
@@ -656,7 +656,7 @@ pub fn stress_calibrate(set_mode: impl Fn(u8)) -> Result<StressCal, &'static str
 pub fn clear_cal() {
     let path = cal_path();
     if let Err(e) = std::fs::remove_file(&path) {
-        crate::log::write(&format!("noise-adapt: clear cal: {e}"));
+        crate::log::warn(&format!("noise-adapt: clear cal: {e}"));
     } else {
         crate::log::write("noise-adapt: calibration cleared");
     }
@@ -1163,7 +1163,7 @@ fn slow_path(
         let stamp = chrono_stamp();
         let dir = format!("{}\\debug-cal-{stamp}", crate::app::data_dir());
         if let Err(e) = std::fs::create_dir_all(&dir) {
-            crate::log::write(&format!("debug-cal: failed to create dir: {e}"));
+            crate::log::warn(&format!("debug-cal: failed to create dir: {e}"));
             return Err("debug dir creation failed");
         }
         crate::log::write(&format!("debug-cal: output dir: {dir}"));
@@ -1906,7 +1906,7 @@ impl CaptureStream {
         ));
 
         if let Err(e) = std::fs::write(path, out.as_bytes()) {
-            crate::log::write(&format!("stress-cal: TSV write failed: {e}"));
+            crate::log::warn(&format!("stress-cal: TSV write failed: {e}"));
         } else {
             crate::log::write(&format!("stress-cal: wrote {n} windows to {path}"));
         }
@@ -2014,7 +2014,7 @@ impl CaptureStream {
         }
 
         if let Err(e) = std::fs::write(path, &buf) {
-            crate::log::write(&format!("debug-cal: WAV write failed: {e}"));
+            crate::log::warn(&format!("debug-cal: WAV write failed: {e}"));
         } else {
             let mb = buf.len() as f64 / (1024.0 * 1024.0);
             crate::log::write(&format!(
@@ -2904,7 +2904,7 @@ impl CaptureLog {
         ));
 
         if let Err(e) = std::fs::write(&path, out.as_bytes()) {
-            crate::log::write(&format!("noise-adapt: TSV write failed: {e}"));
+            crate::log::warn(&format!("noise-adapt: TSV write failed: {e}"));
         } else {
             crate::log::write(&format!(
                 "noise-adapt: wrote {} rows to {path}",
@@ -2981,7 +2981,7 @@ fn write_telemetry_tsv(readings: &[TelemetryReading], path: &str) {
         ));
     }
     if let Err(e) = std::fs::write(path, out.as_bytes()) {
-        crate::log::write(&format!("debug-cal: telemetry TSV write failed: {e}"));
+        crate::log::warn(&format!("debug-cal: telemetry TSV write failed: {e}"));
     } else {
         crate::log::write(&format!(
             "debug-cal: wrote {} telemetry readings to {path}",

@@ -57,17 +57,17 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     // the trust model (a lower-privileged user cannot tamper the image or stand in for the
     // service) no longer holds, so refuse to do any privileged WMI work.
     if !crate::install::running_from_install_dir() {
-        log::write("REFUSING: not running from the install directory");
+        log::error("REFUSING: not running from the install directory");
         set_status(SERVICE_STOPPED, 4);
         return;
     }
     if !crate::install::image_write_restricted() {
-        log::write("REFUSING: install image is writable by a non-privileged principal");
+        log::error("REFUSING: install image is writable by a non-privileged principal");
         set_status(SERVICE_STOPPED, 5);
         return;
     }
     if !crate::pipe::own_process_is_privileged() {
-        log::write("REFUSING: not at System/High integrity");
+        log::error("REFUSING: not at System/High integrity");
         set_status(SERVICE_STOPPED, 6);
         return;
     }
@@ -90,14 +90,14 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
             "token self-assert: removed {removed} extra privilege(s), {extras} beyond-set remain"
         ));
         if extras > 0 {
-            log::write("REFUSING: token retains privileges beyond the least-privilege set");
+            log::error("REFUSING: token retains privileges beyond the least-privilege set");
             set_status(SERVICE_STOPPED, 7);
             return;
         }
     }
 
     let Ok(event) = CreateEventW(None, true, false, None) else {
-        log::write("FAIL: CreateEventW");
+        log::error("FAIL: CreateEventW");
         set_status(SERVICE_STOPPED, 1);
         return;
     };
@@ -110,7 +110,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
             w
         }
         Err(e) => {
-            log::write(&format!("FAIL: WMI connect error=0x{e:02X}"));
+            log::error(&format!("FAIL: WMI connect error=0x{e:02X}"));
             set_status(SERVICE_STOPPED, 2);
             return;
         }
@@ -123,7 +123,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
             p
         }
         Err(e) => {
-            log::write(&format!("FAIL: pipe create {e:?}"));
+            log::error(&format!("FAIL: pipe create {e:?}"));
             set_status(SERVICE_STOPPED, 3);
             return;
         }
@@ -136,7 +136,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         Some(fn_key) => match wmi.subscribe_events(fn_key) {
             Ok(sub) => Some(sub),
             Err(_) => {
-                log::write("event listener: subscription failed (hotkey disabled)");
+                log::warn("event listener: subscription failed (hotkey disabled)");
                 // SAFETY: fn_key is a valid handle we still own on this error path.
                 unsafe {
                     let _ = CloseHandle(fn_key);
@@ -145,7 +145,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
             }
         },
         None => {
-            log::write("event listener: named event creation failed (hotkey disabled)");
+            log::warn("event listener: named event creation failed (hotkey disabled)");
             None
         }
     };
@@ -431,7 +431,7 @@ fn create_named_event(name: &str) -> Option<HANDLE> {
         let sddl = w!("D:(A;;0x00120000;;;BU)(A;;0x001F0003;;;SY)(A;;0x001F0003;;;BA)");
         let mut sd: PSECURITY_DESCRIPTOR = PSECURITY_DESCRIPTOR(std::ptr::null_mut());
         if ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, &mut sd, None).is_err() {
-            log::write(&format!("named event {name}: SDDL parse failed"));
+            log::warn(&format!("named event {name}: SDDL parse failed"));
             return None;
         }
 
@@ -449,7 +449,7 @@ fn create_named_event(name: &str) -> Option<HANDLE> {
         match event {
             Ok(h) => Some(h),
             Err(e) => {
-                log::write(&format!("named event {name}: CreateEventW failed: {e}"));
+                log::warn(&format!("named event {name}: CreateEventW failed: {e}"));
                 None
             }
         }

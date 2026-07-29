@@ -234,7 +234,7 @@ impl WmiConnection {
             // (Self::connect_services); process-wide COM security is already set, so this does
             // NOT re-init it. CancelAsyncCall on drop MUST use this same connection.
             let sink_services = Self::connect_services().map_err(|e| {
-                log::write(&format!("event sink: dedicated ConnectServer failed: {e}"));
+                log::warn(&format!("event sink: dedicated ConnectServer failed: {e}"));
                 STATUS_WMI_ERROR
             })?;
 
@@ -247,11 +247,11 @@ impl WmiConnection {
             // not by arbitrary local processes.
             let apartment: IUnsecuredApartment =
                 CoCreateInstance(&UnsecuredApartment, None, CLSCTX_LOCAL_SERVER).map_err(|e| {
-                    log::write(&format!("CoCreateInstance(UnsecuredApartment) failed: {e}"));
+                    log::warn(&format!("CoCreateInstance(UnsecuredApartment) failed: {e}"));
                     STATUS_WMI_ERROR
                 })?;
             let stub_unk = apartment.CreateObjectStub(&sink).map_err(|e| {
-                log::write(&format!("CreateObjectStub failed: {e}"));
+                log::warn(&format!("CreateObjectStub failed: {e}"));
                 STATUS_WMI_ERROR
             })?;
             let stub: IWbemObjectSink = stub_unk.cast().map_err(|_| STATUS_WMI_ERROR)?;
@@ -271,7 +271,7 @@ impl WmiConnection {
                     &stub,
                 )
                 .map_err(|e| {
-                    log::write(&format!("ExecNotificationQueryAsync(hpqBEvnt) failed: {e}"));
+                    log::warn(&format!("ExecNotificationQueryAsync(hpqBEvnt) failed: {e}"));
                     STATUS_WMI_ERROR
                 })?;
 
@@ -406,13 +406,13 @@ impl WmiConnection {
                 None,
             )
             .map_err(|e| {
-                log::write(&format!("GetObject(hpqBDataIn) failed: {e}"));
+                log::error(&format!("GetObject(hpqBDataIn) failed: {e}"));
                 0x10u8
             })?;
         let in_data_class_obj = in_data_class.ok_or(0x11u8)?;
 
         let in_data = in_data_class_obj.SpawnInstance(0).map_err(|e| {
-            log::write(&format!("SpawnInstance(hpqBDataIn) failed: {e}"));
+            log::error(&format!("SpawnInstance(hpqBDataIn) failed: {e}"));
             0x12u8
         })?;
 
@@ -605,7 +605,7 @@ unsafe fn log_put_u32(
 ) -> Result<(), u8> {
     let var = var_from_u32(val);
     obj.Put(name, 0, &var, 0).map_err(|e| {
-        log::write(&format!("Put({label}, {val}) failed: {e}"));
+        log::error(&format!("Put({label}, {val}) failed: {e}"));
         step
     })
 }

@@ -885,7 +885,7 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
                         (1usize, (lo | hi) as isize)
                     }
                     Err(e) => {
-                        crate::log::write(&format!("stress-cal: error: {e}"));
+                        crate::log::warn(&format!("stress-cal: error: {e}"));
                         (0usize, 0isize)
                     }
                 };
@@ -1061,7 +1061,7 @@ fn run_smart_measure_thread(hwnd: HWND, debug: bool, label: &'static str) {
                 (w, l)
             }
             Err(e) => {
-                crate::log::write(&format!("{label}: error: {e}"));
+                crate::log::warn(&format!("{label}: error: {e}"));
                 (current as usize, 0i32)
             }
         };
@@ -1208,7 +1208,7 @@ unsafe fn enable_system_theme_menus() {
     let uxtheme = LoadLibraryExW(w!("uxtheme.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32);
     let Ok(uxtheme) = uxtheme else {
         if crate::log::is_verbose() {
-            crate::log::write("dark mode: uxtheme.dll not found, using classic menus");
+            crate::log::warn("dark mode: uxtheme.dll not found, using classic menus");
         }
         return;
     };
@@ -1219,7 +1219,7 @@ unsafe fn enable_system_theme_menus() {
     let ord_135 = PCSTR(135usize as *const u8);
     let Some(proc) = GetProcAddress(uxtheme, ord_135) else {
         if crate::log::is_verbose() {
-            crate::log::write("dark mode: ordinal 135 not found (pre-1809?), using classic menus");
+            crate::log::warn("dark mode: ordinal 135 not found (pre-1809?), using classic menus");
         }
         return;
     };
@@ -1263,7 +1263,7 @@ fn open_named_event(name: &str, what: &str) -> Option<HANDLE> {
     match result {
         Ok(h) => Some(h),
         Err(e) => {
-            crate::log::write(&format!("tray: {what} event open failed: {e}"));
+            crate::log::warn(&format!("tray: {what} event open failed: {e}"));
             None
         }
     }
@@ -1303,7 +1303,7 @@ unsafe fn handle_fn_key(_hwnd: HWND) {
         enable_shutdown_privilege();
         let ok = SetSuspendState(false, false, false);
         if !ok {
-            crate::log::write("Fn+F12: SetSuspendState failed");
+            crate::log::warn("Fn+F12: SetSuspendState failed");
         }
     }
 }
