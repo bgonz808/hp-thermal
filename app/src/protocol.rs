@@ -11,7 +11,8 @@ pub const CMD_READ_THERMAL: u8 = 0x01;
 pub const CMD_SET_THERMAL: u8 = 0x02;
 pub const CMD_READ_COOLSENSE: u8 = 0x03;
 pub const CMD_SET_COOLSENSE: u8 = 0x04;
-pub const CMD_SET_LOGGING: u8 = 0x05;
+// 0x05 retired (was CMD_SET_LOGGING): logging moved to Event Log, no runtime toggle.
+// Left as a hole so existing opcodes keep their wire values; 0x05 is now rejected.
 pub const CMD_READ_BUILD_ID: u8 = 0x06;
 pub const CMD_SET_STACK_MONITOR: u8 = 0x07;
 pub const CMD_READ_TEMP: u8 = 0x08;
@@ -89,7 +90,7 @@ impl TryFrom<[u8; 2]> for Request {
             | CMD_READ_BRIGHTNESS | CMD_READ_STATE => 0,
             // Set commands validate the payload against a per-command maximum.
             CMD_SET_THERMAL => validated(buf[1], 3)?,
-            CMD_SET_COOLSENSE | CMD_SET_LOGGING | CMD_SET_STACK_MONITOR => validated(buf[1], 1)?,
+            CMD_SET_COOLSENSE | CMD_SET_STACK_MONITOR => validated(buf[1], 1)?,
             CMD_SET_BRIGHTNESS => validated(buf[1], 100)?,
             _ => return Err(STATUS_INVALID_CMD),
         };
@@ -142,7 +143,7 @@ mod tests {
 
     #[test]
     fn toggle_commands_accept_only_0_or_1() {
-        for cmd in [CMD_SET_COOLSENSE, CMD_SET_LOGGING, CMD_SET_STACK_MONITOR] {
+        for cmd in [CMD_SET_COOLSENSE, CMD_SET_STACK_MONITOR] {
             assert_eq!(parse(cmd, 0).unwrap().payload, 0);
             assert_eq!(parse(cmd, 1).unwrap().payload, 1);
             for bad in [2u8, 3, 255] {
@@ -171,8 +172,9 @@ mod tests {
 
     #[test]
     fn unknown_commands_are_rejected() {
-        // 0x00 (below range), 0x0C (just past the table), and high bytes.
-        for cmd in [0x00u8, 0x0C, 0x40, 0x7F, 0xFF] {
+        // 0x00 (below range), 0x05 (retired CMD_SET_LOGGING hole), 0x0C (just past the
+        // table), and high bytes — all must be rejected.
+        for cmd in [0x00u8, 0x05, 0x0C, 0x40, 0x7F, 0xFF] {
             assert_eq!(
                 parse(cmd, 0).err(),
                 Some(STATUS_INVALID_CMD),

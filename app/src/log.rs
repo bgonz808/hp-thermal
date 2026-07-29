@@ -1,101 +1,76 @@
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicUsize, Ordering};
 
 use windows::Win32::Foundation::HANDLE;
+use windows::Win32::System::EventLog::{
+    EVENTLOG_ERROR_TYPE, EVENTLOG_INFORMATION_TYPE, REPORT_EVENT_TYPE, RegisterEventSourceW,
+    ReportEventW,
+};
 use windows::core::PCWSTR;
 
-static LOG: Mutex<Option<std::fs::File>> = Mutex::new(None);
+/// Handle from `RegisterEventSourceW`, kept for the process lifetime. 0 = not initialized
+/// (writes become no-ops). Stored as isize so the crash-handler can read it lock-free.
+static EVENT_SOURCE: AtomicIsize = AtomicIsize::new(0);
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 static STACK_MONITOR: AtomicBool = AtomicBool::new(false);
 
-/// Process label: "svc" or "tray". Set once at init.
-static LABEL: Mutex<&str> = Mutex::new("???");
+/// Single event ID for our free-text diagnostic lines. With no message resource
+/// registered, Event Viewer prefixes a generic wrapper — harmless, and `Get-WinEvent`
+/// returns the bare string regardless. Non-zero so it's never the "success" sentinel.
+const EVENT_ID_LINE: u32 = 1000;
 
-/// Initialize logging to a shared file next to the executable.
-/// `label` identifies the process ("svc" or "tray") in each line.
-/// Also restores verbose state from sentinel file (persistent across restarts).
+/// Register this process's Event Log source. `label` ("svc"/"tray") selects the per-role
+/// source name (`HpThermal-Service` / `HpThermal-Tray`), both derived from one brand stem.
+/// If the source isn't registry-registered (portable run), the EventLog service routes to
+/// the Application log by name — logging still works, just less isolated.
 pub fn init(label: &'static str) {
-    if let Ok(mut guard) = LABEL.lock() {
-        *guard = label;
-    }
-    // Ensure data directory exists (no-op if already present)
-    let _ = std::fs::create_dir_all(crate::app::data_dir());
-    let path = log_path();
-    if let Some(f) = open_log_file(&path)
-        && let Ok(mut guard) = LOG.lock()
-    {
-        *guard = Some(f);
-    }
-    // Restore verbose state from sentinel file
-    if std::path::Path::new(&verbose_sentinel_path()).exists() {
-        VERBOSE.store(true, Ordering::Relaxed);
-    }
-}
-
-/// Write a timestamped, labeled line to the log.
-/// Formats the entire line first, then writes in a single `write_all` call
-/// so that concurrent appends from service + tray don't interleave.
-pub fn write(msg: &str) {
-    if let Ok(mut guard) = LOG.lock()
-        && let Some(f) = guard.as_mut()
-    {
-        use std::io::Write;
-        let ts = timestamp();
-        let label = LABEL.lock().map(|g| *g).unwrap_or("???");
-        let line = format!("[{ts}] [{label}] {msg}\n");
-        let _ = f.write_all(line.as_bytes());
-        let _ = f.flush();
-    }
-}
-
-/// Local time as "YYYY-MM-DD HH:MM:SS.mmm" using Win32 GetLocalTime.
-fn timestamp() -> String {
-    // SAFETY: GetLocalTime writes to a stack-allocated SYSTEMTIME; no preconditions.
-    let st = unsafe { windows::Win32::System::SystemInformation::GetLocalTime() };
-    format!(
-        "{:04}-{:02}-{:02} {:02}:{:02}:{:02}.{:03}",
-        st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond, st.wMilliseconds
-    )
-}
-
-/// Open the log file in create + append mode (`None` on failure).
-fn open_log_file(path: &str) -> Option<std::fs::File> {
-    std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .ok()
-}
-
-/// Truncate the log file and reopen in append mode.
-/// `set_len(0)` doesn't work here because append mode opens with
-/// FILE_APPEND_DATA (no FILE_WRITE_DATA), so we close → truncate → reopen.
-pub fn clear() {
-    let path = log_path();
-    if let Ok(mut guard) = LOG.lock() {
-        *guard = None; // close old handle
-        let _ = std::fs::File::create(&path); // truncate to 0
-        if let Some(f) = open_log_file(&path) {
-            *guard = Some(f);
+    let source = source_name(label);
+    let wide = crate::wide::wide_null(&source);
+    // SAFETY: `wide` is a null-terminated wide string alive for the call. The returned
+    // handle is a process-lifetime EventLog handle we never explicitly deregister (the
+    // OS reclaims it at exit) — matching how the service/tray run until process death.
+    unsafe {
+        if let Ok(h) = RegisterEventSourceW(PCWSTR::null(), PCWSTR(wide.as_ptr())) {
+            EVENT_SOURCE.store(h.0 as isize, Ordering::SeqCst);
         }
     }
-    write("log cleared");
 }
 
-pub fn set_verbose(on: bool) {
-    VERBOSE.store(on, Ordering::Relaxed);
-    // Persist via sentinel file: create to enable, delete to disable.
-    // Both service and tray check this at startup.
-    let sentinel = verbose_sentinel_path();
-    if on {
-        let _ = std::fs::File::create(&sentinel);
-    } else {
-        let _ = std::fs::remove_file(&sentinel);
+/// Map the process label to its per-role Event Log source name.
+fn source_name(label: &str) -> String {
+    match label {
+        "svc" => crate::app::event_source_service(),
+        _ => crate::app::event_source_tray(),
     }
-    write(&format!(
-        "verbose logging {}",
-        if on { "ON" } else { "OFF" }
-    ));
+}
+
+/// Write one diagnostic line as an Information event. The EventLog service stamps time,
+/// source, and level — so no timestamp/label prefix here (the source encodes svc vs tray).
+pub fn write(msg: &str) {
+    report(EVENTLOG_INFORMATION_TYPE, msg);
+}
+
+/// Emit a single-string event of the given type. No-op until `init()` has run.
+fn report(kind: REPORT_EVENT_TYPE, msg: &str) {
+    let h = EVENT_SOURCE.load(Ordering::Relaxed);
+    if h == 0 {
+        return;
+    }
+    let wide = crate::wide::wide_null(msg);
+    let strings = [PCWSTR(wide.as_ptr())];
+    // SAFETY: `h` is our registered source handle; `strings` points at a live wide string
+    // that outlives the call; no user SID / raw data.
+    unsafe {
+        let _ = ReportEventW(
+            HANDLE(h as *mut std::ffi::c_void),
+            kind,
+            0,
+            EVENT_ID_LINE,
+            None,
+            0,
+            Some(&strings),
+            None,
+        );
+    }
 }
 
 pub fn is_verbose() -> bool {
@@ -116,47 +91,26 @@ pub fn is_stack_monitor() -> bool {
 // Stack overflow guard (VEH)
 // ---------------------------------------------------------------------------
 
-/// Raw log file handle for the VEH handler. Separate from the Mutex-guarded
-/// File so the crash handler can write with zero allocations.
-static GUARD_LOG_HANDLE: AtomicIsize = AtomicIsize::new(0);
+/// Pre-built, null-terminated wide crash message. Written once at init so the VEH
+/// handler allocates nothing — it only reads this static and the source handle.
+static mut GUARD_MSG_W: [u16; 32] = [0; 32];
 
-/// Pre-formatted crash message, written once at init. The VEH handler reads
-/// this with zero allocations — no format!(), no Mutex, no heap.
-static mut GUARD_MSG: [u8; 80] = [0; 80];
-static GUARD_MSG_LEN: AtomicUsize = AtomicUsize::new(0);
-
-/// Install a vectored exception handler that catches STATUS_STACK_OVERFLOW.
-/// Writes a fixed message to the log file using a pre-opened raw handle,
-/// then lets the OS terminate the process. Call once after `init()`.
+/// Install a vectored exception handler that catches STATUS_STACK_OVERFLOW and emits a
+/// best-effort Error event before the OS terminates the process. Best-effort because
+/// `ReportEventW` makes an RPC to the EventLog service, which may not fit in the ~4 KB of
+/// stack left at overflow — if it faults, we lose only the breadcrumb (the process was
+/// dying anyway) and gain no file. WER is excluded for this exe (#38), so this is the only
+/// crash trace; the earlier "approaching overflow" warning (stack monitor) is the primary
+/// precursor signal. Call once after `init()`.
 pub fn install_stack_guard() {
-    // SAFETY: GUARD_MSG is written once here before the VEH can fire (single-
-    // threaded init). The raw file handle outlives the process. The VEH handler
-    // only reads the static and does a single WriteFile with zero allocations.
+    // SAFETY: GUARD_MSG_W is written once here before the VEH can fire (single-threaded
+    // init). The handler only reads it and the source handle, both process-lifetime.
     unsafe {
-        use windows::Win32::Storage::FileSystem::*;
-
-        // Pre-format the crash message while we still have stack
-        let label = LABEL.lock().map(|g| *g).unwrap_or("???");
-        let msg = format!("[FATAL] [{label}] STATUS_STACK_OVERFLOW\n");
-        let bytes = msg.as_bytes();
-        let len = bytes.len().min(80);
-        let dst = std::ptr::addr_of_mut!(GUARD_MSG) as *mut u8;
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), dst, len);
-        GUARD_MSG_LEN.store(len, Ordering::Relaxed);
-
-        // Open a raw append handle (separate from the Mutex<File>)
-        let path_w = crate::wide::wide_null(&log_path());
-        if let Ok(h) = CreateFileW(
-            PCWSTR(path_w.as_ptr()),
-            FILE_APPEND_DATA.0,
-            FILE_SHARE_READ | FILE_SHARE_WRITE,
-            None,
-            OPEN_ALWAYS,
-            FILE_ATTRIBUTE_NORMAL,
-            None,
-        ) {
-            GUARD_LOG_HANDLE.store(h.0 as isize, Ordering::Relaxed);
-        }
+        let msg: Vec<u16> = "STATUS_STACK_OVERFLOW".encode_utf16().collect();
+        let len = msg.len().min(31); // leave room for the NUL terminator
+        let dst = std::ptr::addr_of_mut!(GUARD_MSG_W) as *mut u16;
+        std::ptr::copy_nonoverlapping(msg.as_ptr(), dst, len);
+        *dst.add(len) = 0;
 
         windows::Win32::System::Diagnostics::Debug::AddVectoredExceptionHandler(
             1,
@@ -165,25 +119,26 @@ pub fn install_stack_guard() {
     }
 }
 
-/// VEH handler: fires on STATUS_STACK_OVERFLOW (0xC00000FD).
-/// Uses only pre-allocated statics and a raw WriteFile — safe with ~4 KB of
-/// remaining stack.  Returns EXCEPTION_CONTINUE_SEARCH so the OS terminates.
+/// VEH handler: fires on STATUS_STACK_OVERFLOW (0xC00000FD). Best-effort `ReportEventW`
+/// using only pre-built statics, then EXCEPTION_CONTINUE_SEARCH so the OS terminates.
 unsafe extern "system" fn stack_overflow_handler(
     info: *mut windows::Win32::System::Diagnostics::Debug::EXCEPTION_POINTERS,
 ) -> i32 {
     if !info.is_null() && !(*info).ExceptionRecord.is_null() {
         let code = (*(*info).ExceptionRecord).ExceptionCode.0 as u32;
         if code == 0xC000_00FD {
-            let h = GUARD_LOG_HANDLE.load(Ordering::Relaxed);
+            let h = EVENT_SOURCE.load(Ordering::Relaxed);
             if h != 0 {
-                let len = GUARD_MSG_LEN.load(Ordering::Relaxed);
-                let src = std::ptr::addr_of!(GUARD_MSG) as *const u8;
-                let msg = std::slice::from_raw_parts(src, len);
-                let mut written = 0u32;
-                let _ = windows::Win32::Storage::FileSystem::WriteFile(
+                let src = std::ptr::addr_of!(GUARD_MSG_W) as *const u16;
+                let strings = [PCWSTR(src)];
+                let _ = ReportEventW(
                     HANDLE(h as *mut std::ffi::c_void),
-                    Some(msg),
-                    Some(&mut written),
+                    EVENTLOG_ERROR_TYPE,
+                    0,
+                    EVENT_ID_LINE,
+                    None,
+                    0,
+                    Some(&strings),
                     None,
                 );
             }
@@ -373,14 +328,4 @@ pub fn stack_peak_kb() -> usize {
 /// Return peak instantaneous depth in KB (for tray debug menu display).
 pub fn stack_depth_peak_kb() -> usize {
     STACK_DEPTH_PEAK.load(Ordering::Relaxed) / 1024
-}
-
-/// Get the log file path (in ProgramData).
-pub fn log_path() -> String {
-    format!("{}\\{}", crate::app::data_dir(), crate::app::LOG_FILE)
-}
-
-/// Sentinel file path for persistent verbose state (in ProgramData).
-fn verbose_sentinel_path() -> String {
-    format!("{}\\hp-thermal.verbose", crate::app::data_dir())
 }

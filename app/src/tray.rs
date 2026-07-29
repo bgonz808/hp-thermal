@@ -38,11 +38,9 @@ const WM_NOISE_ADAPT_DONE: u32 = WM_USER + 2;
 #[cfg(feature = "noise-adapt")]
 const WM_CALIBRATE_DONE: u32 = WM_USER + 3;
 const ID_DEBUG_HEADER: u32 = 300;
-const ID_VERBOSE_LOG: u32 = 309;
-const ID_OPEN_LOG: u32 = 310;
+const ID_OPEN_EVENTVWR: u32 = 310;
 const ID_RESTART_SVC: u32 = 311;
 const ID_STACK_MONITOR: u32 = 312;
-const ID_CLEAR_LOG: u32 = 313;
 #[cfg(feature = "noise-adapt")]
 const ID_CLEAR_CAL: u32 = 314;
 #[cfg(feature = "noise-adapt")]
@@ -75,7 +73,6 @@ const METHOD_BRIGHTNESS: u8 = 1;
 const METHOD_BLACK: u8 = 2;
 
 static mut HWND_MAIN: HWND = HWND(std::ptr::null_mut());
-static mut VERBOSE_ON: bool = false;
 static mut STACK_MONITOR_ON: bool = false;
 #[cfg(feature = "noise-adapt")]
 static mut NOISE_ADAPT_RUNNING: bool = false;
@@ -789,10 +786,8 @@ unsafe fn show_context_menu(hwnd: HWND, anchor_x: i32, anchor_y: i32) {
 
         // --- Tools ---
         let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
-        append_item(hmenu, ID_VERBOSE_LOG, "Verbose Logging", VERBOSE_ON);
         append_item(hmenu, ID_STACK_MONITOR, "Stack Monitor", STACK_MONITOR_ON);
-        append_item(hmenu, ID_OPEN_LOG, "Open Log", false);
-        append_item(hmenu, ID_CLEAR_LOG, "Clear Log", false);
+        append_item(hmenu, ID_OPEN_EVENTVWR, "Open Event Viewer", false);
     }
 
     // Backstop warm (#64): refresh the cache for the NEXT open. Idempotent + throttled, so a
@@ -929,12 +924,6 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             }
             return;
         }
-        ID_VERBOSE_LOG => {
-            VERBOSE_ON = !VERBOSE_ON;
-            crate::log::set_verbose(VERBOSE_ON);
-            pipe::client_transact(CMD_SET_LOGGING, if VERBOSE_ON { 1 } else { 0 });
-            return;
-        }
         ID_STACK_MONITOR => {
             STACK_MONITOR_ON = !STACK_MONITOR_ON;
             crate::log::set_stack_monitor(STACK_MONITOR_ON);
@@ -963,12 +952,15 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             save_fnkey_settings();
             return;
         }
-        ID_OPEN_LOG => {
-            shell_open(&crate::log::log_path());
-            return;
-        }
-        ID_CLEAR_LOG => {
-            crate::log::clear();
+        ID_OPEN_EVENTVWR => {
+            // Launch Event Viewer directly from its pinned System32 path — no shell, no
+            // CreateProcess search order (a bare "eventvwr.msc" would resolve via CWD/PATH,
+            // squattable). Event Viewer is an external GUI app, so a process launch is the
+            // only way to show it; this runs at the tray's Medium IL (no elevation). Our
+            // per-role events are under Windows Logs → Application, Source =
+            // HpThermal-Service / HpThermal-Tray.
+            let _ =
+                std::process::Command::new(crate::install::system32_exe("eventvwr.exe")).spawn();
             return;
         }
         #[cfg(feature = "noise-adapt")]
@@ -1171,7 +1163,10 @@ fn load_tray_icon() -> HICON {
     }
 }
 
-/// Open a path with the shell's default handler (ShellExecute "open").
+/// Open a path with the shell's default handler (ShellExecute "open"). Only used to open
+/// the noise-capture TSV (a data file); executable launches use a pinned System32 path via
+/// a direct `CreateProcess`, never the shell's search order.
+#[cfg(feature = "noise-adapt")]
 fn shell_open(path: &str) {
     let path_w = crate::wide::wide_null(path);
     // SAFETY: path_w is a null-terminated wide string on the stack; ShellExecuteW

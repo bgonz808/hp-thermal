@@ -111,7 +111,9 @@ pub const PIPE_NAME: &str = r"\\.\pipe\HpThermalCtl";
 pub const MUTEX_NAME: &str = "HpThermalTrayMutex";
 pub const SETUP_MUTEX_NAME: &str = "HpThermalSetupMutex";
 pub const WINDOW_CLASS: &str = "HpThermalTray";
-pub const LOG_FILE: &str = "hp-thermal.log";
+/// PascalCase brand stem. Single source of truth for the two per-role Event Log
+/// source names below — so `-Service` / `-Tray` can never drift from each other.
+pub const LOG_IDENT: &str = "HpThermal";
 /// Named event signaled by the service when Fn+F12 (hpqBEvnt EventId=29) fires.
 /// Global\ namespace = visible across sessions (service in session 0, tray in user session).
 pub const FNKEY_EVENT: &str = r"Global\HpThermalFnKey";
@@ -178,6 +180,16 @@ pub fn data_dir() -> &'static str {
 /// Path to the installed exe: C:\Program Files\HpThermal\hp-thermal.exe
 pub fn installed_exe() -> String {
     format!("{}\\{}", install_dir(), EXE_NAME)
+}
+
+/// Event Log source name for the SYSTEM service: "HpThermal-Service".
+pub fn event_source_service() -> String {
+    format!("{LOG_IDENT}-Service")
+}
+
+/// Event Log source name for the user-session tray: "HpThermal-Tray".
+pub fn event_source_tray() -> String {
+    format!("{LOG_IDENT}-Tray")
 }
 
 /// Resolve a known folder via SHGetKnownFolderPath.
