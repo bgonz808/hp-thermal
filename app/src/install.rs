@@ -367,6 +367,61 @@ unsafe fn reg_set_dword(
 }
 
 // ---------------------------------------------------------------------------
+// Event Log sources (elevated)
+// ---------------------------------------------------------------------------
+
+/// Register both per-role Event Log sources under the Application log so events render with
+/// a known source + `TypesSupported`. Adding a *source* to the existing Application log is
+/// live — no reboot (unlike creating a new custom log). Idempotent; called from install and
+/// update. Must be elevated (HKLM). Undone by `deregister_event_sources()` on uninstall.
+fn register_event_sources() {
+    register_one_event_source(&app::event_source_service());
+    register_one_event_source(&app::event_source_tray());
+}
+
+fn register_one_event_source(source: &str) {
+    use windows::Win32::System::Registry::*;
+    let subkey = format!("SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application\\{source}");
+    let subkey_w = wide_null(&subkey);
+    // SAFETY: `subkey_w` is a null-terminated wide string alive for the call; `key` is
+    // closed before return; `TypesSupported` is a fixed DWORD.
+    unsafe {
+        let mut key = HKEY::default();
+        let err = RegCreateKeyExW(
+            HKEY_LOCAL_MACHINE,
+            PCWSTR(subkey_w.as_ptr()),
+            None,
+            PCWSTR::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            None,
+            &mut key,
+            None,
+        );
+        if err.is_err() {
+            return;
+        }
+        reg_set_dword(key, w!("TypesSupported"), 7); // ERROR | WARNING | INFORMATION
+        let _ = RegCloseKey(key);
+    }
+}
+
+/// Remove both Event Log sources on uninstall — leave no registry entry behind.
+fn deregister_event_sources() {
+    use windows::Win32::System::Registry::*;
+    for source in [app::event_source_service(), app::event_source_tray()] {
+        let subkey =
+            format!("SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application\\{source}");
+        let subkey_w = wide_null(&subkey);
+        // SAFETY: `subkey_w` is a null-terminated wide string; the source key holds only
+        // values (no child subkeys), so `RegDeleteKeyW` suffices.
+        unsafe {
+            let _ = RegDeleteKeyW(HKEY_LOCAL_MACHINE, PCWSTR(subkey_w.as_ptr()));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // File operations (elevated)
 // ---------------------------------------------------------------------------
 
@@ -544,7 +599,10 @@ fn schedule_delete_on_reboot(path: &std::path::Path) {
 }
 
 /// Create C:\ProgramData\HpThermal\ and grant Users modify access.
-/// Must be called elevated.
+/// Must be called elevated. The Users grant exists for user-authored config/calibration
+/// (fnkey, consent, smart-cal, noise-capture) written by the Medium-IL tray. No SYSTEM/
+/// elevated process writes files here anymore — logs and update diagnostics go to the
+/// Event Log — so the grant no longer enables a hardlink-squat → privileged-append (CWE-59).
 fn ensure_data_dir() -> Result<(), String> {
     let data_dir = app::data_dir();
 
@@ -881,6 +939,7 @@ pub fn uninstall() {
     remove_start_menu_shortcut();
     remove_desktop_shortcut();
     unexclude_from_wer(); // #38: leave no WER exclusion behind
+    deregister_event_sources(); // leave no Event Log source registration behind
 
     // Close tray instances gracefully, then wait/force — native, no taskkill.
     close_tray_windows();
@@ -905,7 +964,7 @@ pub fn uninstall() {
         }
     }
 
-    // Remove data directory (C:\ProgramData\HpThermal — logs, sentinel)
+    // Remove data directory (C:\ProgramData\HpThermal — user config/calibration)
     let data_dir = app::data_dir();
     if std::path::Path::new(data_dir).exists() {
         match fs::remove_dir_all(data_dir) {
@@ -937,8 +996,12 @@ pub fn install_service(choices: Choices) {
 
     if let Err(e) = ensure_data_dir() {
         eprintln!("Data dir setup failed: {e}");
-        // Non-fatal: service can still run, just can't log until fixed
+        // Non-fatal: service can still run, just can't persist user config until fixed
     }
+
+    // Register the per-role Event Log sources (HpThermal-Service / -Tray) before the
+    // service starts, so its first events render with a known source.
+    register_event_sources();
 
     let installed = app::installed_exe();
     let bin_path = format!("\"{}\" --service", installed);
@@ -1116,6 +1179,9 @@ fn unexclude_from_wer() {
 /// Stop, replace exe, delete old registration, recreate, start.
 /// Must be called elevated.
 pub fn update_service() {
+    // Idempotent — ensures the Event Log sources exist when updating from a pre-Event-Log
+    // install, so UpdateLog (and the restarted service) render with a known source.
+    register_event_sources();
     let log = UpdateLog::open();
     log.write("update_service started");
     log.write(&format!("installing: {}", app::build_identity()));
@@ -1196,26 +1262,20 @@ pub fn update_service() {
     log.write("update_service done — privileged work complete");
 }
 
-/// Append-only log to C:\ProgramData\HpThermal\update.log for diagnosing
-/// the UAC child process (which has no visible console).
-struct UpdateLog {
-    path: String,
-}
+/// Diagnostics for the UAC update child (which has no visible console), routed to the
+/// `HpThermal-Service` Event Log source instead of a file — so the update path leaves no
+/// writable log collateral in the shared data dir. Entries persist across runs (the Event
+/// Log rotates by size); filter by time to see the latest attempt.
+struct UpdateLog;
 
 impl UpdateLog {
     fn open() -> Self {
-        let path = format!("{}\\update.log", app::data_dir());
-        let _ = fs::create_dir_all(app::data_dir());
-        // Truncate on each run so we only see the latest attempt
-        let _ = fs::write(&path, "");
-        Self { path }
+        crate::log::init("svc");
+        Self
     }
 
     fn write(&self, msg: &str) {
-        use std::io::Write;
-        if let Ok(mut f) = fs::OpenOptions::new().append(true).open(&self.path) {
-            let _ = writeln!(f, "{msg}");
-        }
+        crate::log::write(msg);
     }
 }
 
@@ -1508,8 +1568,9 @@ pub fn start_service() {
 /// launched from wherever hp-thermal.exe lives (a user-writable Downloads folder
 /// on first run), a bare name like `"sc"` could otherwise resolve to a bundled
 /// malicious `sc.exe` and run as Administrator — a binary-planting LPE. An
-/// absolute path is not searched, closing that class entirely.
-fn system32_exe(name: &str) -> std::path::PathBuf {
+/// absolute path is not searched, closing that class entirely. Also used by the
+/// tray's "Open Event Viewer" so that launch is pinned to System32, not searched.
+pub(crate) fn system32_exe(name: &str) -> std::path::PathBuf {
     let mut buf = [0u16; 260];
     // SAFETY: GetSystemDirectoryW writes up to buf.len() wchars and returns the count.
     let len = unsafe { GetSystemDirectoryW(Some(&mut buf)) } as usize;

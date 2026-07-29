@@ -348,10 +348,6 @@ fn dispatch<W: ThermalOps>(wmi: &W, cache: &mut CacheSet, req: &Request) -> [u8;
         CMD_READ_TEMP => CacheSet::cached_read(&mut cache.temp, COOLDOWN_TEMP_MS, || {
             read_result(wmi.read_temp())
         }),
-        CMD_SET_LOGGING => {
-            log::set_verbose(req.payload != 0);
-            [STATUS_OK, 0]
-        }
         CMD_SET_STACK_MONITOR => {
             log::set_stack_monitor(req.payload != 0);
             [STATUS_OK, 0]
