@@ -395,6 +395,10 @@ impl WmiConnection {
     ) -> Result<(u32, Vec<u8>), u8> {
         let method_w: Vec<u16> = method.encode_utf16().chain(std::iter::once(0)).collect();
 
+        // WMI-message-level trace (ETW, on-demand): the hpqB call being issued. Correlate by
+        // timestamp with the durable Event Log "set thermal mode=X" to see the WMI carrying it.
+        log::trace!("wmi: {method} cmd=0x{command:X} type=0x{command_type:X} data={data:02X?}");
+
         // Step 0x10: Get hpqBDataIn class
         let mut in_data_class = None;
         self.services
@@ -532,10 +536,10 @@ impl IWbemObjectSink_Impl for FnKeySink_Impl {
             let Ok(id) = (unsafe { get_u32(obj, w!("EventId")) }) else {
                 continue;
             };
-            if log::is_verbose() {
+            if log::trace_enabled() {
                 // SAFETY: same valid object.
                 let data = unsafe { get_u32(obj, w!("EventData")) }.unwrap_or(0);
-                log::write(&format!("hpqBEvnt: id={id} data=0x{data:04X}"));
+                log::trace!("hpqBEvnt: id={id} data=0x{data:04X}");
             }
             if should_signal_fn_key(id) {
                 let h = HANDLE(self.fn_key as *mut core::ffi::c_void);

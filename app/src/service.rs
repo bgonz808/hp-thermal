@@ -49,6 +49,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     set_status(SERVICE_START_PENDING, 0);
     log::init("svc");
     log::install_stack_guard();
+    log::etw_register();
     log::write("service starting");
     log::write(&format!("build: {}", app::build_identity()));
 
@@ -173,16 +174,12 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
 
         // Read 4-byte request (magic prefix + command + payload)
         if let Some(buf) = pipe::read_request(pipe) {
-            if log::is_verbose() {
-                log::write(&format!("req: 0x{:02X} 0x{:02X}", buf[0], buf[1]));
-            }
+            log::trace!("req: 0x{:02X} 0x{:02X}", buf[0], buf[1]);
             let response = match Request::try_from(buf) {
                 Ok(req) => dispatch(&wmi, &mut cache, &req),
                 Err(status) => [status, 0],
             };
-            if log::is_verbose() {
-                log::write(&format!("rsp: 0x{:02X} 0x{:02X}", response[0], response[1],));
-            }
+            log::trace!("rsp: 0x{:02X} 0x{:02X}", response[0], response[1]);
             pipe::write2(pipe, &response);
         }
 

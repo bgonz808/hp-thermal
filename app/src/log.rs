@@ -1,17 +1,32 @@
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
 use windows::Win32::Foundation::HANDLE;
+use windows::Win32::System::Diagnostics::Etw::{
+    ENABLECALLBACK_ENABLED_STATE, EVENT_FILTER_DESCRIPTOR, EventRegister, EventWriteString,
+    REGHANDLE,
+};
 use windows::Win32::System::EventLog::{
     EVENTLOG_ERROR_TYPE, EVENTLOG_INFORMATION_TYPE, EVENTLOG_WARNING_TYPE, REPORT_EVENT_TYPE,
     RegisterEventSourceW, ReportEventW,
 };
-use windows::core::PCWSTR;
+use windows::core::{GUID, PCWSTR};
 
 /// Handle from `RegisterEventSourceW`, kept for the process lifetime. 0 = not initialized
 /// (writes become no-ops). Stored as isize so the crash-handler can read it lock-free.
 static EVENT_SOURCE: AtomicIsize = AtomicIsize::new(0);
-static VERBOSE: AtomicBool = AtomicBool::new(false);
 static STACK_MONITOR: AtomicBool = AtomicBool::new(false);
+
+// --- Verbose/trace tier (ETW, on-demand) --------------------------------------------------
+/// ETW registration handle (REGHANDLE). 0 = unregistered.
+static ETW_HANDLE: AtomicU64 = AtomicU64::new(0);
+/// True while a trace session has our provider enabled (set by the enable callback). The
+/// `trace!` macro reads this BEFORE formatting, so at rest a trace line is one atomic load.
+static ETW_ENABLED: AtomicBool = AtomicBool::new(false);
+/// Stable ETW provider GUID for HpThermal verbose/trace. Consumers subscribe by this GUID
+/// (wpr / logman / PerfView). Fixed — reproducible builds + version stability.
+const ETW_PROVIDER_GUID: GUID = GUID::from_u128(0x7b2a1c4e_9d3f_4a8b_b1e6_2c5d8f0a3e71);
+/// TRACE_LEVEL_VERBOSE — a session enabling at >= this level receives our trace lines.
+const ETW_LEVEL_VERBOSE: u8 = 5;
 
 /// Single event ID for our free-text diagnostic lines. With no message resource
 /// registered, Event Viewer prefixes a generic wrapper — harmless, and `Get-WinEvent`
@@ -100,9 +115,85 @@ fn report(kind: REPORT_EVENT_TYPE, msg: &str) {
     }
 }
 
-pub fn is_verbose() -> bool {
-    VERBOSE.load(Ordering::Relaxed)
+/// Register the verbose/trace ETW provider. Call once per process, after `init()`. Near-zero
+/// cost at rest — events are dropped unless a trace session subscribes. Not explicitly
+/// unregistered (process-lifetime; the OS reclaims at exit), matching the Event Log source.
+pub fn etw_register() {
+    let mut handle = REGHANDLE(0);
+    // SAFETY: standard EventRegister with our static provider GUID + enable callback; the
+    // out-param `handle` is a stack REGHANDLE written before return.
+    unsafe {
+        if EventRegister(
+            &ETW_PROVIDER_GUID,
+            Some(etw_enable_callback),
+            None,
+            &mut handle,
+        ) == 0
+        {
+            ETW_HANDLE.store(handle.0 as u64, Ordering::SeqCst);
+        }
+    }
 }
+
+/// ETW enable callback: a trace session enabling/disabling our provider flips `ETW_ENABLED`.
+/// State 1 = enable, 0 = disable; 2 = capture-state (rundown), which is not an enable-state
+/// change, so it's ignored.
+unsafe extern "system" fn etw_enable_callback(
+    _source: *const GUID,
+    is_enabled: ENABLECALLBACK_ENABLED_STATE,
+    _level: u8,
+    _match_any: u64,
+    _match_all: u64,
+    _filter: *const EVENT_FILTER_DESCRIPTOR,
+    _ctx: *mut core::ffi::c_void,
+) {
+    match is_enabled.0 {
+        0 => ETW_ENABLED.store(false, Ordering::Relaxed),
+        1 => ETW_ENABLED.store(true, Ordering::Relaxed),
+        _ => {}
+    }
+}
+
+/// Whether a trace session is currently listening. The `trace!` macro gates on this before
+/// formatting, so at rest a `trace!(...)` is a single atomic load.
+#[inline]
+pub fn trace_enabled() -> bool {
+    ETW_ENABLED.load(Ordering::Relaxed)
+}
+
+/// The fat side of `trace!`: format the args and emit one Verbose ETW string. Only reached
+/// when `trace_enabled()` — so the `format!` cost is paid only while a session is capturing.
+pub fn trace_line(args: std::fmt::Arguments) {
+    let h = ETW_HANDLE.load(Ordering::Relaxed);
+    if h == 0 {
+        return;
+    }
+    let s = std::fmt::format(args);
+    let wide = crate::wide::wide_null(&s);
+    // SAFETY: `h` is our registration handle; `wide` is a live null-terminated wide string.
+    unsafe {
+        let _ = EventWriteString(
+            REGHANDLE(h as i64),
+            ETW_LEVEL_VERBOSE,
+            0,
+            PCWSTR(wide.as_ptr()),
+        );
+    }
+}
+
+/// Verbose/trace line → ETW (Verbose level), NOT the always-on Event Log. Gated on an active
+/// trace session BEFORE `format_args!`, so at rest it is one atomic load and nothing else.
+/// Collected on-demand via wpr / logman / PerfView / `Get-WinEvent -Path *.etl`, and
+/// correlated with the durable Event Log by timestamp. The heavy path lives once in
+/// `trace_line` (thin-macro / fat-fn — negligible per-call-site code).
+macro_rules! trace {
+    ($($arg:tt)*) => {
+        if $crate::log::trace_enabled() {
+            $crate::log::trace_line(format_args!($($arg)*));
+        }
+    };
+}
+pub(crate) use trace;
 
 pub fn set_stack_monitor(on: bool) {
     STACK_MONITOR.store(on, Ordering::Relaxed);
@@ -313,8 +404,8 @@ pub fn stack_sample(label: &str) {
         }
     }
 
-    if is_verbose() {
-        write(&format!(
+    if trace_enabled() {
+        trace_line(format_args!(
             "stack [{label}] depth={} KB committed={kb} KB peak_depth={} KB peak_committed={} KB",
             depth / 1024,
             STACK_DEPTH_PEAK.load(Ordering::Relaxed) / 1024,
