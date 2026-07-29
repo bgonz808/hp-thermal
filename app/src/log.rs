@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicUsize, Orderin
 
 use windows::Win32::Foundation::HANDLE;
 use windows::Win32::System::EventLog::{
-    EVENTLOG_ERROR_TYPE, EVENTLOG_INFORMATION_TYPE, REPORT_EVENT_TYPE, RegisterEventSourceW,
-    ReportEventW,
+    EVENTLOG_ERROR_TYPE, EVENTLOG_INFORMATION_TYPE, EVENTLOG_WARNING_TYPE, REPORT_EVENT_TYPE,
+    RegisterEventSourceW, ReportEventW,
 };
 use windows::core::PCWSTR;
 
@@ -47,6 +47,18 @@ fn source_name(label: &str) -> String {
 /// source, and level — so no timestamp/label prefix here (the source encodes svc vs tray).
 pub fn write(msg: &str) {
     report(EVENTLOG_INFORMATION_TYPE, msg);
+}
+
+/// Warning event: a degraded state, a non-fatal failure, or a fallback taken (an optional
+/// feature disabled itself, a hardening step didn't apply). Surfaces under `Level -le 3`.
+pub fn warn(msg: &str) {
+    report(EVENTLOG_WARNING_TYPE, msg);
+}
+
+/// Error event: a fail-closed refusal, or a core operation that failed (WMI connect, a
+/// thermal command that didn't apply). Surfaces under `Level -le 2`.
+pub fn error(msg: &str) {
+    report(EVENTLOG_ERROR_TYPE, msg);
 }
 
 /// Emit a single-string event of the given type. No-op until `init()` has run.
@@ -263,9 +275,10 @@ pub fn stack_sample(label: &str) {
     if bin == STACK_NUM_BINS - 1 {
         let prev = STACK_OVERFLOW_WARN.fetch_add(1, Ordering::Relaxed);
         if prev == 0 {
-            // First overflow: always log regardless of verbose
-            write(&format!(
-                "WARNING: stack [{label}] hit overflow bin! committed={kb} KB"
+            // First overflow: always log regardless of verbose. Warning level — the
+            // "WARNING:" text prefix is gone, the event level now carries it.
+            warn(&format!(
+                "stack [{label}] hit overflow bin! committed={kb} KB"
             ));
         }
     }
