@@ -370,13 +370,16 @@ unsafe fn reg_set_dword(
 // Event Log sources (elevated)
 // ---------------------------------------------------------------------------
 
-/// Register both per-role Event Log sources under the Application log so events render with
-/// a known source + `TypesSupported`. Adding a *source* to the existing Application log is
-/// live — no reboot (unlike creating a new custom log). Idempotent; called from install and
-/// update. Must be elevated (HKLM). Undone by `deregister_event_sources()` on uninstall.
+/// Register the Event Log sources (`-Service`, `-Tray`, `-Setup`, `-Untrusted`) under the
+/// Application log so events render with a known source + `TypesSupported`. Adding a
+/// *source* to the existing Application log is live — no reboot (unlike creating a new
+/// custom log). Idempotent; called from install and update. Must be elevated (HKLM). Undone
+/// by `deregister_event_sources()` on uninstall.
 fn register_event_sources() {
     register_one_event_source(&app::event_source_service());
     register_one_event_source(&app::event_source_tray());
+    register_one_event_source(&app::event_source_setup());
+    register_one_event_source(&app::event_source_untrusted());
 }
 
 fn register_one_event_source(source: &str) {
@@ -409,7 +412,12 @@ fn register_one_event_source(source: &str) {
 /// Remove both Event Log sources on uninstall — leave no registry entry behind.
 fn deregister_event_sources() {
     use windows::Win32::System::Registry::*;
-    for source in [app::event_source_service(), app::event_source_tray()] {
+    for source in [
+        app::event_source_service(),
+        app::event_source_tray(),
+        app::event_source_setup(),
+        app::event_source_untrusted(),
+    ] {
         let subkey =
             format!("SYSTEM\\CurrentControlSet\\Services\\EventLog\\Application\\{source}");
         let subkey_w = wide_null(&subkey);
@@ -999,8 +1007,8 @@ pub fn install_service(choices: Choices) {
         // Non-fatal: service can still run, just can't persist user config until fixed
     }
 
-    // Register the per-role Event Log sources (HpThermal-Service / -Tray) before the
-    // service starts, so its first events render with a known source.
+    // Register the Event Log sources (HpThermal-Service / -Tray / -Setup / -Untrusted)
+    // before the service starts, so its first events render with a known source.
     register_event_sources();
 
     let installed = app::installed_exe();
@@ -1270,7 +1278,9 @@ struct UpdateLog;
 
 impl UpdateLog {
     fn open() -> Self {
-        crate::log::init("svc");
+        // "setup" -> the transient install/update helper always logs under HpThermal-Setup,
+        // separate from resident-service runtime (it runs from the download location).
+        crate::log::init("setup");
         Self
     }
 

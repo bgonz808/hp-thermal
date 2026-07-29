@@ -192,6 +192,22 @@ pub fn event_source_tray() -> String {
     format!("{LOG_IDENT}-Tray")
 }
 
+/// Event Log source name for the transient install/update helper: "HpThermal-Setup". The
+/// helper legitimately runs from the download location during a bootstrap, so it gets its
+/// own source rather than masquerading as (or being flagged like) a resident component.
+pub fn event_source_setup() -> String {
+    format!("{LOG_IDENT}-Setup")
+}
+
+/// Event Log source name for a *resident* role (service/tray) running from a NON-canonical
+/// location: "HpThermal-Untrusted". The image sits somewhere a non-admin could have planted
+/// or modified it, so its events are quarantined here — forensically loud — rather than
+/// under -Service / -Tray (a copied binary can't masquerade) or -Setup (this is not a
+/// benign bootstrap; it's an anomaly worth investigating).
+pub fn event_source_untrusted() -> String {
+    format!("{LOG_IDENT}-Untrusted")
+}
+
 /// Resolve a known folder via SHGetKnownFolderPath.
 /// Exits the process on failure — if this API fails, the OS is broken.
 fn known_folder_path(folder_id: &windows::core::GUID) -> String {

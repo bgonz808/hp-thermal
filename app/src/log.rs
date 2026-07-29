@@ -18,10 +18,11 @@ static STACK_MONITOR: AtomicBool = AtomicBool::new(false);
 /// returns the bare string regardless. Non-zero so it's never the "success" sentinel.
 const EVENT_ID_LINE: u32 = 1000;
 
-/// Register this process's Event Log source. `label` ("svc"/"tray") selects the per-role
-/// source name (`HpThermal-Service` / `HpThermal-Tray`), both derived from one brand stem.
-/// If the source isn't registry-registered (portable run), the EventLog service routes to
-/// the Application log by name — logging still works, just less isolated.
+/// Register this process's Event Log source. `label` ("svc"/"tray"/"setup") selects the
+/// per-role source name, but the resident `-Service`/`-Tray` identities are asserted ONLY
+/// from the canonical install dir (see `source_name`). If the source isn't registry-
+/// registered (portable run), the EventLog service routes to the Application log by name —
+/// logging still works, just less isolated.
 pub fn init(label: &'static str) {
     let source = source_name(label);
     let wide = crate::wide::wide_null(&source);
@@ -35,8 +36,22 @@ pub fn init(label: &'static str) {
     }
 }
 
-/// Map the process label to its per-role Event Log source name.
+/// Map the process label to its Event Log source, steered by provenance:
+/// - `"setup"` (the install/update helper) → always `HpThermal-Setup`, whatever the location
+///   (bootstrap legitimately runs from the download dir).
+/// - `"svc"` / `"tray"` → `HpThermal-Service` / `HpThermal-Tray` ONLY from the canonical,
+///   admin-write-only install dir. From anywhere else the resident image is unverified, so
+///   they route to `HpThermal-Untrusted` — a distinct, forensically loud bucket (NOT Setup:
+///   this is an anomaly, not a benign bootstrap). A copied/misplaced binary thus can't
+///   masquerade as the resident service/tray, and a service started non-canonically files
+///   its "REFUSING: not from install dir" refusal under Untrusted (init precedes the check).
 fn source_name(label: &str) -> String {
+    if label == "setup" {
+        return crate::app::event_source_setup();
+    }
+    if !crate::install::running_from_install_dir() {
+        return crate::app::event_source_untrusted();
+    }
     match label {
         "svc" => crate::app::event_source_service(),
         _ => crate::app::event_source_tray(),
