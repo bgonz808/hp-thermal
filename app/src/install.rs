@@ -1011,6 +1011,17 @@ pub fn update() {
     }
 }
 
+/// Best-effort removal of the per-user consent key (HKCU\Software\HpThermal) on uninstall.
+/// HKCU here is the *elevated* uninstaller's hive — cleans the common same-user-admin case; a
+/// standard user elevating to a *different* admin leaves a benign fingerprint string behind.
+fn remove_consent() {
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteTreeW};
+    // SAFETY: static subkey literal; RegDeleteTreeW removes the key and its value(s).
+    unsafe {
+        let _ = RegDeleteTreeW(HKEY_CURRENT_USER, w!("Software\\HpThermal"));
+    }
+}
+
 /// Uninstall the service and clean up directories. If not elevated, re-launches with UAC.
 pub fn uninstall() {
     if !is_elevated() {
@@ -1024,6 +1035,7 @@ pub fn uninstall() {
     remove_desktop_shortcut();
     unexclude_from_wer(); // #38: leave no WER exclusion behind
     deregister_event_sources(); // leave no Event Log source registration behind
+    remove_consent(); // #88: drop the per-user HKCU consent record (best-effort)
 
     // Close tray instances gracefully, then wait/force — native, no taskkill.
     close_tray_windows();
