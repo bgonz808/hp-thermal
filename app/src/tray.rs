@@ -38,13 +38,10 @@ const WM_NOISE_ADAPT_DONE: u32 = WM_USER + 2;
 #[cfg(feature = "noise-adapt")]
 const WM_CALIBRATE_DONE: u32 = WM_USER + 3;
 const ID_DEBUG_HEADER: u32 = 300;
-const ID_OPEN_EVENTVWR: u32 = 310;
 const ID_RESTART_SVC: u32 = 311;
 const ID_STACK_MONITOR: u32 = 312;
 #[cfg(feature = "noise-adapt")]
 const ID_CLEAR_CAL: u32 = 314;
-#[cfg(feature = "noise-adapt")]
-const ID_OPEN_TSV: u32 = 315;
 #[cfg(feature = "noise-adapt")]
 const ID_DEBUG_CAL: u32 = 316;
 const ID_FNKEY_SCREEN: u32 = 317;
@@ -740,7 +737,6 @@ unsafe fn show_context_menu(hwnd: HWND, anchor_x: i32, anchor_y: i32) {
                 append_item_disabled(hmenu, id, "Noise cal: none");
             }
             append_item(hmenu, ID_CLEAR_CAL, "Clear calibration", false);
-            append_item(hmenu, ID_OPEN_TSV, "Open capture TSV", false);
             if NOISE_ADAPT_RUNNING || CALIBRATING {
                 append_item_disabled(hmenu, ID_DEBUG_CAL, "Debug Calibration (WAV)...");
             } else {
@@ -788,7 +784,6 @@ unsafe fn show_context_menu(hwnd: HWND, anchor_x: i32, anchor_y: i32) {
         // --- Tools ---
         let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
         append_item(hmenu, ID_STACK_MONITOR, "Stack Monitor", STACK_MONITOR_ON);
-        append_item(hmenu, ID_OPEN_EVENTVWR, "Open Event Viewer", false);
     }
 
     // Backstop warm (#64): refresh the cache for the NEXT open. Idempotent + throttled, so a
@@ -953,17 +948,6 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             save_fnkey_settings();
             return;
         }
-        ID_OPEN_EVENTVWR => {
-            // Launch Event Viewer directly from its pinned System32 path — no shell, no
-            // CreateProcess search order (a bare "eventvwr.msc" would resolve via CWD/PATH,
-            // squattable). Event Viewer is an external GUI app, so a process launch is the
-            // only way to show it; this runs at the tray's Medium IL (no elevation). Our
-            // per-role events are under Windows Logs → Application, Source =
-            // HpThermal-Service / HpThermal-Tray.
-            let _ =
-                std::process::Command::new(crate::install::system32_exe("eventvwr.exe")).spawn();
-            return;
-        }
         #[cfg(feature = "noise-adapt")]
         ID_CLEAR_CAL => {
             crate::audio::clear_cal();
@@ -975,11 +959,6 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             return;
         }
         #[cfg(feature = "noise-adapt")]
-        ID_OPEN_TSV => {
-            shell_open(&format!("{}\\noise-capture.tsv", app::data_dir()));
-            return;
-        }
-        #[cfg(feature = "noise-adapt")]
         ID_DEBUG_CAL => {
             if NOISE_ADAPT_RUNNING || CALIBRATING {
                 return;
@@ -988,7 +967,7 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             show_balloon(
                 hwnd,
                 "Debug Calibration",
-                "A/B test with WAV recording.\nWill open results folder when done.",
+                "A/B test with WAV recording. Results path is in the Event Log.",
             );
             run_smart_measure_thread(hwnd, true, "debug-cal");
             set_tooltip_text(hwnd, &format!("{}: Debug Calibration...", app::NAME));
@@ -1161,26 +1140,6 @@ fn load_tray_icon() -> HICON {
         // Safe fallback: the predefined, always-available application icon.
         // unwrap_or_default keeps this panic-free even in the impossible failure case.
         LoadIconW(None, IDI_APPLICATION).unwrap_or_default()
-    }
-}
-
-/// Open a path with the shell's default handler (ShellExecute "open"). Only used to open
-/// the noise-capture TSV (a data file); executable launches use a pinned System32 path via
-/// a direct `CreateProcess`, never the shell's search order.
-#[cfg(feature = "noise-adapt")]
-fn shell_open(path: &str) {
-    let path_w = crate::wide::wide_null(path);
-    // SAFETY: path_w is a null-terminated wide string on the stack; ShellExecuteW
-    // reads it synchronously before returning.
-    unsafe {
-        ShellExecuteW(
-            None,
-            w!("open"),
-            PCWSTR(path_w.as_ptr()),
-            None,
-            None,
-            SW_SHOW,
-        );
     }
 }
 

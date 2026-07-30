@@ -1656,9 +1656,8 @@ pub fn start_service() {
 /// launched from wherever hp-thermal.exe lives (a user-writable Downloads folder
 /// on first run), a bare name like `"sc"` could otherwise resolve to a bundled
 /// malicious `sc.exe` and run as Administrator — a binary-planting LPE. An
-/// absolute path is not searched, closing that class entirely. Also used by the
-/// tray's "Open Event Viewer" so that launch is pinned to System32, not searched.
-pub(crate) fn system32_exe(name: &str) -> std::path::PathBuf {
+/// absolute path is not searched, closing that class entirely.
+fn system32_exe(name: &str) -> std::path::PathBuf {
     let mut buf = [0u16; 260];
     // SAFETY: GetSystemDirectoryW writes up to buf.len() wchars and returns the count.
     let len = unsafe { GetSystemDirectoryW(Some(&mut buf)) } as usize;

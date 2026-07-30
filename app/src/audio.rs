@@ -17,10 +17,8 @@ use windows::Win32::System::Threading::{
     GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_BELOW_NORMAL,
 };
 use windows::Win32::UI::Shell::PropertiesSystem::IPropertyStore;
-use windows::Win32::UI::Shell::ShellExecuteW;
-use windows::Win32::UI::WindowsAndMessaging::SW_SHOW;
 use windows::core::BOOL; // 0.62: primitive types moved Win32::Foundation -> windows::core
-use windows::core::{GUID, Interface, PCWSTR, PWSTR, w};
+use windows::core::{GUID, Interface, PWSTR};
 
 /// Result of a noise-adapt measurement.
 #[allow(dead_code)]
@@ -1379,21 +1377,8 @@ fn slow_path(
             write_telemetry_tsv(&readings, &format!("{dir}\\telemetry.tsv"));
         }
 
-        // Open the directory in Explorer
-        let dir_w = crate::wide::wide_null(dir);
-        // SAFETY: `dir_w` is a valid null-terminated UTF-16 path on the stack.
-        // ShellExecuteW with "open" on a directory launches Explorer; no handles leaked.
-        unsafe {
-            ShellExecuteW(
-                None,
-                w!("open"),
-                PCWSTR(dir_w.as_ptr()),
-                None,
-                None,
-                SW_SHOW,
-            );
-        }
-        crate::log::write(&format!("debug-cal: opened {dir}"));
+        // Results are in `dir` (logged above as "debug-cal: output dir"); no longer opened in
+        // Explorer — the tray drops shell-out for hardening (#86). Find them via the log path.
     } else {
         stream.write_continuous_tsv(dev_gain, perf_power, bal_power);
     }
