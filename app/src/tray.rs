@@ -318,6 +318,12 @@ unsafe extern "system" fn wnd_proc(
                 WM_CONTEXTMENU => {
                     let x = (wparam.0 & 0xFFFF) as i16 as i32;
                     let y = ((wparam.0 >> 16) & 0xFFFF) as i16 as i32;
+                    // #95: trace each right-click that actually reaches our wnd_proc. Paired with
+                    // the SetForegroundWindow trace inside show_context_menu, a "menu never opens"
+                    // repro is now disambiguated: WM_CONTEXTMENU logged then a stuck open menu
+                    // (thread parked in a prior modal loop) vs. NO WM_CONTEXTMENU at all (the UI
+                    // thread isn't pumping — wedged before the menu, a different root cause).
+                    crate::log::trace!(crate::log::KW_UI, "menu: WM_CONTEXTMENU x={x} y={y}");
                     show_context_menu(hwnd, x, y);
                 }
                 // maybe_warm is idempotent + throttled, so listing several trigger sites is
