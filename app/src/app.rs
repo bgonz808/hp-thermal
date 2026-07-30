@@ -136,17 +136,43 @@ static INSTALL_DIR: OnceLock<String> = OnceLock::new();
 static DATA_DIR: OnceLock<String> = OnceLock::new();
 static EXE_FNV_AT_INIT: OnceLock<String> = OnceLock::new();
 
-/// Full path to the running executable. Computed once via GetModuleFileNameW.
+/// Full path to the running executable, cached (the path is process-lifetime-invariant).
+/// Kernel-sourced via [`query_image_path`]. SECURITY decisions use [`current_image_path`]
+/// instead — a fresh, uncached kernel re-read rather than this long-lived cached copy.
 pub fn exe_path() -> &'static str {
-    EXE_PATH.get_or_init(|| {
-        let mut buf = [0u16; 260];
-        // SAFETY: `buf` is a stack-allocated 260-char array (MAX_PATH); the API
-        // writes at most buf.len() chars and returns the actual length.
-        let len =
-            unsafe { windows::Win32::System::LibraryLoader::GetModuleFileNameW(None, &mut buf) }
-                as usize;
-        String::from_utf16_lossy(&buf[..len])
-    })
+    EXE_PATH.get_or_init(query_image_path)
+}
+
+/// Fresh, UNCACHED kernel query of the running image path — for SECURITY decisions (footing /
+/// role resolution) that must not trust a long-lived cached copy an attacker could tamper.
+/// Same authoritative source as [`exe_path`], just re-read each call instead of cached.
+pub fn current_image_path() -> String {
+    query_image_path()
+}
+
+/// The running image's full path, read from the KERNEL (EPROCESS) via
+/// `QueryFullProcessImageNameW` — authoritative and NOT forgeable by PEB / loaded-module-list
+/// tampering the way `GetModuleFileNameW` (and `std::env::current_exe`) are. Empty string on
+/// failure, so security callers that compare against the install dir fail closed.
+fn query_image_path() -> String {
+    use windows::Win32::System::Threading::{
+        GetCurrentProcess, PROCESS_NAME_WIN32, QueryFullProcessImageNameW,
+    };
+    let mut buf = [0u16; 260];
+    let mut len = buf.len() as u32;
+    // SAFETY: `buf` is a 260-wchar (MAX_PATH) stack buffer; `len` carries its capacity in and
+    // the actual length out. GetCurrentProcess() is the current-process pseudo-handle.
+    unsafe {
+        match QueryFullProcessImageNameW(
+            GetCurrentProcess(),
+            PROCESS_NAME_WIN32,
+            windows::core::PWSTR(buf.as_mut_ptr()),
+            &mut len,
+        ) {
+            Ok(()) => String::from_utf16_lossy(&buf[..len as usize]),
+            Err(_) => String::new(),
+        }
+    }
 }
 
 /// Directory containing the running executable. Derived from exe_path().
@@ -206,6 +232,59 @@ pub fn event_source_setup() -> String {
 /// benign bootstrap; it's an anomaly worth investigating).
 pub fn event_source_untrusted() -> String {
     format!("{LOG_IDENT}-Untrusted")
+}
+
+/// The process's resolved identity, from its declared role (`label`) validated against the
+/// verifiable trust footing (canonical, admin-write-only install location). ONE authority for
+/// routing — both the Event Log source ([`role_source_name`]) and the ETW provider
+/// (`log::etw_register`) consume this, so the two transports can never disagree about who a
+/// process is. NOT an authorization gate: the service's fail-closed footing check keeps its
+/// own, stronger, freshly-evaluated set (location + image write-restriction + privilege).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Role {
+    /// SYSTEM service, from the canonical install dir.
+    Service,
+    /// User-session tray, from the canonical install dir.
+    Tray,
+    /// Transient install/update helper (runs from the download location by design).
+    Setup,
+    /// A resident role (svc/tray) running from a NON-canonical location — an anomaly.
+    Untrusted,
+    /// An unrecognized role label — a programmer error, treated as an anomaly.
+    Unknown,
+}
+
+/// Resolve the process role. Reads the trust footing FRESH (uncached kernel image path via
+/// [`current_image_path`], compared to the install dir) — no cached copy to tamper. A
+/// resident `svc`/`tray` from a non-canonical location demotes to `Untrusted`; an
+/// unrecognized label is `Unknown`. Setup is location-agnostic (bootstrap runs from Downloads).
+pub fn resolve_role(label: &str) -> Role {
+    match label {
+        "setup" => Role::Setup,
+        "svc" | "tray" => {
+            if crate::install::running_from_install_dir() {
+                if label == "svc" {
+                    Role::Service
+                } else {
+                    Role::Tray
+                }
+            } else {
+                Role::Untrusted
+            }
+        }
+        _ => Role::Unknown,
+    }
+}
+
+/// The Event Log source name for a resolved role. Untrusted AND Unknown both quarantine to
+/// the `-Untrusted` source — anomalies never borrow a trusted (`-Service`/`-Tray`) identity.
+pub fn role_source_name(role: Role) -> String {
+    match role {
+        Role::Service => event_source_service(),
+        Role::Tray => event_source_tray(),
+        Role::Setup => event_source_setup(),
+        Role::Untrusted | Role::Unknown => event_source_untrusted(),
+    }
 }
 
 /// Resolve a known folder via SHGetKnownFolderPath.

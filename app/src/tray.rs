@@ -147,7 +147,7 @@ unsafe fn run_inner() {
 
     crate::log::init("tray");
     crate::log::install_stack_guard();
-    crate::log::etw_register();
+    crate::log::etw_register("tray");
     crate::log::write("tray starting");
     crate::log::write(&format!("build: {}", app::build_identity()));
 
@@ -1208,7 +1208,10 @@ fn set_tip(nid: &mut NOTIFYICONDATAW, tip: &str) {
 unsafe fn enable_system_theme_menus() {
     let uxtheme = LoadLibraryExW(w!("uxtheme.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32);
     let Ok(uxtheme) = uxtheme else {
-        crate::log::trace!("dark mode: uxtheme.dll not found, using classic menus");
+        crate::log::trace!(
+            crate::log::KW_UI,
+            "dark mode: uxtheme.dll not found, using classic menus"
+        );
         return;
     };
 
@@ -1217,7 +1220,10 @@ unsafe fn enable_system_theme_menus() {
     // PCSTR with value < 0x10000 is interpreted as MAKEINTRESOURCEA(ordinal)
     let ord_135 = PCSTR(135usize as *const u8);
     let Some(proc) = GetProcAddress(uxtheme, ord_135) else {
-        crate::log::trace!("dark mode: ordinal 135 not found (pre-1809?), using classic menus");
+        crate::log::trace!(
+            crate::log::KW_UI,
+            "dark mode: ordinal 135 not found (pre-1809?), using classic menus"
+        );
         return;
     };
     let set_preferred_app_mode: unsafe extern "system" fn(u32) -> u32 = std::mem::transmute(proc);
@@ -1232,7 +1238,10 @@ unsafe fn enable_system_theme_menus() {
         flush_menu_themes();
     }
 
-    crate::log::trace!("dark mode: enabled (SetPreferredAppMode=AllowDark)");
+    crate::log::trace!(
+        crate::log::KW_UI,
+        "dark mode: enabled (SetPreferredAppMode=AllowDark)"
+    );
 }
 
 // ---------------------------------------------------------------------------

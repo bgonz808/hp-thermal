@@ -429,6 +429,78 @@ fn deregister_event_sources() {
     }
 }
 
+/// Lock the SYSTEM-service ETW provider (`HpThermal-Service`) so only SYSTEM may
+/// register/emit it — a non-SYSTEM process (any interactive user, elevated admin included,
+/// since their token carries `Users`/`Administrators` but not the SYSTEM identity) cannot
+/// spoof service traces under our GUID. ETW reads the provider security descriptor at
+/// `EventRegister` time, so this is **reboot-free** (effective at the next service start).
+/// Administrators keep enable/capture rights so traces stay collectable for debugging; only
+/// the REGISTER right is SYSTEM-exclusive. The tray provider is intentionally left open (the
+/// tray is a legitimate non-privileged emitter). Must run elevated. Idempotent.
+///
+/// LIVE-VERIFY (cannot be checked at build time): on a real box, confirm a non-SYSTEM
+/// process — including an elevated admin — fails to `EventRegister` the service GUID while
+/// the SYSTEM service succeeds, and that a capture session still collects the traces.
+/// geoffchappell documents a historical Windows quirk where `TRACELOG_REGISTER_GUIDS` was
+/// dropped from some access-right sets, so enforcement must be validated, not assumed.
+fn set_etw_provider_security() {
+    use windows::Win32::Security::{PSID, WinBuiltinAdministratorsSid, WinLocalSystemSid};
+    use windows::Win32::System::Diagnostics::Etw::{
+        EventAccessControl, EventSecurityAddDACL, EventSecuritySetDACL, TRACELOG_ACCESS_REALTIME,
+        TRACELOG_CREATE_ONDISK, TRACELOG_GUID_ENABLE, TRACELOG_REGISTER_GUIDS, WMIGUID_QUERY,
+    };
+    const READ_CONTROL: u32 = 0x0002_0000;
+    // Capture/consume rights (enable a session, read realtime, query) — deliberately NO
+    // TRACELOG_REGISTER_GUIDS, so Administrators can collect but not emit.
+    let capture = WMIGUID_QUERY
+        | TRACELOG_GUID_ENABLE
+        | TRACELOG_CREATE_ONDISK
+        | TRACELOG_ACCESS_REALTIME
+        | READ_CONTROL;
+    let system_all = capture | TRACELOG_REGISTER_GUIDS;
+
+    let (Some(system), Some(admins)) = (
+        well_known_sid(WinLocalSystemSid),
+        well_known_sid(WinBuiltinAdministratorsSid),
+    ) else {
+        return;
+    };
+    let guid = crate::log::etw_service_guid();
+    // SAFETY: `guid` is a valid GUID; the SID buffers outlive both calls. SetDACL replaces the
+    // DACL with SYSTEM=full (incl. register); AddDACL then grants Administrators capture only,
+    // leaving every other principal with no ACE (implicit deny of register).
+    unsafe {
+        let sy = PSID(system.as_ptr() as *mut core::ffi::c_void);
+        let ba = PSID(admins.as_ptr() as *mut core::ffi::c_void);
+        let _ = EventAccessControl(&guid, EventSecuritySetDACL.0 as u32, sy, system_all, true);
+        let _ = EventAccessControl(&guid, EventSecurityAddDACL.0 as u32, ba, capture, true);
+    }
+}
+
+/// Allocate a well-known SID into a heap buffer via the two-call `CreateWellKnownSid`. The
+/// SID pointer is `buf.as_ptr()`; keep the returned `Vec` alive while the SID is in use.
+fn well_known_sid(kind: windows::Win32::Security::WELL_KNOWN_SID_TYPE) -> Option<Vec<u8>> {
+    use windows::Win32::Security::{CreateWellKnownSid, PSID};
+    let mut cb = 0u32;
+    // SAFETY: first call queries the required size (fails, sets `cb`); the second fills a
+    // `cb`-sized buffer. Both out-params are valid for the calls.
+    unsafe {
+        let _ = CreateWellKnownSid(kind, None, None, &mut cb);
+        if cb == 0 {
+            return None;
+        }
+        let mut buf = vec![0u8; cb as usize];
+        CreateWellKnownSid(
+            kind,
+            None,
+            Some(PSID(buf.as_mut_ptr() as *mut core::ffi::c_void)),
+            &mut cb,
+        )
+        .ok()?;
+        Some(buf)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // File operations (elevated)
 // ---------------------------------------------------------------------------
@@ -463,9 +535,13 @@ fn copy_exe_to_install_dir() -> Result<(), String> {
 /// admin-only-write location. The service refuses to run from anywhere else: elsewhere, the
 /// assumption that a lower-privileged user cannot tamper the image no longer holds.
 pub fn running_from_install_dir() -> bool {
-    let Ok(exe) = std::env::current_exe() else {
+    // KERNEL-authoritative image path (uncached), NOT std::env::current_exe() /
+    // GetModuleFileNameW — those read the PEB, which in-process memory tampering can forge.
+    // Empty on query failure → fails closed below. Re-queried fresh, never a cached copy.
+    let exe = app::current_image_path();
+    if exe.is_empty() {
         return false;
-    };
+    }
     let expected = std::path::PathBuf::from(app::installed_exe());
     // Canonicalize both to normalize 8.3 names, casing, and symlinks before comparing.
     match (
@@ -1010,6 +1086,8 @@ pub fn install_service(choices: Choices) {
     // Register the Event Log sources (HpThermal-Service / -Tray / -Setup / -Untrusted)
     // before the service starts, so its first events render with a known source.
     register_event_sources();
+    // Lock the SYSTEM-service ETW provider to SYSTEM-only registration (reboot-free).
+    set_etw_provider_security();
 
     let installed = app::installed_exe();
     let bin_path = format!("\"{}\" --service", installed);
