@@ -79,6 +79,18 @@ use std::sync::atomic::{AtomicBool, AtomicU8, AtomicU64, Ordering};
 
 static FNKEY_SCREEN_ON: AtomicBool = AtomicBool::new(true);
 static FNKEY_SLEEP_ON: AtomicBool = AtomicBool::new(false);
+/// #95: Fn+F12 idempotency. `LAST_FNKEY_MS` = `GetTickCount64` (monotonic, sleep-inclusive) at the
+/// last ACTED press; a press within `FNKEY_DEBOUNCE_MS` of it is dropped, coalescing key-repeat /
+/// double-taps for EVERY action (screen, sleep, any future toggle). `FNKEY_SUPPRESS_UNTIL_MS` is
+/// stamped after a sleep resumes: Fn+F12 is dropped until that tick, so the wake-press latched
+/// during sleep (auto-reset event consumed on resume) can't immediately re-sleep — the wake-bounce.
+/// Both are checked only when an event fires — event-driven, no poll.
+static LAST_FNKEY_MS: AtomicU64 = AtomicU64::new(0);
+static FNKEY_SUPPRESS_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
+/// Coalesce presses within this window into one action (key-repeat / nervous double-tap).
+const FNKEY_DEBOUNCE_MS: u64 = 750;
+/// After resume from an Fn+F12 sleep, ignore Fn+F12 this long so the wake can't re-sleep.
+const FNKEY_RESUME_SUPPRESS_MS: u64 = 2000;
 /// Tracks display state for toggling. true = screen is on.
 static SCREEN_IS_ON: AtomicBool = AtomicBool::new(true);
 /// Screen-off method: 0=DPMS, 1=Brightness, 2=Black Window.
@@ -1286,6 +1298,24 @@ fn open_svc_start_event() -> Option<HANDLE> {
 /// Ctrl modifier detection was removed: the ~2s WMI poll delay means
 /// Ctrl is always released by the time we check GetKeyState.
 unsafe fn handle_fn_key(_hwnd: HWND) {
+    // #95: idempotency guards, both from GetTickCount64 (checked only when an event fires — no poll).
+    let now = GetTickCount64();
+    // Post-resume suppression: drop a press latched during sleep so the wake can't re-sleep.
+    if now < FNKEY_SUPPRESS_UNTIL_MS.load(Ordering::Relaxed) {
+        crate::log::trace!(
+            crate::log::KW_UI,
+            "fn+f12: dropped (post-resume suppression)"
+        );
+        return;
+    }
+    // Debounce: coalesce key-repeat / double-taps into ONE action — for any Fn+F12 behavior.
+    let last = LAST_FNKEY_MS.load(Ordering::Relaxed);
+    if last != 0 && now.saturating_sub(last) < FNKEY_DEBOUNCE_MS {
+        crate::log::trace!(crate::log::KW_UI, "fn+f12: dropped (debounce)");
+        return;
+    }
+    LAST_FNKEY_MS.store(now, Ordering::Relaxed);
+
     if FNKEY_SCREEN_ON.load(Ordering::Relaxed) {
         let was_on = SCREEN_IS_ON.load(Ordering::Relaxed);
         SCREEN_IS_ON.store(!was_on, Ordering::Relaxed);
@@ -1306,6 +1336,12 @@ unsafe fn handle_fn_key(_hwnd: HWND) {
         if !ok {
             crate::log::warn("Fn+F12: SetSuspendState failed");
         }
+        // Resumed — SetSuspendState blocks until wake. Suppress Fn+F12 briefly so the wake-press
+        // (or one latched during sleep) is dropped instead of re-sleeping. Re-stamp LAST too.
+        let resumed = GetTickCount64();
+        FNKEY_SUPPRESS_UNTIL_MS.store(resumed + FNKEY_RESUME_SUPPRESS_MS, Ordering::Relaxed);
+        LAST_FNKEY_MS.store(resumed, Ordering::Relaxed);
+        crate::log::write("Fn+F12: resumed from sleep");
     }
 }
 
