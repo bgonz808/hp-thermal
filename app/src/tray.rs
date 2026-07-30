@@ -153,6 +153,14 @@ unsafe fn run_inner() {
     // is one UAC away from High — so shrink what injected code could leverage. Best-effort.
     strip_unneeded_privileges();
 
+    // #86: the tray now spawns nothing (openers removed; a version mismatch is exit-only, not
+    // a self-spawn), so forbid child creation at the OS level — injected code in this
+    // weakly-mitigated, third-party-DLL-loading role then can't shell out (LOLBin/proxy
+    // exfil). This is the strongest mitigation the tray CAN take: it needs win32k and loads
+    // non-MS DLLs (nvml), so the service's signed-only / win32k-disable / dynamic-code locks
+    // don't apply here.
+    crate::mitigations::prohibit_child_processes();
+
     // Enable dark/light mode for popup menus (must be before any window creation)
     enable_system_theme_menus();
 
@@ -247,8 +255,8 @@ unsafe fn run_inner() {
                 if fn_key_idx == Some(signaled as usize) {
                     handle_fn_key(HWND_MAIN);
                 } else if svc_start_idx == Some(signaled as usize) {
-                    // Service restarted — check if we're stale
-                    version_mismatch_restart(HWND_MAIN);
+                    // Service restarted — if it's a newer build, exit (no self-spawn).
+                    exit_if_service_newer(HWND_MAIN);
                 }
             } else if signaled == handles.len() as u32 {
                 // Window messages available
@@ -913,10 +921,16 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             cache_store(Some(mode), Some(0)); // optimistic: mode on, Smart Sense off
         }
         ID_RESTART_SVC => {
-            // sdset grants interactive users start rights — no UAC needed
-            crate::install::start();
-            if crate::install::wait_for_service_running() {
-                update_tooltip(hwnd);
+            // Start via the SCM start-right (sdset grants interactive users SERVICE_START) — no
+            // child process, so it works under the tray's prohibit_child_processes (#86). No
+            // elevated fallback here: the start right is always granted, and the tray can't
+            // spawn anyway. A failure is logged, not escalated.
+            if crate::install::native_start() {
+                if crate::install::wait_for_service_running() {
+                    update_tooltip(hwnd);
+                }
+            } else {
+                crate::log::warn("tray: service start failed (SCM SERVICE_START denied?)");
             }
             return;
         }
@@ -1479,7 +1493,14 @@ fn save_fnkey_settings() {
 /// this in-memory tray binary. If so, spawn the updated on-disk binary
 /// directly (no shell) and exit. The new instance retries the singleton
 /// mutex for up to 3s while we wind down.
-unsafe fn version_mismatch_restart(hwnd: HWND) {
+/// The service (re)started as a build different from this tray's. We do NOT hot-swap
+/// ourselves: the tray prohibits child processes (#86), and a stale tray must not keep running
+/// against a newer service — so log it and exit cleanly. The normal update path already
+/// relaunches via `install::ensure_tray`; an out-of-band service update (an admin manually
+/// swapping the binary + restarting the service) recovers via the Run key at next logon or by
+/// the admin relaunching. (Was a self-spawn; removing that spawn is what lets the tray adopt
+/// prohibit_child_processes — a service-triggered relaunch task is the deferred follow-up.)
+unsafe fn exit_if_service_newer(hwnd: HWND) {
     use crate::protocol::{BUILD_FINGERPRINT, CMD_READ_BUILD_ID};
 
     let Some(resp) = pipe::client_transact(CMD_READ_BUILD_ID, 0) else {
@@ -1490,18 +1511,14 @@ unsafe fn version_mismatch_restart(hwnd: HWND) {
     }
 
     crate::log::write(&format!(
-        "tray: version mismatch (tray={:02X}{:02X} svc={:02X}{:02X}), restarting",
+        "tray: service is a newer build (tray={:02X}{:02X} svc={:02X}{:02X}), exiting for relaunch",
         BUILD_FINGERPRINT[0], BUILD_FINGERPRINT[1], resp[0], resp[1],
     ));
 
-    // Remove tray icon before exiting (avoids ghost icon in the tray)
+    // Remove the tray icon before exiting (avoids a ghost icon).
     let nid = new_nid(hwnd);
     let _ = Shell_NotifyIconW(NIM_DELETE, &nid);
 
-    // Spawn the updated binary directly — no shell, no cmd.exe.
-    // Path is the canonical install location (C:\Program Files\HpThermal\).
-    let installed = app::installed_exe();
-    let _ = std::process::Command::new(&installed).spawn();
-
+    // No self-spawn — exit and let ensure_tray / the Run key bring up the new build.
     PostQuitMessage(0);
 }

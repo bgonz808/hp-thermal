@@ -1559,7 +1559,7 @@ fn relaunch_elevated_and_wait(args: &str) -> bool {
 
 /// Start the service via the SCM API. True if it started or is already running;
 /// false if we lack rights (caller should elevate) or it failed to start.
-fn native_start() -> bool {
+pub(crate) fn native_start() -> bool {
     if service_state() == Some(SERVICE_RUNNING.0) {
         return true;
     }
