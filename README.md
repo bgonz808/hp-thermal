@@ -32,7 +32,10 @@ Is easily uninstallable via **Settings → Apps** or `hp-thermal uninstall`
 - **`C:\Program Files\HpThermal\hp-thermal.exe`** — the binary (admin-only-writable)
 - **Windows service `HpThermalService`** — runs as SYSTEM, makes the BIOS/WMI calls,
   auto-starts at boot
-- **`C:\ProgramData\HpThermal\`** — logs and the hardware-consent record (Users-writable)
+- **`C:\ProgramData\HpThermal\`** — hardware-consent record + settings/calibration (Users-writable). No logs live here.
+- **Logs → the Windows Event Log**, not a file. Read them with:
+  `Get-WinEvent -ProviderName HpThermal-Service` (or `-Tray`) `| % { $_.Properties[0].Value }`.
+  You shouldn't ever need to — it's there if something goes wrong.
 - **Auto-start** — `HKLM\...\CurrentVersion\Run\HpThermal`, so the tray starts at logon
 - **Apps entry** — `HKLM\...\CurrentVersion\Uninstall\HpThermal`, listing it in Settings → Apps
 - **Start Menu** — `%ProgramData%\Microsoft\Windows\Start Menu\Programs\HP Thermal Control.lnk`
