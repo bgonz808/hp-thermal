@@ -1214,19 +1214,25 @@ fn set_required_privileges() {
     }
 }
 
-/// #4: give the service its own per-service SID (`NT SERVICE\HpThermalService`). Sets
-/// `SERVICE_SID_TYPE_UNRESTRICTED` via `ChangeServiceConfig2W`, which adds the name-derived,
-/// upgrade-stable service SID to the process token at the next start. UNRESTRICTED (not
-/// RESTRICTED) so it only ADDS the SID for use in DACLs — it does NOT yet write-restrict the
-/// token (that is the C5 endgame). Foundational: lets us later scope the pipe / data-dir /
-/// event DACLs to *this* service rather than to any SYSTEM process. Effective at the next
-/// start; needs SERVICE_CHANGE_CONFIG (elevated install/update child). Idempotent.
+/// #4 + C5: give the service its own per-service SID (`NT SERVICE\HpThermalService`) AND
+/// write-restrict its token. Sets `SERVICE_SID_TYPE_RESTRICTED` via `ChangeServiceConfig2W`:
+/// RESTRICTED *includes* UNRESTRICTED (still adds the name-derived, upgrade-stable service SID
+/// for use in DACLs) and additionally marks the process token WRITE_RESTRICTED — a write then
+/// succeeds only where the target's DACL grants a *restricting* SID (the service SID, World,
+/// the logon SID, or `NT AUTHORITY\WRITE RESTRICTED` S-1-5-33). The service writes nothing to
+/// disk/HKLM at runtime, so this shrinks a compromised-service blast radius (no arbitrary
+/// admin-only file/registry writes) without dropping the LocalSystem privilege the BIOS-WMI
+/// call needs. Effective at the next start; needs SERVICE_CHANGE_CONFIG (elevated
+/// install/update child). Idempotent.
 /// https://learn.microsoft.com/windows/win32/api/winsvc/ns-winsvc-service_sid_info
 fn set_service_sid_type() {
     use windows::Win32::System::Services::{
         ChangeServiceConfig2W, SERVICE_CHANGE_CONFIG, SERVICE_CONFIG_SERVICE_SID_INFO,
-        SERVICE_SID_INFO, SERVICE_SID_TYPE_UNRESTRICTED,
+        SERVICE_SID_INFO,
     };
+    // windows 0.62 code-gens only NONE(0)/UNRESTRICTED(1); RESTRICTED is the Win32 value 0x3
+    // (winnt.h SERVICE_SID_TYPE_RESTRICTED). Includes UNRESTRICTED + write-restricts the token.
+    const SERVICE_SID_TYPE_RESTRICTED: u32 = 0x0000_0003;
     // SAFETY: standard SCM open -> ChangeServiceConfig2W with a stack-allocated SERVICE_SID_INFO
     // that outlives the call; both service handles are closed before return.
     unsafe {
@@ -1236,7 +1242,7 @@ fn set_service_sid_type() {
         let name = wide_null(app::SERVICE_NAME);
         if let Ok(svc) = OpenServiceW(scm, PCWSTR(name.as_ptr()), SERVICE_CHANGE_CONFIG) {
             let info = SERVICE_SID_INFO {
-                dwServiceSidType: SERVICE_SID_TYPE_UNRESTRICTED,
+                dwServiceSidType: SERVICE_SID_TYPE_RESTRICTED,
             };
             let _ = ChangeServiceConfig2W(
                 svc,
