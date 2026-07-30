@@ -820,7 +820,17 @@ unsafe fn show_context_menu(hwnd: HWND, anchor_x: i32, anchor_y: i32) {
     } else {
         (anchor_x, anchor_y)
     };
-    let _ = SetForegroundWindow(hwnd);
+    // #95/#6: SetForegroundWindow is gated by the foreground lock (aggravated after resume). On
+    // failure, TrackPopupMenu can show a menu that won't dismiss on click-away and parks the UI
+    // thread in its modal loop — the observed "tooltip alive, menu dead" wedge. Instrument the
+    // result so a repro is diagnostic: verbose ETW always, a durable Event Log warn on the anomaly.
+    let fg = SetForegroundWindow(hwnd).as_bool();
+    crate::log::trace!(crate::log::KW_UI, "menu: SetForegroundWindow={fg}");
+    if !fg {
+        crate::log::warn(
+            "menu: SetForegroundWindow failed (foreground lock?) — menu may not dismiss",
+        );
+    }
     let _ = TrackPopupMenu(
         hmenu,
         TPM_LEFTALIGN | TPM_RIGHTBUTTON,
