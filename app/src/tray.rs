@@ -87,10 +87,13 @@ static FNKEY_SLEEP_ON: AtomicBool = AtomicBool::new(false);
 /// Both are checked only when an event fires — event-driven, no poll.
 static LAST_FNKEY_MS: AtomicU64 = AtomicU64::new(0);
 static FNKEY_SUPPRESS_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
-/// Coalesce presses within this window into one action (key-repeat / nervous double-tap).
-const FNKEY_DEBOUNCE_MS: u64 = 750;
+/// Coalesce presses within this window into one action (key-repeat / nervous double-tap, plus
+/// physical settle time — every Fn+F12 action has non-negligible latency + after-effects). One
+/// universal value for now; if actions ever diverge (e.g. a fast profile toggle vs. sleep), this
+/// is the single point to split into a per-effect window.
+const FNKEY_DEBOUNCE_MS: u64 = 2000;
 /// After resume from an Fn+F12 sleep, ignore Fn+F12 this long so the wake can't re-sleep.
-const FNKEY_RESUME_SUPPRESS_MS: u64 = 2000;
+const FNKEY_RESUME_SUPPRESS_MS: u64 = 3000;
 /// Tracks display state for toggling. true = screen is on.
 static SCREEN_IS_ON: AtomicBool = AtomicBool::new(true);
 /// Screen-off method: 0=DPMS, 1=Brightness, 2=Black Window.
