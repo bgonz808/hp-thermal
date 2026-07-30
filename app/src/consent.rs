@@ -8,11 +8,16 @@
 //! user has explicitly accepted the risk on.
 //!
 //! Acceptance is keyed to `HwInfo::fingerprint()` (board + BIOS + EC), so a
-//! firmware update re-triggers the prompt. It is stored unelevated in a
-//! ProgramData sibling file, matching the existing `fnkey` config pattern.
+//! firmware update re-triggers the prompt. It is stored per-user, unelevated, in
+//! `HKCU\Software\HpThermal` — the user is the authority on accepting their own
+//! machine's risk, so it belongs in their own hive, not a machine-wide
+//! `Users:(M)` file any local user could forge for everyone (#88).
 
-use crate::app;
 use crate::hwinfo::HwInfo;
+
+/// HKCU location of the accepted-hardware-fingerprint value (REG_SZ). Per-user + user-owned.
+const CONSENT_SUBKEY: windows::core::PCWSTR = windows::core::w!("Software\\HpThermal");
+const CONSENT_VALUE: windows::core::PCWSTR = windows::core::w!("AcceptedHwFingerprint");
 
 /// Hardware fingerprints the developers have validated CT76/CT44 on.
 /// Format matches `HwInfo::fingerprint()`: `mfg|product|family|board|bios|ec`.
@@ -39,11 +44,40 @@ pub fn check(hw: &HwInfo) -> Consent {
     classify(&hw.fingerprint(), read_accepted().as_deref())
 }
 
-/// Persist the user's acceptance of the current hardware fingerprint.
-/// Unelevated write to ProgramData (same pattern as `fnkey` settings).
+/// Persist the user's acceptance of the current hardware fingerprint to HKCU (per-user,
+/// unelevated). Best-effort: a write failure just means the prompt reappears next launch.
 pub fn record_acceptance(hw: &HwInfo) {
-    let _ = std::fs::create_dir_all(app::data_dir());
-    let _ = std::fs::write(consent_path(), hw.fingerprint().as_bytes());
+    use windows::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_SET_VALUE, REG_OPTION_NON_VOLATILE, REG_SZ, RegCloseKey,
+        RegCreateKeyExW, RegSetValueExW,
+    };
+    let data: Vec<u16> = hw
+        .fingerprint()
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    // SAFETY: `data` is a null-terminated UTF-16 string; reinterpreted as bytes for the REG_SZ
+    // write. `key` is closed before return. HKCU write needs no elevation.
+    unsafe {
+        let bytes = std::slice::from_raw_parts(data.as_ptr() as *const u8, data.len() * 2);
+        let mut key = HKEY::default();
+        let err = RegCreateKeyExW(
+            HKEY_CURRENT_USER,
+            CONSENT_SUBKEY,
+            None,
+            windows::core::PCWSTR::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            None,
+            &mut key,
+            None,
+        );
+        if err.is_err() {
+            return;
+        }
+        let _ = RegSetValueExW(key, CONSENT_VALUE, None, REG_SZ, Some(bytes));
+        let _ = RegCloseKey(key);
+    }
 }
 
 /// Pure decision core (no I/O), so the trust logic is unit-testable.
@@ -71,15 +105,31 @@ fn same_machine(a: &str, b: &str) -> bool {
     fa.len() == 6 && fb.len() == 6 && fa[3] == fb[3] && fa[1] == fb[1]
 }
 
-fn consent_path() -> String {
-    format!("{}\\consent", app::data_dir())
-}
-
+/// Read the accepted fingerprint from HKCU (`None` if absent/empty/not a string).
 fn read_accepted() -> Option<String> {
-    std::fs::read_to_string(consent_path())
-        .ok()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
+    use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RRF_RT_REG_SZ, RegGetValueW};
+    let mut buf = [0u16; 256]; // fingerprint is short (mfg|product|family|board|bios|ec)
+    let mut len = (buf.len() * 2) as u32; // byte size, in/out
+    // SAFETY: RegGetValueW writes up to `len` bytes into `buf` and updates `len`; RRF_RT_REG_SZ
+    // restricts to a string value.
+    let rc = unsafe {
+        RegGetValueW(
+            HKEY_CURRENT_USER,
+            CONSENT_SUBKEY,
+            CONSENT_VALUE,
+            RRF_RT_REG_SZ,
+            None,
+            Some(buf.as_mut_ptr() as *mut core::ffi::c_void),
+            Some(&mut len),
+        )
+    };
+    if rc.is_err() {
+        return None;
+    }
+    // `len` counts the trailing NUL (in bytes) — drop it.
+    let n = (len as usize / 2).saturating_sub(1).min(buf.len());
+    let s = String::from_utf16_lossy(&buf[..n]).trim().to_string();
+    (!s.is_empty()).then_some(s)
 }
 
 #[cfg(test)]
