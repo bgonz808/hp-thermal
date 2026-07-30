@@ -1,30 +1,74 @@
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 
 use windows::Win32::Foundation::HANDLE;
+use windows::Win32::System::Diagnostics::Etw::{
+    ENABLECALLBACK_ENABLED_STATE, EVENT_FILTER_DESCRIPTOR, EventRegister, EventWriteString,
+    REGHANDLE,
+};
 use windows::Win32::System::EventLog::{
     EVENTLOG_ERROR_TYPE, EVENTLOG_INFORMATION_TYPE, EVENTLOG_WARNING_TYPE, REPORT_EVENT_TYPE,
     RegisterEventSourceW, ReportEventW,
 };
-use windows::core::PCWSTR;
+use windows::core::{GUID, PCWSTR};
 
 /// Handle from `RegisterEventSourceW`, kept for the process lifetime. 0 = not initialized
 /// (writes become no-ops). Stored as isize so the crash-handler can read it lock-free.
 static EVENT_SOURCE: AtomicIsize = AtomicIsize::new(0);
-static VERBOSE: AtomicBool = AtomicBool::new(false);
 static STACK_MONITOR: AtomicBool = AtomicBool::new(false);
+
+// --- Verbose/trace tier (ETW, on-demand) --------------------------------------------------
+/// ETW registration handle (REGHANDLE). 0 = unregistered.
+static ETW_HANDLE: AtomicU64 = AtomicU64::new(0);
+/// True while a trace session has our provider enabled (set by the enable callback).
+static ETW_ENABLED: AtomicBool = AtomicBool::new(false);
+/// The session's requested MatchAnyKeyword mask (from the enable callback); 0 = "all
+/// keywords" (ETW semantics). With ETW_ENABLED, lets `trace!` skip formatting for facets the
+/// current session did not ask for — not just skip when nobody is listening.
+static ETW_KEYWORDS: AtomicU64 = AtomicU64::new(0);
+
+// Two role-named ETW providers, split by PRIVILEGE so the SYSTEM side can be locked down
+// (see install::set_etw_provider_security). Both GUIDs are DERIVED from their EventSource
+// name (not hand-picked) and FROZEN once released — recompute/verify:
+//   [System.Diagnostics.Tracing.EventSource]::new("HpThermal-Service").Guid  etc.
+// They mirror the Event Log source names, so "-Service"/"-Tray" mean the same across both
+// transports. Facet comes from the keyword below; severity from the level; role/trustlevel
+// from the event header (PID/image).
+/// SYSTEM service provider — its registration is restricted to SYSTEM at install, so a
+/// non-SYSTEM process can't spoof service traces under it.
+const ETW_GUID_SERVICE: GUID = GUID::from_u128(0x56276417_1850_5f5a_adc0_3f74363f8eb2);
+/// Tray provider — open, because the tray is a legitimate Medium-IL (non-privileged) emitter.
+const ETW_GUID_TRAY: GUID = GUID::from_u128(0xc3401cd2_f74b_5101_2480_261c57b3109b);
+/// TRACE_LEVEL_VERBOSE — a session enabling at >= this level receives our trace lines.
+const ETW_LEVEL_VERBOSE: u8 = 5;
+
+/// The SYSTEM service provider GUID, exposed so install can lock its SD to SYSTEM-only
+/// registration.
+pub(crate) fn etw_service_guid() -> GUID {
+    ETW_GUID_SERVICE
+}
+
+// Facet keywords (u64 bitmask). A consumer selects facets with a MatchAnyKeyword mask, e.g.
+// `logman ... {GUID} 0x2` captures WMI only. Bits are spent on SUBSYSTEM — the thing the
+// event header does NOT already give you; role/trustlevel are read from the header, not here.
+pub(crate) const KW_WIRE: u64 = 0x1; // pipe request/response bytes
+pub(crate) const KW_WMI: u64 = 0x2; // hpqB* BIOS-WMI operations + hardware events
+pub(crate) const KW_UI: u64 = 0x4; // tray / menu / theme
+pub(crate) const KW_STACK: u64 = 0x8; // stack-depth samples
 
 /// Single event ID for our free-text diagnostic lines. With no message resource
 /// registered, Event Viewer prefixes a generic wrapper — harmless, and `Get-WinEvent`
 /// returns the bare string regardless. Non-zero so it's never the "success" sentinel.
 const EVENT_ID_LINE: u32 = 1000;
 
-/// Register this process's Event Log source. `label` ("svc"/"tray"/"setup") selects the
-/// per-role source name, but the resident `-Service`/`-Tray` identities are asserted ONLY
-/// from the canonical install dir (see `source_name`). If the source isn't registry-
+/// Register this process's Event Log source, chosen by its resolved [`crate::app::Role`] (the
+/// declared label validated against the trust footing) — the SAME resolver that picks the ETW
+/// provider, so the two transports can never disagree about who this process is. Resident
+/// `-Service`/`-Tray` are asserted only from the canonical install dir; a non-canonical
+/// resident or an unknown label quarantines to `-Untrusted`. If the source isn't registry-
 /// registered (portable run), the EventLog service routes to the Application log by name —
 /// logging still works, just less isolated.
 pub fn init(label: &'static str) {
-    let source = source_name(label);
+    let source = crate::app::role_source_name(crate::app::resolve_role(label));
     let wide = crate::wide::wide_null(&source);
     // SAFETY: `wide` is a null-terminated wide string alive for the call. The returned
     // handle is a process-lifetime EventLog handle we never explicitly deregister (the
@@ -33,28 +77,6 @@ pub fn init(label: &'static str) {
         if let Ok(h) = RegisterEventSourceW(PCWSTR::null(), PCWSTR(wide.as_ptr())) {
             EVENT_SOURCE.store(h.0 as isize, Ordering::SeqCst);
         }
-    }
-}
-
-/// Map the process label to its Event Log source, steered by provenance:
-/// - `"setup"` (the install/update helper) → always `HpThermal-Setup`, whatever the location
-///   (bootstrap legitimately runs from the download dir).
-/// - `"svc"` / `"tray"` → `HpThermal-Service` / `HpThermal-Tray` ONLY from the canonical,
-///   admin-write-only install dir. From anywhere else the resident image is unverified, so
-///   they route to `HpThermal-Untrusted` — a distinct, forensically loud bucket (NOT Setup:
-///   this is an anomaly, not a benign bootstrap). A copied/misplaced binary thus can't
-///   masquerade as the resident service/tray, and a service started non-canonically files
-///   its "REFUSING: not from install dir" refusal under Untrusted (init precedes the check).
-fn source_name(label: &str) -> String {
-    if label == "setup" {
-        return crate::app::event_source_setup();
-    }
-    if !crate::install::running_from_install_dir() {
-        return crate::app::event_source_untrusted();
-    }
-    match label {
-        "svc" => crate::app::event_source_service(),
-        _ => crate::app::event_source_tray(),
     }
 }
 
@@ -100,9 +122,117 @@ fn report(kind: REPORT_EVENT_TYPE, msg: &str) {
     }
 }
 
-pub fn is_verbose() -> bool {
-    VERBOSE.load(Ordering::Relaxed)
+/// Register the verbose/trace ETW provider. Call once per process, after `init()`. Near-zero
+/// cost at rest — events are dropped unless a trace session subscribes. Not explicitly
+/// unregistered (process-lifetime; the OS reclaims at exit), matching the Event Log source.
+pub fn etw_register(label: &'static str) {
+    use crate::app::Role;
+    // SAME resolver as the Event Log source, so the transports agree on identity. Only the two
+    // VETTED resident roles get a provider: Service -> the SYSTEM-locked service provider, Tray
+    // -> the open tray provider. Setup/Untrusted/Unknown are REFUSED — a bootstrap helper or an
+    // anomaly gets no trusted verbose identity, and it must NOT silently borrow the tray
+    // provider (the catch-all bug). The attempted role is recorded instead.
+    let guid = match crate::app::resolve_role(label) {
+        Role::Service => ETW_GUID_SERVICE,
+        Role::Tray => ETW_GUID_TRAY,
+        other => {
+            warn(&format!(
+                "etw: no verbose provider for role {other:?}; traces unavailable"
+            ));
+            return;
+        }
+    };
+    let mut handle = REGHANDLE(0);
+    // SAFETY: standard EventRegister with a static provider GUID + enable callback; the
+    // out-param `handle` is a stack REGHANDLE written before return.
+    unsafe {
+        if EventRegister(&guid, Some(etw_enable_callback), None, &mut handle) == 0 {
+            ETW_HANDLE.store(handle.0 as u64, Ordering::SeqCst);
+        } else {
+            // Registration refused by the service-provider SD (a non-SYSTEM caller) or a
+            // genuine ETW error. Fail closed — ETW_HANDLE stays 0 so every trace_line() no-ops
+            // — but record it, so an absent verbose channel is diagnosable, not a silent
+            // mystery.
+            warn("etw: provider registration refused; verbose traces unavailable");
+        }
+    }
 }
+
+/// ETW enable callback: a trace session enabling/disabling our provider flips `ETW_ENABLED`.
+/// State 1 = enable, 0 = disable; 2 = capture-state (rundown), which is not an enable-state
+/// change, so it's ignored.
+unsafe extern "system" fn etw_enable_callback(
+    _source: *const GUID,
+    is_enabled: ENABLECALLBACK_ENABLED_STATE,
+    _level: u8,
+    match_any: u64,
+    _match_all: u64,
+    _filter: *const EVENT_FILTER_DESCRIPTOR,
+    _ctx: *mut core::ffi::c_void,
+) {
+    match is_enabled.0 {
+        0 => {
+            ETW_ENABLED.store(false, Ordering::Relaxed);
+            ETW_KEYWORDS.store(0, Ordering::Relaxed);
+        }
+        1 => {
+            // Store the mask before flipping enabled, so a concurrent `trace!` never sees
+            // enabled with a stale (0 = all) mask.
+            ETW_KEYWORDS.store(match_any, Ordering::Relaxed);
+            ETW_ENABLED.store(true, Ordering::Relaxed);
+        }
+        _ => {} // capture-state (rundown): not an enable-state change
+    }
+}
+
+/// Whether the current session wants `keyword`-tagged lines. The `trace!` macro gates on this
+/// before formatting, so at rest — or for a facet the session did not request — a `trace!` is
+/// a couple of atomic loads and nothing else. A 0 session mask means "all keywords".
+#[inline]
+pub fn trace_enabled(keyword: u64) -> bool {
+    if !ETW_ENABLED.load(Ordering::Relaxed) {
+        return false;
+    }
+    let mask = ETW_KEYWORDS.load(Ordering::Relaxed);
+    mask == 0 || (mask & keyword) != 0
+}
+
+/// The fat side of `trace!`: format the args and emit one Verbose ETW string tagged with its
+/// facet `keyword`. Only reached when `trace_enabled(keyword)`, so `format!` is paid only
+/// while a session is capturing that facet.
+pub fn trace_line(keyword: u64, args: std::fmt::Arguments) {
+    let h = ETW_HANDLE.load(Ordering::Relaxed);
+    if h == 0 {
+        return;
+    }
+    let s = std::fmt::format(args);
+    let wide = crate::wide::wide_null(&s);
+    // SAFETY: `h` is our registration handle; `wide` is a live null-terminated wide string.
+    unsafe {
+        let _ = EventWriteString(
+            REGHANDLE(h as i64),
+            ETW_LEVEL_VERBOSE,
+            keyword,
+            PCWSTR(wide.as_ptr()),
+        );
+    }
+}
+
+/// Verbose/trace line → ETW (Verbose level), NOT the always-on Event Log. Gated on an active
+/// trace session BEFORE `format_args!`, so at rest it is one atomic load and nothing else.
+/// Collected on-demand via wpr / logman / PerfView / `Get-WinEvent -Path *.etl`, and
+/// correlated with the durable Event Log by timestamp. The heavy path lives once in
+/// `trace_line` (thin-macro / fat-fn — negligible per-call-site code).
+/// First argument is the facet keyword (`log::KW_WIRE`, `KW_WMI`, …); the rest is the format
+/// string + args.
+macro_rules! trace {
+    ($kw:expr, $($arg:tt)*) => {
+        if $crate::log::trace_enabled($kw) {
+            $crate::log::trace_line($kw, format_args!($($arg)*));
+        }
+    };
+}
+pub(crate) use trace;
 
 pub fn set_stack_monitor(on: bool) {
     STACK_MONITOR.store(on, Ordering::Relaxed);
@@ -313,13 +443,16 @@ pub fn stack_sample(label: &str) {
         }
     }
 
-    if is_verbose() {
-        write(&format!(
-            "stack [{label}] depth={} KB committed={kb} KB peak_depth={} KB peak_committed={} KB",
-            depth / 1024,
-            STACK_DEPTH_PEAK.load(Ordering::Relaxed) / 1024,
-            STACK_PEAK.load(Ordering::Relaxed) / 1024,
-        ));
+    if trace_enabled(KW_STACK) {
+        trace_line(
+            KW_STACK,
+            format_args!(
+                "stack [{label}] depth={} KB committed={kb} KB peak_depth={} KB peak_committed={} KB",
+                depth / 1024,
+                STACK_DEPTH_PEAK.load(Ordering::Relaxed) / 1024,
+                STACK_PEAK.load(Ordering::Relaxed) / 1024,
+            ),
+        );
     }
 }
 
