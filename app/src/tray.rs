@@ -98,6 +98,14 @@ static CACHED_COOLSENSE: AtomicU8 = AtomicU8::new(0xFF);
 static CACHE_STAMP: AtomicU64 = AtomicU64::new(0);
 /// True while a warm worker is reading — gates duplicate reads so `maybe_warm` is idempotent.
 static WARM_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+/// #93: DPMS monitor-off is dispatched to an ephemeral worker so the UI thread never blocks on
+/// the `SendMessage(HWND_BROADCAST, …)` broadcast — which has no timeout and permanently wedges
+/// the message loop if any top-level window isn't pumping (screen-off, menu/tooltip dead until
+/// the process is killed). `DIRTY` = an off-broadcast was requested; `WORKER_ACTIVE` = a worker
+/// owns the broadcast. Together they coalesce a mashed Fn+F12 into at most one in-flight worker
+/// without ever dropping the last request.
+static MONITOR_OFF_DIRTY: AtomicBool = AtomicBool::new(false);
+static MONITOR_WORKER_ACTIVE: AtomicBool = AtomicBool::new(false);
 static mut BLACK_WINDOW: HWND = HWND(std::ptr::null_mut());
 
 /// Last mic info from noise-adapt or calibration thread (stashed for UI display).
@@ -1305,15 +1313,13 @@ unsafe fn screen_off() {
             }
         }
         METHOD_DPMS => {
-            // DPMS off via SC_MONITORPOWER. Warning: triggers Modern Standby on
-            // some systems, which can freeze this process for 16-22 seconds.
+            // Keep the system awake (don't auto-sleep) while the screen is manually off. This is
+            // a PERSISTENT, per-thread request, so it stays on the long-lived UI thread — on the
+            // ephemeral broadcast worker it would evaporate the instant that worker exits.
             SetThreadExecutionState(ES_SYSTEM_REQUIRED | ES_CONTINUOUS);
-            SendMessageW(
-                HWND(0xFFFF as *mut _),
-                WM_SYSCOMMAND,
-                Some(WPARAM(SC_MONITORPOWER)),
-                Some(LPARAM(2)),
-            );
+            // #93: the SC_MONITORPOWER broadcast is offloaded — it must NEVER run on the UI
+            // thread (raw SendMessage to HWND_BROADCAST has no timeout and can wedge it forever).
+            request_monitor_off();
         }
         METHOD_BLACK
             // Fullscreen topmost black window. Useful for OLED (true black).
@@ -1342,6 +1348,58 @@ unsafe fn screen_on() {
     // Clear DPMS flags and force display on
     SetThreadExecutionState(ES_CONTINUOUS);
     SetThreadExecutionState(ES_DISPLAY_REQUIRED);
+}
+
+/// #93: request a DPMS monitor-off broadcast, executed OFF the UI thread. Raw
+/// `SendMessageW(HWND_BROADCAST, WM_SYSCOMMAND, SC_MONITORPOWER, …)` has no timeout and blocks
+/// until every top-level window in the system acks — so a single non-pumping window wedges the
+/// caller forever. On the UI thread that permanently freezes the tray (menu/tooltip dead until
+/// the process is killed). We move it to an ephemeral worker (see `monitor_off_broadcast`). A
+/// dirty flag + single-worker guard coalesce mashed toggles into one worker without dropping the
+/// last request; the worker exits when there's no pending request, so there's zero idle thread.
+fn request_monitor_off() {
+    MONITOR_OFF_DIRTY.store(true, Ordering::SeqCst);
+    // Claim ownership iff no worker is active — only the claiming caller spawns. An already
+    // running worker will observe DIRTY and re-broadcast, so a concurrent request is not lost.
+    if MONITOR_WORKER_ACTIVE.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    std::thread::spawn(|| {
+        loop {
+            // Drain: broadcast once per pending request (coalesced — the target is idempotent).
+            while MONITOR_OFF_DIRTY.swap(false, Ordering::SeqCst) {
+                monitor_off_broadcast();
+            }
+            MONITOR_WORKER_ACTIVE.store(false, Ordering::SeqCst);
+            // Close the race where a request set DIRTY after our last drain but before we
+            // released ownership: reclaim if we can, else another caller already owns it.
+            if MONITOR_OFF_DIRTY.load(Ordering::SeqCst)
+                && !MONITOR_WORKER_ACTIVE.swap(true, Ordering::SeqCst)
+            {
+                continue;
+            }
+            break;
+        }
+    });
+}
+
+/// Bounded monitor-off broadcast — worker-thread only. `SMTO_ABORTIFHUNG` returns immediately
+/// for any window already flagged not-responding; the 1000 ms per-window cap bounds a merely
+/// busy (not hung) window. Unlike raw `SendMessage`, this can never wait indefinitely.
+fn monitor_off_broadcast() {
+    // SAFETY: a standard WM_SYSCOMMAND/SC_MONITORPOWER broadcast; no pointers are retained and
+    // the timeout guarantees return even if a peer window is hung. `lpdwresult` is unused.
+    unsafe {
+        let _ = SendMessageTimeoutW(
+            HWND_BROADCAST,
+            WM_SYSCOMMAND,
+            WPARAM(SC_MONITORPOWER),
+            LPARAM(2), // 2 = power off
+            SMTO_ABORTIFHUNG,
+            1000,
+            None,
+        );
+    }
 }
 
 /// Create a fullscreen topmost black window covering all monitors.
