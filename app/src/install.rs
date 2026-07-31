@@ -1255,28 +1255,67 @@ fn set_service_sid_type() {
     }
 }
 
-/// #38 no-egress: exclude the installed exe from Windows Error Reporting entirely, so
-/// WerFault.exe never collects/uploads a crash dump — covering the `__fastfail` paths
-/// (stack-cookie / CFG) that the top-level exception filter cannot intercept. Writes HKLM
-/// (all users), so it must run elevated. Removed by unexclude_from_wer() on uninstall.
-/// Idempotent. https://learn.microsoft.com/windows/win32/api/werapi/nf-werapi-weraddexcludedapplication
+/// WER `ExcludedApplications` subkey (all-users). Excluding by image name here covers every
+/// role — tray, `--service`, installer — since they share one exe.
+const WER_EXCLUDED_SUBKEY: PCWSTR =
+    w!("SOFTWARE\\Microsoft\\Windows\\Windows Error Reporting\\ExcludedApplications");
+
+/// #38 no-egress: exclude the installed exe from Windows Error Reporting so WerFault.exe never
+/// collects/uploads a crash dump — covering the `__fastfail` paths (stack-cookie / CFG) the
+/// top-level exception filter cannot intercept. Written DIRECTLY as the `<exe>`=REG_DWORD:1 value
+/// (byte-identical to what `WerAddExcludedApplication` writes — verified against the OS API's own
+/// output, which is REG_DWORD not the REG_SZ the docs imply), so the shipped binary imports no
+/// `wer.dll` and the golden import allowlist stays minimal. WER can't tell our write from its
+/// API's, so the exclusion is functionally identical. HKLM → runs only from the elevated
+/// install/update child. Idempotent. https://learn.microsoft.com/windows/win32/wer/wer-settings
 fn exclude_from_wer() {
-    use windows::Win32::System::ErrorReporting::WerAddExcludedApplication;
-    let name = wide_null(app::EXE_NAME);
-    // SAFETY: `name` is a null-terminated wide string outliving the call. `true` = all users
-    // (HKLM), which needs admin — this runs only from the elevated install/update child.
+    use windows::Win32::System::Registry::*;
+    let value = wide_null(app::EXE_NAME);
+    // SAFETY: static subkey literal + null-terminated value name outlive the call; `key` is an
+    // out-param closed before return. REG_DWORD data = the 4 native bytes of `1u32`.
     unsafe {
-        let _ = WerAddExcludedApplication(PCWSTR(name.as_ptr()), true);
+        let mut key = HKEY::default();
+        let err = RegCreateKeyExW(
+            HKEY_LOCAL_MACHINE,
+            WER_EXCLUDED_SUBKEY,
+            None,
+            PCWSTR::null(),
+            REG_OPTION_NON_VOLATILE,
+            KEY_SET_VALUE,
+            None,
+            &mut key,
+            None,
+        );
+        if err.is_err() {
+            return;
+        }
+        let one = 1u32.to_ne_bytes();
+        let _ = RegSetValueExW(key, PCWSTR(value.as_ptr()), None, REG_DWORD, Some(&one));
+        let _ = RegCloseKey(key);
     }
 }
 
-/// Undo exclude_from_wer() (#38) on uninstall — leave no WER config behind.
+/// Undo exclude_from_wer() (#38) on uninstall — remove only our value, leaving the shared WER
+/// key intact. No-op if the key/value is absent (open, don't create).
 fn unexclude_from_wer() {
-    use windows::Win32::System::ErrorReporting::WerRemoveExcludedApplication;
-    let name = wide_null(app::EXE_NAME);
-    // SAFETY: `name` is a null-terminated wide string outliving the call; all-users (HKLM).
+    use windows::Win32::System::Registry::*;
+    let value = wide_null(app::EXE_NAME);
+    // SAFETY: static subkey literal + null-terminated value name outlive the call; `key` closed
+    // before return.
     unsafe {
-        let _ = WerRemoveExcludedApplication(PCWSTR(name.as_ptr()), true);
+        let mut key = HKEY::default();
+        let err = RegOpenKeyExW(
+            HKEY_LOCAL_MACHINE,
+            WER_EXCLUDED_SUBKEY,
+            None,
+            KEY_SET_VALUE,
+            &mut key,
+        );
+        if err.is_err() {
+            return;
+        }
+        let _ = RegDeleteValueW(key, PCWSTR(value.as_ptr()));
+        let _ = RegCloseKey(key);
     }
 }
 

@@ -4,6 +4,13 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-07-31
+
+Release-gate fix over 0.2.0 (which was tagged but never published). No user-facing behavior change.
+
+### Security
+- **The Windows Error Reporting opt-out writes its registry exclusion directly** now, dropping the `wer.dll` import so the shipped binary's golden import allowlist stays minimal (13 DLLs). The exclusion value is byte-identical to the WER API's own write, so the no-crash-dump-egress guarantee is unchanged.
+
 ## [0.2.0] - 2026-07-31
 
 Core features the same. The privileged service process gained least-privilege and injection-contained enhancements, logging and hardware consent are file-less, and interactions are faster and more robust thanks to idempotency and splitting UI from event handling.
@@ -66,6 +73,7 @@ First tagged release.
 - **Reproducible**: build timestamp derives from the commit (`SOURCE_DATE_EPOCH`), so the
   same tag rebuilds to the same bytes.
 
-[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/bgonz808/hp-thermal/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/bgonz808/hp-thermal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bgonz808/hp-thermal/releases/tag/v0.1.0
