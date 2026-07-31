@@ -4,6 +4,33 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-31
+
+Core features the same. The privileged service process gained least-privilege and injection-contained enhancements, logging and hardware consent are file-less, and interactions are faster and more robust thanks to idempotency and splitting UI from event handling.
+
+### Security
+- **Least privilege.** The SYSTEM service runs on a write-restricted token (`SERVICE_SID_TYPE_RESTRICTED`, Windows Service Hardening L2/L3): even as LocalSystem it writes only where its own service identity is granted, so process stays confined under any circumstance. Backed by a per-service SID and a runtime self-assertion that drops every privilege the service doesn't use.
+- **No child-process creation.** The service and the tray processes both refuse to launch other programs (`ProcessChildProcessPolicy`); the tray also stays at Medium integrity, refuses to run elevated, and sheds its unused privileges. The shell-out menu openers were removed so the tray needs no such capability.
+- **No dynamic code, no legacy syscalls.** The service process enforces `ProcessDynamicCodePolicy` (no runtime-generated or modified executable memory — [CWE-94](https://cwe.mitre.org/data/definitions/94.html)) and disables win32k system calls, cutting a large kernel attack surface. The tray process relies on UI features and needs win32k, but is already a lower privilege process.
+- **Hardened IPC.** The local named pipe rejects remote clients and enforces a kernel-level integrity check on callers; COM is locked down and service-side impersonation dropped, closing off remote RPC/COM access.
+- **File-less logging and tracing.** Logging moved to the Windows Event Log with per-role, severity-tagged sources, plus per-message tracing (strictly) on demand over ETW — retiring the on-disk log ([CWE-59](https://cwe.mitre.org/data/definitions/59.html), [CWE-732](https://cwe.mitre.org/data/definitions/732.html)) and giving a standard, queryable surface. Read with `Get-WinEvent -ProviderName HpThermal-Service`.
+- **No crash-dump egress.** The installed binaries opt out of Windows Error Reporting, so strictly no network.
+
+### Changed
+- **File-less consent.** Your hardware acknowledgement now lives in `HKCU` rather than a shared config file ([CWE-732](https://cwe.mitre.org/data/definitions/732.html)). Consent to run on your hardware is checked per Windows user. (As always, if not an HP, it will warn and exit.)
+- **The menu opens instantly.** Likely unnoticeably faster, but profile state requested upon icon hover, awaiting the menu open. Also a single round trip now fetches thermal + Smart Sense together.
+
+### Fixed
+- **Fn+F12 sleep hotkey more robust.** Blanking the screen no longer freezes the tray. Rapid presses are debounced. Rapid presses no longer queue, and drained upon wake anyways, to avoid waking from sleep just to go back to sleep.
+- **Fn+F12 listener isolated from the control path.** Listening for the Fn+F12 hardware event now uses its own dedicated WMI interface, separate from the one that sets and reads profiles — so it can't add latency to a profile change.
+- **Installer UI/UX.** Cancelling the update dialog now exits immediately.
+
+### Removed
+- The shell-out menu items — logs are read via the Event Log now, so they're no longer needed. This was required to enable the `ProcessChildProcessPolicy`.
+
+### Supply chain & release integrity
+- **Stronger artifact verification.** `verify-artifact` enforces an import allowlist, flags high-risk APIs, and binds the exe to its PDB by CodeView GUID; a digest-chained job gates the release, and the PDB sidecar is reproducible.
+
 ## [0.1.0] - 2026-07-26
 
 First tagged release.
@@ -39,5 +66,6 @@ First tagged release.
 - **Reproducible**: build timestamp derives from the commit (`SOURCE_DATE_EPOCH`), so the
   same tag rebuilds to the same bytes.
 
-[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/bgonz808/hp-thermal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bgonz808/hp-thermal/releases/tag/v0.1.0
