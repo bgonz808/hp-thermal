@@ -154,6 +154,13 @@ jobs:
       - name: Verify staged artifact
         run: cargo run --manifest-path xtask/Cargo.toml -- verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
 
+      # #104/#109 consumer gate on the SHIPPED bytes: fail closed if the stamp step didn't run
+      # or left a field behind — implausible (zero / pre-project / future) or inconsistent
+      # (debug-dir != COFF, surviving REPRO marker). Runs on dist/ only (post-stamp); the
+      # pre-stamp `ci` pass on target/ still carries the /Brepro hash and must NOT be gated here.
+      - name: Verify PE timestamps (plausible + consistent)
+        run: cargo run --manifest-path xtask/Cargo.toml -- verify-timestamp dist/hp-thermal.exe
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
         with:

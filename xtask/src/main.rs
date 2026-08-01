@@ -34,6 +34,10 @@ fn main() {
             args.get(1).map(String::as_str),
             args.get(2).map(String::as_str),
         ),
+        Some("verify-timestamp") => cmd_verify_timestamp(
+            args.get(1).map(String::as_str),
+            args.get(2).map(String::as_str),
+        ),
         #[cfg(windows)]
         Some("vsa-spike") => vsa::run(&args[1..]),
         _ => {
@@ -47,7 +51,10 @@ fn main() {
                 "  verify-artifact [EXE] [PDB]  hardening + capabilities + exe<->pdb GUID bind"
             );
             eprintln!(
-                "  stamp-time [EXE] [EPOCH]  pin PE TimeDateStamp to EPOCH (else SOURCE_DATE_EPOCH)"
+                "  stamp-time [EXE] [EPOCH]  reconcile ALL PE timestamps to EPOCH (else SOURCE_DATE_EPOCH)"
+            );
+            eprintln!(
+                "  verify-timestamp [EXE] [CEIL]  fail if PE timestamps are implausible/inconsistent"
             );
             eprintln!(
                 "  vsa-spike [--recover]    DEV #61: test the service under a virtual account (elevated)"
@@ -58,29 +65,82 @@ fn main() {
     exit(code);
 }
 
-/// #104: pin the PE COFF `TimeDateStamp` to a deterministic, plausible epoch (the commit date),
-/// overwriting the `/Brepro` content-hash that link.exe writes (link.exe has no `/TIMESTAMP`, so
-/// this is done post-link). MUST run BEFORE any hash/sign/attest step so those cover the patched
-/// bytes. Reproducible: same commit -> same epoch -> same bytes. Leaves the `repro` debug marker
-/// intact (it correctly still says "reproducible build").
-fn cmd_stamp_time(exe: Option<&str>, epoch: Option<&str>) -> i32 {
-    let path = exe.unwrap_or(RELEASE_EXE);
-    let epoch: u32 = match epoch
+/// IMAGE_DEBUG_TYPE_REPRO — the `/Brepro` marker that declares the COFF TimeDateStamp a
+/// build-id hash rather than a time. We neutralize it (see cmd_stamp_time).
+const IMAGE_DEBUG_TYPE_REPRO: u32 = 0x10;
+
+/// File offsets of every timestamp-bearing field in the PE, discovered by parsing (offsets
+/// shift every build, so nothing is hardcoded). Shared by stamp-time (writer) and
+/// verify-timestamp (reader) so they agree on exactly which fields exist.
+struct PeTsFields {
+    coff_ts: usize,            // COFF FileHeader.TimeDateStamp (PE+8)
+    debug_entries: Vec<usize>, // file offset of each IMAGE_DEBUG_DIRECTORY entry (ts at +4, type at +12)
+    rsrc_ts: Option<usize>,    // IMAGE_RESOURCE_DIRECTORY.TimeDateStamp, if a resource dir exists
+}
+
+fn pe_timestamp_fields(b: &[u8]) -> Option<PeTsFields> {
+    let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
+    if b.get(pe..pe + 4)? != b"PE\0\0" {
+        return None;
+    }
+    let opt = pe + 24;
+    let magic = u16::from_le_bytes(b.get(opt..opt + 2)?.try_into().ok()?);
+    let datadir = opt + if magic == 0x20B { 112 } else { 96 }; // PE32+ vs PE32
+    // Debug directory = data dir #6; walk its 28-byte entries.
+    let dbg = datadir + 6 * 8;
+    let dbg_rva = u32::from_le_bytes(b.get(dbg..dbg + 4)?.try_into().ok()?) as usize;
+    let dbg_size = u32::from_le_bytes(b.get(dbg + 4..dbg + 8)?.try_into().ok()?) as usize;
+    let mut debug_entries = Vec::new();
+    if dbg_rva != 0 {
+        if let Some(dbg_off) = pe_rva_to_off(b, dbg_rva) {
+            for i in 0..(dbg_size / 28) {
+                let e = dbg_off + i * 28;
+                if b.get(e..e + 28).is_some() {
+                    debug_entries.push(e);
+                }
+            }
+        }
+    }
+    // Resource directory = data dir #2; IMAGE_RESOURCE_DIRECTORY.TimeDateStamp is at +4.
+    let rsrc = datadir + 2 * 8;
+    let rsrc_rva = u32::from_le_bytes(b.get(rsrc..rsrc + 4)?.try_into().ok()?) as usize;
+    let rsrc_ts = if rsrc_rva != 0 {
+        pe_rva_to_off(b, rsrc_rva).map(|o| o + 4)
+    } else {
+        None
+    };
+    Some(PeTsFields {
+        coff_ts: pe + 8,
+        debug_entries,
+        rsrc_ts,
+    })
+}
+
+/// Parse an epoch from the arg, else SOURCE_DATE_EPOCH. `None` if neither is a valid u32-range epoch.
+fn epoch_arg_or_env(epoch: Option<&str>) -> Option<u32> {
+    epoch
         .and_then(|s| s.trim().parse::<u64>().ok())
         .or_else(|| {
             std::env::var("SOURCE_DATE_EPOCH")
                 .ok()
                 .and_then(|s| s.trim().parse::<u64>().ok())
-        }) {
-        Some(e) if e <= u32::MAX as u64 => e as u32,
-        Some(_) => {
-            eprintln!("stamp-time: epoch exceeds 32-bit PE range");
-            return 1;
-        }
-        None => {
-            eprintln!("stamp-time: no epoch (pass EPOCH arg or set SOURCE_DATE_EPOCH)");
-            return 1;
-        }
+        })
+        .filter(|&e| e <= u32::MAX as u64)
+        .map(|e| e as u32)
+}
+
+/// #104/#109: reconcile EVERY PE timestamp field to a deterministic, plausible epoch (the commit
+/// date), replacing the `/Brepro` content-hash that link.exe writes (link.exe has no `/TIMESTAMP`,
+/// so this is post-link). Patches the COFF `TimeDateStamp` AND each debug-directory entry's
+/// timestamp, and ZEROES the `IMAGE_DEBUG_TYPE_REPRO` entry so nothing still declares the field a
+/// build-id hash (leaving it would ship a now-stale self-hash and a COFF-vs-debug-dir mismatch —
+/// the exact timestomp tell). Result mimics a normal deterministic-timestamp build. MUST run
+/// BEFORE any hash/sign/attest step. Reproducible: same commit -> same epoch -> same bytes.
+fn cmd_stamp_time(exe: Option<&str>, epoch: Option<&str>) -> i32 {
+    let path = exe.unwrap_or(RELEASE_EXE);
+    let Some(epoch) = epoch_arg_or_env(epoch) else {
+        eprintln!("stamp-time: no valid epoch (pass EPOCH arg or set SOURCE_DATE_EPOCH; must fit 32 bits)");
+        return 1;
     };
     let mut data = match std::fs::read(path) {
         Ok(d) => d,
@@ -89,37 +149,45 @@ fn cmd_stamp_time(exe: Option<&str>, epoch: Option<&str>) -> i32 {
             return 1;
         }
     };
-    // e_lfanew (PE header offset) at 0x3C; COFF TimeDateStamp at PE+8.
-    if data.len() < 0x40 {
-        eprintln!("stamp-time: {path} too small to be a PE");
+    let Some(f) = pe_timestamp_fields(&data) else {
+        eprintln!("stamp-time: {path} is not a parseable PE");
         return 1;
-    }
-    let pe = u32::from_le_bytes([data[0x3C], data[0x3D], data[0x3E], data[0x3F]]) as usize;
-    if pe + 12 > data.len() || &data[pe..pe + 4] != b"PE\0\0" {
-        eprintln!("stamp-time: no PE signature at 0x{pe:X}");
-        return 1;
-    }
-    let ts = pe + 8;
-    let old = u32::from_le_bytes([data[ts], data[ts + 1], data[ts + 2], data[ts + 3]]);
+    };
+    let le = epoch.to_le_bytes();
+    let old = u32::from_le_bytes(data[f.coff_ts..f.coff_ts + 4].try_into().unwrap());
 
-    // Bounded-transform proof. Snapshot the pre-image, patch, then REFUSE to write if any
-    // byte OUTSIDE the 4-byte TimeDateStamp at PE+8 changed. This makes "only the timestamp
-    // was altered" a fail-closed invariant the (attested) release log records, not a claim
-    // in a comment — so provenance over the post-stamp digest stays honestly connected to
-    // the toolchain output. A subset test (not exact-equality) keeps it idempotent: a file
-    // already carrying `epoch` changes zero bytes and still passes. Backstopped by
-    // reproducibility — the pre-image is deterministic build output and `epoch` is the
-    // commit second, so a third party can rebuild + re-stamp to a byte-identical exe_v1.
+    // Snapshot for the bounded-transform proof, then collect the byte ranges we intend to touch.
     let pre = data.clone();
-    data[ts..ts + 4].copy_from_slice(&epoch.to_le_bytes());
-    let ts_range = ts..ts + 4;
+    let mut allowed: Vec<std::ops::Range<usize>> = vec![f.coff_ts..f.coff_ts + 4];
+    data[f.coff_ts..f.coff_ts + 4].copy_from_slice(&le);
+
+    let (mut restamped, mut zeroed) = (0usize, 0usize);
+    for &e in &f.debug_entries {
+        let ty = u32::from_le_bytes(data[e + 12..e + 16].try_into().unwrap());
+        match ty {
+            IMAGE_DEBUG_TYPE_REPRO => {
+                data[e..e + 28].fill(0); // neutralize: null entry, tools skip type-0
+                allowed.push(e..e + 28);
+                zeroed += 1;
+            }
+            0 => {} // already-null entry (idempotent re-run) — leave it
+            _ => {
+                data[e + 4..e + 8].copy_from_slice(&le);
+                allowed.push(e + 4..e + 8);
+                restamped += 1;
+            }
+        }
+    }
+
+    // Bounded-transform proof: REFUSE to write if any changed byte falls outside the fields we
+    // meant to touch. Makes "only the timestamp fields moved" a fail-closed, logged invariant
+    // (idempotent: a re-run changes zero bytes and passes).
     let stray: Vec<usize> = (0..data.len())
-        .filter(|&i| data[i] != pre[i] && !ts_range.contains(&i))
+        .filter(|&i| data[i] != pre[i] && !allowed.iter().any(|r| r.contains(&i)))
         .collect();
     if !stray.is_empty() {
         eprintln!(
-            "stamp-time: REFUSING to write — patch changed {} byte(s) OUTSIDE the \
-             TimeDateStamp at 0x{ts:X}: {stray:?}",
+            "stamp-time: REFUSING to write — {} byte(s) changed OUTSIDE the timestamp fields: {stray:?}",
             stray.len()
         );
         return 1;
@@ -128,12 +196,114 @@ fn cmd_stamp_time(exe: Option<&str>, epoch: Option<&str>) -> i32 {
         eprintln!("stamp-time: write {path}: {e}");
         return 1;
     }
+    let (y, mo, d) = civil_date(epoch);
     eprintln!(
-        "stamp-time: {path}  TimeDateStamp 0x{old:08X} -> 0x{epoch:08X} ({epoch})  \
-         delta={} byte(s) @ 0x{ts:X} (only the timestamp changed)",
-        4 - (old == epoch) as usize * 4
+        "stamp-time: {path}  COFF 0x{old:08X} -> 0x{epoch:08X} ({y:04}-{mo:02}-{d:02}); \
+         restamped {restamped} debug entr(ies), zeroed {zeroed} repro marker(s)"
     );
     0
+}
+
+/// #109 consumer gate: fail-closed on an implausible OR inconsistent PE timestamp on the SHIPPED
+/// bytes. Plausibility: COFF TimeDateStamp must be non-zero and inside [project floor, now+skew]
+/// (catches a zeroed field, an unstamped `/Brepro` hash — random/pre-project year — or a
+/// future date). Consistency: every non-null debug-dir entry must equal the COFF stamp, no
+/// `IMAGE_DEBUG_TYPE_REPRO` marker may survive, and the resource-dir stamp must be 0 or match.
+/// Together they prove stamp-time actually reconciled every field. Runs ONLY on the post-stamp
+/// artifact (dist/), never in the pre-stamp `ci` pass. Ceiling overridable via arg / SOURCE_DATE_EPOCH.
+fn cmd_verify_timestamp(exe: Option<&str>, ceiling: Option<&str>) -> i32 {
+    // hp-thermal's root commit (2026-07-22). No legitimate build predates the source; a rebased
+    // root would trip this loudly (bump the constant), never pass silently.
+    const FIRST_COMMIT_EPOCH: u32 = 1_784_744_572;
+    const SKEW: u32 = 172_800; // 2 days: build->verify gap + clock skew
+
+    let path = exe.unwrap_or(RELEASE_EXE);
+    let data = match std::fs::read(path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("verify-timestamp: read {path}: {e}");
+            return 1;
+        }
+    };
+    let Some(f) = pe_timestamp_fields(&data) else {
+        eprintln!("verify-timestamp: {path} is not a parseable PE");
+        return 1;
+    };
+    let coff = u32::from_le_bytes(data[f.coff_ts..f.coff_ts + 4].try_into().unwrap());
+    let ceiling = epoch_arg_or_env(ceiling)
+        .unwrap_or_else(|| {
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs().min(u32::MAX as u64) as u32)
+                .unwrap_or(u32::MAX)
+        })
+        .saturating_add(SKEW);
+
+    let mut ok = true;
+    let (y, mo, d) = civil_date(coff);
+    // --- Plausibility (COFF header) ---
+    if coff == 0 {
+        eprintln!("verify-timestamp: FAIL — COFF TimeDateStamp is 0 (zeroed / not stamped)");
+        ok = false;
+    } else if coff < FIRST_COMMIT_EPOCH {
+        eprintln!(
+            "verify-timestamp: FAIL — COFF 0x{coff:08X} = {y:04}-{mo:02}-{d:02} predates the \
+             project (floor 0x{FIRST_COMMIT_EPOCH:08X}); likely an unstamped /Brepro hash"
+        );
+        ok = false;
+    } else if coff > ceiling {
+        eprintln!(
+            "verify-timestamp: FAIL — COFF 0x{coff:08X} = {y:04}-{mo:02}-{d:02} is future-dated \
+             (ceiling 0x{ceiling:08X})"
+        );
+        ok = false;
+    }
+    // --- Consistency (debug dir + resource dir vs COFF) ---
+    for (i, &e) in f.debug_entries.iter().enumerate() {
+        let ty = u32::from_le_bytes(data[e + 12..e + 16].try_into().unwrap());
+        let ts = u32::from_le_bytes(data[e + 4..e + 8].try_into().unwrap());
+        if ty == IMAGE_DEBUG_TYPE_REPRO {
+            eprintln!("verify-timestamp: FAIL — debug entry #{i} is a surviving REPRO marker (0x10)");
+            ok = false;
+        } else if ty != 0 && ts != coff {
+            eprintln!(
+                "verify-timestamp: FAIL — debug entry #{i} (type {ty}) ts 0x{ts:08X} != COFF 0x{coff:08X}"
+            );
+            ok = false;
+        }
+    }
+    if let Some(r) = f.rsrc_ts {
+        let rts = u32::from_le_bytes(data[r..r + 4].try_into().unwrap());
+        if rts != 0 && rts != coff {
+            eprintln!("verify-timestamp: FAIL — resource-dir ts 0x{rts:08X} is neither 0 nor COFF 0x{coff:08X}");
+            ok = false;
+        }
+    }
+    if ok {
+        println!(
+            "verify-timestamp: OK — COFF + {} debug entr(ies) all = 0x{coff:08X} ({y:04}-{mo:02}-{d:02}), \
+             plausible, no REPRO marker",
+            f.debug_entries.len()
+        );
+        0
+    } else {
+        1
+    }
+}
+
+/// UTC (year, month, day) from a Unix timestamp — compact civil-calendar decode (Hinnant's
+/// algorithm), for legible check messages. No chrono dependency. Valid across the u32 PE range.
+fn civil_date(epoch: u32) -> (i64, u32, u32) {
+    let z = (epoch / 86400) as i64 + 719_468;
+    let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
+    let doe = z - era * 146_097; // [0, 146096]
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365; // [0, 399]
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100); // [0, 365]
+    let mp = (5 * doy + 2) / 153; // [0, 11]
+    let d = (doy - (153 * mp + 2) / 5 + 1) as u32; // [1, 31]
+    let m = if mp < 10 { mp + 3 } else { mp - 9 } as u32; // [1, 12]
+    (if m <= 2 { y + 1 } else { y }, m, d)
 }
 
 /// Run a step, streaming its output. Returns true on success.
@@ -750,4 +920,80 @@ fn pe_imported_functions(b: &[u8]) -> Option<Vec<String>> {
         off += 20;
     }
     Some(funcs)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::civil_date;
+
+    /// Independent, obviously-correct reference: walk forward from 1970-01-01 one day at a
+    /// time, subtracting whole years then whole months. Structurally unlike `civil_date`
+    /// (Hinnant's closed form), so a shared bug is implausible — agreement across every day
+    /// in the range is the proof.
+    fn ref_civil(epoch: u32) -> (i64, u32, u32) {
+        let leap = |y: i64| (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+        let mut days = (epoch / 86400) as i64;
+        let mut y = 1970i64;
+        loop {
+            let yd = if leap(y) { 366 } else { 365 };
+            if days < yd {
+                break;
+            }
+            days -= yd;
+            y += 1;
+        }
+        let md = [
+            31,
+            if leap(y) { 29 } else { 28 },
+            31,
+            30,
+            31,
+            30,
+            31,
+            31,
+            30,
+            31,
+            30,
+            31,
+        ];
+        let mut m = 0usize;
+        while days >= md[m] as i64 {
+            days -= md[m] as i64;
+            m += 1;
+        }
+        (y, (m + 1) as u32, (days + 1) as u32)
+    }
+
+    /// Anchors hard-coded from an independent authority (`date -u -d @<epoch>`), including the
+    /// leap-year edge cases: 2000 IS leap (÷400), 2100 is NOT (÷100 not ÷400), and the u32 ceiling.
+    #[test]
+    fn anchors_match_os_ground_truth() {
+        assert_eq!(civil_date(0), (1970, 1, 1));
+        assert_eq!(civil_date(1_784_744_572), (2026, 7, 22)); // repo's first commit
+        assert_eq!(civil_date(1_785_526_818), (2026, 7, 31)); // HEAD stamp
+        assert_eq!(civil_date(951_782_400), (2000, 2, 29)); // 2000 leap day
+        assert_eq!(civil_date(4_107_456_000), (2100, 2, 28)); // 2100 not leap...
+        assert_eq!(civil_date(4_107_542_400), (2100, 3, 1)); // ...so no 2100-02-29
+        assert_eq!(civil_date(4_294_967_295), (2106, 2, 7)); // u32::MAX
+    }
+
+    /// Every day from 1970 to the u32 ceiling (~49710 days, year 2106) must match the
+    /// independent reference. Exhaustive over the entire domain `civil_date` can be called with.
+    #[test]
+    fn matches_reference_every_day_in_u32_range() {
+        let max_day = u32::MAX / 86400;
+        for day in 0..=max_day {
+            let e = day * 86400;
+            assert_eq!(civil_date(e), ref_civil(e), "day {day}, epoch {e}");
+        }
+    }
+
+    /// Any second within a day maps to the same date (we key on epoch/86400).
+    #[test]
+    fn intra_day_is_constant() {
+        let base = 1_785_526_818 - (1_785_526_818 % 86400);
+        for s in [0u32, 1, 3600, 43_200, 86_399] {
+            assert_eq!(civil_date(base + s), (2026, 7, 31));
+        }
+    }
 }
