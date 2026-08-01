@@ -30,6 +30,10 @@ fn main() {
             args.get(1).map(String::as_str),
             args.get(2).map(String::as_str),
         ),
+        Some("stamp-time") => cmd_stamp_time(
+            args.get(1).map(String::as_str),
+            args.get(2).map(String::as_str),
+        ),
         #[cfg(windows)]
         Some("vsa-spike") => vsa::run(&args[1..]),
         _ => {
@@ -43,12 +47,93 @@ fn main() {
                 "  verify-artifact [EXE] [PDB]  hardening + capabilities + exe<->pdb GUID bind"
             );
             eprintln!(
+                "  stamp-time [EXE] [EPOCH]  pin PE TimeDateStamp to EPOCH (else SOURCE_DATE_EPOCH)"
+            );
+            eprintln!(
                 "  vsa-spike [--recover]    DEV #61: test the service under a virtual account (elevated)"
             );
             2
         }
     };
     exit(code);
+}
+
+/// #104: pin the PE COFF `TimeDateStamp` to a deterministic, plausible epoch (the commit date),
+/// overwriting the `/Brepro` content-hash that link.exe writes (link.exe has no `/TIMESTAMP`, so
+/// this is done post-link). MUST run BEFORE any hash/sign/attest step so those cover the patched
+/// bytes. Reproducible: same commit -> same epoch -> same bytes. Leaves the `repro` debug marker
+/// intact (it correctly still says "reproducible build").
+fn cmd_stamp_time(exe: Option<&str>, epoch: Option<&str>) -> i32 {
+    let path = exe.unwrap_or(RELEASE_EXE);
+    let epoch: u32 = match epoch
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .or_else(|| {
+            std::env::var("SOURCE_DATE_EPOCH")
+                .ok()
+                .and_then(|s| s.trim().parse::<u64>().ok())
+        }) {
+        Some(e) if e <= u32::MAX as u64 => e as u32,
+        Some(_) => {
+            eprintln!("stamp-time: epoch exceeds 32-bit PE range");
+            return 1;
+        }
+        None => {
+            eprintln!("stamp-time: no epoch (pass EPOCH arg or set SOURCE_DATE_EPOCH)");
+            return 1;
+        }
+    };
+    let mut data = match std::fs::read(path) {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("stamp-time: read {path}: {e}");
+            return 1;
+        }
+    };
+    // e_lfanew (PE header offset) at 0x3C; COFF TimeDateStamp at PE+8.
+    if data.len() < 0x40 {
+        eprintln!("stamp-time: {path} too small to be a PE");
+        return 1;
+    }
+    let pe = u32::from_le_bytes([data[0x3C], data[0x3D], data[0x3E], data[0x3F]]) as usize;
+    if pe + 12 > data.len() || &data[pe..pe + 4] != b"PE\0\0" {
+        eprintln!("stamp-time: no PE signature at 0x{pe:X}");
+        return 1;
+    }
+    let ts = pe + 8;
+    let old = u32::from_le_bytes([data[ts], data[ts + 1], data[ts + 2], data[ts + 3]]);
+
+    // Bounded-transform proof. Snapshot the pre-image, patch, then REFUSE to write if any
+    // byte OUTSIDE the 4-byte TimeDateStamp at PE+8 changed. This makes "only the timestamp
+    // was altered" a fail-closed invariant the (attested) release log records, not a claim
+    // in a comment — so provenance over the post-stamp digest stays honestly connected to
+    // the toolchain output. A subset test (not exact-equality) keeps it idempotent: a file
+    // already carrying `epoch` changes zero bytes and still passes. Backstopped by
+    // reproducibility — the pre-image is deterministic build output and `epoch` is the
+    // commit second, so a third party can rebuild + re-stamp to a byte-identical exe_v1.
+    let pre = data.clone();
+    data[ts..ts + 4].copy_from_slice(&epoch.to_le_bytes());
+    let ts_range = ts..ts + 4;
+    let stray: Vec<usize> = (0..data.len())
+        .filter(|&i| data[i] != pre[i] && !ts_range.contains(&i))
+        .collect();
+    if !stray.is_empty() {
+        eprintln!(
+            "stamp-time: REFUSING to write — patch changed {} byte(s) OUTSIDE the \
+             TimeDateStamp at 0x{ts:X}: {stray:?}",
+            stray.len()
+        );
+        return 1;
+    }
+    if let Err(e) = std::fs::write(path, &data) {
+        eprintln!("stamp-time: write {path}: {e}");
+        return 1;
+    }
+    eprintln!(
+        "stamp-time: {path}  TimeDateStamp 0x{old:08X} -> 0x{epoch:08X} ({epoch})  \
+         delta={} byte(s) @ 0x{ts:X} (only the timestamp changed)",
+        4 - (old == epoch) as usize * 4
+    );
+    0
 }
 
 /// Run a step, streaming its output. Returns true on success.
