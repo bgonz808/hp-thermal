@@ -54,6 +54,22 @@ fn main() {
         env("CARGO_PKG_NAME")
     );
 
+    // --- #106: DELAY-LOAD rstrtmgr + powrprof (close the pre-main DLL-hijack window, honestly) ---
+    // Both are used only on cold paths (rstrtmgr: install/uninstall; powrprof: SetSuspendState on
+    // Fn+F12). As regular static imports the loader resolves them — and their non-KnownDLL
+    // transitive deps (ncrypt / umpdc / wmiclnt) — at process init, BEFORE main()'s
+    // SetDefaultDllDirectories(SYSTEM32) pin, via the search order (app dir before System32): a
+    // plantable pre-main window (proven exploitable for rstrtmgr->ncrypt). Delay-loading keeps them
+    // as DECLARED imports (in the delay-import directory — visible to static analysis, unlike a
+    // manual LoadLibrary+GetProcAddress, which reads as dynamic-API-resolution obfuscation) while
+    // deferring the load to first use, by when the pin is live -> the deps resolve from System32.
+    // Needs delayimp.lib (the MSVC delay-load helper). Pattern per rust-lang/rustup's build.rs.
+    // COST: measured +4,608 bytes (~4.5 KB, ~1.5%: 303,616 -> 308,224) for delayimp.lib + the two
+    // DLLs' delay thunks — the price of search-order enforcement on these deps. Worth it.
+    println!("cargo:rustc-link-arg-bins=/DELAYLOAD:rstrtmgr.dll");
+    println!("cargo:rustc-link-arg-bins=/DELAYLOAD:powrprof.dll");
+    println!("cargo:rustc-link-arg-bins=delayimp.lib");
+
     // --- Parse version from Cargo.toml ---
     let version = env("CARGO_PKG_VERSION");
     let parts: Vec<&str> = version.split('.').collect();

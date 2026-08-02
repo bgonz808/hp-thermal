@@ -119,6 +119,52 @@ Exploit-mitigation flags on the shipped `.exe` (verify with `cargo xtask verify-
 | Control Flow Guard | ✅ (`-C control-flow-guard=checks`) |
 | Stack canaries | ✅ (`-Z stack-protector=strong`) |
 
+## DLL search-order integrity
+
+Windows resolves a non-[KnownDLL](https://learn.microsoft.com/windows/win32/dlls/known-dlls) by
+[search order](https://learn.microsoft.com/windows/win32/dlls/dynamic-link-library-search-order) —
+**the application directory before `System32`** — so a DLL loaded *by name* from a writable run
+directory can be **planted** and hijacked ([MITRE T1574.001](https://attack.mitre.org/techniques/T1574/001/)
+/ [.002](https://attack.mitre.org/techniques/T1574/002/)). Installed to `Program Files` (admin-only
+ACL) this is a non-issue; the surface that matters is the **portable/installer `.exe` run elevated
+from a writable dir** (e.g. Downloads), where a standard user can pre-plant a DLL and escalate.
+
+Controls (verify with `cargo xtask audit-dll-closure` / `audit-dll-planting`):
+
+| Load | Control |
+| --- | --- |
+| Our **static** imports | `/DEPENDENTLOADFLAG:0x800` — the loader pins them to `System32` at process init |
+| Runtime `LoadLibrary` (`nvml`, `uxtheme`) | explicit `LoadLibraryExW(…, LOAD_LIBRARY_SEARCH_SYSTEM32)` per call |
+| Process-wide default | `SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32)` as `main`'s first line |
+| **Deferred** cold-path DLLs (`rstrtmgr`, `powrprof`) | delay-load (`build.rs /DELAYLOAD`) — load past the pin (measured +4.5 KB for `delayimp.lib`) |
+
+The subtlety: `/DEPENDENTLOADFLAG` pins our *own* static imports but **not a dependency's own
+resolution** ([docs](https://learn.microsoft.com/cpp/build/reference/dependentloadflag)). `rstrtmgr`
+and `powrprof` (used only on the install and Fn+F12 cold paths) each pulled a non-KnownDLL
+transitive dep (`ncrypt`; `umpdc`/`wmiclnt`) at process init — *before* the runtime pin — a real
+pre-`main` window (confirmed exploitable for `rstrtmgr`→`ncrypt` by the plant harness). Both are now
+**delay-loaded**, so they stay *declared* imports (honest, visible to static analysis — unlike a
+manual `LoadLibrary`+`GetProcAddress`, which reads as dynamic-API-resolution obfuscation,
+[T1027.007](https://attack.mitre.org/techniques/T1027/007/)) but load at first use, after the pin,
+resolving from `System32`. Net: **zero pre-`main` plant surface.**
+
+Gated in CI (`.github/workflows/dll-plant-audit.yml`):
+
+- **`audit-dll-closure`** walks the regular + delay import closure and **fails on any new pre-`main`
+  transitive dep** (allowlist empty); delay/runtime deps are reported, not gated (pinned).
+- **`audit-dll-planting`** — a user-mode plant harness (no admin, no kernel driver): builds a proxy
+  under a dependency's name beside a throwaway exe copy and detects a run-dir win via a load marker
+  (dynamic load) or the startup `NTSTATUS` (static bind failure). Blocking; validated with a
+  known-plantable and a known-fixed control.
+- **`capabilities`** — the import allowlist is **exact-match**: it fails if the concrete-DLL surface
+  grows *or* shrinks without updating `ALLOWED`, ratcheting the reduced surface so it can't silently
+  regress.
+
+Residual: a *system* DLL dynamically `LoadLibrary`-ing a non-KnownDLL pre-`main` is OS-level behavior
+we can't close in-process for a parent we don't control (an elevated installer's parent is
+`consent.exe`). Backstops: the `Program Files` ACL (installed app) and Authenticode signing
+(roadmap); the plant harness surfaces any such case.
+
 ## Dependency & supply-chain posture
 
 - **Runtime third-party surface = the Microsoft `windows` crate family only.** Build-only
