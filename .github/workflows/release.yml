@@ -127,6 +127,19 @@ jobs:
           cargo run --manifest-path xtask/Cargo.toml -- stamp-time \
             app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe "$EPOCH"
 
+      # --- Authenticode signing (#21) — STAGED, inert until a cert is configured ---
+      # Order is load-bearing: sign AFTER stamp-time and BEFORE the SHA-256 / SLSA attestation,
+      # so checksums and provenance subject cover the SIGNED bytes (build -> stamp -> SIGN ->
+      # hash -> attest). Secretless via OIDC; wiring plan + Azure Artifact Signing provisioning:
+      # #21. Fail-closed: if SIGNING_ENABLED is set before the action is wired, error rather than
+      # ship unsigned-but-believed-signed.
+      - name: Sign (Authenticode)
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        shell: bash
+        run: |
+          echo "::error::SIGNING_ENABLED=true but the Artifact Signing (OIDC) action is not wired yet — see #21."
+          exit 1
+
       - name: Stage artifacts + SHA-256 checksums
         id: stage
         shell: pwsh
