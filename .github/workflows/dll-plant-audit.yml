@@ -1,0 +1,71 @@
+name: DLL-plant audit
+
+# #106: static + dynamic audit of the DLL search-order hijack surface (MITRE T1574.001/.002).
+# Runs on demand and when the import surface / mitigations change. Pure user-mode — no admin
+# kernel driver (unlike ProcMon): the dynamic tier plants a FORWARDING proxy next to a throwaway
+# copy of the exe and checks whether the run-dir copy wins the loader search order — the exact
+# DLL-planting EoP the static closure gate flags. See tools/dll-plant-probe/probe.rs.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'xtask/**'
+      - 'tools/dll-plant-probe/**'
+      - 'app/.cargo/config.toml'
+      - 'app/Cargo.toml'
+      - '.github/workflows/dll-plant-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  dll-plant-audit:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain (+ rust-src for build-std)
+        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+
+      # A plain build is representative for this audit: same static imports (powrprof / rstrtmgr)
+      # and the same /DEPENDENTLOADFLAG load-config as a release artifact. No cargo-auditable / SBOM
+      # needed here.
+      - name: Build a representative release binary
+        working-directory: app
+        run: cargo +nightly-2026-07-23 build --release --target x86_64-pc-windows-msvc
+
+      # EPHEMERAL RUNNER ONLY: exclude the harness's temp workspace from Defender so real-time
+      # protection can't quarantine the throwaway exe copy or the forwarding proxy mid-test. This
+      # is a disposable build VM, NOT a workstation — same ephemeral-runner license as the
+      # long-paths registry tweak in release.yml. Scoped to TEMP, never a machine-wide disable.
+      - name: Exclude harness temp from Defender (ephemeral runner)
+        shell: pwsh
+        run: |
+          try { Add-MpPreference -ExclusionPath $env:RUNNER_TEMP -ErrorAction Stop } catch {}
+          try { Add-MpPreference -ExclusionPath $env:TEMP        -ErrorAction Stop } catch {}
+
+      # STATIC tier (blocking): fail on any NEW pre-main transitive dep (new DLL-plant surface).
+      - name: Static gate — transitive DLL-plant surface
+        run: cargo run --manifest-path xtask/Cargo.toml -- audit-dll-closure app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
+
+      # DYNAMIC tier (DIAGNOSTIC for now): plant a forwarding proxy for the current pre-main
+      # candidate (ncrypt) and report whether it loads from the run dir. This is the empirical
+      # arbiter of whether /DEPENDENTLOADFLAG:0x800 already covers the transitive dep. It does NOT
+      # fail the job yet — flip `exit 0` to `exit $code` once the rstrtmgr deferral lands and the
+      # expected result is "not plantable".
+      - name: Dynamic tier — plant test (ncrypt, diagnostic)
+        shell: pwsh
+        run: |
+          cargo run --manifest-path xtask/Cargo.toml -- audit-dll-planting app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe ncrypt.dll
+          $code = $LASTEXITCODE
+          $msg = switch ($code) {
+            1 { "**PLANTABLE** — ncrypt.dll loaded from the run dir; /DEPENDENTLOADFLAG:0x800 did NOT cover this transitive dep. Real pre-main DLL-hijack gap." }
+            0 { "**not plantable** — System32 won the search; the transitive dep is already covered for the exercised path." }
+            default { "**inconclusive** (exit $code) — likely Defender or a build/runtime issue on the runner." }
+          }
+          "## Dynamic plant test: ncrypt.dll`n$msg" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          Write-Host $msg
+          exit 0   # diagnostic only — see comment above
