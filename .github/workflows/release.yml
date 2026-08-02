@@ -115,6 +115,18 @@ jobs:
         working-directory: app
         run: cargo cyclonedx --format json
 
+      # #104: MUTATION before any seal. Patch the /Brepro hash timestamp (which decodes to an
+      # implausible year and can trip timestomp heuristics) to the reproducible commit epoch —
+      # plausible AND deterministic. link.exe has no /TIMESTAMP, so it's a post-link patch, and
+      # it MUST run before the SHA-256 / attestation below so those cover the stamped bytes.
+      # (Same source as build.rs's BUILD_DATE: SOURCE_DATE_EPOCH, else the HEAD commit time.)
+      - name: Stamp PE TimeDateStamp to the commit date
+        shell: bash
+        run: |
+          EPOCH="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}"
+          cargo run --manifest-path xtask/Cargo.toml -- stamp-time \
+            app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe "$EPOCH"
+
       - name: Stage artifacts + SHA-256 checksums
         id: stage
         shell: pwsh
@@ -141,6 +153,13 @@ jobs:
       # copy means a corrupted copy cannot slip through. See #41 / #42.
       - name: Verify staged artifact
         run: cargo run --manifest-path xtask/Cargo.toml -- verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
+
+      # #104/#109 consumer gate on the SHIPPED bytes: fail closed if the stamp step didn't run
+      # or left a field behind — implausible (zero / pre-project / future) or inconsistent
+      # (debug-dir != COFF, surviving REPRO marker). Runs on dist/ only (post-stamp); the
+      # pre-stamp `ci` pass on target/ still carries the /Brepro hash and must NOT be gated here.
+      - name: Verify PE timestamps (plausible + consistent)
+        run: cargo run --manifest-path xtask/Cargo.toml -- verify-timestamp dist/hp-thermal.exe
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
