@@ -739,10 +739,11 @@ fn cmd_imports_scan(exe_path: &str) -> i32 {
 /// so a copy planted in a writable run dir can win over System32 before our runtime mitigations
 /// execute. Regression-gates: fails on any flagged dep NOT in the accepted allowlist.
 /// PRE-MAIN transitive deps we've reviewed and accepted (the plant surface — loaded before our
-/// runtime pins). `ncrypt` (via `rstrtmgr`, a regular static import) is the current one; #106
-/// tracks deferring `rstrtmgr` to a lazy System32 load, which removes it. `umpdc`/`wmiclnt` (via
-/// `powrprof`) are DELAY imports → runtime-pinned by SetDefaultDllDirectories, so not gated here.
-const DLL_CLOSURE_ACCEPTED: &[&str] = &["ncrypt.dll"];
+/// runtime pins). EMPTY: #106 deferred `rstrtmgr` to a lazy System32 load, removing `ncrypt` (its
+/// former pre-main dep) from the static closure — so the gate now asserts ZERO pre-main plant
+/// surface, and any new one fails CI. `umpdc`/`wmiclnt` (via `powrprof`) are DELAY imports →
+/// runtime-pinned by SetDefaultDllDirectories, so not gated here.
+const DLL_CLOSURE_ACCEPTED: &[&str] = &[];
 
 fn cmd_audit_dll_closure(exe: Option<&str>) -> i32 {
     use std::collections::{HashSet, VecDeque};
