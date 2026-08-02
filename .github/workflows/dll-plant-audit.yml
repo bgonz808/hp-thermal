@@ -9,10 +9,9 @@ on:
   workflow_dispatch:
   pull_request:
     paths:
+      - 'app/**'   # any app change can alter the import surface -> re-run the DLL-integrity gate
       - 'xtask/**'
       - 'tools/dll-plant-probe/**'
-      - 'app/.cargo/config.toml'
-      - 'app/Cargo.toml'
       - '.github/workflows/dll-plant-audit.yml'
 
 permissions:
@@ -30,9 +29,9 @@ jobs:
       - name: Install pinned toolchain (+ rust-src for build-std)
         run: rustup toolchain install nightly-2026-07-23 -c rust-src
 
-      # A plain build is representative for this audit: same static imports (powrprof / rstrtmgr)
-      # and the same /DEPENDENTLOADFLAG load-config as a release artifact. No cargo-auditable / SBOM
-      # needed here.
+      # A plain build is representative for this audit: same import surface (incl. rstrtmgr/powrprof
+      # delay-loaded) and the same /DEPENDENTLOADFLAG load-config as a release artifact. No
+      # cargo-auditable / SBOM needed here.
       - name: Build a representative release binary
         working-directory: app
         run: cargo +nightly-2026-07-23 build --release --target x86_64-pc-windows-msvc
@@ -50,6 +49,17 @@ jobs:
       # STATIC tier (blocking): fail on any NEW pre-main transitive dep (new DLL-plant surface).
       - name: Static gate — transitive DLL-plant surface
         run: cargo run --manifest-path xtask/Cargo.toml -- audit-dll-closure app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
+
+      # CAPABILITY RATCHET (blocking): EXACT-match import allowlist. The gate FAILS unless the
+      # binary's concrete-DLL imports equal ALLOWED exactly — nothing is allowed to drift:
+      #   * an EXTRA import (not in ALLOWED) is REJECTED — a new capability (supply-chain compromise
+      #     or feature creep) can't ship until someone deliberately adds it to ALLOWED.
+      #   * a MISSING import (in ALLOWED but no longer imported) also FAILS — forcing ALLOWED to be
+      #     tightened, so a slimmed surface can't leave a loose allowlist that silently re-permits
+      #     that DLL later.
+      # Gated here (not only in the tag-time release build) so it runs on every import-affecting PR.
+      - name: Capability ratchet — exact-match import allowlist
+        run: cargo run --manifest-path xtask/Cargo.toml -- capabilities app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
 
       # DYNAMIC tier (BLOCKING): plant a bare proxy under ncrypt's name next to a throwaway exe copy
       # and detect whether the run-dir copy wins the loader search — via marker (dynamic load) OR an

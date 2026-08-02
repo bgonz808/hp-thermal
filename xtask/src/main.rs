@@ -503,20 +503,41 @@ fn cmd_capabilities(exe: Option<&str>) -> i32 {
     let allowed = |d: &str| {
         ALLOWED.contains(&d) || d.starts_with("api-ms-win-") || d.starts_with("ext-ms-win-")
     };
+    // EXACT-MATCH ratchet: the concrete-DLL surface must equal ALLOWED, not merely be a subset.
+    //   * off_list — imported but NOT allowed  => capability GREW (supply-chain / feature creep).
+    //   * stale    — allowed but NOT imported  => surface SHRANK; ALLOWED must be tightened to lock
+    //                the smaller surface in, else the upper-bound over-permits a silent regression.
+    let imported: std::collections::HashSet<&str> = dlls.iter().map(String::as_str).collect();
     let off_list: Vec<&str> = dlls
         .iter()
         .map(String::as_str)
         .filter(|d| !allowed(d))
         .collect();
-    if off_list.is_empty() {
+    let stale: Vec<&str> = ALLOWED
+        .iter()
+        .copied()
+        .filter(|a| !imported.contains(a))
+        .collect();
+    if off_list.is_empty() && stale.is_empty() {
         println!(
-            "capabilities: OK — imports within the golden allowlist (no network/unknown DLLs)"
+            "capabilities: OK — imports EXACTLY match the golden allowlist (no network/unknown DLLs)"
         );
         0
     } else {
-        eprintln!("capabilities: FAIL — off-allowlist import(s): {off_list:?}");
-        eprintln!("  a shipped build must import only the vetted OS set; a new entry is a");
-        eprintln!("  capability change — update ALLOWED only for a deliberate CRT/feature change.");
+        if !off_list.is_empty() {
+            eprintln!("capabilities: FAIL — off-allowlist import(s): {off_list:?}");
+            eprintln!("  a shipped build must import only the vetted OS set; a new entry is a");
+            eprintln!(
+                "  capability change — update ALLOWED only for a deliberate CRT/feature change."
+            );
+        }
+        if !stale.is_empty() {
+            eprintln!("capabilities: FAIL — allowlist entr(ies) no longer imported: {stale:?}");
+            eprintln!("  the surface shrank — REMOVE these from ALLOWED to ratchet the posture");
+            eprintln!(
+                "  (an upper-bound allowlist that over-permits lets the capability regress)."
+            );
+        }
         1
     }
 }
@@ -771,17 +792,32 @@ fn cmd_audit_dll_closure(exe: Option<&str>) -> i32 {
             || known.contains(n)
     };
     let direct: HashSet<String> = direct_raw.iter().map(|d| d.to_ascii_lowercase()).collect();
+    // Our OWN delay imports (e.g. rstrtmgr/powrprof via build.rs /DELAYLOAD): declared but loaded
+    // at first use — after our SetDefaultDllDirectories pin — so they seed the walk as pre_main=false.
+    let delayed: HashSet<String> = pe_delay_imported_dlls(&bytes)
+        .unwrap_or_default()
+        .iter()
+        .map(|d| d.to_ascii_lowercase())
+        .collect();
+    // Our own imports (regular + delay) are pinned/deferred by us — not transitive plant surface.
+    let own: HashSet<String> = direct.union(&delayed).cloned().collect();
 
-    // BFS the closure from our direct imports, tracking a `pre_main` flag: true means every edge
-    // from the exe to this DLL is a REGULAR static import, so it resolves during process init
-    // (before main, before our runtime pins). A DELAY edge anywhere defers the whole subtree to
-    // first-use — by then SetDefaultDllDirectories(SYSTEM32) is live, so the plant window is
-    // closed. That split is the real severity: pre-main = plantable; delay/runtime = pinned.
+    // BFS the closure from our imports, tracking a `pre_main` flag: true means every edge from the
+    // exe to this DLL is a REGULAR static import, so it resolves during process init (before main,
+    // before our runtime pins). A DELAY edge anywhere (our own /DELAYLOAD, or a dependency's delay
+    // import) defers the whole subtree to first-use — by then SetDefaultDllDirectories(SYSTEM32) is
+    // live, so the plant window is closed. That split is the real severity: pre-main = plantable;
+    // delay/runtime = pinned.
     let mut visited: HashSet<String> = HashSet::new();
     let mut flagged: Vec<(String, String, bool)> = Vec::new(); // (dll, via, pre_main)
     let mut q: VecDeque<(String, String, bool)> = direct
         .iter()
         .map(|d| (d.clone(), "<exe>".to_string(), true))
+        .chain(
+            delayed
+                .iter()
+                .map(|d| (d.clone(), "<exe> [delay]".to_string(), false)),
+        )
         .collect();
     while let Some((dll, via, pre_main)) = q.pop_front() {
         if !visited.insert(dll.clone()) {
@@ -790,9 +826,9 @@ fn cmd_audit_dll_closure(exe: Option<&str>) -> i32 {
         if exempt(&dll) {
             continue; // protected closure — stop, don't recurse
         }
-        // Non-exempt = search-path-resolvable. Flag it UNLESS it's one of our OWN direct imports
-        // (those are pinned by /DEPENDENTLOADFLAG on our load config).
-        if !direct.contains(&dll) {
+        // Non-exempt = search-path-resolvable. Flag it UNLESS it's one of OUR OWN imports (regular
+        // ones are pinned by /DEPENDENTLOADFLAG; delay ones load post-pin from System32).
+        if !own.contains(&dll) {
             flagged.push((dll.clone(), via.clone(), pre_main));
         }
         // Recurse: regular imports inherit pre_main; delay imports force the subtree to runtime.
