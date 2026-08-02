@@ -4,6 +4,14 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-08-02
+
+Proactive hardening and cleanup. No user-facing behavior change.
+
+### Security
+- **DLL search-order hardening.** `rstrtmgr` and `powrprof` are now delay-loaded: their non-KnownDLL dependencies (`ncrypt`, `umpdc`/`wmiclnt`) resolve from `System32` rather than the run directory, closing a DLL-planting path when the binary runs from a writable folder. Loading only on use also sharpens the single binary's roles, so the installer, tray, and service each pull only the DLLs they need. They stay *declared* imports; CI gates lock the surface (import-closure walk, plant test, exact-match allowlist). See SECURITY.md. [T1574.001](https://attack.mitre.org/techniques/T1574/001/)/[.002](https://attack.mitre.org/techniques/T1574/002/).
+- **Deterministic build timestamp.** The PE `TimeDateStamp` pins to the commit date instead of the `/Brepro` content-hash, which decoded to a random year. This drops a timestomp heuristic with no effect on reproducibility, and a CI gate rejects an implausible timestamp. [T1070.006](https://attack.mitre.org/techniques/T1070/006/).
+
 ## [0.2.1] - 2026-07-31
 
 Release-gate fix over 0.2.0 (which was tagged but never published). No user-facing behavior change.
@@ -73,7 +81,8 @@ First tagged release.
 - **Reproducible**: build timestamp derives from the commit (`SOURCE_DATE_EPOCH`), so the
   same tag rebuilds to the same bytes.
 
-[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/bgonz808/hp-thermal/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/bgonz808/hp-thermal/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/bgonz808/hp-thermal/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/bgonz808/hp-thermal/releases/tag/v0.1.0
