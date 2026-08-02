@@ -1424,33 +1424,113 @@ impl UpdateLog {
     }
 }
 
+// --- Restart Manager, lazily loaded from System32 (#106) ------------------------------------
+// rstrtmgr.dll is NOT a static import: as one, the loader would resolve its non-KnownDLL
+// dependency ncrypt.dll at process init — before main()'s SetDefaultDllDirectories pin runs — a
+// pre-main window the plant test proved is hijackable from a writable run dir. Loading it on
+// demand (only the install/uninstall path calls who_locks_file) moves the load past the pin, so
+// ncrypt resolves from System32. We hand-declare the C signatures: referencing the windows-crate
+// RmXxx bindings would re-emit the static rstrtmgr import (raw-dylib) and defeat the deferral —
+// the audit-dll-closure gate catches that regression. Struct types carry no linkage, so reused.
+/// The bare `FARPROC` shape `GetProcAddress` returns, before transmute to a typed signature.
+type RawProc = unsafe extern "system" fn() -> isize;
+type RmStartSessionFn = unsafe extern "system" fn(*mut u32, u32, *mut u16) -> u32;
+type RmRegisterResourcesFn = unsafe extern "system" fn(
+    u32,
+    u32,
+    *const *const u16,
+    u32,
+    *const windows::Win32::System::RestartManager::RM_UNIQUE_PROCESS,
+    u32,
+    *const *const u16,
+) -> u32;
+type RmGetListFn = unsafe extern "system" fn(
+    u32,
+    *mut u32,
+    *mut u32,
+    *mut windows::Win32::System::RestartManager::RM_PROCESS_INFO,
+    *mut u32,
+) -> u32;
+type RmEndSessionFn = unsafe extern "system" fn(u32) -> u32;
+
+struct Rstrtmgr {
+    start_session: RmStartSessionFn,
+    register_resources: RmRegisterResourcesFn,
+    get_list: RmGetListFn,
+    end_session: RmEndSessionFn,
+}
+
+fn rstrtmgr() -> Option<&'static Rstrtmgr> {
+    use windows::Win32::System::LibraryLoader::{
+        GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
+    };
+    use windows::core::{s, w};
+    static API: std::sync::OnceLock<Option<Rstrtmgr>> = std::sync::OnceLock::new();
+    // SAFETY: LOAD_LIBRARY_SEARCH_SYSTEM32 pins the load to System32; each GetProcAddress result
+    // is a valid rstrtmgr export transmuted to its C ABI signature (declared above).
+    API.get_or_init(|| unsafe {
+        let h = LoadLibraryExW(w!("rstrtmgr.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32).ok()?;
+        Some(Rstrtmgr {
+            start_session: std::mem::transmute::<RawProc, RmStartSessionFn>(GetProcAddress(
+                h,
+                s!("RmStartSession"),
+            )?),
+            register_resources: std::mem::transmute::<RawProc, RmRegisterResourcesFn>(
+                GetProcAddress(h, s!("RmRegisterResources"))?,
+            ),
+            get_list: std::mem::transmute::<RawProc, RmGetListFn>(GetProcAddress(
+                h,
+                s!("RmGetList"),
+            )?),
+            end_session: std::mem::transmute::<RawProc, RmEndSessionFn>(GetProcAddress(
+                h,
+                s!("RmEndSession"),
+            )?),
+        })
+    })
+    .as_ref()
+}
+
 /// Use the Restart Manager API to identify which processes have a file open.
 /// Returns a list of "PID: process_name" strings, or an error description.
 fn who_locks_file(path: &str) -> Vec<String> {
-    use windows::Win32::Foundation::WIN32_ERROR;
-    use windows::Win32::System::RestartManager::*;
+    use windows::Win32::System::RestartManager::RM_PROCESS_INFO;
 
-    let ok = WIN32_ERROR(0);
-    let more_data = WIN32_ERROR(234);
+    let Some(rm) = rstrtmgr() else {
+        return vec!["Restart Manager (rstrtmgr.dll) unavailable".to_string()];
+    };
+    const OK: u32 = 0;
+    const MORE_DATA: u32 = 234;
 
     let mut session: u32 = 0;
     let mut key = [0u16; 64];
 
-    // SAFETY: `key` is a 64-element u16 buffer (>= CCH_RM_SESSION_KEY+1). `session` is out-param.
-    let err = unsafe { RmStartSession(&mut session, None, windows::core::PWSTR(key.as_mut_ptr())) };
-    if err != ok {
-        return vec![format!("RmStartSession failed: {:?}", err)];
+    // SAFETY: `key` is 64 u16 (>= CCH_RM_SESSION_KEY+1); `session` is an out-param; dwSessionFlags
+    // is reserved-0 per rstrtmgr.h. Called through a signature hand-declared to match the C ABI.
+    let err = unsafe { (rm.start_session)(&mut session, 0, key.as_mut_ptr()) };
+    if err != OK {
+        return vec![format!("RmStartSession failed: {err}")];
     }
 
     let path_w: Vec<u16> = path.encode_utf16().chain(std::iter::once(0)).collect();
-    let path_ptrs = [windows::core::PCWSTR(path_w.as_ptr())];
-    // SAFETY: `session` is a valid RM session from RmStartSession. `path_ptrs` contains
-    // one valid null-terminated wide string pointer that outlives the call.
-    let err = unsafe { RmRegisterResources(session, Some(&path_ptrs), None, None) };
-    if err != ok {
+    let files = [path_w.as_ptr()];
+    // SAFETY: `session` valid; `files` holds one null-terminated wide string that outlives the
+    // call; nFiles=1 matches; app/service arrays are null with counts 0.
+    let err = unsafe {
+        (rm.register_resources)(
+            session,
+            1,
+            files.as_ptr(),
+            0,
+            std::ptr::null(),
+            0,
+            std::ptr::null(),
+        )
+    };
+    if err != OK {
         // SAFETY: `session` is a valid RM session that must be closed on error.
-        let _ = unsafe { RmEndSession(session) };
-        return vec![format!("RmRegisterResources failed: {:?}", err)];
+        let _ = unsafe { (rm.end_session)(session) };
+        return vec![format!("RmRegisterResources failed: {err}")];
     }
 
     let mut needed: u32 = 0;
@@ -1458,25 +1538,26 @@ fn who_locks_file(path: &str) -> Vec<String> {
     let mut buf = vec![RM_PROCESS_INFO::default(); 16];
     let mut reason: u32 = 0;
 
-    // SAFETY: `session` is valid. `buf` has capacity for 16 entries and `count` is set to 16,
-    // so RmGetList will not write beyond the buffer.
+    // SAFETY: `session` valid; `buf` has 16 slots and `count`=16, so RmGetList won't overflow it.
     let err = unsafe {
-        RmGetList(
+        (rm.get_list)(
             session,
             &mut needed,
             &mut count,
-            Some(buf.as_mut_ptr()),
+            buf.as_mut_ptr(),
             &mut reason,
         )
     };
-    if err != ok && err != more_data {
+    if err != OK && err != MORE_DATA {
         // SAFETY: Same RmEndSession contract as above.
-        let _ = unsafe { RmEndSession(session) };
-        return vec![format!("RmGetList failed: {:?}", err)];
+        let _ = unsafe { (rm.end_session)(session) };
+        return vec![format!("RmGetList failed: {err}")];
     }
 
     let mut result = Vec::new();
-    for info in &buf[..count as usize] {
+    // Clamp: on MORE_DATA the API reports `needed` > buffer; only `buf.len()` slots are valid.
+    let n = (count as usize).min(buf.len());
+    for info in &buf[..n] {
         let end = info
             .strAppName
             .iter()
@@ -1490,7 +1571,7 @@ fn who_locks_file(path: &str) -> Vec<String> {
     }
 
     // SAFETY: Same RmEndSession contract as above. Closes the RM session on normal exit.
-    let _ = unsafe { RmEndSession(session) };
+    let _ = unsafe { (rm.end_session)(session) };
     result
 }
 

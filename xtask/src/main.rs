@@ -38,6 +38,11 @@ fn main() {
             args.get(1).map(String::as_str),
             args.get(2).map(String::as_str),
         ),
+        Some("audit-dll-closure") => cmd_audit_dll_closure(args.get(1).map(String::as_str)),
+        Some("audit-dll-planting") => cmd_audit_dll_planting(
+            args.get(1).map(String::as_str),
+            args.get(2).map(String::as_str),
+        ),
         #[cfg(windows)]
         Some("vsa-spike") => vsa::run(&args[1..]),
         _ => {
@@ -55,6 +60,12 @@ fn main() {
             );
             eprintln!(
                 "  verify-timestamp [EXE] [CEIL]  fail if PE timestamps are implausible/inconsistent"
+            );
+            eprintln!(
+                "  audit-dll-closure [EXE]  flag non-KnownDLL transitive imports (DLL-plant surface, #106)"
+            );
+            eprintln!(
+                "  audit-dll-planting [EXE] [DLL]  DEV: plant a forwarding proxy, test run-dir load (#106)"
             );
             eprintln!(
                 "  vsa-spike [--recover]    DEV #61: test the service under a virtual account (elevated)"
@@ -91,13 +102,12 @@ fn pe_timestamp_fields(b: &[u8]) -> Option<PeTsFields> {
     let dbg_rva = u32::from_le_bytes(b.get(dbg..dbg + 4)?.try_into().ok()?) as usize;
     let dbg_size = u32::from_le_bytes(b.get(dbg + 4..dbg + 8)?.try_into().ok()?) as usize;
     let mut debug_entries = Vec::new();
-    if dbg_rva != 0 {
-        if let Some(dbg_off) = pe_rva_to_off(b, dbg_rva) {
-            for i in 0..(dbg_size / 28) {
-                let e = dbg_off + i * 28;
-                if b.get(e..e + 28).is_some() {
-                    debug_entries.push(e);
-                }
+    // pe_rva_to_off returns None for rva 0, so no separate zero-guard is needed.
+    if let Some(dbg_off) = pe_rva_to_off(b, dbg_rva) {
+        for i in 0..(dbg_size / 28) {
+            let e = dbg_off + i * 28;
+            if b.get(e..e + 28).is_some() {
+                debug_entries.push(e);
             }
         }
     }
@@ -139,7 +149,9 @@ fn epoch_arg_or_env(epoch: Option<&str>) -> Option<u32> {
 fn cmd_stamp_time(exe: Option<&str>, epoch: Option<&str>) -> i32 {
     let path = exe.unwrap_or(RELEASE_EXE);
     let Some(epoch) = epoch_arg_or_env(epoch) else {
-        eprintln!("stamp-time: no valid epoch (pass EPOCH arg or set SOURCE_DATE_EPOCH; must fit 32 bits)");
+        eprintln!(
+            "stamp-time: no valid epoch (pass EPOCH arg or set SOURCE_DATE_EPOCH; must fit 32 bits)"
+        );
         return 1;
     };
     let mut data = match std::fs::read(path) {
@@ -158,7 +170,8 @@ fn cmd_stamp_time(exe: Option<&str>, epoch: Option<&str>) -> i32 {
 
     // Snapshot for the bounded-transform proof, then collect the byte ranges we intend to touch.
     let pre = data.clone();
-    let mut allowed: Vec<std::ops::Range<usize>> = vec![f.coff_ts..f.coff_ts + 4];
+    let mut allowed: Vec<std::ops::Range<usize>> = Vec::new();
+    allowed.push(f.coff_ts..f.coff_ts + 4);
     data[f.coff_ts..f.coff_ts + 4].copy_from_slice(&le);
 
     let (mut restamped, mut zeroed) = (0usize, 0usize);
@@ -263,7 +276,9 @@ fn cmd_verify_timestamp(exe: Option<&str>, ceiling: Option<&str>) -> i32 {
         let ty = u32::from_le_bytes(data[e + 12..e + 16].try_into().unwrap());
         let ts = u32::from_le_bytes(data[e + 4..e + 8].try_into().unwrap());
         if ty == IMAGE_DEBUG_TYPE_REPRO {
-            eprintln!("verify-timestamp: FAIL — debug entry #{i} is a surviving REPRO marker (0x10)");
+            eprintln!(
+                "verify-timestamp: FAIL — debug entry #{i} is a surviving REPRO marker (0x10)"
+            );
             ok = false;
         } else if ty != 0 && ts != coff {
             eprintln!(
@@ -275,7 +290,9 @@ fn cmd_verify_timestamp(exe: Option<&str>, ceiling: Option<&str>) -> i32 {
     if let Some(r) = f.rsrc_ts {
         let rts = u32::from_le_bytes(data[r..r + 4].try_into().unwrap());
         if rts != 0 && rts != coff {
-            eprintln!("verify-timestamp: FAIL — resource-dir ts 0x{rts:08X} is neither 0 nor COFF 0x{coff:08X}");
+            eprintln!(
+                "verify-timestamp: FAIL — resource-dir ts 0x{rts:08X} is neither 0 nor COFF 0x{coff:08X}"
+            );
             ok = false;
         }
     }
@@ -712,6 +729,298 @@ fn cmd_imports_scan(exe_path: &str) -> i32 {
         eprintln!("imports-scan: FAIL — high-risk import(s): {hits:?}");
         eprintln!("  injection/exfil primitives the tool never uses (possible tamper)");
         1
+    }
+}
+
+/// #106: static gate for the T1574.001/.002 pre-main transitive-load class. Walks the exe's
+/// static-import closure and flags any DLL that (a) is reached *transitively* — i.e. is NOT one
+/// of our own direct imports, which `/DEPENDENTLOADFLAG:0x800` already pins to System32 — and
+/// (b) is not a KnownDLL / api-set / loader-core DLL. Such a DLL resolves via the search path,
+/// so a copy planted in a writable run dir can win over System32 before our runtime mitigations
+/// execute. Regression-gates: fails on any flagged dep NOT in the accepted allowlist.
+/// PRE-MAIN transitive deps we've reviewed and accepted (the plant surface — loaded before our
+/// runtime pins). EMPTY: #106 deferred `rstrtmgr` to a lazy System32 load, removing `ncrypt` (its
+/// former pre-main dep) from the static closure — so the gate now asserts ZERO pre-main plant
+/// surface, and any new one fails CI. `umpdc`/`wmiclnt` (via `powrprof`) are DELAY imports →
+/// runtime-pinned by SetDefaultDllDirectories, so not gated here.
+const DLL_CLOSURE_ACCEPTED: &[&str] = &[];
+
+fn cmd_audit_dll_closure(exe: Option<&str>) -> i32 {
+    use std::collections::{HashSet, VecDeque};
+    let path = exe.unwrap_or(RELEASE_EXE);
+    let bytes = match std::fs::read(path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("audit-dll-closure: read {path}: {e}");
+            return 1;
+        }
+    };
+    let Some(direct_raw) = pe_imported_dlls(&bytes) else {
+        eprintln!("audit-dll-closure: {path} import table not walkable");
+        return 1;
+    };
+    let known = load_known_dlls();
+    // Exempt = cannot be planted from the app dir: api-sets are loader-resolved from the
+    // schema; ntdll/kernelbase are mapped by the kernel before any search; KnownDLLs (and
+    // their static closure) are forced from System32 by the loader.
+    let exempt = |n: &str| {
+        n.starts_with("api-ms-")
+            || n.starts_with("ext-ms-")
+            || n == "ntdll.dll"
+            || n == "kernelbase.dll"
+            || known.contains(n)
+    };
+    let direct: HashSet<String> = direct_raw.iter().map(|d| d.to_ascii_lowercase()).collect();
+
+    // BFS the closure from our direct imports, tracking a `pre_main` flag: true means every edge
+    // from the exe to this DLL is a REGULAR static import, so it resolves during process init
+    // (before main, before our runtime pins). A DELAY edge anywhere defers the whole subtree to
+    // first-use — by then SetDefaultDllDirectories(SYSTEM32) is live, so the plant window is
+    // closed. That split is the real severity: pre-main = plantable; delay/runtime = pinned.
+    let mut visited: HashSet<String> = HashSet::new();
+    let mut flagged: Vec<(String, String, bool)> = Vec::new(); // (dll, via, pre_main)
+    let mut q: VecDeque<(String, String, bool)> = direct
+        .iter()
+        .map(|d| (d.clone(), "<exe>".to_string(), true))
+        .collect();
+    while let Some((dll, via, pre_main)) = q.pop_front() {
+        if !visited.insert(dll.clone()) {
+            continue;
+        }
+        if exempt(&dll) {
+            continue; // protected closure — stop, don't recurse
+        }
+        // Non-exempt = search-path-resolvable. Flag it UNLESS it's one of our OWN direct imports
+        // (those are pinned by /DEPENDENTLOADFLAG on our load config).
+        if !direct.contains(&dll) {
+            flagged.push((dll.clone(), via.clone(), pre_main));
+        }
+        // Recurse: regular imports inherit pre_main; delay imports force the subtree to runtime.
+        if let Ok(b) = std::fs::read(format!("C:\\Windows\\System32\\{dll}")) {
+            for d in pe_imported_dlls(&b).unwrap_or_default() {
+                q.push_back((d.to_ascii_lowercase(), dll.clone(), pre_main));
+            }
+            for d in pe_delay_imported_dlls(&b).unwrap_or_default() {
+                q.push_back((d.to_ascii_lowercase(), dll.clone(), false));
+            }
+        }
+    }
+
+    flagged.sort();
+    flagged.dedup();
+    println!(
+        "audit-dll-closure: {path}  ({} direct imports)",
+        direct.len()
+    );
+    if flagged.is_empty() {
+        println!("  closure clean — no transitive search-path deps");
+        return 0;
+    }
+    // Only PRE-MAIN transitive deps are the plant surface (loaded before our runtime pins);
+    // gate those against the allowlist. delay/rt deps load post-mitigation — reported for
+    // completeness (the full runtime surface), not gated.
+    let mut new_premain = 0;
+    for (dll, via, pre_main) in &flagged {
+        if *pre_main {
+            let accepted = DLL_CLOSURE_ACCEPTED.contains(&dll.as_str());
+            if !accepted {
+                new_premain += 1;
+            }
+            println!(
+                "  PRE-MAIN  {dll:<16} via {via:<14} [{}]",
+                if accepted {
+                    "accepted"
+                } else {
+                    "*** NEW — plantable ***"
+                }
+            );
+        } else {
+            println!("  delay/rt  {dll:<16} via {via:<14} (runtime-pinned)");
+        }
+    }
+    if new_premain > 0 {
+        eprintln!(
+            "audit-dll-closure: FAIL — {new_premain} NEW pre-main transitive dep(s): plantable \
+             before runtime mitigations. Defer the parent import or add to DLL_CLOSURE_ACCEPTED."
+        );
+        1
+    } else {
+        println!(
+            "audit-dll-closure: OK — pre-main plant surface allow-listed; delay/rt deps pinned \
+             by SetDefaultDllDirectories. (#106)"
+        );
+        0
+    }
+}
+
+/// KnownDLLs from `HKLM\...\Session Manager\KnownDLLs` (lowercased, `.dll` suffix). The loader
+/// forces these — and their static closure — from System32, so they cannot be planted. Uses
+/// reg.exe to avoid a registry-crate dependency; empty set on failure (fails safe: more flags).
+fn load_known_dlls() -> std::collections::HashSet<String> {
+    let mut set = std::collections::HashSet::new();
+    let out = std::process::Command::new("reg")
+        .args([
+            "query",
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\KnownDLLs",
+        ])
+        .output();
+    if let Ok(o) = out {
+        for line in String::from_utf8_lossy(&o.stdout).lines() {
+            // "  <name>    REG_SZ    <value>"; keep bare *.dll values, skip DllDirectory paths.
+            if let Some(v) = line.split("REG_SZ").nth(1) {
+                let v = v.trim().to_ascii_lowercase();
+                if v.ends_with(".dll") && !v.contains('\\') {
+                    set.insert(v);
+                }
+            }
+        }
+    }
+    set
+}
+
+#[cfg(windows)]
+unsafe extern "system" {
+    fn SetErrorMode(mode: u32) -> u32;
+}
+
+/// #106 dynamic tier (DEV). Plant a BARE proxy DLL under a dependency's filename next to a
+/// THROWAWAY copy of the exe and see whether the loader picks it up from the run dir. For a
+/// DYNAMIC load (a dependency's runtime LoadLibrary), the loader runs the proxy's `.CRT$XCU` init
+/// on load — writing a marker + the resolved loader stack — BEFORE any GetProcAddress, so no
+/// export forwarding is needed (the target's later crypto call fails, but the load is already
+/// recorded; we kill the process shortly after). The complementary STATIC gate (audit-dll-closure)
+/// covers static-import re-introduction, so this tier need not forward. Deterministic, user-mode,
+/// no admin/driver.
+///
+/// Exit codes are DISJOINT — a harness failure must never masquerade as a verdict:
+///   1 = PLANTABLE (marker present), 0 = not plantable, 2 = INCONCLUSIVE (build/copy/spawn error).
+fn cmd_audit_dll_planting(exe: Option<&str>, candidate: Option<&str>) -> i32 {
+    const ERR: i32 = 2; // inconclusive — distinct from the 0/1 verdict codes
+    let exe = exe.unwrap_or(RELEASE_EXE);
+    let cand = candidate.unwrap_or("ncrypt.dll").to_ascii_lowercase();
+    let probe_src = "tools/dll-plant-probe/probe.rs";
+    if !std::path::Path::new(probe_src).exists() {
+        eprintln!("audit-dll-planting: {probe_src} not found (run from repo root)");
+        return ERR;
+    }
+    let base = cand.trim_end_matches(".dll");
+    let dir = std::env::temp_dir().join(format!("hp-plant-{}-{base}", std::process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+
+    // Build the BARE proxy cdylib named exactly <cand>. No `/DEF`: rustc's cdylib already emits its
+    // own export .def, and passing a second one is what caused the earlier `link.exe` 1120 failure.
+    // Forwarding is unnecessary for a dynamic load — the marker fires on attach, before any bind.
+    let proxy = dir.join(&cand);
+    let build = Command::new("rustc")
+        .args([
+            "--crate-type",
+            "cdylib",
+            "-O",
+            "--target",
+            "x86_64-pc-windows-msvc",
+            "--edition",
+            "2021",
+        ])
+        .arg(probe_src)
+        .arg("-o")
+        .arg(&proxy)
+        .status();
+    match build {
+        Ok(s) if s.success() => {}
+        other => {
+            eprintln!("audit-dll-planting: proxy build failed ({other:?})");
+            let _ = std::fs::remove_dir_all(&dir);
+            return ERR;
+        }
+    }
+
+    // Assemble the plant dir: throwaway exe copy + the proxy under the dependency's name.
+    let target = dir.join("hp-thermal.exe");
+    if let Err(e) = std::fs::copy(exe, &target) {
+        eprintln!(
+            "audit-dll-planting: copy exe -> temp failed ({e}). If os error 225, Defender \
+             quarantined the copy — run on CI / an isolated VM (do not weaken Defender here)."
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+        return ERR;
+    }
+
+    let marker = dir.join("loaded.marker");
+    let _ = std::fs::remove_file(&marker);
+
+    // Suppress the hard-error dialog so a static-import bind failure (export-less proxy winning the
+    // search) exits with its NTSTATUS instead of blocking on a modal box.
+    #[cfg(windows)]
+    // SAFETY: SetErrorMode only sets this process's (inherited) error-mode flags.
+    unsafe {
+        SetErrorMode(0x0001 | 0x0002 | 0x8000); // FAILCRITICALERRORS | NOGPFAULTERRORBOX | NOOPENFILEERRORBOX
+    }
+
+    // Run the throwaway copy; poll for an EARLY exit (static bind failure) up to the timeout, else
+    // kill it (it ran normally).
+    let spawned = Command::new(&target)
+        .current_dir(&dir)
+        .env("HP_PLANT_MARKER", &marker)
+        .spawn();
+    let mut child = match spawned {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!(
+                "audit-dll-planting: spawn failed ({e}) — likely Defender (os 225). Run on CI."
+            );
+            let _ = std::fs::remove_dir_all(&dir);
+            return ERR;
+        }
+    };
+    let mut early: Option<i32> = None;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(3000);
+    loop {
+        match child.try_wait() {
+            Ok(Some(st)) => {
+                early = st.code();
+                break;
+            }
+            Ok(None) if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+            Err(_) => break,
+        }
+    }
+
+    let loaded = marker.exists();
+    // Read the probe's resolved module chain (loader stack) BEFORE cleanup wipes it.
+    let chain = std::fs::read_to_string(&marker).unwrap_or_default();
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // Two independent plantable signals:
+    //   * marker present         -> a DYNAMIC LoadLibrary picked up our proxy (its init ran).
+    //   * early exit w/ a loader  -> a STATIC-import bind failed because our export-less proxy won
+    //     NTSTATUS (0xC00001xx)      the search (real ncrypt would have bound cleanly and run on).
+    let static_hijack = early
+        .map(|c| c as u32)
+        .is_some_and(|c| matches!(c, 0xC0000135 | 0xC0000139 | 0xC000007B));
+    if loaded || static_hijack {
+        let how = if loaded {
+            "dynamic load — marker fired"
+        } else {
+            "static bind failure — export-less proxy won the search"
+        };
+        println!("audit-dll-planting: {cand} *** LOADED from run dir *** — PLANTABLE ({how})");
+        // Discovery tier (dynamic case only): the module chain names WHO pulled the planted DLL.
+        let chain: Vec<&str> = chain.lines().skip(1).collect();
+        if !chain.is_empty() {
+            println!("  load chain (nearest caller first) — who pulled {cand}:");
+            for m in &chain {
+                println!("    {m}");
+            }
+        }
+        1
+    } else {
+        println!("audit-dll-planting: {cand} not loaded from run dir — not plantable on this path");
+        0
     }
 }
 

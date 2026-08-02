@@ -1,0 +1,74 @@
+name: DLL-plant audit
+
+# #106: static + dynamic audit of the DLL search-order hijack surface (MITRE T1574.001/.002).
+# Runs on demand and when the import surface / mitigations change. Pure user-mode — no admin
+# kernel driver (unlike ProcMon): the dynamic tier plants a FORWARDING proxy next to a throwaway
+# copy of the exe and checks whether the run-dir copy wins the loader search order — the exact
+# DLL-planting EoP the static closure gate flags. See tools/dll-plant-probe/probe.rs.
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'xtask/**'
+      - 'tools/dll-plant-probe/**'
+      - 'app/.cargo/config.toml'
+      - 'app/Cargo.toml'
+      - '.github/workflows/dll-plant-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  dll-plant-audit:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain (+ rust-src for build-std)
+        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+
+      # A plain build is representative for this audit: same static imports (powrprof / rstrtmgr)
+      # and the same /DEPENDENTLOADFLAG load-config as a release artifact. No cargo-auditable / SBOM
+      # needed here.
+      - name: Build a representative release binary
+        working-directory: app
+        run: cargo +nightly-2026-07-23 build --release --target x86_64-pc-windows-msvc
+
+      # EPHEMERAL RUNNER ONLY: exclude the harness's temp workspace from Defender so real-time
+      # protection can't quarantine the throwaway exe copy or the forwarding proxy mid-test. This
+      # is a disposable build VM, NOT a workstation — same ephemeral-runner license as the
+      # long-paths registry tweak in release.yml. Scoped to TEMP, never a machine-wide disable.
+      - name: Exclude harness temp from Defender (ephemeral runner)
+        shell: pwsh
+        run: |
+          try { Add-MpPreference -ExclusionPath $env:RUNNER_TEMP -ErrorAction Stop } catch {}
+          try { Add-MpPreference -ExclusionPath $env:TEMP        -ErrorAction Stop } catch {}
+
+      # STATIC tier (blocking): fail on any NEW pre-main transitive dep (new DLL-plant surface).
+      - name: Static gate — transitive DLL-plant surface
+        run: cargo run --manifest-path xtask/Cargo.toml -- audit-dll-closure app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
+
+      # DYNAMIC tier (BLOCKING): plant a bare proxy under ncrypt's name next to a throwaway exe copy
+      # and detect whether the run-dir copy wins the loader search — via marker (dynamic load) OR an
+      # 0xC00001xx startup NTSTATUS (static bind failure = the export-less proxy won). #106 deferred
+      # rstrtmgr, so ncrypt is no longer a static import and the expected result is "not plantable".
+      # The harness is validated by controls: v0.2.1 (rstrtmgr static) reads PLANTABLE, the deferred
+      # binary reads not-plantable. Disjoint exit codes (1 plantable / 0 not / 2 inconclusive) — a
+      # build/Defender/runtime failure returns 2 and FAILS the job (a test that couldn't run is not a
+      # pass). Regression guard: if rstrtmgr is re-added as a static import, this goes red.
+      - name: Dynamic tier — plant test (ncrypt, blocking)
+        shell: pwsh
+        run: |
+          cargo run --manifest-path xtask/Cargo.toml -- audit-dll-planting app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe ncrypt.dll
+          $code = $LASTEXITCODE
+          $msg = switch ($code) {
+            1 { "**PLANTABLE** — ncrypt loaded from the run dir. Regression: rstrtmgr (or another static importer of ncrypt) is back — the pre-main DLL-hijack gap is reopened." }
+            0 { "**not plantable** — the run-dir copy did not win; the rstrtmgr deferral holds." }
+            default { "**inconclusive** (exit $code) — proxy build / Defender / runtime issue on the runner. Failing: a plant test that couldn't run is not a pass." }
+          }
+          "## Dynamic plant test: ncrypt.dll`n$msg" | Out-File -Append $env:GITHUB_STEP_SUMMARY
+          Write-Host $msg
+          exit $code   # blocking (0 pass; 1 plantable / 2 inconclusive both fail)
