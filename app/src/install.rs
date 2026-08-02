@@ -1530,7 +1530,11 @@ pub fn ensure_tray() {
     if is_tray_running() {
         return;
     }
-    let _ = Command::new(app::installed_exe()).spawn();
+    // Launch with a creation-time image-load mitigation (PreferSystem32 | NoRemote | NoLowLabel)
+    // so the hardening is airtight from the child's image #0 — before its own main() could run
+    // the runtime SetDefaultDllDirectories/image-load pin. Best-effort: the logon Run key is the
+    // backstop if the launch fails. (#119)
+    let _ = crate::win_harden::spawn_hardened(&app::installed_exe());
 }
 
 /// True if a tray instance already holds its singleton mutex (`app::MUTEX_NAME`). A

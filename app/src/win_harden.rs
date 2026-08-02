@@ -340,3 +340,100 @@ pub fn strip_token_privileges_except(keep: &[PCWSTR]) -> (u32, u32) {
         (removed, extras)
     }
 }
+
+/// Launch `exe` with a CREATION-TIME image-load mitigation baked into the child's
+/// process-creation policy — the only pre-`main`-airtight form of the hardening that
+/// [`apply`]'s `restrict_image_loads` / `restrict_dll_search` apply at runtime. Those
+/// runtime calls only take effect once the child's own `main` runs; a DLL planted next to
+/// the exe could already win during the child's *startup* import resolution, before then.
+/// The creation-time `PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY` closes that window for the
+/// launches we own (parent → tray, via `install::ensure_tray`).
+///
+/// Policy = PreferSystem32 | NoRemoteImages | NoLowMandatoryLabelImages — the same bits
+/// `restrict_image_loads` sets, but enforced from image #0. NOT CIG/no-child/win32k: the
+/// tray is a Medium-IL GUI that loads nvml and must keep spawning nothing-special behavior.
+///
+/// The child inherits our token, so its integrity level is unchanged — call only from a
+/// Medium parent (`ensure_tray` guarantees this). Returns false on any failure; callers
+/// treat the launch as best-effort (the logon Run key is the backstop).
+pub fn spawn_hardened(exe: &str) -> bool {
+    use std::ffi::c_void;
+    use windows::Win32::System::Threading::{
+        CreateProcessW, DeleteProcThreadAttributeList, EXTENDED_STARTUPINFO_PRESENT,
+        InitializeProcThreadAttributeList, LPPROC_THREAD_ATTRIBUTE_LIST, PROCESS_INFORMATION,
+        STARTUPINFOEXW, UpdateProcThreadAttribute,
+    };
+    use windows::core::PCWSTR;
+
+    // PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY = ProcThreadAttributeValue(7, FALSE, TRUE, FALSE)
+    // = 7 | PROC_THREAD_ATTRIBUTE_INPUT(0x0002_0000). The `windows` crate doesn't export the
+    // assembled constant, so we spell the frozen winbase.h value directly.
+    const PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY: usize = 0x0002_0007;
+    // PROCESS_CREATION_MITIGATION_POLICY_IMAGE_LOAD_* (winbase.h) — DWORD64 bit positions:
+    //   NO_REMOTE_ALWAYS_ON (1<<52) | NO_LOW_LABEL_ALWAYS_ON (1<<56) | PREFER_SYSTEM32_ALWAYS_ON (1<<60).
+    const IMAGE_LOAD_POLICY: u64 = (1u64 << 52) | (1u64 << 56) | (1u64 << 60);
+
+    let exe_w = crate::wide::wide_null(exe);
+
+    // SAFETY: textbook attribute-list dance — size (null-list call sets `size`) -> allocate ->
+    // init -> UpdateProcThreadAttribute with a `u64` policy that outlives the CreateProcessW
+    // call -> CreateProcessW with EXTENDED_STARTUPINFO_PRESENT. The attribute list is always
+    // deleted and both returned handles closed before any success return.
+    unsafe {
+        let mut size = 0usize;
+        // Sizing call: expected to "fail" (null list) while writing the required `size`.
+        let _ = InitializeProcThreadAttributeList(None, 1, None, &mut size);
+        if size == 0 {
+            return false;
+        }
+        let mut buf = vec![0u8; size];
+        let attr = LPPROC_THREAD_ATTRIBUTE_LIST(buf.as_mut_ptr() as *mut c_void);
+        if InitializeProcThreadAttributeList(Some(attr), 1, None, &mut size).is_err() {
+            return false;
+        }
+
+        let policy: u64 = IMAGE_LOAD_POLICY;
+        let updated = UpdateProcThreadAttribute(
+            attr,
+            0,
+            PROC_THREAD_ATTRIBUTE_MITIGATION_POLICY,
+            Some(std::ptr::addr_of!(policy) as *const c_void),
+            std::mem::size_of::<u64>(),
+            None,
+            None,
+        )
+        .is_ok();
+        if !updated {
+            DeleteProcThreadAttributeList(attr);
+            return false;
+        }
+
+        let mut si = STARTUPINFOEXW::default();
+        si.StartupInfo.cb = std::mem::size_of::<STARTUPINFOEXW>() as u32;
+        si.lpAttributeList = attr;
+        let mut pi = PROCESS_INFORMATION::default();
+
+        // lpApplicationName = the absolute installed exe path (no CreateProcess search order);
+        // lpCommandLine null -> argv[0] is the app path, matching the prior Command::spawn.
+        let created = CreateProcessW(
+            PCWSTR(exe_w.as_ptr()),
+            None,
+            None,
+            None,
+            false,
+            EXTENDED_STARTUPINFO_PRESENT,
+            None,
+            PCWSTR::null(),
+            std::ptr::addr_of!(si.StartupInfo),
+            &mut pi,
+        )
+        .is_ok();
+
+        DeleteProcThreadAttributeList(attr);
+        if created {
+            let _ = CloseHandle(pi.hProcess);
+            let _ = CloseHandle(pi.hThread);
+        }
+        created
+    }
+}
