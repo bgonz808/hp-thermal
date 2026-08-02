@@ -51,23 +51,24 @@ jobs:
       - name: Static gate — transitive DLL-plant surface
         run: cargo run --manifest-path xtask/Cargo.toml -- audit-dll-closure app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
 
-      # DYNAMIC tier (DIAGNOSTIC): plant a forwarding proxy for ncrypt and report whether it loads
-      # from the run dir. #106 deferred rstrtmgr, which the STATIC gate confirms removed ncrypt from
-      # the static import closure — yet this test still shows ncrypt loading, i.e. a *dynamic* load
-      # path (a dependency's runtime LoadLibrary, invisible to import-table analysis) remains and is
-      # not pinned. That residual is under investigation (identify the loader, then pin/defer it or
-      # apply creation-time PreferSystem32). Stays diagnostic — reports without failing — until the
-      # dynamic loader is closed; then flip `exit 0` back to `exit $code`.
-      - name: Dynamic tier — plant test (ncrypt, diagnostic — dynamic residual)
+      # DYNAMIC tier (BLOCKING): plant a bare proxy under ncrypt's name next to a throwaway exe copy
+      # and detect whether the run-dir copy wins the loader search — via marker (dynamic load) OR an
+      # 0xC00001xx startup NTSTATUS (static bind failure = the export-less proxy won). #106 deferred
+      # rstrtmgr, so ncrypt is no longer a static import and the expected result is "not plantable".
+      # The harness is validated by controls: v0.2.1 (rstrtmgr static) reads PLANTABLE, the deferred
+      # binary reads not-plantable. Disjoint exit codes (1 plantable / 0 not / 2 inconclusive) — a
+      # build/Defender/runtime failure returns 2 and FAILS the job (a test that couldn't run is not a
+      # pass). Regression guard: if rstrtmgr is re-added as a static import, this goes red.
+      - name: Dynamic tier — plant test (ncrypt, blocking)
         shell: pwsh
         run: |
           cargo run --manifest-path xtask/Cargo.toml -- audit-dll-planting app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe ncrypt.dll
           $code = $LASTEXITCODE
           $msg = switch ($code) {
-            1 { "**PLANTABLE (dynamic residual)** — ncrypt loaded from the run dir via a DYNAMIC path. The static rstrtmgr->ncrypt path is closed (see static gate); a runtime loader still pulls ncrypt unpinned. Under investigation (#106)." }
-            0 { "**not plantable** — System32 won the search." }
-            default { "**inconclusive** (exit $code) — likely Defender or a build/runtime issue on the runner." }
+            1 { "**PLANTABLE** — ncrypt loaded from the run dir. Regression: rstrtmgr (or another static importer of ncrypt) is back — the pre-main DLL-hijack gap is reopened." }
+            0 { "**not plantable** — the run-dir copy did not win; the rstrtmgr deferral holds." }
+            default { "**inconclusive** (exit $code) — proxy build / Defender / runtime issue on the runner. Failing: a plant test that couldn't run is not a pass." }
           }
           "## Dynamic plant test: ncrypt.dll`n$msg" | Out-File -Append $env:GITHUB_STEP_SUMMARY
           Write-Host $msg
-          exit 0   # diagnostic — dynamic residual under investigation, see comment above
+          exit $code   # blocking (0 pass; 1 plantable / 2 inconclusive both fail)

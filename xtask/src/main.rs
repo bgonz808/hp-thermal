@@ -878,87 +878,38 @@ fn load_known_dlls() -> std::collections::HashSet<String> {
     set
 }
 
-/// Exported function NAMES from a PE's export directory (data dir #0). Used to build a forwarding
-/// proxy for the plant test. Forwarded exports keep their names, so they're included.
-fn pe_export_names(b: &[u8]) -> Option<Vec<String>> {
-    let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
-    if b.get(pe..pe + 4)? != b"PE\0\0" {
-        return None;
-    }
-    let opt = pe + 24;
-    let magic = u16::from_le_bytes(b.get(opt..opt + 2)?.try_into().ok()?);
-    let datadir = opt + if magic == 0x20B { 112 } else { 96 };
-    // Export directory = data dir #0: RVA at datadir+0.
-    let exp_rva = u32::from_le_bytes(b.get(datadir..datadir + 4)?.try_into().ok()?) as usize;
-    if exp_rva == 0 {
-        return Some(Vec::new());
-    }
-    let exp_off = pe_rva_to_off(b, exp_rva)?;
-    // IMAGE_EXPORT_DIRECTORY: NumberOfNames @ +0x18, AddressOfNames (RVA) @ +0x20.
-    let num = u32::from_le_bytes(b.get(exp_off + 0x18..exp_off + 0x1C)?.try_into().ok()?) as usize;
-    let names_rva =
-        u32::from_le_bytes(b.get(exp_off + 0x20..exp_off + 0x24)?.try_into().ok()?) as usize;
-    let names_off = pe_rva_to_off(b, names_rva)?;
-    let mut out = Vec::with_capacity(num);
-    for i in 0..num {
-        let nr = u32::from_le_bytes(
-            b.get(names_off + i * 4..names_off + i * 4 + 4)?
-                .try_into()
-                .ok()?,
-        ) as usize;
-        let no = pe_rva_to_off(b, nr)?;
-        let end = b[no..].iter().position(|&c| c == 0)? + no;
-        out.push(String::from_utf8_lossy(&b[no..end]).into_owned());
-    }
-    Some(out)
+#[cfg(windows)]
+unsafe extern "system" {
+    fn SetErrorMode(mode: u32) -> u32;
 }
 
-/// #106 dynamic tier (DEV). Plant a forwarding proxy under a dependency's filename next to a
-/// THROWAWAY copy of the exe and see whether the loader picks it up from the run dir — the actual
-/// DLL-planting EoP the pre-main closure flags. The proxy forwards every export to a renamed copy
-/// of the genuine System32 DLL (so the target runs normally) and its `.CRT$XCU` init writes a
-/// marker on attach. Marker present => run-dir copy won over System32 => PLANTABLE. Deterministic,
-/// user-mode, no admin/driver. Only meaningful for deps that load on the exercised path: a bare
-/// run covers pre-main (init-time) deps; delay/dynamic deps need the feature exercised (coverage).
-/// Returns 1 if any candidate loaded from the run dir. Defaults to the pre-main candidate ncrypt.
+/// #106 dynamic tier (DEV). Plant a BARE proxy DLL under a dependency's filename next to a
+/// THROWAWAY copy of the exe and see whether the loader picks it up from the run dir. For a
+/// DYNAMIC load (a dependency's runtime LoadLibrary), the loader runs the proxy's `.CRT$XCU` init
+/// on load — writing a marker + the resolved loader stack — BEFORE any GetProcAddress, so no
+/// export forwarding is needed (the target's later crypto call fails, but the load is already
+/// recorded; we kill the process shortly after). The complementary STATIC gate (audit-dll-closure)
+/// covers static-import re-introduction, so this tier need not forward. Deterministic, user-mode,
+/// no admin/driver.
+///
+/// Exit codes are DISJOINT — a harness failure must never masquerade as a verdict:
+///   1 = PLANTABLE (marker present), 0 = not plantable, 2 = INCONCLUSIVE (build/copy/spawn error).
 fn cmd_audit_dll_planting(exe: Option<&str>, candidate: Option<&str>) -> i32 {
+    const ERR: i32 = 2; // inconclusive — distinct from the 0/1 verdict codes
     let exe = exe.unwrap_or(RELEASE_EXE);
     let cand = candidate.unwrap_or("ncrypt.dll").to_ascii_lowercase();
     let probe_src = "tools/dll-plant-probe/probe.rs";
     if !std::path::Path::new(probe_src).exists() {
         eprintln!("audit-dll-planting: {probe_src} not found (run from repo root)");
-        return 1;
+        return ERR;
     }
     let base = cand.trim_end_matches(".dll");
-    let real = format!("C:\\Windows\\System32\\{cand}");
-    let real_bytes = match std::fs::read(&real) {
-        Ok(b) => b,
-        Err(e) => {
-            eprintln!("audit-dll-planting: read {real}: {e}");
-            return 1;
-        }
-    };
-    let Some(exports) = pe_export_names(&real_bytes) else {
-        eprintln!("audit-dll-planting: {cand} export table not walkable");
-        return 1;
-    };
-
     let dir = std::env::temp_dir().join(format!("hp-plant-{}-{base}", std::process::id()));
     let _ = std::fs::create_dir_all(&dir);
 
-    // Forwarder .def: every export -> <base>_orig.<export> (the renamed genuine DLL).
-    let orig = format!("{base}_orig");
-    let mut def = String::from("EXPORTS\n");
-    for name in &exports {
-        def.push_str(&format!("  {name}={orig}.{name}\n"));
-    }
-    let def_path = dir.join("forward.def");
-    if let Err(e) = std::fs::write(&def_path, &def) {
-        eprintln!("audit-dll-planting: write def: {e}");
-        return 1;
-    }
-
-    // Build the proxy cdylib named exactly <cand>.
+    // Build the BARE proxy cdylib named exactly <cand>. No `/DEF`: rustc's cdylib already emits its
+    // own export .def, and passing a second one is what caused the earlier `link.exe` 1120 failure.
+    // Forwarding is unnecessary for a dynamic load — the marker fires on attach, before any bind.
     let proxy = dir.join(&cand);
     let build = Command::new("rustc")
         .args([
@@ -970,7 +921,6 @@ fn cmd_audit_dll_planting(exe: Option<&str>, candidate: Option<&str>) -> i32 {
             "--edition",
             "2021",
         ])
-        .arg(format!("-Clink-arg=/DEF:{}", def_path.display()))
         .arg(probe_src)
         .arg("-o")
         .arg(&proxy)
@@ -979,25 +929,35 @@ fn cmd_audit_dll_planting(exe: Option<&str>, candidate: Option<&str>) -> i32 {
         Ok(s) if s.success() => {}
         other => {
             eprintln!("audit-dll-planting: proxy build failed ({other:?})");
-            return 1;
+            let _ = std::fs::remove_dir_all(&dir);
+            return ERR;
         }
     }
 
-    // Assemble the plant dir: throwaway exe copy + renamed genuine DLL + the proxy.
+    // Assemble the plant dir: throwaway exe copy + the proxy under the dependency's name.
     let target = dir.join("hp-thermal.exe");
     if let Err(e) = std::fs::copy(exe, &target) {
         eprintln!(
             "audit-dll-planting: copy exe -> temp failed ({e}). If os error 225, Defender \
              quarantined the copy — run on CI / an isolated VM (do not weaken Defender here)."
         );
-        return 1;
+        let _ = std::fs::remove_dir_all(&dir);
+        return ERR;
     }
-    let _ = std::fs::copy(&real, dir.join(format!("{orig}.dll")));
 
     let marker = dir.join("loaded.marker");
     let _ = std::fs::remove_file(&marker);
 
-    // Run the throwaway copy briefly (enough for init-time loads), then kill.
+    // Suppress the hard-error dialog so a static-import bind failure (export-less proxy winning the
+    // search) exits with its NTSTATUS instead of blocking on a modal box.
+    #[cfg(windows)]
+    // SAFETY: SetErrorMode only sets this process's (inherited) error-mode flags.
+    unsafe {
+        SetErrorMode(0x0001 | 0x0002 | 0x8000); // FAILCRITICALERRORS | NOGPFAULTERRORBOX | NOOPENFILEERRORBOX
+    }
+
+    // Run the throwaway copy; poll for an EARLY exit (static bind failure) up to the timeout, else
+    // kill it (it ran normally).
     let spawned = Command::new(&target)
         .current_dir(&dir)
         .env("HP_PLANT_MARKER", &marker)
@@ -1009,23 +969,47 @@ fn cmd_audit_dll_planting(exe: Option<&str>, candidate: Option<&str>) -> i32 {
                 "audit-dll-planting: spawn failed ({e}) — likely Defender (os 225). Run on CI."
             );
             let _ = std::fs::remove_dir_all(&dir);
-            return 1;
+            return ERR;
         }
     };
-    std::thread::sleep(std::time::Duration::from_millis(2500));
-    let _ = child.kill();
-    let _ = child.wait();
+    let mut early: Option<i32> = None;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(3000);
+    loop {
+        match child.try_wait() {
+            Ok(Some(st)) => {
+                early = st.code();
+                break;
+            }
+            Ok(None) if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break;
+            }
+            Ok(None) => std::thread::sleep(std::time::Duration::from_millis(100)),
+            Err(_) => break,
+        }
+    }
 
     let loaded = marker.exists();
     // Read the probe's resolved module chain (loader stack) BEFORE cleanup wipes it.
     let chain = std::fs::read_to_string(&marker).unwrap_or_default();
     let _ = std::fs::remove_dir_all(&dir);
-    if loaded {
-        println!(
-            "audit-dll-planting: {cand} *** LOADED from run dir *** — PLANTABLE (DLL-hijack gap)"
-        );
-        // Discovery tier: the module chain names WHO pulled the planted DLL. Skip the header line;
-        // frames are nearest-caller-first, so the first non-ntdll/kernel32 module is the loader.
+
+    // Two independent plantable signals:
+    //   * marker present         -> a DYNAMIC LoadLibrary picked up our proxy (its init ran).
+    //   * early exit w/ a loader  -> a STATIC-import bind failed because our export-less proxy won
+    //     NTSTATUS (0xC00001xx)      the search (real ncrypt would have bound cleanly and run on).
+    let static_hijack = early
+        .map(|c| c as u32)
+        .is_some_and(|c| matches!(c, 0xC0000135 | 0xC0000139 | 0xC000007B));
+    if loaded || static_hijack {
+        let how = if loaded {
+            "dynamic load — marker fired"
+        } else {
+            "static bind failure — export-less proxy won the search"
+        };
+        println!("audit-dll-planting: {cand} *** LOADED from run dir *** — PLANTABLE ({how})");
+        // Discovery tier (dynamic case only): the module chain names WHO pulled the planted DLL.
         let chain: Vec<&str> = chain.lines().skip(1).collect();
         if !chain.is_empty() {
             println!("  load chain (nearest caller first) — who pulled {cand}:");
@@ -1035,10 +1019,7 @@ fn cmd_audit_dll_planting(exe: Option<&str>, candidate: Option<&str>) -> i32 {
         }
         1
     } else {
-        println!(
-            "audit-dll-planting: {cand} not loaded from run dir — System32 won (mitigated for the \
-             exercised path)"
-        );
+        println!("audit-dll-planting: {cand} not loaded from run dir — not plantable on this path");
         0
     }
 }
