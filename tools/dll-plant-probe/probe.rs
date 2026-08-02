@@ -12,24 +12,41 @@
 
 use std::ffi::c_void;
 
-// Raw FFI so this stays a single-file cdylib (no windows-crate / Cargo project needed).
-#[link(name = "ntdll")]
-extern "system" {
-    fn RtlCaptureStackBackTrace(
-        frames_to_skip: u32,
-        frames_to_capture: u32,
-        back_trace: *mut *mut c_void,
-        back_trace_hash: *mut u32,
-    ) -> u16;
-}
+// Raw FFI so this stays a single-file cdylib (no windows-crate / Cargo project needed). Only
+// kernel32 is import-lib-linked (always on the link path). RtlCaptureStackBackTrace lives in
+// ntdll, whose import lib (ntdll.lib) is NOT reliably present in CI — so it's resolved at runtime
+// via GetProcAddress (ntdll is always mapped), avoiding any ntdll.lib dependency.
 #[link(name = "kernel32")]
 extern "system" {
+    fn GetModuleHandleW(module_name: *const u16) -> *mut c_void;
+    fn GetProcAddress(module: *mut c_void, proc_name: *const u8) -> *mut c_void;
     fn GetModuleHandleExW(flags: u32, module_name: *const u16, module: *mut *mut c_void) -> i32;
     fn GetModuleFileNameW(module: *mut c_void, filename: *mut u16, size: u32) -> u32;
 }
 
+type CaptureStackFn =
+    unsafe extern "system" fn(u32, u32, *mut *mut c_void, *mut u32) -> u16;
+
 const GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS: u32 = 0x0000_0004;
 const GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT: u32 = 0x0000_0002; // safe under loader lock
+
+/// Resolve `ntdll!RtlCaptureStackBackTrace` at runtime (no ntdll.lib link dependency).
+fn capture_backtrace(frames: &mut [*mut c_void]) -> usize {
+    let ntdll: Vec<u16> = "ntdll.dll".encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: ntdll is always mapped; the resolved export matches the RtlCaptureStackBackTrace ABI.
+    unsafe {
+        let h = GetModuleHandleW(ntdll.as_ptr());
+        if h.is_null() {
+            return 0;
+        }
+        let p = GetProcAddress(h, c"RtlCaptureStackBackTrace".as_ptr().cast());
+        if p.is_null() {
+            return 0;
+        }
+        let capture: CaptureStackFn = std::mem::transmute(p);
+        capture(0, frames.len() as u32, frames.as_mut_ptr(), std::ptr::null_mut()) as usize
+    }
+}
 
 /// Basename of the module owning `addr`, or None if it can't be resolved.
 fn module_at(addr: *mut c_void) -> Option<String> {
@@ -66,10 +83,7 @@ fn write_marker() {
 
     // Capture the load call stack and resolve the module chain (dedup consecutive dupes).
     let mut frames = [std::ptr::null_mut::<c_void>(); 48];
-    // SAFETY: `frames` is a valid 48-slot buffer; no hash requested.
-    let n = unsafe {
-        RtlCaptureStackBackTrace(0, frames.len() as u32, frames.as_mut_ptr(), std::ptr::null_mut())
-    } as usize;
+    let n = capture_backtrace(&mut frames);
     let mut last = String::new();
     for &addr in frames.iter().take(n) {
         if let Some(m) = module_at(addr) {
