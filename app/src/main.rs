@@ -13,7 +13,6 @@ mod consent;
 mod hwinfo;
 mod install;
 mod log;
-mod mitigations;
 mod nvml;
 mod onboarding;
 mod pipe;
@@ -21,6 +20,7 @@ mod protocol;
 mod service;
 mod tray;
 mod wide;
+mod win_harden;
 mod wmi_com;
 
 use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
@@ -49,7 +49,7 @@ fn main() {
     // launcher unelevated instead), and the prior runas /trustlevel attempt neither
     // lowered IL nor stopped fork-bombing this guard. So refuse — with NO file I/O: an
     // elevated log::init would leave an admin-owned log in the user data dir (CWE-732),
-    // the very thing this guard exists to prevent. This fires before mitigations, the
+    // the very thing this guard exists to prevent. This fires before win_harden, the
     // hardware probe, consent, or the log. Normal launches (logon Run key, bootstrap, the
     // post-update Medium parent) are already Medium, so this is a backstop against
     // Run-as-administrator, not a happy path. Only --service (SCM/SYSTEM) and the UAC
@@ -66,7 +66,7 @@ fn main() {
     }
 
     // Harden every role (tray, service, installer helpers) as early as possible.
-    mitigations::apply();
+    win_harden::apply();
 
     match args.get(1).map(|s| s.as_str()) {
         Some("--service") => {
@@ -74,17 +74,17 @@ fn main() {
             // WMI/COM DLLs, so lock it to Microsoft-signed images only (blocks all
             // non-MS injection/planting). Not applied to the tray (nvml + GUI
             // third-party injection). Set before WMI/COM pulls in its DLLs.
-            mitigations::enforce_ms_signed_only();
+            win_harden::enforce_ms_signed_only();
             // The service spawns no child processes; forbid it at the OS level so even
             // injected code cannot shell out (LOLBin/proxy exfil). Service-only (#47).
-            mitigations::prohibit_child_processes();
+            win_harden::prohibit_child_processes();
             // Headless service has no GUI — cut off the win32k syscall surface (a major
             // kernel LPE target). Service-only; live-validated. (#48)
-            mitigations::disallow_win32k_syscalls();
+            win_harden::disallow_win32k_syscalls();
             // Strongest anti-shellcode mitigation: forbid dynamic/executable-memory codegen
             // (ProhibitDynamicCode). Validated audit-first (a clean live run) then enforced.
             // Service-only; live-validated. (#24)
-            mitigations::prohibit_dynamic_code();
+            win_harden::prohibit_dynamic_code();
             service::run();
         }
         Some("install" | "--install") => {
@@ -127,11 +127,11 @@ fn main() {
         // only MS-signed system DLLs — nvml (NVIDIA, non-MS) is tray-only, never loaded
         // on this path. Set before install_service pulls in shell/COM for shortcuts.
         Some("--install-svc") => {
-            mitigations::enforce_ms_signed_only();
+            win_harden::enforce_ms_signed_only();
             install::install_service(onboarding::Choices::from_args(&args));
         }
         Some("--update-svc") => {
-            mitigations::enforce_ms_signed_only();
+            win_harden::enforce_ms_signed_only();
             install::update_service();
         }
         Some("--stop-svc") => install::stop_service(),

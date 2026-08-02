@@ -86,7 +86,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
             w!("SeCreateGlobalPrivilege"),
             w!("SeImpersonatePrivilege"),
         ];
-        let (removed, extras) = crate::mitigations::strip_token_privileges_except(&keep);
+        let (removed, extras) = crate::win_harden::strip_token_privileges_except(&keep);
         log::write(&format!(
             "token self-assert: removed {removed} extra privilege(s), {extras} beyond-set remain"
         ));
