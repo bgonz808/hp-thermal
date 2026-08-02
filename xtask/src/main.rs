@@ -1017,12 +1017,22 @@ fn cmd_audit_dll_planting(exe: Option<&str>, candidate: Option<&str>) -> i32 {
     let _ = child.wait();
 
     let loaded = marker.exists();
+    // Read the probe's resolved module chain (loader stack) BEFORE cleanup wipes it.
+    let chain = std::fs::read_to_string(&marker).unwrap_or_default();
     let _ = std::fs::remove_dir_all(&dir);
     if loaded {
         println!(
-            "audit-dll-planting: {cand} *** LOADED from run dir *** — PLANTABLE (DLL-hijack gap; \
-             /DEPENDENTLOADFLAG did NOT cover this transitive dep)"
+            "audit-dll-planting: {cand} *** LOADED from run dir *** — PLANTABLE (DLL-hijack gap)"
         );
+        // Discovery tier: the module chain names WHO pulled the planted DLL. Skip the header line;
+        // frames are nearest-caller-first, so the first non-ntdll/kernel32 module is the loader.
+        let chain: Vec<&str> = chain.lines().skip(1).collect();
+        if !chain.is_empty() {
+            println!("  load chain (nearest caller first) — who pulled {cand}:");
+            for m in &chain {
+                println!("    {m}");
+            }
+        }
         1
     } else {
         println!(
