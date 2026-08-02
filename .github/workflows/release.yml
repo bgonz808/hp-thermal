@@ -127,6 +127,30 @@ jobs:
           cargo run --manifest-path xtask/Cargo.toml -- stamp-time \
             app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe "$EPOCH"
 
+      # --- Authenticode signing (#21) — STAGED, inert until a cert is configured ---
+      # Position is load-bearing: sign AFTER stamp-time (Authenticode's digest covers the COFF
+      # TimeDateStamp) and BEFORE the SHA-256 / SLSA attestation below, so the published checksums
+      # and the provenance subject cover the SIGNED bytes. Order: build -> stamp -> SIGN -> hash ->
+      # attest. Sign the target/ exe here; Stage then copies the signed bytes into dist/.
+      #
+      # Path: SignPath Foundation (free OSS) was declined (usage-gated: too new / too few downloads).
+      # Primary route is AZURE TRUSTED SIGNING (identity-gated, so a fresh project qualifies; ~$10/mo,
+      # individual identity validation). Fallback: an OV cert from a CA (needs a registered org + HSM).
+      # To activate:
+      #   1. Stand up an Azure Trusted Signing account + cert profile; validate identity.
+      #   2. Configure OIDC federation (no long-lived secret) and set repo variable SIGNING_ENABLED=true.
+      #   3. Replace the tripwire below with the pinned `azure/trusted-signing-action` (endpoint,
+      #      account, cert-profile, files: the target/ exe) — or signtool against the cloud cert.
+      # Until then the step SKIPS (SIGNING_ENABLED unset). Fail-closed: if the flag is set before the
+      # action is wired, it errors rather than silently shipping unsigned-but-believed-signed.
+      - name: Sign (Authenticode)
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        shell: bash
+        run: |
+          echo "::error::SIGNING_ENABLED=true but the Authenticode signing action is not wired yet."
+          echo "::error::Wire azure/trusted-signing-action here (see the comment above) — #21."
+          exit 1
+
       - name: Stage artifacts + SHA-256 checksums
         id: stage
         shell: pwsh

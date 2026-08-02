@@ -189,6 +189,38 @@ every push/PR; Dependabot re-checks continuously off-workflow), and it excludes 
 only trivy's OS scan reaches those), and any not-yet-published vulnerability. So: "no *known*
 advisories against these pinned versions," not "no vulnerabilities exist."
 
+## Antivirus false positives
+
+hp-thermal is an **unsigned, low-reputation Rust binary that does legitimately privileged,
+hardware-specific work** — the exact combination heuristic/ML antivirus engines and sandboxes
+over-flag. If a scanner flags it, here is what the detections are and are not.
+
+**They are generic / reputation signals, not behavior.** A representative VirusTotal run rolled a
+handful of engines, all *generic/ML* names (`Gen:Variant.Yogi`, `Trojan:Win32/Wacatac.B!ml`,
+`Win64:MalwareX-gen`, `…Agent`) — **no specific malware family**, and the count inflates because
+several products license one engine's database (e.g. the BitDefender "Yogi" signature reappears
+across its licensees). `Yogi` and `Wacatac.B!ml` are documented Rust-toolchain false positives.
+Behavioral sandboxes agree: **Zenbox returns Non-Malicious**. A no-argument run is the bare tray
+(Medium integrity) doing **reads only** — no file writes, no persistence, no network. The
+privileged install behaviors are gated behind `--install` and never fire in a bare detonation.
+
+**What trips the heuristics, node by node:**
+
+| Flag | Cause | Assessment |
+| --- | --- | --- |
+| unsigned / "Unknown Publisher" | no Authenticode certificate yet | the root cause; fixed by signing (see below) |
+| reads `HKLM\...\BIOS\SystemManufacturer` / `SystemProductName` | HP-model detection (`hwinfo.rs`) — the tool is HP-specific | trips the **anti-VM heuristic** (the same read malware uses to detect sandboxes); irreducible for a hardware tool |
+| `.dep-v0` / non-standard PE section names | `cargo-auditable` dependency manifest (enables `cargo audit bin`) | irreducible without dropping auditable |
+| "requires command line arguments" | monolithic role-by-flag design (`--install` / `--service`) | benign; the risky paths are consent-gated, not evasion |
+| dual-use API surface | service create ([T1543.003](https://attack.mitre.org/techniques/T1543/003/)), token adjust ([T1134](https://attack.mitre.org/techniques/T1134/)), WMI ([T1047](https://attack.mitre.org/techniques/T1047/)), WER opt-out ([T1562.001](https://attack.mitre.org/techniques/T1562/001/)) | legitimate *installer* behavior; a base-rate false positive |
+
+**The fix is identity, not code.** These are the structural false positives of an unsigned,
+zero-reputation, dual-use binary; changing code to lower the count is whack-a-mole against
+classifiers that can't read intent. The remedy is **Authenticode code-signing + accrued download
+reputation**, which removes "Unknown Publisher" and collapses the heuristic cluster over time.
+We scan every release on VirusTotal and record the result so the trend is tracked as reputation
+builds — and we do **not** alter behavior to game the number.
+
 ## Build & CI trust boundary
 
 A CI runner is a privileged trust boundary: every action and installed tool executes with
