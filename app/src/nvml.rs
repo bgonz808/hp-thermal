@@ -2,9 +2,7 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{FreeLibrary, HMODULE};
-use windows::Win32::System::LibraryLoader::{
-    GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
-};
+use windows::Win32::System::LibraryLoader::GetProcAddress;
 use windows::core::{PCSTR, w};
 
 /// How long NVML may sit unused before the idle sweep unloads it. NVIDIA keeps nvml.dll's
@@ -35,10 +33,10 @@ static NVML: Mutex<Option<NvmlState>> = Mutex::new(None);
 /// Load nvml.dll, init NVML, resolve the exports. Frees the library on ANY post-load
 /// failure so a non-NVIDIA machine (or a failed init) never leaks the ~28 MB mapping.
 fn init() -> Option<NvmlState> {
-    // SAFETY: LoadLibraryExW loads nvml.dll from System32 only; on success we hand the
+    // SAFETY: load_system32 loads nvml.dll from System32 only; on success we hand the
     // handle to build_state, otherwise there is nothing to free.
     unsafe {
-        let lib = LoadLibraryExW(w!("nvml.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32).ok()?;
+        let lib = crate::win_harden::dll::load_system32(w!("nvml.dll")).ok()?;
         match build_state(lib) {
             Some(state) => Some(state),
             None => {

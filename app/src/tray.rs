@@ -1,8 +1,6 @@
 use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH};
-use windows::Win32::System::LibraryLoader::{
-    GetModuleHandleW, GetProcAddress, LOAD_LIBRARY_SEARCH_SYSTEM32, LoadLibraryExW,
-};
+use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Power::*;
 use windows::Win32::System::SystemInformation::{GetSystemDirectoryW, GetTickCount64};
 use windows::Win32::System::Threading::{CreateMutexW, INFINITE, OpenEventW, WaitForSingleObject};
@@ -182,7 +180,7 @@ unsafe fn run_inner() {
     // exfil). This is the strongest mitigation the tray CAN take: it needs win32k and loads
     // non-MS DLLs (nvml), so the service's signed-only / win32k-disable / dynamic-code locks
     // don't apply here.
-    crate::mitigations::prohibit_child_processes();
+    crate::win_harden::prohibit_child_processes();
 
     // Enable dark/light mode for popup menus (must be before any window creation)
     enable_system_theme_menus();
@@ -1218,7 +1216,7 @@ fn set_tip(nid: &mut NOTIFYICONDATAW, tip: &str) {
 /// On Windows 11: also gets native rounded corners and Mica shadow.
 /// On older Windows: silently no-ops, menus stay classic. Zero risk.
 unsafe fn enable_system_theme_menus() {
-    let uxtheme = LoadLibraryExW(w!("uxtheme.dll"), None, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    let uxtheme = crate::win_harden::dll::load_system32(w!("uxtheme.dll"));
     let Ok(uxtheme) = uxtheme else {
         crate::log::trace!(
             crate::log::KW_UI,
@@ -1519,9 +1517,9 @@ unsafe extern "system" fn black_wnd_proc(
 /// Right-size the tray's own token: permanently drop every privilege the tray never uses,
 /// keeping only SeChangeNotify (path traversal / file access) and SeShutdown (Fn+F12 sleep,
 /// enabled on demand by `enable_shutdown_privilege`). Delegates to the shared, SSoT enforcement
-/// in `mitigations` — the same helper the service uses (#2).
+/// in `win_harden` — the same helper the service uses (#2).
 fn strip_unneeded_privileges() {
-    let (removed, _extras) = crate::mitigations::strip_token_privileges_except(&[
+    let (removed, _extras) = crate::win_harden::strip_token_privileges_except(&[
         w!("SeChangeNotifyPrivilege"),
         w!("SeShutdownPrivilege"),
     ]);

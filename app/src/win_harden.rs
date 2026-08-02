@@ -1,10 +1,19 @@
-//! Process mitigation policies applied at startup to both roles (tray + service).
+//! `win_harden` — reusable Windows process/DLL hardening for a single-binary MSVC app.
+//!
+//! Consolidates the runtime hardening surface into one module (#114): process
+//! mitigation policies (here) + System32-confined DLL loading ([`dll`]). The link-time
+//! half — `/DEPENDENTLOADFLAG` (static imports), `/DELAYLOAD` + `delayimp.lib` (deferred
+//! deps), CFG / stack canaries — lives in `build.rs` and `.cargo/config.toml`; a shared
+//! build-side emitter is tracked in #120, and a pre-`main`-airtight child launch
+//! (`spawn_hardened`) in #119.
 //!
 //! These raise the bar against the one attack the pipe design can't fully prevent
 //! by construction — same-user in-memory tampering (injection/hollowing). They are
 //! hardening, not a security boundary: the real boundary is the OS (user +
 //! integrity level + Program Files ACL), and the pipe's bounded command set caps
 //! the impact regardless. See SECURITY.md.
+
+pub mod dll;
 
 use windows::Win32::Foundation::{CloseHandle, HANDLE, LUID};
 use windows::Win32::Security::{
