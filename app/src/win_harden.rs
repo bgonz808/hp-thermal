@@ -3,9 +3,9 @@
 //! Consolidates the runtime hardening surface into one module (#114): process
 //! mitigation policies (here) + System32-confined DLL loading ([`dll`]). The link-time
 //! half — `/DEPENDENTLOADFLAG` (static imports), `/DELAYLOAD` + `delayimp.lib` (deferred
-//! deps), CFG / stack canaries — lives in `build.rs` and `.cargo/config.toml`; a shared
-//! build-side emitter is tracked in #120, and a pre-`main`-airtight child launch
-//! (`spawn_hardened`) in #119.
+//! deps), CFG / stack canaries — stays in `build.rs` / `.cargo/config.toml` by design
+//! (`build.rs` can't import `src/`, and the three link-arg lines don't warrant shared
+//! plumbing).
 //!
 //! These raise the bar against the one attack the pipe design can't fully prevent
 //! by construction — same-user in-memory tampering (injection/hollowing). They are
