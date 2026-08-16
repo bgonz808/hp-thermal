@@ -203,7 +203,23 @@ jobs:
   sign:
     needs: build
     runs-on: windows-latest
-    environment: release
+    # Two environments, deliberately. A real release (v* tag) deploys to `release`, whose
+    # ONLY deployment policy is the v* TAG rule -- so the production signing path cannot be
+    # reached from a branch at all. A workflow_dispatch dry-run deploys to `release-dryrun`,
+    # whose policy allows the `main` BRANCH.
+    #
+    # Why not one environment: a tag policy cannot match a branch ref, so a dispatch run
+    # against a tag-only environment is REJECTED at policy evaluation -- before the reviewer
+    # gate -- and the job dies in ~1s with zero steps and no approval prompt. Allowing `main`
+    # on the single `release` environment would instead have widened the production path.
+    #
+    # Both environments require the same human reviewer, and each has its own federated
+    # credential (subjects `...:environment:release` and `...:environment:release-dryrun`),
+    # so the OIDC subject distinguishes the two paths at the Azure end as well. This is also
+    # the seam #132 needs: `release` later moves to a production-only identity holding
+    # Certificate Profile Signer on rjg-publictrust, while `release-dryrun` keeps the
+    # test-profile identity.
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || 'release-dryrun' }}
     permissions:
       contents: read
       id-token: write        # OIDC -> Azure (federated, no secret)
@@ -211,6 +227,25 @@ jobs:
       exe_sha256: ${{ steps.seal.outputs.exe_sha256 }}
       pdb_sha256: ${{ steps.seal.outputs.pdb_sha256 }}
     steps:
+      # FIRST step, before anything touches a credential. Every other exposure in this job
+      # is closed structurally -- there is no key to leak (the private key never leaves
+      # Microsoft's HSM; we send a digest and receive a signature), and the AZURE_* vars are
+      # identifiers, not credentials: they authenticate nothing without an OIDC assertion
+      # that only GitHub can mint for subject `repo:<owner>/<repo>:environment:release`.
+      #
+      # Verbose logging was the one remaining exposure that was hygiene rather than
+      # structure, so we close it by refusing to run. `runner.debug` is 1 whenever step
+      # debug logging is active, which covers ALL three ways it can be turned on: the
+      # ACTIONS_STEP_DEBUG repo secret, the repo variable, and the "Re-run jobs with debug
+      # logging" checkbox (which write-access holders can tick and we cannot prevent).
+      # Detect-and-refuse is the available control when prevention isn't.
+      - name: Refuse to sign under debug logging
+        if: ${{ runner.debug == '1' }}
+        shell: bash
+        run: |
+          echo "::error::ACTIONS_STEP_DEBUG is enabled; refusing to sign. Re-run without debug logging."
+          exit 1
+
       - name: Download unsigned artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # actions/download-artifact v8.0.1
         with:
