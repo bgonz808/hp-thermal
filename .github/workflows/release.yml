@@ -292,15 +292,43 @@ jobs:
           timestamp-digest: SHA256
 
       # Fail-closed: if signing was requested, refuse to continue with an unsigned binary.
+      # Fail-closed, but trust expectation depends on which profile signed.
+      #
+      # A PublicTrustTest certificate chains to a Microsoft TEST root that is NOT in the
+      # runner's trusted root store, so Get-AuthenticodeSignature cannot build a chain and
+      # returns 'UnknownError'. That is the DEFINING property of a test profile, not a
+      # defect -- demanding 'Valid' there is an assertion the dry-run path can never satisfy.
+      #
+      # Expectation is derived from the ref, the same condition that selects the environment
+      # and hence the federated credential -- deliberately NOT from a mutable repo variable,
+      # so relaxing the production check requires a reviewed workflow change (see #132).
+      #   tag  v* -> production profile -> REQUIRE Status 'Valid' (full chain to a public root)
+      #   branch  -> test profile       -> require a signer cert + a timestamp; report Status
+      #
+      # Invariant on BOTH paths: a signer certificate must exist and the signature must be
+      # RFC3161 timestamped. Certificates live ~72h, so an un-timestamped release stops
+      # validating three days after it ships.
       - name: Assert the binary is actually signed
         if: ${{ vars.SIGNING_ENABLED == 'true' }}
         shell: pwsh
+        env:
+          EXPECT_PUBLIC_TRUST: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           $sig = Get-AuthenticodeSignature dist/hp-thermal.exe
-          if ($sig.Status -ne 'Valid') { throw "Authenticode status is '$($sig.Status)', expected 'Valid'" }
+          Write-Output "status:    $($sig.Status)"
+          if (-not $sig.SignerCertificate) { throw "no signer certificate — the file is NOT signed" }
           Write-Output "signed by: $($sig.SignerCertificate.Subject)"
-          Write-Output "timestamp: $($sig.TimeStamperCertificate.Subject)"
           if (-not $sig.TimeStamperCertificate) { throw "signature is NOT timestamped — it would expire with the cert" }
+          Write-Output "timestamp: $($sig.TimeStamperCertificate.Subject)"
+          if ($env:EXPECT_PUBLIC_TRUST -eq 'true') {
+            if ($sig.Status -ne 'Valid') { throw "production signature status is '$($sig.Status)', expected 'Valid'" }
+            Write-Output "production signature verified: chains to a publicly-trusted root"
+          } else {
+            # UnknownError == chain not trusted here, expected for PublicTrustTest. Anything
+            # else (HashMismatch, NotSigned, ...) is a real failure even on the test path.
+            if ($sig.Status -notin @('Valid','UnknownError')) { throw "unexpected status '$($sig.Status)' on the test-profile path" }
+            Write-Output "test signature present + timestamped (status '$($sig.Status)' expected: test root is not publicly trusted)"
+          }
 
       # SHA256SUMS is written HERE so it covers the signed bytes, preserving the load-bearing
       # order: build -> stamp -> SIGN -> hash -> attest.
@@ -384,14 +412,25 @@ jobs:
 
       # Signature presence is asserted in `sign`; re-assert on the downloaded bytes so a
       # swap on the sign->verify hop cannot strip the signature unnoticed.
+      # Mirrors the assertion in `sign`, on the bytes as downloaded, so a swap on the
+      # sign->verify hop cannot strip the signature unnoticed. Same ref-derived trust
+      # expectation: a PublicTrustTest chain is untrusted here by design and reports
+      # 'UnknownError'; only the production (tag) path may demand 'Valid'.
       - name: Re-assert Authenticode signature survived transport
         if: ${{ vars.SIGNING_ENABLED == 'true' }}
         shell: pwsh
+        env:
+          EXPECT_PUBLIC_TRUST: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
           $sig = Get-AuthenticodeSignature dist/hp-thermal.exe
-          if ($sig.Status -ne 'Valid') { throw "Authenticode status is '$($sig.Status)' after transport, expected 'Valid'" }
+          if (-not $sig.SignerCertificate) { throw "no signer certificate after transport — signature stripped" }
           if (-not $sig.TimeStamperCertificate) { throw "timestamp missing after transport" }
-          Write-Output "signature intact: $($sig.SignerCertificate.Subject)"
+          if ($env:EXPECT_PUBLIC_TRUST -eq 'true') {
+            if ($sig.Status -ne 'Valid') { throw "production status is '$($sig.Status)' after transport, expected 'Valid'" }
+          } elseif ($sig.Status -notin @('Valid','UnknownError')) {
+            throw "unexpected status '$($sig.Status)' after transport on the test-profile path"
+          }
+          Write-Output "signature intact ($($sig.Status)): $($sig.SignerCertificate.Subject)"
 
   # --- Attest + publish. Minimal elevation, no third-party actions / tool builds here.
   #     Attestations run on BOTH a real tag AND a manual workflow_dispatch, so the whole
