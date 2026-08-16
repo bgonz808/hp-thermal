@@ -255,7 +255,7 @@ jobs:
       # https://cyclonedx.org/bom predicate — verified identical to the prior output.
       - name: Attest SBOM
         id: sbom
-        uses: actions/attest@f7c74d28b9d84cb8768d0b8ca14a4bac6ef463e6  # actions/attest v4.2.0
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # actions/attest v4.2.2
         with:
           subject-path: dist/hp-thermal.exe
           sbom-path: dist/hp-thermal.cdx.json
