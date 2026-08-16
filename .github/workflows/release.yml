@@ -203,7 +203,23 @@ jobs:
   sign:
     needs: build
     runs-on: windows-latest
-    environment: release
+    # Two environments, deliberately. A real release (v* tag) deploys to `release`, whose
+    # ONLY deployment policy is the v* TAG rule -- so the production signing path cannot be
+    # reached from a branch at all. A workflow_dispatch dry-run deploys to `release-dryrun`,
+    # whose policy allows the `main` BRANCH.
+    #
+    # Why not one environment: a tag policy cannot match a branch ref, so a dispatch run
+    # against a tag-only environment is REJECTED at policy evaluation -- before the reviewer
+    # gate -- and the job dies in ~1s with zero steps and no approval prompt. Allowing `main`
+    # on the single `release` environment would instead have widened the production path.
+    #
+    # Both environments require the same human reviewer, and each has its own federated
+    # credential (subjects `...:environment:release` and `...:environment:release-dryrun`),
+    # so the OIDC subject distinguishes the two paths at the Azure end as well. This is also
+    # the seam #132 needs: `release` later moves to a production-only identity holding
+    # Certificate Profile Signer on rjg-publictrust, while `release-dryrun` keeps the
+    # test-profile identity.
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || 'release-dryrun' }}
     permissions:
       contents: read
       id-token: write        # OIDC -> Azure (federated, no secret)
