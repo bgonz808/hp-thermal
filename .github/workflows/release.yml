@@ -211,6 +211,25 @@ jobs:
       exe_sha256: ${{ steps.seal.outputs.exe_sha256 }}
       pdb_sha256: ${{ steps.seal.outputs.pdb_sha256 }}
     steps:
+      # FIRST step, before anything touches a credential. Every other exposure in this job
+      # is closed structurally -- there is no key to leak (the private key never leaves
+      # Microsoft's HSM; we send a digest and receive a signature), and the AZURE_* vars are
+      # identifiers, not credentials: they authenticate nothing without an OIDC assertion
+      # that only GitHub can mint for subject `repo:<owner>/<repo>:environment:release`.
+      #
+      # Verbose logging was the one remaining exposure that was hygiene rather than
+      # structure, so we close it by refusing to run. `runner.debug` is 1 whenever step
+      # debug logging is active, which covers ALL three ways it can be turned on: the
+      # ACTIONS_STEP_DEBUG repo secret, the repo variable, and the "Re-run jobs with debug
+      # logging" checkbox (which write-access holders can tick and we cannot prevent).
+      # Detect-and-refuse is the available control when prevention isn't.
+      - name: Refuse to sign under debug logging
+        if: ${{ runner.debug == '1' }}
+        shell: bash
+        run: |
+          echo "::error::ACTIONS_STEP_DEBUG is enabled; refusing to sign. Re-run without debug logging."
+          exit 1
+
       - name: Download unsigned artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # actions/download-artifact v8.0.1
         with:
