@@ -57,12 +57,13 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
-    # Digest chain: publish the shipped bytes' SHA-256 as job outputs — an OUT-OF-BAND
-    # channel (GitHub job metadata), separate from SHA256SUMS which travels inside the
-    # artifact. The verify job re-derives and asserts both, so a swap/corruption on the
-    # build->publish hop is caught (closes the transport-trusted custody seam). See #42.
+    # Digest chain (#42/#130): publish the PRE-SIGN bytes' SHA-256 as job outputs — an
+    # OUT-OF-BAND channel (GitHub job metadata). The `sign` job asserts the artifact it
+    # downloads matches this before signing, closing the build->sign custody hop; it then
+    # republishes the POST-SIGN digests, which `verify` asserts against SHA256SUMS. Chain:
+    # build digest -> asserted at sign -> signed digest -> asserted at verify -> attested.
     outputs:
-      exe_sha256: ${{ steps.stage.outputs.exe_sha256 }}
+      exe_unsigned_sha256: ${{ steps.stage.outputs.exe_unsigned_sha256 }}
       pdb_sha256: ${{ steps.stage.outputs.pdb_sha256 }}
     steps:
       - name: Checkout
@@ -127,20 +128,17 @@ jobs:
           cargo run --manifest-path xtask/Cargo.toml -- stamp-time \
             app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe "$EPOCH"
 
-      # --- Authenticode signing (#21) — STAGED, inert until a cert is configured ---
-      # Order is load-bearing: sign AFTER stamp-time and BEFORE the SHA-256 / SLSA attestation,
-      # so checksums and provenance subject cover the SIGNED bytes (build -> stamp -> SIGN ->
-      # hash -> attest). Secretless via OIDC; wiring plan + Azure Artifact Signing provisioning:
-      # #21. Fail-closed: if SIGNING_ENABLED is set before the action is wired, error rather than
-      # ship unsigned-but-believed-signed.
-      - name: Sign (Authenticode)
-        if: ${{ vars.SIGNING_ENABLED == 'true' }}
-        shell: bash
-        run: |
-          echo "::error::SIGNING_ENABLED=true but the Artifact Signing (OIDC) action is not wired yet — see #21."
-          exit 1
+      # --- #130: xtask is pure-std with ZERO dependencies, so it builds to a standalone
+      #     verifier binary in seconds. Shipping it as an artifact lets the POST-SIGN
+      #     `verify` job re-run these exact checks on the signed bytes without a Rust
+      #     toolchain — which must never exist in the credentialed `sign` job.
+      - name: Build standalone xtask verifier
+        run: cargo build --release --manifest-path xtask/Cargo.toml
 
-      - name: Stage artifacts + SHA-256 checksums
+      # Stage the UNSIGNED bytes. SHA256SUMS is deliberately NOT written here: it must cover
+      # the SIGNED bytes, so the `sign` job produces it. Only the out-of-band pre-sign digests
+      # are emitted, for the build->sign custody assertion (#42/#130).
+      - name: Stage artifacts (unsigned)
         id: stage
         shell: pwsh
         run: |
@@ -151,30 +149,139 @@ jobs:
           # exe's debug directory (build.rs sets /PDBALTPATH from CARGO_PKG_NAME).
           Copy-Item app/target/x86_64-pc-windows-msvc/release/hp_thermal.pdb dist/hp-thermal.pdb
           Copy-Item app/*.cdx.json dist/hp-thermal.cdx.json
+          $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
+          $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
+          "exe_unsigned_sha256=$exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+          "pdb_sha256=$pdb"          | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+
+      # PASS 1 of 2 (#130) — FAIL FAST, pre-sign. Catches a bad build before it consumes a
+      # signing operation AND a human environment approval. Authenticode only appends a
+      # certificate table and updates the PE checksum; imports, mitigation flags, the debug
+      # directory and the COFF TimeDateStamp are untouched, so a pass here still holds after
+      # signing. Pass 2 in `verify` re-asserts it on the signed bytes rather than assuming it,
+      # which is what keeps the "validate the EXACT bytes that ship" invariant intact.
+      - name: Verify staged artifact (pre-sign, fail-fast)
+        run: cargo run --manifest-path xtask/Cargo.toml -- verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
+
+      # #104/#109 gate: fail closed if the stamp step didn't run or left a field behind —
+      # implausible (zero / pre-project / future) or inconsistent (debug-dir != COFF,
+      # surviving REPRO marker). Runs on dist/ only (post-stamp); the pre-stamp `ci` pass on
+      # target/ still carries the /Brepro hash and must NOT be gated here.
+      - name: Verify PE timestamps (pre-sign, fail-fast)
+        run: cargo run --manifest-path xtask/Cargo.toml -- verify-timestamp dist/hp-thermal.exe
+
+      - name: Upload unsigned artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
+        with:
+          name: dist-unsigned
+          path: dist/
+          if-no-files-found: error
+
+      # The verifier travels separately so `verify` needs neither the repo nor a toolchain.
+      - name: Upload xtask verifier
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
+        with:
+          name: xtask-verifier
+          path: xtask/target/release/xtask.exe
+          if-no-files-found: error
+
+  # --- SIGN (#21/#130). The ONLY job holding a credential capable of signing as our
+  #     published identity, so it is deliberately minimal: download, assert, log in, sign,
+  #     hash, upload. NO repo checkout, NO toolchain, NO third-party tool builds — every
+  #     step inside a job with `id-token: write` can mint OIDC tokens, so the blast radius
+  #     is kept to actions we pin by SHA.
+  #
+  #     Trust path: GitHub mints a short-lived OIDC token whose subject is
+  #     `repo:<owner>/<repo>:environment:release`. Azure's federated credential accepts ONLY
+  #     that subject, which cannot be produced until the `release` environment's required
+  #     reviewer approves — so the human gate is part of the cryptographic path, not just
+  #     workflow etiquette. No secret exists to steal: the app registration has zero
+  #     password and zero certificate credentials.
+  #
+  #     Least privilege: the CI principal holds exactly one role assignment — Artifact
+  #     Signing Certificate Profile Signer — scoped to a single certificate profile.
+  sign:
+    needs: build
+    runs-on: windows-latest
+    environment: release
+    permissions:
+      contents: read
+      id-token: write        # OIDC -> Azure (federated, no secret)
+    outputs:
+      exe_sha256: ${{ steps.seal.outputs.exe_sha256 }}
+      pdb_sha256: ${{ steps.seal.outputs.pdb_sha256 }}
+    steps:
+      - name: Download unsigned artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # actions/download-artifact v8.0.1
+        with:
+          name: dist-unsigned
+          path: dist
+
+      # Close the build->sign custody hop (#42/#130): the bytes we are about to sign must be
+      # exactly the bytes `build` produced and verified. Digests bound via env (not inlined
+      # as ${{ }}) so zizmor's template-injection audit stays clean.
+      - name: Assert incoming bytes match build output
+        shell: pwsh
+        env:
+          EXPECT_EXE: ${{ needs.build.outputs.exe_unsigned_sha256 }}
+          EXPECT_PDB: ${{ needs.build.outputs.pdb_sha256 }}
+        run: |
+          $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
+          $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
+          if ($exe -ne $env:EXPECT_EXE) { throw "pre-sign exe digest != build output (build->sign custody break)" }
+          if ($pdb -ne $env:EXPECT_PDB) { throw "pre-sign pdb digest != build output (build->sign custody break)" }
+          Write-Output "build->sign custody OK: signing the exact bytes build verified"
+
+      - name: Azure login (OIDC, federated — no secret)
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca  # Azure/login v3.0.1
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Timestamping is REQUIRED, not optional: certificates live 72 hours. Without an
+      # RFC3161 timestamp every release would stop validating three days after it shipped.
+      # The action defaults to http://timestamp.acs.microsoft.com; pinned explicitly here so
+      # the requirement is visible rather than inherited.
+      - name: Sign (Authenticode)
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        uses: Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82  # Azure/artifact-signing-action v2.0.0
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\dist\hp-thermal.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      # Fail-closed: if signing was requested, refuse to continue with an unsigned binary.
+      - name: Assert the binary is actually signed
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature dist/hp-thermal.exe
+          if ($sig.Status -ne 'Valid') { throw "Authenticode status is '$($sig.Status)', expected 'Valid'" }
+          Write-Output "signed by: $($sig.SignerCertificate.Subject)"
+          Write-Output "timestamp: $($sig.TimeStamperCertificate.Subject)"
+          if (-not $sig.TimeStamperCertificate) { throw "signature is NOT timestamped — it would expire with the cert" }
+
+      # SHA256SUMS is written HERE so it covers the signed bytes, preserving the load-bearing
+      # order: build -> stamp -> SIGN -> hash -> attest.
+      - name: Seal — SHA-256 over the signed bytes
+        id: seal
+        shell: pwsh
+        run: |
           $exe = (Get-FileHash dist/hp-thermal.exe      -Algorithm SHA256).Hash.ToLower()
           $pdb = (Get-FileHash dist/hp-thermal.pdb      -Algorithm SHA256).Hash.ToLower()
           $cdx = (Get-FileHash dist/hp-thermal.cdx.json -Algorithm SHA256).Hash.ToLower()
           @("$exe  hp-thermal.exe", "$pdb  hp-thermal.pdb", "$cdx  hp-thermal.cdx.json") |
             Out-File dist/SHA256SUMS -Encoding ascii
-          # Out-of-band digests for the verify job (job metadata, not inside the artifact).
           "exe_sha256=$exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
           "pdb_sha256=$pdb" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
 
-      # Validate the EXACT staged bytes that will ship (post-copy, pre-upload): import
-      # allowlist, high-risk-API scan, mitigation flags, and the exe<->pdb GUID bind. The
-      # build tier already ran verify-artifact on the target/ exe; re-checking the dist/
-      # copy means a corrupted copy cannot slip through. See #41 / #42.
-      - name: Verify staged artifact
-        run: cargo run --manifest-path xtask/Cargo.toml -- verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
-
-      # #104/#109 consumer gate on the SHIPPED bytes: fail closed if the stamp step didn't run
-      # or left a field behind — implausible (zero / pre-project / future) or inconsistent
-      # (debug-dir != COFF, surviving REPRO marker). Runs on dist/ only (post-stamp); the
-      # pre-stamp `ci` pass on target/ still carries the /Brepro hash and must NOT be gated here.
-      - name: Verify PE timestamps (plausible + consistent)
-        run: cargo run --manifest-path xtask/Cargo.toml -- verify-timestamp dist/hp-thermal.exe
-
-      - name: Upload build artifacts
+      - name: Upload signed artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
         with:
           name: dist
@@ -187,23 +294,32 @@ jobs:
   #     A swap/corruption on the build->publish hop mismatches at least one and fails here,
   #     BEFORE publish. Pure hashing: no toolchain, no secrets.
   verify:
-    needs: build
+    needs: [build, sign]
     runs-on: windows-latest
     permissions:
       contents: read
     steps:
-      - name: Download build artifacts
+      - name: Download signed artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # actions/download-artifact v8.0.1
         with:
           name: dist
           path: dist
+
+      # The standalone verifier built by `build` — no repo checkout, no Rust toolchain.
+      - name: Download xtask verifier
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # actions/download-artifact v8.0.1
+        with:
+          name: xtask-verifier
+          path: verifier
+
       # Digests bound via env (not inlined as ${{ }} in the script) so zizmor's
-      # template-injection audit stays clean.
+      # template-injection audit stays clean. Anchored on the SIGN job's outputs: those
+      # describe the signed bytes that actually ship.
       - name: Re-verify staged digests (out-of-band + manifest)
         shell: pwsh
         env:
-          EXPECT_EXE: ${{ needs.build.outputs.exe_sha256 }}
-          EXPECT_PDB: ${{ needs.build.outputs.pdb_sha256 }}
+          EXPECT_EXE: ${{ needs.sign.outputs.exe_sha256 }}
+          EXPECT_PDB: ${{ needs.sign.outputs.pdb_sha256 }}
         run: |
           $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
           $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
@@ -218,7 +334,29 @@ jobs:
           }
           if ($manifest['hp-thermal.exe'] -ne $exe) { throw "SHA256SUMS exe hash != computed" }
           if ($manifest['hp-thermal.pdb'] -ne $pdb) { throw "SHA256SUMS pdb hash != computed" }
-          Write-Output "digest chain OK: published bytes are byte-identical to build-verified bytes"
+          Write-Output "digest chain OK: published bytes are byte-identical to the signed, sealed bytes"
+
+      # --- PASS 2 of 2 (#130): the AUTHORITATIVE run, on the exact bytes that ship.
+      #     This is what preserves the "validate the EXACT staged bytes that will ship"
+      #     invariant across the signing split: pass 1 in `build` is fail-fast on unsigned
+      #     bytes, but the claim is only *asserted* here, post-sign. Runs the prebuilt
+      #     verifier, so this job needs no repo and no toolchain.
+      - name: Verify signed artifact (post-sign, authoritative)
+        run: verifier\xtask.exe verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
+
+      - name: Verify PE timestamps on signed bytes (post-sign, authoritative)
+        run: verifier\xtask.exe verify-timestamp dist/hp-thermal.exe
+
+      # Signature presence is asserted in `sign`; re-assert on the downloaded bytes so a
+      # swap on the sign->verify hop cannot strip the signature unnoticed.
+      - name: Re-assert Authenticode signature survived transport
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature dist/hp-thermal.exe
+          if ($sig.Status -ne 'Valid') { throw "Authenticode status is '$($sig.Status)' after transport, expected 'Valid'" }
+          if (-not $sig.TimeStamperCertificate) { throw "timestamp missing after transport" }
+          Write-Output "signature intact: $($sig.SignerCertificate.Subject)"
 
   # --- Attest + publish. Minimal elevation, no third-party actions / tool builds here.
   #     Attestations run on BOTH a real tag AND a manual workflow_dispatch, so the whole
