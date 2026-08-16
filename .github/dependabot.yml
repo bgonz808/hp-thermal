@@ -24,6 +24,24 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    # github/codeql-action/init and .../analyze are the SAME action and MUST move on the
+    # SAME SHA -- CodeQL fails the run outright ("Not all workflow steps that use
+    # `github/codeql-action` actions use the same version") when they skew. Dependabot
+    # treats each sub-path as a separate dependency and opened one PR per half (#126,
+    # #129), so neither could merge green alone. Worse, merging one at a time leaves main
+    # red on `Analyze (rust)`, which the release source-gate requires -- i.e. a release
+    # freeze until the second lands. Grouping makes Dependabot propose them as one PR.
+    # Pattern note: `patterns` are WILDCARD matches (Dependabot's WildcardMatcher), NOT
+    # regex -- `[^/]+` would be read as a literal, not a quantifier. The trailing-slash
+    # form is used deliberately: `github/codeql-action/*` needs `*` to match only `init` /
+    # `analyze`, so it is correct whether or not `*` crosses a `/`. The looser
+    # `github/codeql-action*` would silently match NOTHING if `*` does not cross `/`, and
+    # a grouping rule that quietly no-ops is worse than none -- the split would come back
+    # unnoticed on the next release.
+    groups:
+      codeql-action:
+        patterns:
+          - "github/codeql-action/*"
 
   # experiments/ (publish=false) and xtask/ (currently zero deps) can be added here
   # later if their dependency surfaces grow.
