@@ -699,11 +699,22 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
         env:
           GH_TOKEN: ${{ github.token }}
+          SIGNING_ENABLED: ${{ vars.SIGNING_ENABLED }}
         shell: bash
         run: |
           set -euo pipefail
+          # SemVer pre-release tags carry a hyphen (v0.3.0-rc.1). They must NOT become the "Latest"
+          # release pointer and must show the pre-release badge; final tags (v0.3.0) are latest.
+          # `--latest=false` is explicit rather than relying on gh's implicit semver comparison.
+          case "${GITHUB_REF_NAME}" in
+            *-*) RELEASE_FLAGS=(--prerelease --latest=false) ;;
+            *)   RELEASE_FLAGS=(--latest) ;;
+          esac
           # Notes built with echo lines (GITHUB_* are shell env vars, not GitHub-expression
           # interpolation), so this is zizmor/actionlint clean. 4-space indent = code block.
+          # The signing line is derived from SIGNING_ENABLED so the notes never claim more than the
+          # artifact actually is: the sign job fails closed unless the binary is validly signed, so
+          # SIGNING_ENABLED == true here means the exe carries a verified Authenticode signature.
           {
             echo "## hp-thermal ${GITHUB_REF_NAME}"
             echo
@@ -713,12 +724,21 @@ jobs:
             echo
             echo "    gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release.yml"
             echo
+            if [ "${SIGNING_ENABLED:-}" = "true" ]; then
+              echo "Authenticode-signed: Windows shows the verified publisher on the UAC prompt. Inspect the signature with:"
+              echo
+              echo "    powershell -c \"Get-AuthenticodeSignature hp-thermal.exe | Format-List Status, SignerCertificate, TimeStamperCertificate\""
+            else
+              echo "Not yet Authenticode-signed."
+            fi
+            echo
             echo "hp-thermal.pdb is optional debug symbols (to symbolicate a crash report); not needed to run. It is hashed in SHA256SUMS and carries the same provenance attestation as the exe."
             echo
-            echo "Details in the README and SECURITY.md. Not yet Authenticode-signed."
+            echo "Details in the README and SECURITY.md."
           } > notes.md
           gh release create "${GITHUB_REF_NAME}" \
             dist/hp-thermal.exe dist/hp-thermal.pdb dist/hp-thermal.cdx.json dist/SHA256SUMS \
             --repo "${GITHUB_REPOSITORY}" \
             --title "hp-thermal ${GITHUB_REF_NAME}" \
-            --notes-file notes.md
+            --notes-file notes.md \
+            "${RELEASE_FLAGS[@]}"
