@@ -1,0 +1,22 @@
+# TOOLS.lock — prebuilt build-tool binaries, verified by digest when the release job consumes them.
+#
+# These four cargo-* utilities run DURING the build but never ship inside hp-thermal.exe.
+# They are pinned by immutable git rev (content-addressed) + --locked (their whole dependency
+# tree is frozen), so a pinned tool is byte-stable until the `rev` here is deliberately changed.
+#
+# Fields:  name  repo  rev  sha256(<name>.exe, windows-x86_64)
+#   rev     — human-edited. THE pin. Changing it is the only thing that warrants a rebuild.
+#   sha256  — OUTPUT of .github/workflows/build-tools.yml, reviewed when committed. This digest
+#             is the immutability ANCHOR: the `tools` GitHub release is just a byte store, and
+#             the release job fails closed on any mismatch. An all-zero digest means
+#             "not built yet — run build-tools.yml and commit the printed value".
+#
+# Dependabot does NOT track these (it manages Cargo.lock deps and `uses:` action pins, not
+# `cargo install --git --rev`). The scheduled .github/workflows/tool-updates.yml is the
+# purpose-built substitute: it opens an issue when an upstream cuts a release newer than `rev`.
+#
+# name             repo                               rev                                       sha256
+cargo-deny         EmbarkStudios/cargo-deny           09faadcea2d0d1742492e6872b743d1e4d151a27  0000000000000000000000000000000000000000000000000000000000000000
+cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  0000000000000000000000000000000000000000000000000000000000000000
+cargo-audit        rustsec/rustsec                    efcde93a237dc51f8c32d84d880bf97b442835c8  0000000000000000000000000000000000000000000000000000000000000000
+cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  0000000000000000000000000000000000000000000000000000000000000000
