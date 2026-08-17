@@ -1,0 +1,54 @@
+name: supply-chain (cargo-vet)
+
+# The "vetted" gate (proactive axis): every new/changed dependency version must be audited by us,
+# covered by an imported trusted-party audit, or exempted with a recorded reason. Complements the
+# reactive known-bad-signal gates already in CI (cargo-deny, cargo-audit, osv-scanner), which run
+# in the `ci` / release path. Operates on the full Cargo.lock graph (transitive).
+#
+# STAGED: the gate is REPORT-ONLY (continue-on-error) until the baseline is committed and reviewed
+# — see app/supply-chain/README.md. To make it blocking, delete the `continue-on-error: true`
+# line on the vet step in a reviewed PR.
+
+on:
+  pull_request:
+    paths:
+      - app/Cargo.toml
+      - app/Cargo.lock
+      - app/supply-chain/**
+      - .github/workflows/supply-chain.yml
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  vet:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain
+        run: rustup toolchain install nightly-2026-07-23
+
+      # cargo-vet is a CI-only vetting tool — it is NOT shipped and never touches the release or
+      # signing path, so a crates.io --version + --locked pin is acceptable here (vs the git-rev
+      # pins the release-path tools use). Compiles from source; fine for a non-blocking gate.
+      - name: Install cargo-vet
+        run: cargo install cargo-vet --locked --version 0.10.0
+
+      # --locked: vet the graph exactly as committed, no re-resolution. Report-only until baseline.
+      - name: cargo vet
+        working-directory: app
+        continue-on-error: true   # REMOVE (in a reviewed PR) once the baseline is committed, to enforce
+        run: |
+          cargo vet --locked || {
+            echo "::warning::cargo vet reported unvetted dependencies. This gate is REPORT-ONLY"
+            echo "::warning::until the baseline is committed (app/supply-chain/README.md). It does"
+            echo "::warning::NOT block yet. Run 'cargo vet' locally to review."
+            exit 1
+          }
