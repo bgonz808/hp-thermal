@@ -98,8 +98,29 @@ jobs:
       # Immutable git-rev pins: a maintainer-account compromise can publish a new
       # crates.io version but cannot rewrite a pinned commit. These BUILD code, which is
       # why they stay on the read-only, secret-less runner.
+      # #137: `cargo install` uses a fresh temp target dir PER INVOCATION, so the four tools
+      # recompile every shared dependency. Measured: 1192 package-builds, 843 unique => 349
+      # redundant (29%), inside a step costing 984s of a 1296s job. A shared target dir lets
+      # them reuse each other's output.
+      #
+      # !! CARGO_TARGET_DIR MUST STAY STEP-SCOPED. Do NOT hoist it to job or workflow level. !!
+      # A job-level value is inherited by the xtask step below AND by the product build that
+      # xtask spawns, redirecting the product's artifacts into a directory where 1192 packages'
+      # build scripts have executed -- which is exactly the poisoned-rlib path this scoping
+      # avoids. It would also break the stamp/stage steps, which expect
+      # target/<custom-triple>/release/. Loud failure, but do not rely on that.
+      #
+      # Ephemeral by construction: runner.temp dies with the VM. Never make this a cache key --
+      # cargo does not verify compiled artifacts (fingerprints are a staleness check over
+      # INPUTS, stored beside the artifact, forgeable from a build script; demonstrated in
+      # #137), so a persistent target dir would be an unanchored trust boundary.
+      #
+      # This does not reduce the arbitrary-code surface -- 1192 build scripts still run here.
+      # #138 removes them from the release path entirely; this is the interim win.
       - name: Install release tools (git-rev pinned)
         shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/tool-build
         run: |
           cargo install cargo-deny      --locked --git https://github.com/EmbarkStudios/cargo-deny          --rev 09faadcea2d0d1742492e6872b743d1e4d151a27
           cargo install cargo-auditable --locked --git https://github.com/rust-secure-code/cargo-auditable  --rev 9dc5ff28ff204b73eae91bd96cde4413fdcb70e0
