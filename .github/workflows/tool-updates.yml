@@ -1,0 +1,98 @@
+name: Tool update check
+
+# THE HOOK that decides when a prebuilt tool warrants a rebuild (#138).
+#
+# Dependabot cannot see `cargo install --git --rev` pins — it manages Cargo.lock deps and
+# `uses:` action pins, neither of which covers these tools. So this scheduled job is the
+# purpose-built substitute: once a week it compares each tool's pinned rev in tools/TOOLS.lock
+# against the newest matching upstream RELEASE, and opens (or refreshes) ONE tracking issue when
+# any are behind. It never bumps anything — the maintainer reviews, edits the rev in TOOLS.lock,
+# runs build-tools.yml, and commits the new digest (tools/README.md). Detection is automated;
+# the decision and the rebuild stay human + reviewed, matching the git-rev security posture.
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"   # Mondays 06:00 UTC — same weekly cadence as Dependabot here
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Compare pinned revs against latest upstream releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Per-tool filter for the newest RELEASE tag. Monorepos publish several products, so
+          # restrict to this tool's tag prefix; single-product repos accept any release ('.').
+          tag_filter() {
+            case "$1" in
+              cargo-audit)     echo '^cargo-audit/' ;;
+              cargo-cyclonedx) echo '^cargo-cyclonedx-' ;;
+              *)               echo '.' ;;
+            esac
+          }
+
+          rows=""; behind=0
+          while read -r name repo rev _sha; do
+            [ -n "${name:-}" ] || continue
+            # Newest release tag matching this tool, then resolve it to a commit SHA.
+            latest_tag=$(gh api "repos/$repo/releases" --jq '.[].tag_name' 2>/dev/null \
+                          | grep -E "$(tag_filter "$name")" | head -1 || true)
+            if [ -z "$latest_tag" ]; then
+              rows+="| $name | \`${rev:0:12}\` | ⚠️ could not resolve latest — check manually | |\n"
+              continue
+            fi
+            latest_sha=$(gh api "repos/$repo/commits/$latest_tag" --jq '.sha' 2>/dev/null || echo "")
+            if [ -n "$latest_sha" ] && [ "$latest_sha" != "$rev" ]; then
+              behind=$((behind+1))
+              rows+="| $name | \`${rev:0:12}\` | **$latest_tag** | \`${latest_sha:0:12}\` |\n"
+            else
+              rows+="| $name | \`${rev:0:12}\` | up to date ($latest_tag) | |\n"
+            fi
+          done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock)
+
+          {
+            echo "behind=$behind"
+            echo "rows<<EOF"
+            printf "%b" "$rows"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+        id: check
+
+      - name: Open or refresh the tracking issue
+        if: steps.check.outputs.behind != '0'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROWS: ${{ steps.check.outputs.rows }}
+          BEHIND: ${{ steps.check.outputs.behind }}
+        run: |
+          set -euo pipefail
+          title="Tool update check: $BEHIND prebuilt tool(s) behind upstream"
+          body=$(printf '%s\n\n%s\n\n%s\n' \
+            "The scheduled tool-update check found newer upstream releases than the pins in \`tools/TOOLS.lock\`." \
+            "| tool | pinned rev | latest release | latest commit |
+          |---|---|---|---|
+          ${ROWS}" \
+            "To adopt one: bump its \`rev\` in \`tools/TOOLS.lock\`, run **build-tools.yml**, then commit the printed digest (see \`tools/README.md\`). Detection is automated; the bump + rebuild stay a reviewed change.")
+          # Update the existing open tracking issue if present, else create it.
+          num=$(gh issue list --state open --search "in:title Tool update check" --json number --jq '.[0].number' || true)
+          if [ -n "${num:-}" ] && [ "$num" != "null" ]; then
+            gh issue edit "$num" --title "$title" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body" --label dependencies
+          fi
