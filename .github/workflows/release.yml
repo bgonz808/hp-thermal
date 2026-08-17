@@ -50,6 +50,28 @@ jobs:
           [ "$fail" -eq 0 ] || { echo "Source-integrity gate FAILED: tag is not on a CI-green commit."; exit 1; }
           echo "Source-integrity gate PASSED."
 
+      # Version-coupling gate: the tag and the version COMPILED INTO the binary must match. The
+      # binary's version is CARGO_PKG_VERSION (app/Cargo.toml) -- it drives the version display,
+      # the install/update dialog, the registry DisplayVersion, AND anti-rollback. The git tag is
+      # decoupled from it, so a tag can otherwise ship a binary reporting the wrong version (it did:
+      # v0.3.0-rc.1 shipped a 0.2.2 binary). Fail closed unless they agree.
+      - name: Require tag to match app/Cargo.toml version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_ver="${GITHUB_REF_NAME#v}"
+          cargo_ver=$(gh api "repos/${GITHUB_REPOSITORY}/contents/app/Cargo.toml?ref=${GITHUB_SHA}" \
+            --jq .content | base64 -d | sed -n 's/^version = "\(.*\)".*/\1/p' | head -1)
+          echo "tag version:        $tag_ver"
+          echo "Cargo.toml version: $cargo_ver"
+          [ "$tag_ver" = "$cargo_ver" ] || {
+            echo "::error::tag v$tag_ver != app/Cargo.toml version $cargo_ver — the binary would report the wrong version. Bump app/Cargo.toml (and Cargo.lock) to match the tag before tagging."
+            exit 1; }
+          echo "Version-coupling gate PASSED: binary will report v$cargo_ver."
+
   # --- Build on a READ-ONLY, secret-less runner. Tool installs execute code, so this
   #     job is bounded to reading public source: it cannot push, publish, or exfiltrate.
   build:
@@ -450,8 +472,11 @@ jobs:
           $exe = (Get-FileHash dist/hp-thermal.exe      -Algorithm SHA256).Hash.ToLower()
           $pdb = (Get-FileHash dist/hp-thermal.pdb      -Algorithm SHA256).Hash.ToLower()
           $cdx = (Get-FileHash dist/hp-thermal.cdx.json -Algorithm SHA256).Hash.ToLower()
-          @("$exe  hp-thermal.exe", "$pdb  hp-thermal.pdb", "$cdx  hp-thermal.cdx.json") |
-            Out-File dist/SHA256SUMS -Encoding ascii
+          # LF + no BOM so `sha256sum -c SHA256SUMS` parses on Linux/macOS. Out-File -Encoding
+          # ascii writes CRLF, whose trailing \r trips sha256sum ("No such file or directory").
+          # -NoNewline keeps exactly our explicit `n between/after entries.
+          $lines = @("$exe  hp-thermal.exe", "$pdb  hp-thermal.pdb", "$cdx  hp-thermal.cdx.json")
+          ($lines -join "`n") + "`n" | Set-Content -Path dist/SHA256SUMS -NoNewline -Encoding utf8NoBOM
           "exe_sha256=$exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
           "pdb_sha256=$pdb" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
 
