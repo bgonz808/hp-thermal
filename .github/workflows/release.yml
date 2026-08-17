@@ -292,15 +292,82 @@ jobs:
           timestamp-digest: SHA256
 
       # Fail-closed: if signing was requested, refuse to continue with an unsigned binary.
+      # Identity-pinned, fail-closed. Do NOT reduce this to a Status check.
+      #
+      # `Status` alone is NOT a trustworthy discriminator, measured not assumed: on
+      # Windows 11 build 26200, Get-AuthenticodeSignature returns 'Valid' for a binary whose
+      # chain terminates in an UNTRUSTED root, while raw WinVerifyTrust on the same file
+      # returns CERT_E_UNTRUSTEDROOT (0x800B0109). So "Status == Valid" does not imply
+      # "chains to a publicly-trusted root" on every Windows build. Conversely 'UnknownError'
+      # is the catch-all bucket -- untrusted root, yes, but also revoked signer, revocation
+      # check failure, expired chain, wrong EKU, and an INVALID timestamp countersignature.
+      # Accepting UnknownError on the strength of Status alone accepts all of those.
+      #
+      # So the discriminator is the CERTIFICATE, not the status:
+      #   subject DN pinned  -> it is our identity and no one else's
+      #   Lifetime Signing EKU (1.3.6.1.4.1.311.10.3.13) polarity -> which PROFILE signed
+      #     absent  => PublicTrust     (production)
+      #     present => PublicTrustTest (test; signature dies with the cert regardless of
+      #                                 timestamp, which is why test artifacts must never ship)
+      # Both are hardcoded here ON PURPOSE. Changing the accepted identity must require a
+      # reviewed workflow change, never a repo-variable flip (see #132).
+      #
+      # The ref still selects the EXPECTATION (it also selects the environment, the reviewer
+      # gate, and the federated credential, and is not admin-mutable). The certificate
+      # supplies the FACT. A mismatch in either direction throws -- including a PRODUCTION
+      # signature appearing on the dry-run path, which must fail rather than be waved through.
+      #
+      # Byte integrity does not rest on this step: the digest chain (build -> sign -> verify)
+      # covers that, and a tampered file surfaces as HashMismatch even on an untrusted chain
+      # (the digest check runs before chain policy -- verified experimentally).
       - name: Assert the binary is actually signed
         if: ${{ vars.SIGNING_ENABLED == 'true' }}
         shell: pwsh
+        env:
+          EXPECT_PUBLIC_TRUST: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
+          $ProdSubject = 'CN=Robert Gonzales, O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+          $TestSubject = 'CN=Robert Gonzales(TEST ONLY), O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+          $LifetimeSigningEku = '1.3.6.1.4.1.311.10.3.13'
+
           $sig = Get-AuthenticodeSignature dist/hp-thermal.exe
-          if ($sig.Status -ne 'Valid') { throw "Authenticode status is '$($sig.Status)', expected 'Valid'" }
-          Write-Output "signed by: $($sig.SignerCertificate.Subject)"
-          Write-Output "timestamp: $($sig.TimeStamperCertificate.Subject)"
+          Write-Output "status:    $($sig.Status) — $($sig.StatusMessage)"
+          if (-not $sig.SignerCertificate) { throw "no signer certificate — the file is NOT signed" }
+          Write-Output "subject:   $($sig.SignerCertificate.Subject)"
           if (-not $sig.TimeStamperCertificate) { throw "signature is NOT timestamped — it would expire with the cert" }
+          Write-Output "timestamp: $($sig.TimeStamperCertificate.Subject)"
+
+          $ekuExt = $sig.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' }
+          $ekus = if ($ekuExt) {
+            ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExt).EnhancedKeyUsages |
+              ForEach-Object Value
+          } else { @() }
+          $hasLifetimeEku = $ekus -contains $LifetimeSigningEku
+
+          # switch with an explicit default: any unexpected value (empty, null from a renamed
+          # env key in a future refactor, expression error) must FAIL, never fall through to
+          # the permissive branch.
+          switch ($env:EXPECT_PUBLIC_TRUST) {
+            'true' {
+              if ($sig.SignerCertificate.Subject -ne $ProdSubject) {
+                throw "signer is '$($sig.SignerCertificate.Subject)', expected the production identity" }
+              if ($hasLifetimeEku) {
+                throw "signer carries the Lifetime Signing EKU — a TEST-profile cert on the production path" }
+              if ($sig.Status -ne 'Valid') {
+                throw "production signature status is '$($sig.Status)' ($($sig.StatusMessage)), expected 'Valid'" }
+              Write-Output "production signature verified: pinned subject, no test EKU, status Valid"
+            }
+            'false' {
+              if ($sig.SignerCertificate.Subject -ne $TestSubject) {
+                throw "signer is '$($sig.SignerCertificate.Subject)', expected the PublicTrustTest identity" }
+              if (-not $hasLifetimeEku) {
+                throw "signer lacks the Lifetime Signing EKU — NOT a test-profile cert; refusing it on the dry-run path" }
+              if ($sig.Status -notin @('Valid','UnknownError')) {
+                throw "status '$($sig.Status)' ($($sig.StatusMessage)) on the test path — not an untrusted-root condition" }
+              Write-Output "test signature verified: pinned TEST subject + Lifetime EKU (status '$($sig.Status)')"
+            }
+            default { throw "EXPECT_PUBLIC_TRUST is '$($env:EXPECT_PUBLIC_TRUST)' — refusing to guess the trust expectation" }
+          }
 
       # SHA256SUMS is written HERE so it covers the signed bytes, preserving the load-bearing
       # order: build -> stamp -> SIGN -> hash -> attest.
@@ -384,14 +451,54 @@ jobs:
 
       # Signature presence is asserted in `sign`; re-assert on the downloaded bytes so a
       # swap on the sign->verify hop cannot strip the signature unnoticed.
+      # Mirrors the identity-pinned assertion in `sign`, on the bytes as downloaded, so a
+      # swap on the sign->verify hop cannot strip or substitute the signature unnoticed.
+      # Same reasoning as there: Status is not a trustworthy discriminator on its own
+      # (measured: 'Valid' is returned for untrusted-root chains on Windows 11 26200), so the
+      # subject DN and the Lifetime Signing EKU polarity decide, and the ref-derived
+      # expectation must match the certificate that actually signed.
       - name: Re-assert Authenticode signature survived transport
         if: ${{ vars.SIGNING_ENABLED == 'true' }}
         shell: pwsh
+        env:
+          EXPECT_PUBLIC_TRUST: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
+          $ProdSubject = 'CN=Robert Gonzales, O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+          $TestSubject = 'CN=Robert Gonzales(TEST ONLY), O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+          $LifetimeSigningEku = '1.3.6.1.4.1.311.10.3.13'
+
           $sig = Get-AuthenticodeSignature dist/hp-thermal.exe
-          if ($sig.Status -ne 'Valid') { throw "Authenticode status is '$($sig.Status)' after transport, expected 'Valid'" }
+          Write-Output "status: $($sig.Status) — $($sig.StatusMessage)"
+          if (-not $sig.SignerCertificate) { throw "no signer certificate after transport — signature stripped" }
           if (-not $sig.TimeStamperCertificate) { throw "timestamp missing after transport" }
-          Write-Output "signature intact: $($sig.SignerCertificate.Subject)"
+
+          $ekuExt = $sig.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' }
+          $ekus = if ($ekuExt) {
+            ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExt).EnhancedKeyUsages |
+              ForEach-Object Value
+          } else { @() }
+          $hasLifetimeEku = $ekus -contains $LifetimeSigningEku
+
+          switch ($env:EXPECT_PUBLIC_TRUST) {
+            'true' {
+              if ($sig.SignerCertificate.Subject -ne $ProdSubject) {
+                throw "signer is '$($sig.SignerCertificate.Subject)' after transport, expected the production identity" }
+              if ($hasLifetimeEku) {
+                throw "signer carries the Lifetime Signing EKU after transport — a TEST cert on the production path" }
+              if ($sig.Status -ne 'Valid') {
+                throw "production status is '$($sig.Status)' ($($sig.StatusMessage)) after transport, expected 'Valid'" }
+            }
+            'false' {
+              if ($sig.SignerCertificate.Subject -ne $TestSubject) {
+                throw "signer is '$($sig.SignerCertificate.Subject)' after transport, expected the PublicTrustTest identity" }
+              if (-not $hasLifetimeEku) {
+                throw "signer lacks the Lifetime Signing EKU after transport — refusing a non-test cert on the dry-run path" }
+              if ($sig.Status -notin @('Valid','UnknownError')) {
+                throw "status '$($sig.Status)' ($($sig.StatusMessage)) after transport on the test path" }
+            }
+            default { throw "EXPECT_PUBLIC_TRUST is '$($env:EXPECT_PUBLIC_TRUST)' — refusing to guess the trust expectation" }
+          }
+          Write-Output "signature intact ($($sig.Status)): $($sig.SignerCertificate.Subject)"
 
   # --- Attest + publish. Minimal elevation, no third-party actions / tool builds here.
   #     Attestations run on BOTH a real tag AND a manual workflow_dispatch, so the whole
