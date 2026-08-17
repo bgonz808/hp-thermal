@@ -291,80 +291,131 @@ jobs:
           timestamp-rfc3161: http://timestamp.acs.microsoft.com
           timestamp-digest: SHA256
 
-      # Fail-closed: if signing was requested, refuse to continue with an unsigned binary.
-      # Identity-pinned, fail-closed. Do NOT reduce this to a Status check.
+      # Fail-closed signer verification. Consumes the RAW WinVerifyTrust HRESULT, NOT
+      # Get-AuthenticodeSignature.Status.
       #
-      # `Status` alone is NOT a trustworthy discriminator, measured not assumed: on
-      # Windows 11 build 26200, Get-AuthenticodeSignature returns 'Valid' for a binary whose
-      # chain terminates in an UNTRUSTED root, while raw WinVerifyTrust on the same file
-      # returns CERT_E_UNTRUSTEDROOT (0x800B0109). So "Status == Valid" does not imply
-      # "chains to a publicly-trusted root" on every Windows build. Conversely 'UnknownError'
-      # is the catch-all bucket -- untrusted root, yes, but also revoked signer, revocation
-      # check failure, expired chain, wrong EKU, and an INVALID timestamp countersignature.
-      # Accepting UnknownError on the strength of Status alone accepts all of those.
+      # Why not Status -- MEASURED on this project's Windows box, not assumed. Signing a PE
+      # with an untrusted root and then corrupting bytes, then reading both engines:
+      #   clean untrusted-root cert   Status=Valid        WVT HRESULT=0x800B0109 (UNTRUSTEDROOT)
+      #   SIGNATURE bytes corrupted   Status=Valid        WVT HRESULT=0x800B0100 (broken signature)
+      #   code bytes corrupted        Status=HashMismatch WVT HRESULT=0x80096010 (bad digest)
+      # Status returns 'Valid' for BOTH a legitimately-untrusted test root AND a
+      # cryptographically BROKEN signature -- so a Status=='Valid' gate would accept a broken
+      # signature, and a Status-in-(Valid,UnknownError) gate accepts every crypto failure that
+      # buckets into UnknownError (invalid timestamp countersignature, broken cert-chain link,
+      # broken primary signature, ASN.1 corruption). Status is a lossy enum; it discards the
+      # exact crypto verdict we need.
       #
-      # So the discriminator is the CERTIFICATE, not the status:
-      #   subject DN pinned  -> it is our identity and no one else's
-      #   Lifetime Signing EKU (1.3.6.1.4.1.311.10.3.13) polarity -> which PROFILE signed
-      #     absent  => PublicTrust     (production)
-      #     present => PublicTrustTest (test; signature dies with the cert regardless of
-      #                                 timestamp, which is why test artifacts must never ship)
-      # Both are hardcoded here ON PURPOSE. Changing the accepted identity must require a
-      # reviewed workflow change, never a repo-variable flip (see #132).
+      # WinVerifyTrust runs the full cryptography: the PE digest, the primary SignerInfo
+      # signature against the signer's PUBLIC KEY, every certificate's chain-link signature,
+      # and the timestamp countersignature. Its HRESULT distinguishes the ONE tolerable defect
+      # (0x800B0109 -- chain is cryptographically valid, we just don't have the test root
+      # installed on the runner) from every genuine crypto failure (each a different code).
+      #   production (tag)  -> require S_OK (0x0): full chain to a trusted PUBLIC root
+      #   test (dry-run)    -> require EXACTLY 0x800B0109: all signatures verified, only defect
+      #                        is the missing Microsoft test root. Any other value == real
+      #                        crypto failure -> throw.
       #
-      # The ref still selects the EXPECTATION (it also selects the environment, the reviewer
-      # gate, and the federated credential, and is not admin-mutable). The certificate
-      # supplies the FACT. A mismatch in either direction throws -- including a PRODUCTION
-      # signature appearing on the dry-run path, which must fail rather than be waved through.
+      # Identity is then pinned by the DURABLE 311.97 EKU (Microsoft doc: value unique to the
+      # identity-validation resource, STABLE across the daily cert renewals -- subject/thumb/
+      # public-key are not). The subject DN is a SECONDARY assertion only: "Robert Gonzales,
+      # San Francisco" is a common identity another CA could re-issue to a different person, so
+      # it is not the anchor. Full-string OID match, never a prefix. All values hardcoded so
+      # changing an accepted identity needs a reviewed PR, never a repo-variable flip (#132).
       #
-      # Byte integrity does not rest on this step: the digest chain (build -> sign -> verify)
-      # covers that, and a tampered file surfaces as HashMismatch even on an untrusted chain
-      # (the digest check runs before chain policy -- verified experimentally).
+      # NOT enforced here (documented so the check does not overclaim): certificate revocation
+      # (WTD_REVOKE_NONE -- the sign/verify jobs may lack OCSP/CRL reachability; a network
+      # blip must not flip a good release to rejected); nested-signature presence/absence;
+      # trust in Microsoft's assignment of the durable-identity octets. Byte integrity is the
+      # digest chain's job (build->sign->verify), not this step's.
       - name: Assert the binary is actually signed
         if: ${{ vars.SIGNING_ENABLED == 'true' }}
         shell: pwsh
         env:
           EXPECT_PUBLIC_TRUST: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          $ProdSubject = 'CN=Robert Gonzales, O=Robert Gonzales, L=San Francisco, S=ca, C=US'
-          $TestSubject = 'CN=Robert Gonzales(TEST ONLY), O=Robert Gonzales, L=San Francisco, S=ca, C=US'
-          $LifetimeSigningEku = '1.3.6.1.4.1.311.10.3.13'
+          $ErrorActionPreference = 'Stop'
 
-          $sig = Get-AuthenticodeSignature dist/hp-thermal.exe
-          Write-Output "status:    $($sig.Status) — $($sig.StatusMessage)"
-          if (-not $sig.SignerCertificate) { throw "no signer certificate — the file is NOT signed" }
-          Write-Output "subject:   $($sig.SignerCertificate.Subject)"
-          if (-not $sig.TimeStamperCertificate) { throw "signature is NOT timestamped — it would expire with the cert" }
-          Write-Output "timestamp: $($sig.TimeStamperCertificate.Subject)"
+          # Durable identity anchors (311.97 EKUs, observed live from the profiles). Full-string
+          # match, never a prefix. Editing an accepted identity requires a reviewed PR (#132).
+          $ProdIdentityEku     = '1.3.6.1.4.1.311.97.560077468.167399228.786894322.562638940'
+          $ProdPublicTrustMark = '1.3.6.1.4.1.311.97.1.0'
+          $TestIdentityEku     = '1.3.6.1.4.1.311.97.1.2.881842232.80014427.164345747.789896896'
+          $LifetimeSigningEku  = '1.3.6.1.4.1.311.10.3.13'
+          $ProdSubject         = 'CN=Robert Gonzales, O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+          $TestSubject         = 'CN=Robert Gonzales(TEST ONLY), O=Robert Gonzales, L=San Francisco, S=ca, C=US'
 
-          $ekuExt = $sig.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' }
-          $ekus = if ($ekuExt) {
-            ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExt).EnhancedKeyUsages |
-              ForEach-Object Value
-          } else { @() }
+          Add-Type -Language CSharp -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class WinTrust {
+            [StructLayout(LayoutKind.Sequential)]
+            struct FI { public uint cb; [MarshalAs(UnmanagedType.LPWStr)] public string p; public IntPtr h; public IntPtr g; }
+            [StructLayout(LayoutKind.Sequential)]
+            struct WD { public uint cb; public IntPtr a; public IntPtr b; public uint ui; public uint rev; public uint uc;
+              public IntPtr file; public uint sa; public IntPtr st; public IntPtr url; public uint pf; public uint ctx; public IntPtr ss; }
+            [DllImport("wintrust.dll", CharSet=CharSet.Unicode)] static extern int WinVerifyTrust(IntPtr h, ref Guid g, ref WD d);
+            public static uint Verify(string path) {
+              Guid a = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE"); // WINTRUST_ACTION_GENERIC_VERIFY_V2
+              var fi = new FI(); fi.cb=(uint)Marshal.SizeOf(typeof(FI)); fi.p=path;
+              IntPtr pf = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(FI))); Marshal.StructureToPtr(fi, pf, false);
+              var d = new WD(); d.cb=(uint)Marshal.SizeOf(typeof(WD)); d.ui=2; d.rev=0; d.uc=1; d.file=pf; d.sa=1; // UI_NONE, REVOKE_NONE, CHOICE_FILE, VERIFY
+              int hr = WinVerifyTrust(IntPtr.Zero, ref a, ref d);
+              d.sa=2; WinVerifyTrust(IntPtr.Zero, ref a, ref d); Marshal.FreeHGlobal(pf); // STATEACTION_CLOSE
+              return unchecked((uint)hr);
+            }
+          }
+          '@
+          # 0x800B0109 parses as a NEGATIVE Int32 in PowerShell; the Int64 'L' literal keeps the
+          # uint32 comparison correct. (Verified: [uint32]0x800B0109 throws.)
+          [uint32]$S_OK                 = 0
+          [uint32]$CERT_E_UNTRUSTEDROOT = 0x800B0109L
+
+          $file = 'dist/hp-thermal.exe'
+          $sig  = Get-AuthenticodeSignature $file
+          [uint32]$hr = [WinTrust]::Verify((Resolve-Path $file).Path)
+
+          Write-Output ("wvt HRESULT: 0x{0:X8}" -f $hr)
+          Write-Output "status:      $($sig.Status) — $($sig.StatusMessage)"
+          if (-not $sig.SignerCertificate)      { throw "no signer certificate — the file is NOT signed" }
+          Write-Output "subject:     $($sig.SignerCertificate.Subject)"
+          if (-not $sig.TimeStamperCertificate) { throw "signature is NOT timestamped — it would expire with the 72h cert" }
+          Write-Output "timestamp:   $($sig.TimeStamperCertificate.Subject)"
+
+          # Union EKUs across every 2.5.29.37 extension, criticality-agnostic, so an ABSENCE
+          # assertion (no Lifetime EKU on prod) cannot be dodged by a duplicate extension.
+          $ekus = @()
+          foreach ($ext in ($sig.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' })) {
+            $ekus += ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ext).EnhancedKeyUsages | ForEach-Object Value
+          }
+          $ekus = $ekus | Sort-Object -Unique
+          Write-Output "ekus:        $($ekus -join '  ')"
           $hasLifetimeEku = $ekus -contains $LifetimeSigningEku
 
-          # switch with an explicit default: any unexpected value (empty, null from a renamed
-          # env key in a future refactor, expression error) must FAIL, never fall through to
-          # the permissive branch.
           switch ($env:EXPECT_PUBLIC_TRUST) {
             'true' {
-              if ($sig.SignerCertificate.Subject -ne $ProdSubject) {
-                throw "signer is '$($sig.SignerCertificate.Subject)', expected the production identity" }
+              if ($hr -ne $S_OK) {
+                throw ("production WinVerifyTrust HRESULT is 0x{0:X8}, expected S_OK — chain not fully trusted/valid" -f $hr) }
+              if ($ekus -notcontains $ProdIdentityEku) {
+                throw "signer lacks the production durable-identity EKU ($ProdIdentityEku)" }
+              if ($ekus -notcontains $ProdPublicTrustMark) {
+                throw "signer lacks the Public Trust marker EKU ($ProdPublicTrustMark)" }
               if ($hasLifetimeEku) {
                 throw "signer carries the Lifetime Signing EKU — a TEST-profile cert on the production path" }
-              if ($sig.Status -ne 'Valid') {
-                throw "production signature status is '$($sig.Status)' ($($sig.StatusMessage)), expected 'Valid'" }
-              Write-Output "production signature verified: pinned subject, no test EKU, status Valid"
+              if ($sig.SignerCertificate.Subject -ne $ProdSubject) {
+                throw "secondary check: subject '$($sig.SignerCertificate.Subject)' != pinned production subject" }
+              Write-Output "PRODUCTION signature verified: WVT=S_OK, prod durable-identity EKU, no test EKU."
             }
             'false' {
-              if ($sig.SignerCertificate.Subject -ne $TestSubject) {
-                throw "signer is '$($sig.SignerCertificate.Subject)', expected the PublicTrustTest identity" }
+              if ($hr -ne $CERT_E_UNTRUSTEDROOT) {
+                throw ("test WinVerifyTrust HRESULT is 0x{0:X8}, expected exactly CERT_E_UNTRUSTEDROOT (0x800B0109) — the only tolerated defect is the missing test root; anything else is a real crypto failure" -f $hr) }
+              if ($ekus -notcontains $TestIdentityEku) {
+                throw "signer lacks the test durable-identity EKU ($TestIdentityEku)" }
               if (-not $hasLifetimeEku) {
                 throw "signer lacks the Lifetime Signing EKU — NOT a test-profile cert; refusing it on the dry-run path" }
-              if ($sig.Status -notin @('Valid','UnknownError')) {
-                throw "status '$($sig.Status)' ($($sig.StatusMessage)) on the test path — not an untrusted-root condition" }
-              Write-Output "test signature verified: pinned TEST subject + Lifetime EKU (status '$($sig.Status)')"
+              if ($sig.SignerCertificate.Subject -ne $TestSubject) {
+                throw "secondary check: subject '$($sig.SignerCertificate.Subject)' != pinned test subject" }
+              Write-Output "TEST signature verified: WVT=CERT_E_UNTRUSTEDROOT (only defect is missing test root), test durable-identity EKU + Lifetime EKU."
             }
             default { throw "EXPECT_PUBLIC_TRUST is '$($env:EXPECT_PUBLIC_TRUST)' — refusing to guess the trust expectation" }
           }
@@ -451,54 +502,92 @@ jobs:
 
       # Signature presence is asserted in `sign`; re-assert on the downloaded bytes so a
       # swap on the sign->verify hop cannot strip the signature unnoticed.
-      # Mirrors the identity-pinned assertion in `sign`, on the bytes as downloaded, so a
-      # swap on the sign->verify hop cannot strip or substitute the signature unnoticed.
-      # Same reasoning as there: Status is not a trustworthy discriminator on its own
-      # (measured: 'Valid' is returned for untrusted-root chains on Windows 11 26200), so the
-      # subject DN and the Lifetime Signing EKU polarity decide, and the ref-derived
-      # expectation must match the certificate that actually signed.
+      # Mirrors the WinVerifyTrust-based assertion in `sign`, on the bytes as downloaded, so a
+      # swap on the sign->verify hop cannot strip or substitute the signature unnoticed. Same
+      # reasoning (see the `sign` step's comment): Get-AuthenticodeSignature.Status is a lossy
+      # enum that reports 'Valid' for both an untrusted root AND a broken signature, so the raw
+      # WinVerifyTrust HRESULT is the crypto verdict and the durable 311.97 EKU is the identity.
       - name: Re-assert Authenticode signature survived transport
         if: ${{ vars.SIGNING_ENABLED == 'true' }}
         shell: pwsh
         env:
           EXPECT_PUBLIC_TRUST: ${{ startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          $ProdSubject = 'CN=Robert Gonzales, O=Robert Gonzales, L=San Francisco, S=ca, C=US'
-          $TestSubject = 'CN=Robert Gonzales(TEST ONLY), O=Robert Gonzales, L=San Francisco, S=ca, C=US'
-          $LifetimeSigningEku = '1.3.6.1.4.1.311.10.3.13'
+          $ErrorActionPreference = 'Stop'
 
-          $sig = Get-AuthenticodeSignature dist/hp-thermal.exe
-          Write-Output "status: $($sig.Status) — $($sig.StatusMessage)"
-          if (-not $sig.SignerCertificate) { throw "no signer certificate after transport — signature stripped" }
+          $ProdIdentityEku     = '1.3.6.1.4.1.311.97.560077468.167399228.786894322.562638940'
+          $ProdPublicTrustMark = '1.3.6.1.4.1.311.97.1.0'
+          $TestIdentityEku     = '1.3.6.1.4.1.311.97.1.2.881842232.80014427.164345747.789896896'
+          $LifetimeSigningEku  = '1.3.6.1.4.1.311.10.3.13'
+          $ProdSubject         = 'CN=Robert Gonzales, O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+          $TestSubject         = 'CN=Robert Gonzales(TEST ONLY), O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+
+          Add-Type -Language CSharp -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class WinTrust {
+            [StructLayout(LayoutKind.Sequential)]
+            struct FI { public uint cb; [MarshalAs(UnmanagedType.LPWStr)] public string p; public IntPtr h; public IntPtr g; }
+            [StructLayout(LayoutKind.Sequential)]
+            struct WD { public uint cb; public IntPtr a; public IntPtr b; public uint ui; public uint rev; public uint uc;
+              public IntPtr file; public uint sa; public IntPtr st; public IntPtr url; public uint pf; public uint ctx; public IntPtr ss; }
+            [DllImport("wintrust.dll", CharSet=CharSet.Unicode)] static extern int WinVerifyTrust(IntPtr h, ref Guid g, ref WD d);
+            public static uint Verify(string path) {
+              Guid a = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE");
+              var fi = new FI(); fi.cb=(uint)Marshal.SizeOf(typeof(FI)); fi.p=path;
+              IntPtr pf = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(FI))); Marshal.StructureToPtr(fi, pf, false);
+              var d = new WD(); d.cb=(uint)Marshal.SizeOf(typeof(WD)); d.ui=2; d.rev=0; d.uc=1; d.file=pf; d.sa=1;
+              int hr = WinVerifyTrust(IntPtr.Zero, ref a, ref d);
+              d.sa=2; WinVerifyTrust(IntPtr.Zero, ref a, ref d); Marshal.FreeHGlobal(pf);
+              return unchecked((uint)hr);
+            }
+          }
+          '@
+          [uint32]$S_OK                 = 0
+          [uint32]$CERT_E_UNTRUSTEDROOT = 0x800B0109L
+
+          $file = 'dist/hp-thermal.exe'
+          $sig  = Get-AuthenticodeSignature $file
+          [uint32]$hr = [WinTrust]::Verify((Resolve-Path $file).Path)
+
+          Write-Output ("wvt HRESULT: 0x{0:X8}" -f $hr)
+          Write-Output "status:      $($sig.Status) — $($sig.StatusMessage)"
+          if (-not $sig.SignerCertificate)      { throw "no signer certificate after transport — signature stripped" }
           if (-not $sig.TimeStamperCertificate) { throw "timestamp missing after transport" }
 
-          $ekuExt = $sig.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' }
-          $ekus = if ($ekuExt) {
-            ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ekuExt).EnhancedKeyUsages |
-              ForEach-Object Value
-          } else { @() }
+          $ekus = @()
+          foreach ($ext in ($sig.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' })) {
+            $ekus += ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ext).EnhancedKeyUsages | ForEach-Object Value
+          }
+          $ekus = $ekus | Sort-Object -Unique
           $hasLifetimeEku = $ekus -contains $LifetimeSigningEku
 
           switch ($env:EXPECT_PUBLIC_TRUST) {
             'true' {
-              if ($sig.SignerCertificate.Subject -ne $ProdSubject) {
-                throw "signer is '$($sig.SignerCertificate.Subject)' after transport, expected the production identity" }
+              if ($hr -ne $S_OK) {
+                throw ("production WinVerifyTrust HRESULT is 0x{0:X8} after transport, expected S_OK" -f $hr) }
+              if ($ekus -notcontains $ProdIdentityEku) {
+                throw "signer lacks the production durable-identity EKU after transport ($ProdIdentityEku)" }
+              if ($ekus -notcontains $ProdPublicTrustMark) {
+                throw "signer lacks the Public Trust marker EKU after transport ($ProdPublicTrustMark)" }
               if ($hasLifetimeEku) {
                 throw "signer carries the Lifetime Signing EKU after transport — a TEST cert on the production path" }
-              if ($sig.Status -ne 'Valid') {
-                throw "production status is '$($sig.Status)' ($($sig.StatusMessage)) after transport, expected 'Valid'" }
+              if ($sig.SignerCertificate.Subject -ne $ProdSubject) {
+                throw "secondary check: subject '$($sig.SignerCertificate.Subject)' != pinned production subject" }
             }
             'false' {
-              if ($sig.SignerCertificate.Subject -ne $TestSubject) {
-                throw "signer is '$($sig.SignerCertificate.Subject)' after transport, expected the PublicTrustTest identity" }
+              if ($hr -ne $CERT_E_UNTRUSTEDROOT) {
+                throw ("test WinVerifyTrust HRESULT is 0x{0:X8} after transport, expected exactly CERT_E_UNTRUSTEDROOT (0x800B0109)" -f $hr) }
+              if ($ekus -notcontains $TestIdentityEku) {
+                throw "signer lacks the test durable-identity EKU after transport ($TestIdentityEku)" }
               if (-not $hasLifetimeEku) {
                 throw "signer lacks the Lifetime Signing EKU after transport — refusing a non-test cert on the dry-run path" }
-              if ($sig.Status -notin @('Valid','UnknownError')) {
-                throw "status '$($sig.Status)' ($($sig.StatusMessage)) after transport on the test path" }
+              if ($sig.SignerCertificate.Subject -ne $TestSubject) {
+                throw "secondary check: subject '$($sig.SignerCertificate.Subject)' != pinned test subject" }
             }
             default { throw "EXPECT_PUBLIC_TRUST is '$($env:EXPECT_PUBLIC_TRUST)' — refusing to guess the trust expectation" }
           }
-          Write-Output "signature intact ($($sig.Status)): $($sig.SignerCertificate.Subject)"
+          Write-Output ("signature intact (WVT 0x{0:X8}): $($sig.SignerCertificate.Subject)" -f $hr)
 
   # --- Attest + publish. Minimal elevation, no third-party actions / tool builds here.
   #     Attestations run on BOTH a real tag AND a manual workflow_dispatch, so the whole
