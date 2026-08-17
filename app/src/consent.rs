@@ -26,6 +26,9 @@ const CONSENT_VALUE: windows::core::PCWSTR = windows::core::w!("AcceptedHwFinger
 const KNOWN_GOOD: &[&str] = &[
     // Dev reference: HP ENVY 16-h1xxx, board 8BE5, BIOS F.25, EC 72.35.
     "HP|HP ENVY Laptop 16-h1xxx|103C_5335M8 HP ENVY|8BE5|F.25|72.35",
+    // Same board + EC (72.35 unchanged), BIOS-only bump F.25 -> F.26. Maintainer-validated
+    // on real hardware; the fingerprint was confirmed byte-exact against the live registry.
+    "HP|HP ENVY Laptop 16-h1xxx|103C_5335M8 HP ENVY|8BE5|F.26|72.35",
 ];
 
 /// Outcome of the consent check.
@@ -186,5 +189,13 @@ mod tests {
     fn known_good_wins_even_over_a_stale_acceptance_file() {
         // If somehow an old acceptance is present, dev-validated HW is still trusted.
         assert_eq!(classify(DEV, Some(OTHER)), Consent::Trusted);
+    }
+
+    #[test]
+    fn f26_bios_only_bump_is_known_good() {
+        // The F.25 dev reference with a BIOS-only bump to F.26 (EC 72.35 unchanged) is
+        // maintainer-validated and must run silently, no acceptance needed.
+        const DEV_F26: &str = "HP|HP ENVY Laptop 16-h1xxx|103C_5335M8 HP ENVY|8BE5|F.26|72.35";
+        assert_eq!(classify(DEV_F26, None), Consent::Trusted);
     }
 }
