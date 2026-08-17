@@ -637,6 +637,40 @@ fn pe_dll_characteristics(b: &[u8]) -> Option<u16> {
 /// exe<->pdb CodeView GUID/age bind. The pipeline-gate half of the assurance case — it
 /// proves properties of the SHIPPED bytes (what the toolchain produced), complementing the
 /// source-side checks. Run in `ci` and by the release verify job.
+/// Assert the SHIPPED PE embeds the ComCtl32 v6 application manifest. TaskDialogIndirect lives
+/// only in comctl32 v6, which the loader provides ONLY if the manifest declares
+/// `Microsoft.Windows.Common-Controls` version 6.0.0.0. A silent resource-embed failure (e.g.
+/// the Server-2025 runner dropping the whole resource) ships a binary that binds comctl32 v5
+/// and crashes on launch ("entry point TaskDialogIndirect not found"). This checks the property
+/// on the actual bytes -- mechanism-independent, so no build-tool failure can slip a
+/// manifest-less binary through. Would have caught rc.2.
+fn cmd_verify_manifest(exe_path: &str) -> i32 {
+    let bytes = match std::fs::read(exe_path) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("verify-manifest: cannot read {exe_path} ({e})");
+            return 1;
+        }
+    };
+    // The manifest is embedded as UTF-8 XML in the RT_MANIFEST resource.
+    let has = |needle: &str| bytes.windows(needle.len()).any(|w| w == needle.as_bytes());
+    let name = has("Microsoft.Windows.Common-Controls");
+    let ver = has("6.0.0.0");
+    if name && ver {
+        println!(
+            "verify-manifest: OK -- ComCtl32 v6 dependency present (TaskDialogIndirect resolvable)"
+        );
+        0
+    } else {
+        eprintln!(
+            "verify-manifest: FAIL -- embedded manifest missing the ComCtl32 v6 dependency \
+             (name={name}, version-6.0.0.0={ver}). Binary would crash on launch \
+             (TaskDialogIndirect not found) -- a resource-embed step was silently dropped."
+        );
+        1
+    }
+}
+
 fn cmd_verify_artifact(exe: Option<&str>, pdb: Option<&str>) -> i32 {
     let exe_path = exe.unwrap_or(RELEASE_EXE);
     let pdb_path = pdb.unwrap_or(RELEASE_PDB);
@@ -645,6 +679,7 @@ fn cmd_verify_artifact(exe: Option<&str>, pdb: Option<&str>) -> i32 {
     ok &= cmd_capabilities(Some(exe_path)) == 0;
     ok &= cmd_imports_scan(exe_path) == 0;
     ok &= cmd_pdb_link(exe_path, pdb_path) == 0;
+    ok &= cmd_verify_manifest(exe_path) == 0;
     if ok { 0 } else { 1 }
 }
 

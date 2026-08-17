@@ -62,8 +62,9 @@ features = [
 [dependencies.windows-core]
 version = "0.62"
 
-[build-dependencies]
-embed-resource = "3"
+# No build-dependencies: build.rs uses only std + the pinned System32/SDK tools it invokes
+# by absolute path. (Dropped embed-resource — resources are now compiled by the pinned
+# rc.exe directly and the manifest is embedded via the linker; see build.rs.)
 
 [profile.release]
 opt-level = "z"
