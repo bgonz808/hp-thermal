@@ -1,0 +1,38 @@
+name: deps-audit (scheduled advisory monitor)
+
+# The CONTINUOUS axis. The in-CI/release gates check advisories at PR/build time; this catches an
+# advisory PUBLISHED AFTER a dependency merged but affecting the CURRENTLY-committed Cargo.lock —
+# the blind spot of point-in-time gating. Runs daily against app/Cargo.lock (RustSec DB) and opens
+# a tracking issue for any new advisory, so we are aware of a CVE in something already shipped
+# without waiting for the next Dependabot cycle.
+#
+# RustSec exports to OSV in real time and osv-scanner already runs per-PR in the `ci` scan job, so
+# this RustSec-based daily monitor is the complementary continuous check, not a duplicate.
+
+on:
+  schedule:
+    - cron: "0 7 * * *"   # daily 07:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write   # audit-check opens an issue when a new advisory affects the lockfile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      # Scans app/Cargo.lock against the RustSec advisory DB (fetched fresh each run) and, on a
+      # scheduled run, files an issue per new advisory. Pinned by SHA (v2.0.0).
+      - name: RustSec advisory audit
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998  # rustsec/audit-check v2.0.0
+        with:
+          token: ${{ github.token }}
+          working-directory: app
