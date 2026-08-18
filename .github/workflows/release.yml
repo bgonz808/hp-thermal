@@ -758,6 +758,45 @@ jobs:
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
           echo "SARIF attestation verified."
 
+  # ALSO surface the release SARIF in the Code-scanning tab (human-browsable posture) — the
+  # Attestation (#171) is the signed record; this is the readable view. Release-only, and a
+  # DEDICATED job holding ONLY security-events:write (kept out of the attester so each privileged
+  # scope stays in its own minimal job). NON-gating (not in publish's needs; the upload itself is
+  # continue-on-error) so a flaky code-scanning upload never blocks a release. Still verifies the
+  # SARIF against binskim-release's out-of-band digest, so we never publish a corrupted report.
+  upload-sarif-release:
+    needs: [binskim-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # the ONLY code-scanning write in the repo; release-scoped, isolated here
+    steps:
+      - name: Checkout (source root for alert attribution)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+      - name: Download release SARIF
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # actions/download-artifact v8.0.1
+        with:
+          name: binskim-release-sarif
+          path: sarif
+      - name: Custody hop — SARIF matches binskim-release's out-of-band digest (fail-closed)
+        shell: bash
+        env:
+          EXPECTED: ${{ needs.binskim-release.outputs.sarif_sha256 }}
+        run: |
+          set -euo pipefail
+          got=$(sha256sum sarif/binskim-release.sarif | cut -d' ' -f1)
+          echo "expected=$EXPECTED got=$got"
+          [ -n "$EXPECTED" ] || { echo "::error::no SARIF digest from binskim-release"; exit 1; }
+          [ "$got" = "$EXPECTED" ] || { echo "::error::release SARIF digest mismatch — not uploading a corrupted report"; exit 1; }
+      - name: Upload release SARIF to code-scanning (informational, non-blocking)
+        continue-on-error: true
+        uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # github/codeql-action v4.37.6
+        with:
+          sarif_file: sarif/binskim-release.sarif
+          category: binskim-release
+
   publish:
     needs: [verify, binskim-release, attest-sarif]
     runs-on: windows-latest
