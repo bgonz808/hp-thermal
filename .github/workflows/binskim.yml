@@ -82,22 +82,53 @@ jobs:
           }
           Expand-Archive -Path $pkg -DestinationPath "$env:RUNNER_TEMP/binskim" -Force
 
-      - name: BinSkim analyze (offline, local PDB, report-only)
+      - name: BinSkim analyze (offline, local PDB; fail-closed on scan errors, report-only on findings)
         shell: pwsh
         run: |
-          $rel = "app/target/x86_64-pc-windows-msvc/release"
-          $exe = "$rel/hp-thermal.exe"
+          # ABSOLUTE paths: BinSkim resolves the PDB by the name in the exe's debug directory against
+          # --local-symbol-directories, and a relative dir yields E_PDB_NOT_FOUND (it skips the target).
+          $rel = (Resolve-Path "app/target/x86_64-pc-windows-msvc/release").Path
+          $exe = Join-Path $rel "hp-thermal.exe"
+          Get-ChildItem $rel -Filter *.pdb | ForEach-Object { "pdb present: $($_.Name)" }
           # exe + hp-thermal.pdb are siblings; --local-symbol-directories points BinSkim at them and
-          # the ABSENCE of --sympath keeps it offline (no remote symbol server).
+          # the ABSENCE of --sympath keeps it offline (no remote symbol server). --disable-telemetry
+          # keeps the tool from phoning home (aligns with harden-runner egress control).
           $binskim = "$env:RUNNER_TEMP/binskim/tools/net9.0/win-x64/BinSkim.dll"
+          $sarif = "$env:RUNNER_TEMP/binskim.sarif"
+          # --kind Fail Pass: emit PASS results too, so a clean scan is visibly non-empty — this lets
+          # us distinguish "scanned, all mitigations present" from "did not scan the target at all".
           dotnet "$binskim" analyze "$exe" `
             --local-symbol-directories "$rel" `
             --hashes `
-            --output "$env:RUNNER_TEMP/binskim.sarif"
-          # REPORT-ONLY for the first cut: surface findings via the SARIF artifact, do not fail the
-          # job on them. $LASTEXITCODE is echoed so a BinSkim *crash* (vs. a mere finding) is still
-          # visible in the log; `exit 0` forces report-only regardless of findings.
-          "binskim exit code: $LASTEXITCODE"
+            --disable-telemetry `
+            --kind Fail Pass `
+            --output "$sarif"
+          $code = $LASTEXITCODE
+
+          # FAIL-CLOSED: a scan that did not actually evaluate the target is NOT a success condition.
+          # "Report-only" applies to FINDINGS, never to "the tool couldn't run" (0 results + a PDB-load
+          # error is a *couldn't-run*, exactly what we must NOT green-wash). Parse the SARIF and require
+          # overall success, no error-level notifications (e.g. ERR997 PDB-load), and >=1 Pass/Fail
+          # result (proof a target was evaluated).
+          if (-not (Test-Path $sarif)) { Write-Error "BinSkim produced no SARIF (fail-closed)."; exit 1 }
+          $o = Get-Content $sarif -Raw | ConvertFrom-Json
+          $inv = $o.runs[0].invocations[0]
+          $results = @($o.runs[0].results)
+          $errNotes = @(@($inv.toolConfigurationNotifications) + @($inv.toolExecutionNotifications)) |
+            Where-Object { $_.level -eq 'error' }
+          $passN = @($results | Where-Object { $_.kind -eq 'pass' }).Count
+          $failN = @($results | Where-Object { $_.kind -eq 'fail' }).Count
+          "binskim: exit=$code executionSuccessful=$($inv.executionSuccessful) pass=$passN fail=$failN errNotifications=$($errNotes.Count)"
+          foreach ($n in $errNotes) { "::error::BinSkim could not scan: $($n.descriptor.id): $($n.message.text)" }
+          if ((-not $inv.executionSuccessful) -or ($errNotes.Count -gt 0) -or (($passN + $failN) -eq 0)) {
+            Write-Error "BinSkim did not successfully evaluate the target (fail-closed). See the SARIF artifact."
+            exit 1
+          }
+          # Report-only on hardening FINDINGS for the baseline: surface them, don't block yet. A
+          # follow-up flips these to gating once the baseline is reviewed.
+          foreach ($r in @($results | Where-Object { $_.kind -eq 'fail' })) {
+            "::warning::BinSkim finding $($r.ruleId): $($r.message.text)"
+          }
           exit 0
 
       - name: Upload SARIF (inert artifact; consumed by sarif-collect)
