@@ -175,6 +175,25 @@ pub fn report_json(hw: &HwInfo, tier: Tier, build: &str) -> String {
     )
 }
 
+/// Version+build provenance string ("0.3.1+140.abc") — chains a report to the exact build.
+fn build_id() -> String {
+    format!("{}+{}", env!("CARGO_PKG_VERSION"), env!("BUILD_ID"))
+}
+
+/// End-to-end hardware report: read identity, run the ladder over the real service pipe, format.
+/// The SINGLE entry both `--hwinfo` and the tray dialog call, so their output is identical by
+/// construction — no near-duplicate read/tier/format glue on either side (#149).
+pub fn hardware_report() -> String {
+    let transact = |cmd, payload| crate::pipe::client_transact(cmd, payload);
+    report(&HwInfo::read(), tier(&transact), &build_id())
+}
+
+/// Machine-readable variant of [`hardware_report`] (`--hwinfo --json`).
+pub fn hardware_report_json() -> String {
+    let transact = |cmd, payload| crate::pipe::client_transact(cmd, payload);
+    report_json(&HwInfo::read(), tier(&transact), &build_id())
+}
+
 /// Minimal JSON string escaper (quote + backslash + control chars) — enough for SMBIOS text.
 fn json_escape(s: &str) -> String {
     let mut out = String::with_capacity(s.len());

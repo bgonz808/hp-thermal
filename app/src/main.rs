@@ -453,14 +453,9 @@ fn print_help() {
 /// (only proven CONTROL is submittable); the consent is the canonical install/run flow. `--json`
 /// emits the machine mapping. Unelevated, risk class of `--version` (#149).
 fn cmd_hwinfo(args: &[String]) {
-    let hw = hwinfo::HwInfo::read();
-    let transact = |cmd, payload| pipe::client_transact(cmd, payload);
-    let tier = capability::tier(&transact);
-    // Provenance telltale: chains a submission to the exact build that proved the hardware.
-    let build = format!("{VERSION}+{BUILD_ID}");
     if args.iter().any(|a| a == "--json") {
-        print!("{}", capability::report_json(&hw, tier, &build));
+        print!("{}", capability::hardware_report_json());
     } else {
-        print!("{}", capability::report(&hw, tier, &build));
+        print!("{}", capability::hardware_report());
     }
 }
