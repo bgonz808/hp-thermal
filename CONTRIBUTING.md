@@ -41,7 +41,17 @@ checks go green before it merges.
 
 ## Expanding hardware coverage
 
-Especially welcome. If you run an HP model other than the tested one, the planned
-**`hp-thermal export-info`** command (and a matching tray menu item) will export a
-hardware/capability report you can attach to an issue, helping map which models this
-interface actually supports.
+Especially welcome. `KNOWN_GOOD` (in `consent.rs`) lists hardware where thermal control is
+**confirmed working** — not just look-alike. To add yours:
+
+1. Install and run the tool on your HP machine (the canonical consent flow).
+2. Run `hp-thermal --hwinfo`. It runs the capability ladder — a thermal **read**, then a
+   minimally-invasive **write** that nudges the mode one step and immediately restores it — to
+   prove the tool actually *controls* your hardware, not just that the interface answers.
+3. If it reports **`VERIFIED`**, open an issue titled `hardware: <model>` and paste the
+   `KNOWN_GOOD line` plus the `Verified by:` line (which chains your submission to the exact
+   build that proved it). `--hwinfo --json` gives a machine-readable form.
+
+Only `VERIFIED` (write-proven) hardware should be submitted: a fingerprint that only *reads*
+isn't confirmed controllable, and adding it would mislead other users. If `--hwinfo` reports
+`READ-ONLY` or `UNVERIFIED`, please don't submit it.

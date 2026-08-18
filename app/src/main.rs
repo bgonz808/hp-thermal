@@ -9,6 +9,7 @@
 mod app;
 #[cfg(feature = "noise-adapt")]
 mod audio;
+mod capability;
 mod consent;
 mod hwinfo;
 mod install;
@@ -120,6 +121,11 @@ fn main() {
         Some("--version" | "-v" | "-V") => {
             println!("{} {VERSION}+{BUILD_ID} ({BUILD_DATE})", app::BIN_NAME);
         }
+        // Unelevated, risk class of --version; gets the TextOnly profile via classify_role's `_`
+        // arm. Prints the hardware fingerprint + capability tier (runs the same read→write/restore
+        // ladder the tray uses) so only proven-controllable hardware is contributed to KNOWN_GOOD
+        // (#149). `--json` for machine output.
+        Some("--hwinfo" | "--fingerprint") => cmd_hwinfo(&args),
         None => default_run(),
         Some(unknown) => {
             eprintln!("Unknown argument: {unknown}");
@@ -436,6 +442,25 @@ fn print_help() {
     println!("  {bin} uninstall    Stop and remove the background service");
     println!("  {bin} start        Start the service");
     println!("  {bin} stop         Stop the service");
+    println!("  {bin} --hwinfo     Print hardware fingerprint + prove control (to contribute)");
+    println!("  {bin}                 add --json for machine output");
     println!("  {bin} --help       Show this help");
     println!("  {bin} --version    Show version");
+}
+
+/// `--hwinfo`: print the hardware fingerprint + capability tier so a user can contribute
+/// validated hardware to `KNOWN_GOOD`. Runs the same read→write/restore ladder the tray uses
+/// (only proven CONTROL is submittable); the consent is the canonical install/run flow. `--json`
+/// emits the machine mapping. Unelevated, risk class of `--version` (#149).
+fn cmd_hwinfo(args: &[String]) {
+    let hw = hwinfo::HwInfo::read();
+    let transact = |cmd, payload| pipe::client_transact(cmd, payload);
+    let tier = capability::tier(&transact);
+    // Provenance telltale: chains a submission to the exact build that proved the hardware.
+    let build = format!("{VERSION}+{BUILD_ID}");
+    if args.iter().any(|a| a == "--json") {
+        print!("{}", capability::report_json(&hw, tier, &build));
+    } else {
+        print!("{}", capability::report(&hw, tier, &build));
+    }
 }
