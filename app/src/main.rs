@@ -65,28 +65,12 @@ fn main() {
         return;
     }
 
-    // Harden every role (tray, service, installer helpers) as early as possible.
-    win_harden::apply();
+    // Harden every role as early as possible, per its declared mitigation profile (#157).
+    win_harden::harden_for_role(classify_role(&args));
 
     match args.get(1).map(|s| s.as_str()) {
-        Some("--service") => {
-            // Crown-jewel hardening: the SYSTEM service loads only MS-signed
-            // WMI/COM DLLs, so lock it to Microsoft-signed images only (blocks all
-            // non-MS injection/planting). Not applied to the tray (nvml + GUI
-            // third-party injection). Set before WMI/COM pulls in its DLLs.
-            win_harden::enforce_ms_signed_only();
-            // The service spawns no child processes; forbid it at the OS level so even
-            // injected code cannot shell out (LOLBin/proxy exfil). Service-only (#47).
-            win_harden::prohibit_child_processes();
-            // Headless service has no GUI — cut off the win32k syscall surface (a major
-            // kernel LPE target). Service-only; live-validated. (#48)
-            win_harden::disallow_win32k_syscalls();
-            // Strongest anti-shellcode mitigation: forbid dynamic/executable-memory codegen
-            // (ProhibitDynamicCode). Validated audit-first (a clean live run) then enforced.
-            // Service-only; live-validated. (#24)
-            win_harden::prohibit_dynamic_code();
-            service::run();
-        }
+        // Full strong tier (CIG + no-child + no-win32k + ACG) applied by harden_for_role (#157).
+        Some("--service") => service::run(),
         Some("install" | "--install") => {
             // HP gate first (never elevate on non-HP). Then split update vs fresh
             // install. The onboarding dialog (fresh install only) runs HERE, in the
@@ -119,21 +103,11 @@ fn main() {
         // `--install-svc [--startup] [--start-menu] [--desktop]` carries the onboarding
         // choices as readable flags. from_args presence-scans the WHOLE argv (the exe
         // path and `--install-svc` can't match a flag), so there's no positional index
-        // to drift; unknown/extra args are ignored.
-        //
-        // CIG here too: the elevated install/update child may run from a user-writable
-        // dir (e.g. Downloads) on first install, so lock it to Microsoft-signed images
-        // to block DLL planting/injection into the admin process. Safe because it loads
-        // only MS-signed system DLLs — nvml (NVIDIA, non-MS) is tray-only, never loaded
-        // on this path. Set before install_service pulls in shell/COM for shortcuts.
-        Some("--install-svc") => {
-            win_harden::enforce_ms_signed_only();
-            install::install_service(onboarding::Choices::from_args(&args));
-        }
-        Some("--update-svc") => {
-            win_harden::enforce_ms_signed_only();
-            install::update_service();
-        }
+        // to drift; unknown/extra args are ignored. CIG is applied by harden_for_role
+        // (Role::ElevatedSetup, #157): these children may first-run from a user-writable
+        // dir (Downloads), where MS-signed-only defeats DLL planting into the admin process.
+        Some("--install-svc") => install::install_service(onboarding::Choices::from_args(&args)),
+        Some("--update-svc") => install::update_service(),
         Some("--stop-svc") => install::stop_service(),
         Some("--start-svc") => install::start_service(),
         Some("stop" | "--stop") => guarded_setup(install::stop),
@@ -173,6 +147,32 @@ fn guarded_setup(op: impl FnOnce()) {
         return;
     };
     op();
+}
+
+/// Resolve argv to a hardening [`Role`] (#157). Unrecognized argv falls to `TextOnly` (the
+/// same no-window path `print_help` takes), so a NEW option a dev forgets to classify runs
+/// under near-max locks and FAILS LOUD if it needs a relaxation — never silently under-hardened.
+fn classify_role(args: &[String]) -> win_harden::Role {
+    use win_harden::Role;
+    match args.get(1).map(|s| s.as_str()) {
+        Some("--service") => Role::Service,
+        None => Role::Tray,
+        Some("--install-svc" | "--update-svc") => Role::ElevatedSetup,
+        Some(
+            "install"
+            | "--install"
+            | "stop"
+            | "--stop"
+            | "start"
+            | "--start"
+            | "uninstall"
+            | "--uninstall"
+            | "--stop-svc"
+            | "--start-svc"
+            | "--preview-onboarding",
+        ) => Role::Launcher,
+        _ => Role::TextOnly,
+    }
 }
 
 fn require_hp() -> Option<hwinfo::HwInfo> {

@@ -174,12 +174,12 @@ unsafe fn run_inner() {
     // is one UAC away from High — so shrink what injected code could leverage. Best-effort.
     strip_unneeded_privileges();
 
-    // #86: the tray now spawns nothing (openers removed; a version mismatch is exit-only, not
-    // a self-spawn), so forbid child creation at the OS level — injected code in this
-    // weakly-mitigated, third-party-DLL-loading role then can't shell out (LOLBin/proxy
-    // exfil). This is the strongest mitigation the tray CAN take: it needs win32k and loads
-    // non-MS DLLs (nvml), so the service's signed-only / win32k-disable / dynamic-code locks
-    // don't apply here.
+    // No-child is deferred to HERE, not applied at dispatch by harden_for_role (Role::Tray, #157):
+    // the no-arg role first acts as a bootstrap installer/launcher (default_run spawns the elevated
+    // UAC child on first-run / repair / service-start), and those branches `return` before reaching
+    // this point — so the lock lands only once we're committed to just running the tray. #86: from
+    // here on the tray spawns nothing, so no-child costs it nothing. (CIG/win32k/ACG stay carved for
+    // this role — nvml + GUI — per the profile table.)
     crate::win_harden::prohibit_child_processes();
 
     // Enable dark/light mode for popup menus (must be before any window creation)
