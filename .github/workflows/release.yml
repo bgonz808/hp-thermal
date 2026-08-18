@@ -196,10 +196,10 @@ jobs:
         run: |
           New-Item -ItemType Directory dist | Out-Null
           Copy-Item app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe dist/hp-thermal.exe
-          # Debug-symbol sidecar: the linker writes hp_thermal.pdb (Rust underscores the
-          # crate name); rename to the exe basename, which is also the name embedded in the
-          # exe's debug directory (build.rs sets /PDBALTPATH from CARGO_PKG_NAME).
-          Copy-Item app/target/x86_64-pc-windows-msvc/release/hp_thermal.pdb dist/hp-thermal.pdb
+          # Debug-symbol sidecar: build.rs names the pdb hp-thermal.pdb AT THE SOURCE (/PDB +
+          # /PDBALTPATH from CARGO_PKG_NAME), matching the exe basename embedded in its debug
+          # directory — so this is a straight copy, no rename.
+          Copy-Item app/target/x86_64-pc-windows-msvc/release/hp-thermal.pdb dist/hp-thermal.pdb
           Copy-Item app/*.cdx.json dist/hp-thermal.cdx.json
           $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
           $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
