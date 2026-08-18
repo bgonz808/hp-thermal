@@ -15,6 +15,18 @@ use crate::protocol::*;
 
 const SIGN: [u8; 4] = [0x53, 0x45, 0x43, 0x55]; // "SECU"
 
+// --- WMI operation surface (#158): the SSoT allowlist of the HP-BIOS WMI selectors this service
+// invokes. Centralized so the operation surface is a single visible block and any ADDITION is a
+// reviewable one-line diff. This DOCUMENTS the allowlist; it does NOT enforce taint — that no
+// caller/pipe-supplied value ever reaches a WMI selector is a dataflow property, enforced in #165
+// (CodeQL/cackle). The read-only WQL SELECT surface (EsifDeviceInformation,
+// MSAcpi_ThermalZoneTemperature, the hpqBIntM enumeration) and the brightness methods are left
+// inline. Names are provider-defined (HP hpqBIOS / WMI) and must match the firmware contract.
+const WMI_NAMESPACE: &str = "root\\wmi";
+const WMI_CLASS_HPQ_INTM: &str = "hpqBIntM"; // HP BIOS provider instance class
+const WMI_CLASS_HPQ_DATAIN: &str = "hpqBDataIn"; // HP BIOS input-parameter class
+const WMI_METHOD_HPQ_BIOS: &str = "hpqBIOSInt4"; // HP BIOS 4-byte call
+
 pub struct WmiConnection {
     services: IWbemServices,
     obj_path: BSTR,
@@ -85,7 +97,7 @@ impl WmiConnection {
         let locator: IWbemLocator = CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER)?;
 
         let services = locator.ConnectServer(
-            &BSTR::from("root\\wmi"),
+            &BSTR::from(WMI_NAMESPACE),
             &BSTR::new(),
             &BSTR::new(),
             &BSTR::new(),
@@ -373,7 +385,8 @@ impl WmiConnection {
         command_type: u32,
         data: &[u8; 4],
     ) -> Result<(u32, [u8; 4]), u8> {
-        let (rc, bytes) = self.bios_call_method("hpqBIOSInt4", command, command_type, data)?;
+        let (rc, bytes) =
+            self.bios_call_method(WMI_METHOD_HPQ_BIOS, command, command_type, data)?;
         let mut result = [0u8; 4];
         let len = bytes.len().min(4);
         result[..len].copy_from_slice(&bytes[..len]);
@@ -406,7 +419,7 @@ impl WmiConnection {
         let mut in_data_class = None;
         self.services
             .GetObject(
-                &BSTR::from("hpqBDataIn"),
+                &BSTR::from(WMI_CLASS_HPQ_DATAIN),
                 Default::default(),
                 None,
                 Some(&mut in_data_class),
@@ -446,7 +459,7 @@ impl WmiConnection {
         let mut class_def = None;
         self.services
             .GetObject(
-                &BSTR::from("hpqBIntM"),
+                &BSTR::from(WMI_CLASS_HPQ_INTM),
                 Default::default(),
                 None,
                 Some(&mut class_def),
