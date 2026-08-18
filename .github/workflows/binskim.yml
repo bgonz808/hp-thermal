@@ -92,8 +92,8 @@ jobs:
           $binskim = "$env:RUNNER_TEMP/binskim/tools/net9.0/win-x64/BinSkim.dll"
           dotnet "$binskim" analyze "$exe" `
             --local-symbol-directories "$rel" `
-            --output "$env:RUNNER_TEMP/binskim.sarif" `
-            --pretty-print
+            --hashes `
+            --output "$env:RUNNER_TEMP/binskim.sarif"
           # REPORT-ONLY for the first cut: surface findings via the SARIF artifact, do not fail the
           # job on them. $LASTEXITCODE is echoed so a BinSkim *crash* (vs. a mere finding) is still
           # visible in the log; `exit 0` forces report-only regardless of findings.
