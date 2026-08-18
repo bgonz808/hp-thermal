@@ -1,0 +1,89 @@
+name: BinSkim scan
+description: >-
+  Fetch a digest-pinned BinSkim, scan a Windows PE OFFLINE against its local PDB, and enforce a
+  fail-closed result: the tool MUST actually evaluate the target (0 results + a PDB-load error is a
+  couldn't-run, never a pass). Shared by the PR-time early-warning (binskim.yml, report-only) and the
+  release verify-chain (release.yml, gating) so the scan logic lives in ONE place (#160).
+inputs:
+  exe:
+    description: Path to the Windows PE to analyze.
+    required: true
+  symbol-dir:
+    description: Directory holding the matching PDB (searched offline; no remote symbol server).
+    required: true
+  sarif-out:
+    description: Path to write the SARIF result to (an inert artifact for sarif-collect to upload).
+    required: true
+  gate-on-findings:
+    description: "true = FAIL on any BinSkim finding (fail>0); false = report-only (findings as warnings). Fail-closed on couldn't-scan applies regardless."
+    default: "false"
+runs:
+  using: composite
+  steps:
+    # BinSkim ships only as a NuGet LIBRARY. Fetch the versioned nupkg and DIGEST-verify it (a
+    # published nupkg is immutable per version, so this sha256 is a content pin) before use.
+    - name: Fetch + verify BinSkim (pinned nupkg by sha256)
+      shell: pwsh
+      env:
+        BINSKIM_VERSION: "4.4.9.11"
+        BINSKIM_SHA256: "69678989cbc273b5b50fcf98fb0fd978e1e35a3f844acb24254b31f0ce90c447"
+      run: |
+        $url = "https://api.nuget.org/v3-flatcontainer/microsoft.codeanalysis.binskim/$env:BINSKIM_VERSION/microsoft.codeanalysis.binskim.$env:BINSKIM_VERSION.nupkg"
+        $pkg = "$env:RUNNER_TEMP/binskim.zip"   # .zip so Expand-Archive accepts the nupkg
+        Invoke-WebRequest -Uri $url -OutFile $pkg
+        $got = (Get-FileHash $pkg -Algorithm SHA256).Hash.ToLower()
+        if ($got -ne $env:BINSKIM_SHA256) { throw "BinSkim nupkg sha256 mismatch: got $got, expected $env:BINSKIM_SHA256" }
+        Expand-Archive -Path $pkg -DestinationPath "$env:RUNNER_TEMP/binskim" -Force
+
+    - name: BinSkim analyze (offline, local PDB; fail-closed)
+      shell: pwsh
+      env:
+        BS_EXE: ${{ inputs.exe }}
+        BS_SYMDIR: ${{ inputs.symbol-dir }}
+        BS_SARIF: ${{ inputs.sarif-out }}
+        BS_GATE: ${{ inputs.gate-on-findings }}
+      run: |
+        $rel = (Resolve-Path $env:BS_SYMDIR).Path
+        $exe = (Resolve-Path $env:BS_EXE).Path
+        Get-ChildItem $rel -Filter *.pdb | ForEach-Object { "pdb present: $($_.Name)" }
+        $binskim = "$env:RUNNER_TEMP/binskim/tools/net9.0/win-x64/BinSkim.dll"
+        # --kind Fail Pass Review Open NotApplicable: full rule disposition — Pass proves the scan
+        # ran, NotApplicable records why a rule didn't fire (no silent gaps), Review/Open are
+        # tool-punted results a human must not miss. No --sympath keeps it offline.
+        dotnet "$binskim" analyze "$exe" `
+          --local-symbol-directories "$rel" `
+          --hashes `
+          --kind Fail Pass Review Open NotApplicable `
+          --output "$env:BS_SARIF"
+        $code = $LASTEXITCODE
+
+        # FAIL-CLOSED (always, regardless of gate): a scan that did not evaluate the target is NOT a
+        # success. Require executionSuccessful, no error-level notifications, and >=1 result of ANY kind.
+        if (-not (Test-Path $env:BS_SARIF)) { Write-Error "BinSkim produced no SARIF (fail-closed)."; exit 1 }
+        $o = Get-Content $env:BS_SARIF -Raw | ConvertFrom-Json
+        $inv = $o.runs[0].invocations[0]
+        $results = @($o.runs[0].results)
+        $errNotes = @(@($inv.toolConfigurationNotifications) + @($inv.toolExecutionNotifications)) |
+          Where-Object { $_.level -eq 'error' }
+        $passN = @($results | Where-Object { $_.kind -eq 'pass' }).Count
+        $failN = @($results | Where-Object { $_.kind -eq 'fail' }).Count
+        $reviewN = @($results | Where-Object { $_.kind -eq 'review' }).Count
+        $openN = @($results | Where-Object { $_.kind -eq 'open' }).Count
+        $naN = @($results | Where-Object { $_.kind -eq 'notApplicable' }).Count
+        "binskim: exit=$code executionSuccessful=$($inv.executionSuccessful) pass=$passN fail=$failN review=$reviewN open=$openN na=$naN errNotifications=$($errNotes.Count)"
+        foreach ($n in $errNotes) { "::error::BinSkim could not scan: $($n.descriptor.id): $($n.message.text)" }
+        if ((-not $inv.executionSuccessful) -or ($errNotes.Count -gt 0) -or ($results.Count -eq 0)) {
+          Write-Error "BinSkim did not successfully evaluate the target (fail-closed). See the SARIF artifact."
+          exit 1
+        }
+        # Surface findings + Review/Open (tool punted -> needs a human) as warnings.
+        foreach ($r in @($results | Where-Object { $_.kind -in @('fail','review','open') })) {
+          "::warning::BinSkim $($r.kind) $($r.ruleId): $($r.message.text)"
+        }
+        # GATING (authoritative/release scan): any real finding fails the job. The PR early-warning
+        # passes gate=false (report-only). Fail-closed above already ran unconditionally.
+        if (($env:BS_GATE -eq 'true') -and ($failN -gt 0)) {
+          Write-Error "BinSkim reported $failN finding(s) with gating enabled."
+          exit 1
+        }
+        exit 0
