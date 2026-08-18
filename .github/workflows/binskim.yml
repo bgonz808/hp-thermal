@@ -96,20 +96,22 @@ jobs:
           # and that flag errors "bad format" on this version.)
           $binskim = "$env:RUNNER_TEMP/binskim/tools/net9.0/win-x64/BinSkim.dll"
           $sarif = "$env:RUNNER_TEMP/binskim.sarif"
-          # --kind Fail Pass: emit PASS results too, so a clean scan is visibly non-empty — this lets
-          # us distinguish "scanned, all mitigations present" from "did not scan the target at all".
+          # --kind Fail Pass Review Open NotApplicable: emit EVERY rule's disposition, not just
+          # failures. Pass makes a clean scan visibly non-empty (proof it ran); NotApplicable records
+          # WHY a rule didn't fire (no silent gaps); Review/Open are results the tool couldn't
+          # auto-decide and flagged for a human — we must not drop those.
           dotnet "$binskim" analyze "$exe" `
             --local-symbol-directories "$rel" `
             --hashes `
-            --kind Fail Pass `
+            --kind Fail Pass Review Open NotApplicable `
             --output "$sarif"
           $code = $LASTEXITCODE
 
           # FAIL-CLOSED: a scan that did not actually evaluate the target is NOT a success condition.
           # "Report-only" applies to FINDINGS, never to "the tool couldn't run" (0 results + a PDB-load
-          # error is a *couldn't-run*, exactly what we must NOT green-wash). Parse the SARIF and require
-          # overall success, no error-level notifications (e.g. ERR997 PDB-load), and >=1 Pass/Fail
-          # result (proof a target was evaluated).
+          # error is a *couldn't-run*, exactly what we must NOT green-wash). Require overall success,
+          # no error-level notifications (e.g. ERR997 PDB-load), and >=1 result of ANY kind (proof a
+          # target was actually evaluated).
           if (-not (Test-Path $sarif)) { Write-Error "BinSkim produced no SARIF (fail-closed)."; exit 1 }
           $o = Get-Content $sarif -Raw | ConvertFrom-Json
           $inv = $o.runs[0].invocations[0]
@@ -118,16 +120,19 @@ jobs:
             Where-Object { $_.level -eq 'error' }
           $passN = @($results | Where-Object { $_.kind -eq 'pass' }).Count
           $failN = @($results | Where-Object { $_.kind -eq 'fail' }).Count
-          "binskim: exit=$code executionSuccessful=$($inv.executionSuccessful) pass=$passN fail=$failN errNotifications=$($errNotes.Count)"
+          $reviewN = @($results | Where-Object { $_.kind -eq 'review' }).Count
+          $openN = @($results | Where-Object { $_.kind -eq 'open' }).Count
+          $naN = @($results | Where-Object { $_.kind -eq 'notApplicable' }).Count
+          "binskim: exit=$code executionSuccessful=$($inv.executionSuccessful) pass=$passN fail=$failN review=$reviewN open=$openN na=$naN errNotifications=$($errNotes.Count)"
           foreach ($n in $errNotes) { "::error::BinSkim could not scan: $($n.descriptor.id): $($n.message.text)" }
-          if ((-not $inv.executionSuccessful) -or ($errNotes.Count -gt 0) -or (($passN + $failN) -eq 0)) {
+          if ((-not $inv.executionSuccessful) -or ($errNotes.Count -gt 0) -or ($results.Count -eq 0)) {
             Write-Error "BinSkim did not successfully evaluate the target (fail-closed). See the SARIF artifact."
             exit 1
           }
-          # Report-only on hardening FINDINGS for the baseline: surface them, don't block yet. A
-          # follow-up flips these to gating once the baseline is reviewed.
-          foreach ($r in @($results | Where-Object { $_.kind -eq 'fail' })) {
-            "::warning::BinSkim finding $($r.ruleId): $($r.message.text)"
+          # Report-only on FINDINGS + surface Review/Open (tool punted → needs a human) for the
+          # baseline; don't block yet. A follow-up flips these to gating once the baseline is reviewed.
+          foreach ($r in @($results | Where-Object { $_.kind -in @('fail','review','open') })) {
+            "::warning::BinSkim $($r.kind) $($r.ruleId): $($r.message.text)"
           }
           exit 0
 
