@@ -278,6 +278,64 @@ unsafe fn token_privilege_luids(token: HANDLE) -> Vec<LUID> {
     }
 }
 
+/// Privileges each ROLE's token is right-sized to KEEP — the single source of truth consumed by
+/// [`strip_token_privileges_except`] at the service (`service.rs`) and tray (`tray.rs`) call sites.
+/// Everything NOT listed is permanently removed at runtime. These sets are load-bearing
+/// least-privilege policy (#35); a regression that WIDENS either (e.g. re-adding
+/// `SeDebugPrivilege`) or renames an entry is caught by `keep_set_tests` below — making the
+/// by-convention invariant durable in CI (#158/#28).
+///
+/// Service keeps: SeChangeNotify (path/file traversal), plus SeCreateGlobal + SeImpersonate — the
+/// DCOM/WMI path to the HP BIOS provider needs them; SeImpersonate is a deliberate residual kept
+/// for latency (see `install.rs` SERVICE_REQUIRED_PRIVILEGES / #66).
+pub const SERVICE_KEEP_PRIVILEGES: &[PCWSTR] = &[
+    windows::core::w!("SeChangeNotifyPrivilege"),
+    windows::core::w!("SeCreateGlobalPrivilege"),
+    windows::core::w!("SeImpersonatePrivilege"),
+];
+
+/// Tray keeps: SeChangeNotify + SeShutdown (Fn+F12 sleep, enabled on demand by
+/// `enable_shutdown_privilege`).
+pub const TRAY_KEEP_PRIVILEGES: &[PCWSTR] = &[
+    windows::core::w!("SeChangeNotifyPrivilege"),
+    windows::core::w!("SeShutdownPrivilege"),
+];
+
+#[cfg(test)]
+mod keep_set_tests {
+    use super::{SERVICE_KEEP_PRIVILEGES, TRAY_KEEP_PRIVILEGES};
+    use windows::core::PCWSTR;
+
+    fn names(set: &[PCWSTR]) -> Vec<String> {
+        // SAFETY: every entry is a `w!()` NUL-terminated UTF-16 string literal with 'static storage.
+        set.iter()
+            .map(|p| unsafe { p.to_string() }.expect("keep-set entry is valid UTF-16"))
+            .collect()
+    }
+
+    // Least-privilege is load-bearing: these keep-sets must NOT silently widen. Adding a privilege
+    // (e.g. SeDebugPrivilege) or renaming an entry fails here before it can ship (#158/#28).
+    #[test]
+    fn service_keep_set_is_exactly_minimal() {
+        assert_eq!(
+            names(SERVICE_KEEP_PRIVILEGES),
+            [
+                "SeChangeNotifyPrivilege",
+                "SeCreateGlobalPrivilege",
+                "SeImpersonatePrivilege",
+            ]
+        );
+    }
+
+    #[test]
+    fn tray_keep_set_is_exactly_change_notify_and_shutdown() {
+        assert_eq!(
+            names(TRAY_KEEP_PRIVILEGES),
+            ["SeChangeNotifyPrivilege", "SeShutdownPrivilege"]
+        );
+    }
+}
+
 /// Permanently REMOVE (`SE_PRIVILEGE_REMOVED`) every privilege in THIS process's token whose
 /// name is not in `keep`. Returns `(removed, extras_remaining)` — `extras_remaining` counts
 /// non-kept privileges still present afterward (should be 0; a non-zero value is an anomaly a

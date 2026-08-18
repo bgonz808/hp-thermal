@@ -81,12 +81,9 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     // (a broken/tampered install running over-privileged) — refuse, consistent with the
     // fail-closed footing checks above.
     {
-        let keep = [
-            w!("SeChangeNotifyPrivilege"),
-            w!("SeCreateGlobalPrivilege"),
-            w!("SeImpersonatePrivilege"),
-        ];
-        let (removed, extras) = crate::win_harden::strip_token_privileges_except(&keep);
+        let (removed, extras) = crate::win_harden::strip_token_privileges_except(
+            crate::win_harden::SERVICE_KEEP_PRIVILEGES,
+        );
         log::write(&format!(
             "token self-assert: removed {removed} extra privilege(s), {extras} beyond-set remain"
         ));
