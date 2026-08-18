@@ -62,11 +62,25 @@ jobs:
         working-directory: app
         run: cargo build --release
 
-      # Version-pinned. NuGet has no content-digest pin like our cargo git-revs; the containment
-      # (read-only job, no secrets, no write scope, egress-audited, own-artifact-only input) is what
+      # BinSkim ships only as a NuGet LIBRARY (not a dotnet tool), so fetch the versioned nupkg and
+      # DIGEST-verify it before use. A published nupkg is immutable per version, so this sha256 is a
+      # content pin — stronger than a bare version string, and in the spirit of our cargo git-revs.
+      # Containment (read-only job, no secrets/write scope, egress-audited, own-artifact-only input)
       # bounds the .NET blast radius, per #160.
-      - name: Install BinSkim (pinned 4.4.9.11)
-        run: dotnet tool install Microsoft.CodeAnalysis.BinSkim --version 4.4.9.11 --tool-path "${{ runner.temp }}/binskim"
+      - name: Fetch + verify BinSkim (pinned nupkg by sha256)
+        shell: pwsh
+        env:
+          BINSKIM_VERSION: "4.4.9.11"
+          BINSKIM_SHA256: "69678989cbc273b5b50fcf98fb0fd978e1e35a3f844acb24254b31f0ce90c447"
+        run: |
+          $url = "https://api.nuget.org/v3-flatcontainer/microsoft.codeanalysis.binskim/$env:BINSKIM_VERSION/microsoft.codeanalysis.binskim.$env:BINSKIM_VERSION.nupkg"
+          $pkg = "$env:RUNNER_TEMP/binskim.zip"   # .zip extension so Expand-Archive accepts the nupkg
+          Invoke-WebRequest -Uri $url -OutFile $pkg
+          $got = (Get-FileHash $pkg -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $env:BINSKIM_SHA256) {
+            throw "BinSkim nupkg sha256 mismatch: got $got, expected $env:BINSKIM_SHA256"
+          }
+          Expand-Archive -Path $pkg -DestinationPath "$env:RUNNER_TEMP/binskim" -Force
 
       - name: BinSkim analyze (offline, local PDB, report-only)
         shell: pwsh
@@ -75,9 +89,10 @@ jobs:
           $exe = "$rel/hp-thermal.exe"
           # exe + hp-thermal.pdb are siblings; --local-symbol-directories points BinSkim at them and
           # the ABSENCE of --sympath keeps it offline (no remote symbol server).
-          & "${{ runner.temp }}/binskim/binskim.exe" analyze "$exe" `
+          $binskim = "$env:RUNNER_TEMP/binskim/tools/net9.0/win-x64/BinSkim.dll"
+          dotnet "$binskim" analyze "$exe" `
             --local-symbol-directories "$rel" `
-            --output "${{ runner.temp }}/binskim.sarif" `
+            --output "$env:RUNNER_TEMP/binskim.sarif" `
             --pretty-print
           # REPORT-ONLY for the first cut: surface findings via the SARIF artifact, do not fail the
           # job on them. $LASTEXITCODE is echoed so a BinSkim *crash* (vs. a mere finding) is still
