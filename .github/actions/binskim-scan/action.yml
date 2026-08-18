@@ -53,6 +53,7 @@ runs:
         dotnet "$binskim" analyze "$exe" `
           --local-symbol-directories "$rel" `
           --hashes `
+          --insert VersionControlDetails `
           --kind Fail Pass Review Open NotApplicable `
           --output "$env:BS_SARIF"
         $code = $LASTEXITCODE
