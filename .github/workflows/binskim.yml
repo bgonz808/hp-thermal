@@ -91,8 +91,9 @@ jobs:
           $exe = Join-Path $rel "hp-thermal.exe"
           Get-ChildItem $rel -Filter *.pdb | ForEach-Object { "pdb present: $($_.Name)" }
           # exe + hp-thermal.pdb are siblings; --local-symbol-directories points BinSkim at them and
-          # the ABSENCE of --sympath keeps it offline (no remote symbol server). --disable-telemetry
-          # keeps the tool from phoning home (aligns with harden-runner egress control).
+          # the ABSENCE of --sympath keeps it offline (no remote symbol server). (BinSkim telemetry
+          # is opt-in via an AppInsights key, off by default, so no --disable-telemetry is needed —
+          # and that flag errors "bad format" on this version.)
           $binskim = "$env:RUNNER_TEMP/binskim/tools/net9.0/win-x64/BinSkim.dll"
           $sarif = "$env:RUNNER_TEMP/binskim.sarif"
           # --kind Fail Pass: emit PASS results too, so a clean scan is visibly non-empty — this lets
@@ -100,7 +101,6 @@ jobs:
           dotnet "$binskim" analyze "$exe" `
             --local-symbol-directories "$rel" `
             --hashes `
-            --disable-telemetry `
             --kind Fail Pass `
             --output "$sarif"
           $code = $LASTEXITCODE
