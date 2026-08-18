@@ -137,7 +137,7 @@ jobs:
           # Parse the committed anchor (name repo rev sha256). Process substitution (NOT a pipe)
           # keeps the loop in THIS shell, so `exit 1` aborts the step — a `| while` subshell would
           # swallow the fail-closed and silently continue. Fail-open here would defeat the point.
-          while read -r name repo rev sha; do
+          while read -r name _repo _rev sha; do
             [ -n "${name:-}" ] || continue
             if [ "$sha" = "$zero" ] || [ -z "${sha:-}" ]; then
               echo "::error::tools/TOOLS.lock digest for '$name' is unset (all-zero). Run build-tools.yml and commit the printed digest before the prebuilt flow can be used." >&2
