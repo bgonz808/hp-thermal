@@ -104,50 +104,59 @@ jobs:
         shell: bash
         run: cargo metadata --locked --format-version 1 > /dev/null
 
-      # Windows MAX_PATH (260) blocks the deep test-snapshot paths inside some tool repos
-      # (cyclonedx-rust-cargo) during `cargo install --git`'s checkout. Enable long paths.
-      # SAFE here: the runner is EPHEMERAL (fresh VM, destroyed after the job), so this
-      # has no lasting/persistent attack surface -- long-path evasion needs a durable
-      # attacker-influenced system, which a throwaway build VM building our pinned source
-      # is not. (Would NOT do this on a workstation/server.)
-      - name: Enable long paths (ephemeral runner)
-        shell: pwsh
-        run: |
-          git config --system core.longpaths true
-          New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
-            -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force | Out-Null
-
-      # Immutable git-rev pins: a maintainer-account compromise can publish a new
-      # crates.io version but cannot rewrite a pinned commit. These BUILD code, which is
-      # why they stay on the read-only, secret-less runner.
-      # #137: `cargo install` uses a fresh temp target dir PER INVOCATION, so the four tools
-      # recompile every shared dependency. Measured: 1192 package-builds, 843 unique => 349
-      # redundant (29%), inside a step costing 984s of a 1296s job. A shared target dir lets
-      # them reuse each other's output.
+      # #138: the four cargo-* build tools are NO LONGER compiled on the release critical path.
+      # They are prebuilt once, out-of-band, by .github/workflows/build-tools.yml (from the same
+      # immutable git-rev pins), published to the `tools` release (a mutable byte store), and
+      # consumed here BY DIGEST. This removes ~76% of release wall-clock (the 984s compile) AND
+      # lifts 1192 build-script executions off the read-only, signed release path entirely — the
+      # #137 CARGO_TARGET_DIR dedup was only an interim win; this is the real fix.
       #
-      # !! CARGO_TARGET_DIR MUST STAY STEP-SCOPED. Do NOT hoist it to job or workflow level. !!
-      # A job-level value is inherited by the xtask step below AND by the product build that
-      # xtask spawns, redirecting the product's artifacts into a directory where 1192 packages'
-      # build scripts have executed -- which is exactly the poisoned-rlib path this scoping
-      # avoids. It would also break the stamp/stage steps, which expect
-      # target/<custom-triple>/release/. Loud failure, but do not rely on that.
+      # CANONICAL VERIFICATION (the load-bearing invariant): integrity is anchored to the sha256
+      # committed + human-reviewed in tools/TOOLS.lock — NOT to the `tools` release, whose assets
+      # are overwritable by anyone who can push a release. Every downloaded binary MUST match its
+      # committed digest or the release ABORTS here, BEFORE the tool is ever executed. An all-zero
+      # digest ("not blessed yet") also hard-fails, so the prebuilt flow can never run against an
+      # unverified anchor. A maintainer-account compromise can overwrite the `tools` asset but
+      # cannot rewrite the git-committed digest without a reviewed commit — so a swapped tool is
+      # caught here, not run.
       #
-      # Ephemeral by construction: runner.temp dies with the VM. Never make this a cache key --
-      # cargo does not verify compiled artifacts (fingerprints are a staleness check over
-      # INPUTS, stored beside the artifact, forgeable from a build script; demonstrated in
-      # #137), so a persistent target dir would be an unanchored trust boundary.
-      #
-      # This does not reduce the arbitrary-code surface -- 1192 build scripts still run here.
-      # #138 removes them from the release path entirely; this is the interim win.
-      - name: Install release tools (git-rev pinned)
+      # Bumping a tool stays a reviewed change: edit its rev in tools/TOOLS.lock -> run
+      # build-tools.yml -> commit the printed digest (see tools/README.md). #145 tracks upstream
+      # drift; adopting a newer rev is deliberate, never automatic.
+      - name: Fetch + verify prebuilt release tools (digest-pinned, fail-closed)
         shell: bash
         env:
-          CARGO_TARGET_DIR: ${{ runner.temp }}/tool-build
+          GH_TOKEN: ${{ github.token }}
+          TOOLS_TAG: tools
         run: |
-          cargo install cargo-deny      --locked --git https://github.com/EmbarkStudios/cargo-deny          --rev 09faadcea2d0d1742492e6872b743d1e4d151a27
-          cargo install cargo-auditable --locked --git https://github.com/rust-secure-code/cargo-auditable  --rev 9dc5ff28ff204b73eae91bd96cde4413fdcb70e0
-          cargo install cargo-audit     --locked --git https://github.com/rustsec/rustsec                   --rev efcde93a237dc51f8c32d84d880bf97b442835c8
-          cargo install cargo-cyclonedx --locked --git https://github.com/CycloneDX/cyclonedx-rust-cargo    --rev e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  # cargo-cyclonedx-0.5.9
+          set -euo pipefail
+          dest="${RUNNER_TEMP}/release-tools"
+          rm -rf "$dest"; mkdir -p "$dest"
+          zero="0000000000000000000000000000000000000000000000000000000000000000"
+          : > "$dest/EXPECTED.sha256"; : > "$dest/NAMES"
+          # Parse the committed anchor (name repo rev sha256). Process substitution (NOT a pipe)
+          # keeps the loop in THIS shell, so `exit 1` aborts the step — a `| while` subshell would
+          # swallow the fail-closed and silently continue. Fail-open here would defeat the point.
+          while read -r name _repo _rev sha; do
+            [ -n "${name:-}" ] || continue
+            if [ "$sha" = "$zero" ] || [ -z "${sha:-}" ]; then
+              echo "::error::tools/TOOLS.lock digest for '$name' is unset (all-zero). Run build-tools.yml and commit the printed digest before the prebuilt flow can be used." >&2
+              exit 1
+            fi
+            printf '%s  %s/%s.exe\n' "$sha" "$dest" "$name" >> "$dest/EXPECTED.sha256"
+            printf '%s\n' "$name" >> "$dest/NAMES"
+          done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock)
+          test -s "$dest/NAMES" || { echo "::error::no tools parsed from tools/TOOLS.lock" >&2; exit 1; }
+          # Pull each asset from the byte store...
+          while read -r name; do
+            gh release download "$TOOLS_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name.exe" --dir "$dest" --clobber
+          done < "$dest/NAMES"
+          # ...and CANONICALLY VERIFY every one against the committed digest. Any mismatch OR
+          # missing file makes `sha256sum -c` exit non-zero -> `set -e` aborts the release here,
+          # before a single tool runs.
+          sha256sum -c "$dest/EXPECTED.sha256"
+          # Only now — post-verification — do the binaries become resolvable as `cargo <sub>`.
+          echo "$dest" >> "$GITHUB_PATH"
 
       # Full tier: fmt/clippy/test + cargo-deny policy + cargo-auditable release build
       # (embeds the dep tree in the binary) + `cargo audit bin` on the artifact + PE
