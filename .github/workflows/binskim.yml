@@ -1,0 +1,94 @@
+name: BinSkim
+
+# PE-hardening SAST (#160), PR-time path-filtered EARLY-WARNING half.
+#
+# This flags a BinSkim-verdict regression when a hardening-relevant INPUT changes. It is
+# explicitly NOT a soundness boundary: exotic source-level changes (#[link_section], inline asm,
+# #[no_stack_protector], banned APIs) can move a verdict WITHOUT touching these paths. The
+# AUTHORITATIVE, content-complete gate is the release verify-chain scan (Option A, added
+# separately), which reads the actual shipped bytes. This filter is the cheap shift-left; Option A
+# is what we rely on.
+#
+# BinSkim is a heavy .NET tool, so it is boxed: read-only job, NO security-events:write (the SARIF
+# is an inert artifact; the separate sarif-collect job uploads it to the Security tab), and the
+# analysis runs OFFLINE — no --sympath / remote symbol server — against our own local PDB. Only the
+# remote symbol server is disabled; the local hp-thermal.pdb still drives the symbol-dependent
+# rules (BA2006/2011/2014/2007), so we lose no coverage vs. an online run of our own binary.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    # Best-effort: run only when an input that can change BinSkim's verdict changes. Kept in sync
+    # with the audited surface — build config, the toolchain pin (drives BA2006 + gates the
+    # unstable mitigation flags), the lockfile (BA2002), and this workflow itself.
+    paths:
+      - "app/.cargo/**"
+      - "app/build.rs"
+      - "app/Cargo.toml"
+      - "app/Cargo.lock"
+      - "app/rust-toolchain.toml"
+      - ".github/workflows/binskim.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  binskim:
+    runs-on: windows-latest
+    permissions:
+      contents: read # NO security-events:write here — SARIF is an inert artifact (sarif-collect uploads it)
+    steps:
+      - name: Harden runner (egress audited)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          # AUDIT for the first cut: log egress so a BLOCK allowlist (rustup + static.rust-lang.org
+          # + crates.io for build-std, NuGet + dotnet feeds for BinSkim) can be reconciled against a
+          # real run — the same methodology the scan job's block allowlist was built with. Tighten
+          # to egress-policy: block once the audit is reconciled.
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain + rust-src
+        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+
+      # Build the SAME hardened binary users get: app/.cargo/config.toml applies the mitigation
+      # rustflags (CFG, stack-protector, crt-static, DEPENDENTLOADFLAG) + build-std, and the
+      # release profile emits the line-tables-only .pdb next to the .exe.
+      - name: Build the hardened release binary
+        working-directory: app
+        run: cargo build --release
+
+      # Version-pinned. NuGet has no content-digest pin like our cargo git-revs; the containment
+      # (read-only job, no secrets, no write scope, egress-audited, own-artifact-only input) is what
+      # bounds the .NET blast radius, per #160.
+      - name: Install BinSkim (pinned 4.4.9.11)
+        run: dotnet tool install Microsoft.CodeAnalysis.BinSkim --version 4.4.9.11 --tool-path "${{ runner.temp }}/binskim"
+
+      - name: BinSkim analyze (offline, local PDB, report-only)
+        shell: pwsh
+        run: |
+          $rel = "app/target/x86_64-pc-windows-msvc/release"
+          $exe = "$rel/hp-thermal.exe"
+          # exe + hp-thermal.pdb are siblings; --local-symbol-directories points BinSkim at them and
+          # the ABSENCE of --sympath keeps it offline (no remote symbol server).
+          & "${{ runner.temp }}/binskim/binskim.exe" analyze "$exe" `
+            --local-symbol-directories "$rel" `
+            --output "${{ runner.temp }}/binskim.sarif" `
+            --pretty-print
+          # REPORT-ONLY for the first cut: surface findings via the SARIF artifact, do not fail the
+          # job on them. $LASTEXITCODE is echoed so a BinSkim *crash* (vs. a mere finding) is still
+          # visible in the log; `exit 0` forces report-only regardless of findings.
+          "binskim exit code: $LASTEXITCODE"
+          exit 0
+
+      - name: Upload SARIF (inert artifact; consumed by sarif-collect)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact v7.0.1
+        with:
+          name: binskim-sarif
+          path: ${{ runner.temp }}/binskim.sarif
+          if-no-files-found: warn
