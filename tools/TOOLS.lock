@@ -16,7 +16,7 @@
 # purpose-built substitute: it opens an issue when an upstream cuts a release newer than `rev`.
 #
 # name             repo                               rev                                       sha256
-cargo-deny         EmbarkStudios/cargo-deny           09faadcea2d0d1742492e6872b743d1e4d151a27  2cef1c4163a0d2a2c3b44aa94802158c90dc9a4696131ce0bc2e2fc5709bb81c
+cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  0000000000000000000000000000000000000000000000000000000000000000
 cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  4c4daef48b475ab62de92caba419fa2bd4975faedcf29392fe57f8012b4620f9
-cargo-audit        rustsec/rustsec                    efcde93a237dc51f8c32d84d880bf97b442835c8  1aa74b805962b66c09712f5e2ff20847aae283d4759789d23f19a055f39d8e73
+cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  0000000000000000000000000000000000000000000000000000000000000000
 cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  daaf927db3dddc3761aa203ff6ba4eae95b626830505aa729d20a208a374a242
