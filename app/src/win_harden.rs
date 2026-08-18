@@ -63,8 +63,138 @@ pub fn apply() {
     disable_extension_points();
     // ProcessDynamicCodePolicy is NOT applied globally: it can break in-process code
     // generators, and this process hosts COM/WMI (service) and WASAPI/COM (tray). It is
-    // enforced on the `--service` role only (prohibit_dynamic_code, #24), validated
+    // enforced per role by `harden_for_role` (prohibit_dynamic_code, #24), validated
     // audit-first against a clean live run.
+}
+
+/// The distinct execution roles of this single binary, resolved from argv (#157).
+/// [`harden_for_role`] maps each to an explicit [`Profile`]; that mapping — not scattered
+/// per-call-site decisions — is the single source of truth for what a role locks down.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Role {
+    /// `--service`: headless SYSTEM service (the crown jewel). Non-interactive; takes every lock.
+    Service,
+    /// default (no argv): interactive Medium-IL tray. nvml + GUI force relaxations.
+    Tray,
+    /// `--install-svc` / `--update-svc`: elevated UAC child that (de)registers the service,
+    /// often first-run from a user-writable dir (Downloads) — CIG defeats DLL planting there.
+    ElevatedSetup,
+    /// Medium-IL launchers that ShellExecute the elevated helper and/or show setup dialogs:
+    /// `install`, `stop`/`start`/`uninstall`, `--stop-svc`/`--start-svc`, `--preview-onboarding`.
+    Launcher,
+    /// `--help` / `--version` / unrecognized argv: text-only, spawns nothing, shows no window.
+    TextOnly,
+}
+
+/// Which process-mitigation locks a role engages. Every lock is ON in [`Profile::MAX`]; a
+/// role earns a relaxation ONLY by proving it can't function under the lock, and every
+/// carve-out in [`profile_for`] names its reason (#157). The safe default is `MAX`: a role
+/// that forgets to relax fails LOUDLY (a blocked child/dialog/DLL), never runs silently
+/// under-hardened.
+#[derive(Clone, Copy)]
+struct Profile {
+    /// CIG (MicrosoftSignedOnly): load only Microsoft-signed images.
+    ms_signed_only: bool,
+    /// NoChildProcessCreation: the process can spawn nothing.
+    no_child: bool,
+    /// DisallowWin32kSystemCalls: no GUI syscalls — headless / no-window roles only.
+    no_win32k: bool,
+    /// ProhibitDynamicCode (ACG): no dynamically-generated / executable memory.
+    no_dynamic_code: bool,
+}
+
+impl Profile {
+    /// Maximum hardening — every lock engaged. The floor every role starts from.
+    const MAX: Profile = Profile {
+        ms_signed_only: true,
+        no_child: true,
+        no_win32k: true,
+        no_dynamic_code: true,
+    };
+
+    // Carve-outs from MAX. Each takes the REASON as a string so a relaxation reads as its own
+    // rationale at the `profile_for` call site; the string is compile-time-only documentation.
+    const fn allow_unsigned_dlls(mut self, _why: &'static str) -> Self {
+        self.ms_signed_only = false;
+        self
+    }
+    const fn allow_child_processes(mut self, _why: &'static str) -> Self {
+        self.no_child = false;
+        self
+    }
+    const fn allow_win32k(mut self, _why: &'static str) -> Self {
+        self.no_win32k = false;
+        self
+    }
+    const fn allow_dynamic_code(mut self, _why: &'static str) -> Self {
+        self.no_dynamic_code = false;
+        self
+    }
+}
+
+/// The role→profile table — the exhaustive SSoT (#157). Adding a [`Role`] variant without a
+/// profile here is a COMPILE ERROR (no wildcard arm), so no role can be silently forgotten;
+/// relaxations from [`Profile::MAX`] are the earned exception, each annotated with its cause.
+///
+/// STAGED (held back, default-conservative until validated — #180): CIG on the interactive
+/// roles (Tray/TextOnly) and ACG on the Tray. CIG on an interactive process also blocks legit
+/// non-MS injectors (IME, accessibility, EDR) and needs a soak; Tray ACG needs on-hardware
+/// validation. Flipping either on is a one-line carve-out removal once proven.
+const fn profile_for(role: Role) -> Profile {
+    match role {
+        // Non-interactive crown jewel: every lock. Live-validated (#24, #48).
+        Role::Service => Profile::MAX,
+        // Interactive GUI + on-demand nvml (NVIDIA-signed, loaded from System32) + a broad
+        // third-party injection surface. Keeps no-child, but that lock is applied late in
+        // `tray::run` (not at dispatch) because the no-arg role bootstraps/spawns first — see
+        // `harden_for_role`.
+        Role::Tray => Profile::MAX
+            .allow_unsigned_dlls("nvml is NVIDIA-signed; IME/a11y/EDR inject into GUI procs")
+            .allow_win32k("interactive GUI needs win32k")
+            .allow_dynamic_code("nvml + GUI components may generate code"),
+        // Elevated, often first-run from a user-writable dir → CIG defeats DLL planting. Still
+        // runs sc / builds shortcuts, so the remaining locks are carved pending validation.
+        Role::ElevatedSetup => Profile::MAX
+            .allow_child_processes("runs sc / service-control helpers")
+            .allow_win32k("COM/shell shortcut creation touches win32k")
+            .allow_dynamic_code("elevated setup path not yet ACG-validated"),
+        // Medium-IL: its job is to ShellExecute the elevated child and/or show setup dialogs.
+        Role::Launcher => Profile::MAX
+            .allow_unsigned_dlls("ShellExecute may load non-MS shell extensions")
+            .allow_child_processes("spawns the elevated UAC helper")
+            .allow_win32k("shows onboarding / error dialogs")
+            .allow_dynamic_code("shell/COM path not yet ACG-validated"),
+        // Text-only leaf: no window, no spawn, no JIT. win32k is safe here — the service runs
+        // the SAME CRT headless under this exact lock. CIG held back (interactive soak, #180).
+        Role::TextOnly => {
+            Profile::MAX.allow_unsigned_dlls("interactive EDR/IME injection compat — soak (#180)")
+        }
+    }
+}
+
+/// Apply the baseline hardening ([`apply`]) plus the role's earned strong-tier locks (#157).
+/// Call ONCE, as early as possible, before the role does any work. The token-strip is applied
+/// separately at each role's own timing-sensitive call site (service.rs / tray.rs).
+pub fn harden_for_role(role: Role) {
+    apply();
+    let p = profile_for(role);
+    if p.ms_signed_only {
+        enforce_ms_signed_only();
+    }
+    // no-child is applied here for every role that takes it EXCEPT the Tray: the no-arg role
+    // first acts as a bootstrap installer/launcher (default_run spawns the elevated UAC child
+    // on first-run / repair / service-start) before it becomes the tray, so its no-child lock
+    // is deferred to `tray::run`, past those spawn-capable branches. Its profile still declares
+    // no_child (intent/SSoT); tray.rs is just its timing-correct application site.
+    if p.no_child && role != Role::Tray {
+        prohibit_child_processes();
+    }
+    if p.no_win32k {
+        disallow_win32k_syscalls();
+    }
+    if p.no_dynamic_code {
+        prohibit_dynamic_code();
+    }
 }
 
 /// #38 top-level exception filter: on any crash that reaches it, terminate immediately so
@@ -124,19 +254,10 @@ fn restrict_image_loads() {
     }
 }
 
-/// Enforce Code Integrity Guard (only Microsoft-signed DLLs may load; a one-way
-/// ratchet that cannot be disabled once set).
-///
-/// Applied to the `--service` role AND the elevated install/update child: both load
-/// only MS-signed system DLLs (WMI/COM for the service — the HP WMI provider runs
-/// out-of-process in WmiPrvSE; shell/COM for the installer), so there is no functional
-/// cost while every non-MS DLL injection or plant is blocked.
-///
-/// NOT applied to the tray: it deliberately loads `nvml.dll` (NVIDIA, non-MS-signed)
-/// for the GPU readout, which CIG would block. (As a GUI process the tray is also a
-/// common injection *target* for third-party software — AV/EDR, input hooks — that
-/// CIG would fight; but nvml is the concrete blocker.) The tray stays at the search +
-/// image-load tier. Best-effort: ignored on older Windows.
+/// Enforce Code Integrity Guard (only Microsoft-signed DLLs may load) — blocks every non-MS
+/// DLL injection or plant. A one-way ratchet that cannot be disabled once set. Which roles
+/// engage it, and why the Tray can't (nvml is NVIDIA-signed), is declared in [`profile_for`]
+/// (#157). Best-effort: ignored on older Windows.
 /// https://learn.microsoft.com/windows/win32/secbp/mitigation-guard
 pub fn enforce_ms_signed_only() {
     // SAFETY: `policy` is a zeroed struct; we set MicrosoftSignedOnly (bit 0) via
@@ -152,14 +273,10 @@ pub fn enforce_ms_signed_only() {
     }
 }
 
-/// Prohibit child-process creation. Applied to the `--service` role ONLY: the SYSTEM
-/// service spawns nothing (verified — every CreateProcess/ShellExecute/spawn lives in
-/// the installer or tray, never in service.rs; its WMI/COM run in-proc or out-of-process
-/// in WmiPrvSE, launched by the SCM, not by us). This removes the LOLBin/proxy exfil path
-/// (curl/powershell/certutil/...) even from injected code — one fewer rung to the network.
-/// NOT applied to the installer/tray, which legitimately spawn (elevation, ensure_tray,
-/// opening links). Integrity-conditional until signing (#21) makes it tamper-rejected;
-/// best-effort (ignored on older Windows).
+/// Prohibit child-process creation — removes the LOLBin/proxy exfil path (curl/powershell/
+/// certutil/...) even from injected code, one fewer rung to the network. Role assignment (and
+/// why the launchers, which must spawn the UAC child, can't take it) is declared in
+/// [`profile_for`] (#47, #157). Best-effort (ignored on older Windows).
 /// https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_child_process_policy
 pub fn prohibit_child_processes() {
     // SAFETY: `policy` is a zeroed struct; we set NoChildProcessCreation (bit 0) via the
@@ -175,13 +292,10 @@ pub fn prohibit_child_processes() {
     }
 }
 
-/// Disable win32k system calls. Applied to the `--service` role ONLY: the headless SYSTEM
-/// service has no GUI and never enters win32k (MTA COM/WMI + named-pipe I/O — no window, no
-/// message pump), so cutting off the win32k syscall surface removes one of the largest kernel
-/// LPE attack surfaces from the crown-jewel process. NOT applied to the tray, which IS a GUI
-/// (win32k) process. Once set it is permanent and any win32k call terminates the process, so
-/// it is validated by a live service run (WMI read/write + event sink + pipe) before shipping.
-/// Best-effort (ignored on older Windows). runtime-mitigation (#48).
+/// Disable win32k system calls — cuts off one of the largest kernel-LPE surfaces. PERMANENT
+/// once set: any win32k call then terminates the process, so it is validated by a live run of
+/// the engaging role before shipping, and only no-window roles can take it (the tray is a GUI).
+/// Role assignment is declared in [`profile_for`] (#48, #157). Best-effort (ignored on older Windows).
 /// https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_system_call_disable_policy
 pub fn disallow_win32k_syscalls() {
     // SAFETY: `policy` is a zeroed struct; we set DisallowWin32kSystemCalls (bit 0) via the
@@ -197,16 +311,14 @@ pub fn disallow_win32k_syscalls() {
     }
 }
 
-/// Enforce ProcessDynamicCodePolicy (ProhibitDynamicCode) on the `--service` role: the
-/// process can no longer allocate/modify executable memory or map an image writable+
-/// executable, and any such attempt TERMINATES it. This is the strongest anti-shellcode
-/// mitigation (CWE-94: blocks JIT-style code injection / dynamically-generated shellcode).
-/// It can break in-process code generators, so it was validated audit-first
-/// (AuditProhibitDynamicCode, bit 3) against a live run — WMI read/write + event sink +
-/// pipe produced ZERO dynamic-code events — before enforcing here. Once set it is a
-/// permanent one-way ratchet, so it is validated by a live service run before shipping.
-/// Applied to the service ONLY: the tray loads third-party code (nvml) and hosts WASAPI/COM,
-/// which are not audited for dynamic-code use. Best-effort — ignored on older Windows. #24.
+/// Enforce ProcessDynamicCodePolicy (ACG): the process can no longer allocate/modify
+/// executable memory, and any attempt TERMINATES it — the strongest anti-shellcode mitigation
+/// (CWE-94: blocks JIT-style code injection / dynamically-generated shellcode). A permanent
+/// one-way ratchet that can break in-process codegen, so it was validated audit-first
+/// (AuditProhibitDynamicCode) against a clean live run before enforcing, and is re-validated by
+/// a live run of the engaging role before shipping. Role assignment (and why the Tray, which
+/// hosts nvml + WASAPI/COM, can't take it) is declared in [`profile_for`] (#24, #157).
+/// Best-effort — ignored on older Windows.
 /// https://learn.microsoft.com/windows/win32/api/winnt/ns-winnt-process_mitigation_dynamic_code_policy
 pub fn prohibit_dynamic_code() {
     // SAFETY: `policy` is a zeroed struct; we set ProhibitDynamicCode (bit 0) via the
