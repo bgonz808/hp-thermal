@@ -16,9 +16,9 @@ mod vsa;
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
 const RELEASE_EXE: &str = "app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe";
-/// The linker names the PDB after the crate (underscores); release staging renames it to
-/// hp-thermal.pdb. Local checks read the build-output name.
-const RELEASE_PDB: &str = "app/target/x86_64-pc-windows-msvc/release/hp_thermal.pdb";
+/// build.rs names the pdb hp-thermal.pdb AT THE SOURCE (/PDB + /PDBALTPATH from CARGO_PKG_NAME,
+/// #168), matching the exe basename — no rename anywhere. This is the build-output name.
+const RELEASE_PDB: &str = "app/target/x86_64-pc-windows-msvc/release/hp-thermal.pdb";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

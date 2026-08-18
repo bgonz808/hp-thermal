@@ -648,8 +648,49 @@ jobs:
   #     Attestations run on BOTH a real tag AND a manual workflow_dispatch, so the whole
   #     pipeline is dry-runnable. Only the GitHub Release *publish* step is gated, behind
   #     TWO conditions (v* tag AND dry_run != true) -- see that step's comment.
+  # Option A (#160): the AUTHORITATIVE PE-hardening scan — on the SIGNED, shipped bytes, so the
+  # BA2022 SignSecurely rule (NotApplicable on the unsigned PR early-warning) actually evaluates
+  # here. Same shared composite action (.github/actions/binskim-scan) as the PR job, but GATING:
+  # any BinSkim finding fails the release (and fail-closed if the scan could not run). Gates
+  # `publish` via its `needs`, so a hardening regression can never ship.
+  binskim-release:
+    needs: [build, sign]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Harden runner (egress audited)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          egress-policy: audit
+      # Sparse: ONLY the composite action, so this stays close to verify's no-full-checkout intent.
+      - name: Checkout (composite action only)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions/binskim-scan
+      - name: Download signed artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # actions/download-artifact v8.0.1
+        with:
+          name: dist
+          path: dist
+      - name: BinSkim scan (authoritative, gating — signed bytes)
+        uses: ./.github/actions/binskim-scan
+        with:
+          exe: dist/hp-thermal.exe
+          symbol-dir: dist
+          sarif-out: ${{ runner.temp }}/binskim-release.sarif
+          gate-on-findings: "true"
+      - name: Upload SARIF (inert artifact)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact v7.0.1
+        with:
+          name: binskim-release-sarif
+          path: ${{ runner.temp }}/binskim-release.sarif
+          if-no-files-found: warn
+
   publish:
-    needs: verify
+    needs: [verify, binskim-release]
     runs-on: windows-latest
     permissions:
       contents: write        # create the Release + upload assets
