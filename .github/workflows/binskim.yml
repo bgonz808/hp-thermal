@@ -1,6 +1,10 @@
-name: BinSkim
+name: Release artifact checks
 
-# PE-hardening SAST (#160), PR-time path-filtered EARLY-WARNING half.
+# PR-time, path-filtered checks on the RELEASE binary (runs only when build-config / xtask change):
+#   - #170 verify-artifact: the IN-HOUSE PE checks (pdb-link GUID bind, exploit-mitigation flags,
+#     import ratchet, comctl32 manifest) that FULL `xtask ci` runs at release time but PR CI's
+#     `--fast` tier skips — so a build.rs/xtask/linker regression is caught here, not at release.
+#   - #160 BinSkim: PE-hardening SAST early-warning (report-only; the release gate is authoritative).
 #
 # This flags a BinSkim-verdict regression when a hardening-relevant INPUT changes. It is
 # explicitly NOT a soundness boundary: exotic source-level changes (#[link_section], inline asm,
@@ -29,6 +33,7 @@ on:
       - "app/rust-toolchain.toml"
       - ".github/workflows/binskim.yml"
       - ".github/actions/binskim-scan/**"
+      - "xtask/**" # #170: an xtask change (e.g. RELEASE_PDB) can break verify-artifact — see below
 
 permissions:
   contents: read
@@ -62,6 +67,15 @@ jobs:
       - name: Build the hardened release binary
         working-directory: app
         run: cargo build --release
+
+      # #170: run the IN-HOUSE PE checks (pdb-link GUID bind, exploit-mitigation flags, import
+      # ratchet, comctl32 manifest) that the FULL `xtask ci` runs at RELEASE time but PR CI
+      # (`--fast`) skips — so a build.rs / xtask / linker-arg regression is caught HERE, not at a
+      # release attempt. (This is exactly the class that slipped through in #168: xtask's RELEASE_PDB
+      # pointed at the old pdb name; only the release build caught it.) No args -> uses the
+      # RELEASE_EXE/RELEASE_PDB consts, so it also validates those point at the real build outputs.
+      - name: Verify release artifact (in-house PE checks)
+        run: cargo run --manifest-path xtask/Cargo.toml -- verify-artifact
 
       # Shared scan core (.github/actions/binskim-scan): fetch+digest-verify BinSkim, analyze offline
       # against the native hp-thermal.pdb, fail-closed on couldn't-scan. gate-on-findings=false here
