@@ -191,35 +191,86 @@ advisories against these pinned versions," not "no vulnerabilities exist."
 
 ## Antivirus false positives
 
-hp-thermal is an **unsigned, low-reputation Rust binary that does legitimately privileged,
+hp-thermal is a **signed but still low-reputation Rust binary that does legitimately privileged,
 hardware-specific work** — the exact combination heuristic/ML antivirus engines and sandboxes
-over-flag. If a scanner flags it, here is what the detections are and are not.
+over-flag. As of v0.3.0 (first signed release) the "Unknown Publisher" root cause is gone and the
+two most impactful engines have cleared; the residual detections are generic and decay with
+download reputation. If a scanner flags it, here is what the detections are and are not.
 
-**They are generic / reputation signals, not behavior.** A representative VirusTotal run rolled a
-handful of engines, all *generic/ML* names (`Gen:Variant.Yogi`, `Trojan:Win32/Wacatac.B!ml`,
-`Win64:MalwareX-gen`, `…Agent`) — **no specific malware family**, and the count inflates because
-several products license one engine's database (e.g. the BitDefender "Yogi" signature reappears
-across its licensees). `Yogi` and `Wacatac.B!ml` are documented Rust-toolchain false positives.
-Behavioral sandboxes agree: **Zenbox returns Non-Malicious**. A no-argument run is the bare tray
-(Medium integrity) doing **reads only** — no file writes, no persistence, no network. The
-privileged install behaviors are gated behind `--install` and never fire in a bare detonation.
+**They are generic / reputation signals, not behavior.** Every detection to date has been a
+*generic/ML* name — **no specific malware family** — and the count inflates because several
+products license one engine's database. A no-argument run is the bare tray (Medium integrity)
+doing **reads only** — no file writes, no persistence, no network; the privileged install
+behaviors are gated behind `--install` and never fire in a bare detonation. Behavioral sandboxes
+agree (**Zenbox: Non-Malicious**).
+
+**Recorded runs (we track every release so the reputation trend is visible):**
+
+| Release | Signed | Score | Engines (all generic/ML, no family) | Notable |
+| --- | --- | --- | --- | --- |
+| pre-0.3.0 (representative) | no | handful | `Gen:Variant.Yogi`, `Wacatac.B!ml`, `MalwareX-gen`, `…Agent` | Microsoft **and** BitDefender firing |
+| **v0.3.0** — `add64e322…ec149dc` | **yes** | **5/71** | Avast/AVG `Win64:MalwareX-gen`, Avira/WithSecure `TR/W64.Agent`, ESET `Win64/Agent_AGen.PRN` | family label `misc`; **Microsoft + BitDefender now clean** |
+
+The v0.3.0 five collapse to **three independent engines** (AVG re-uses Avast's engine; WithSecure
+re-uses Avira's — identical detection strings prove the shared verdict), all generic. The decisive
+signal: signing flipped **Microsoft** (`Wacatac.B!ml`) and **BitDefender** (`Yogi`) from *firing*
+to *clean* on byte-identical code — detections that respond to signing metadata rather than code
+are the mechanical signature of reputation FPs, not behavior. The VT sample hash was verified equal
+to the published `SHA256SUMS` entry and the attested build digest, so the scoreboard describes the
+real release, not a stray upload.
 
 **What trips the heuristics, node by node:**
 
 | Flag | Cause | Assessment |
 | --- | --- | --- |
-| unsigned / "Unknown Publisher" | no Authenticode certificate yet | the root cause; fixed by signing (see below) |
+| ~~unsigned / "Unknown Publisher"~~ | *resolved in v0.3.0* — Azure Trusted Signing, WVT `S_OK`, durable-identity EKU | the root cause, now removed; Microsoft + BitDefender cleared as a direct result |
 | reads `HKLM\...\BIOS\SystemManufacturer` / `SystemProductName` | HP-model detection (`hwinfo.rs`) — the tool is HP-specific | trips the **anti-VM heuristic** (the same read malware uses to detect sandboxes); irreducible for a hardware tool |
 | `.dep-v0` / non-standard PE section names | `cargo-auditable` dependency manifest (enables `cargo audit bin`) | irreducible without dropping auditable |
 | "requires command line arguments" | monolithic role-by-flag design (`--install` / `--service`) | benign; the risky paths are consent-gated, not evasion |
 | dual-use API surface | service create ([T1543.003](https://attack.mitre.org/techniques/T1543/003/)), token adjust ([T1134](https://attack.mitre.org/techniques/T1134/)), WMI ([T1047](https://attack.mitre.org/techniques/T1047/)), WER opt-out ([T1562.001](https://attack.mitre.org/techniques/T1562/001/)) | legitimate *installer* behavior; a base-rate false positive |
 
-**The fix is identity, not code.** These are the structural false positives of an unsigned,
-zero-reputation, dual-use binary; changing code to lower the count is whack-a-mole against
-classifiers that can't read intent. The remedy is **Authenticode code-signing + accrued download
-reputation**, which removes "Unknown Publisher" and collapses the heuristic cluster over time.
-We scan every release on VirusTotal and record the result so the trend is tracked as reputation
-builds — and we do **not** alter behavior to game the number.
+**The fix is identity, not code.** These are the structural false positives of a low-reputation,
+dual-use binary; changing code to lower the count is whack-a-mole against classifiers that can't
+read intent. Signing supplied the identity half (removing "Unknown Publisher" and, with it,
+Microsoft + BitDefender); the remaining half is **accrued download reputation**, which collapses
+the residual generic cluster over days-to-weeks. We record every VirusTotal run above so the trend
+is visible — and we do **not** alter behavior to game the number.
+
+## SmartScreen reputation (the "Windows protected your PC" wall)
+
+SmartScreen is a **separate system from both AV and Authenticode**, and this is the most
+misunderstood part: **a valid signature does not clear the red warning.** SmartScreen gates on
+*reputation* — the publisher identity's and the specific file hash's download prevalence — not on
+signature validity. v0.3.0 verifies as `Valid` (WVT `S_OK`) and *still* shows the red
+"Windows protected your PC" screen on first run, because the signing identity has not accrued
+reputation yet. This is expected for a new publisher, not a defect.
+
+**What does and does not move it:**
+
+- **Do not buy an EV certificate to fix this.** EV code-signing certs used to grant *instant*
+  SmartScreen reputation, but **Microsoft removed that behavior in 2024** and its docs (current as
+  of mid-2026) state plainly it no longer exists. An EV cert would not clear the warning and would
+  be wasted money; OV, EV, and Trusted Signing now all earn reputation the same way.
+- **Reputation is earned by download volume + time (days to a few weeks).** It accrues to the
+  **durable publisher identity** (the `1.3.6.1.4.1.311.97.*` EKU we pin), so it compounds across
+  releases and survives the ~72 h cert rotation — one reason we pin the durable-identity EKU rather
+  than a spoofable subject name.
+- **Submit the binary to Microsoft for analysis** (Microsoft Security Intelligence, aka.ms/wdsi →
+  "I believe this is clean"). Now that it is signed, Microsoft can attribute the file to the
+  identity; this can pre-clear Defender and feed SmartScreen.
+- **Sign every release with the same identity and drive legitimate downloads.** Consistency is the
+  whole mechanism; re-signing obsessively does not help (a new hash resets *file* reputation,
+  though *publisher* reputation carries).
+
+**Known 2026 Trusted Signing caveat (may be amplifying our warning).** v0.3.0 chains through the
+intermediate CA `Microsoft ID Verified CS EOC CA 03`. In ~March 2026 Microsoft silently migrated
+Trusted Signing customers onto new intermediate CAs (`AOC` / `EOC CA 03`), which **reset or broke
+SmartScreen reputation** for affected customers — identical publishers that were trusted under the
+prior CA began tripping "Windows protected your PC," with some still warned weeks later. So part of
+our red wall may be this Microsoft-side migration, not organic warm-up alone. Tracked via Microsoft
+Q&A and the `Azure/artifact-signing-action` issue tracker; if reputation has not built after a few
+weeks of real downloads, that CA issue is the likely cause and warrants a Microsoft
+engineering-review request rather than any change on our side.
 
 ## Build & CI trust boundary
 
