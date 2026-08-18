@@ -1,0 +1,145 @@
+name: BinSkim
+
+# PE-hardening SAST (#160), PR-time path-filtered EARLY-WARNING half.
+#
+# This flags a BinSkim-verdict regression when a hardening-relevant INPUT changes. It is
+# explicitly NOT a soundness boundary: exotic source-level changes (#[link_section], inline asm,
+# #[no_stack_protector], banned APIs) can move a verdict WITHOUT touching these paths. The
+# AUTHORITATIVE, content-complete gate is the release verify-chain scan (Option A, added
+# separately), which reads the actual shipped bytes. This filter is the cheap shift-left; Option A
+# is what we rely on.
+#
+# BinSkim is a heavy .NET tool, so it is boxed: read-only job, NO security-events:write (the SARIF
+# is an inert artifact; the separate sarif-collect job uploads it to the Security tab), and the
+# analysis runs OFFLINE — no --sympath / remote symbol server — against our own local PDB. Only the
+# remote symbol server is disabled; the local hp-thermal.pdb still drives the symbol-dependent
+# rules (BA2006/2011/2014/2007), so we lose no coverage vs. an online run of our own binary.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    # Best-effort: run only when an input that can change BinSkim's verdict changes. Kept in sync
+    # with the audited surface — build config, the toolchain pin (drives BA2006 + gates the
+    # unstable mitigation flags), the lockfile (BA2002), and this workflow itself.
+    paths:
+      - "app/.cargo/**"
+      - "app/build.rs"
+      - "app/Cargo.toml"
+      - "app/Cargo.lock"
+      - "app/rust-toolchain.toml"
+      - ".github/workflows/binskim.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  binskim:
+    runs-on: windows-latest
+    permissions:
+      contents: read # NO security-events:write here — SARIF is an inert artifact (sarif-collect uploads it)
+    steps:
+      - name: Harden runner (egress audited)
+        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        with:
+          # AUDIT for the first cut: log egress so a BLOCK allowlist (rustup + static.rust-lang.org
+          # + crates.io for build-std, NuGet + dotnet feeds for BinSkim) can be reconciled against a
+          # real run — the same methodology the scan job's block allowlist was built with. Tighten
+          # to egress-policy: block once the audit is reconciled.
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain + rust-src
+        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+
+      # Build the SAME hardened binary users get: app/.cargo/config.toml applies the mitigation
+      # rustflags (CFG, stack-protector, crt-static, DEPENDENTLOADFLAG) + build-std, and the
+      # release profile emits the line-tables-only .pdb next to the .exe.
+      - name: Build the hardened release binary
+        working-directory: app
+        run: cargo build --release
+
+      # BinSkim ships only as a NuGet LIBRARY (not a dotnet tool), so fetch the versioned nupkg and
+      # DIGEST-verify it before use. A published nupkg is immutable per version, so this sha256 is a
+      # content pin — stronger than a bare version string, and in the spirit of our cargo git-revs.
+      # Containment (read-only job, no secrets/write scope, egress-audited, own-artifact-only input)
+      # bounds the .NET blast radius, per #160.
+      - name: Fetch + verify BinSkim (pinned nupkg by sha256)
+        shell: pwsh
+        env:
+          BINSKIM_VERSION: "4.4.9.11"
+          BINSKIM_SHA256: "69678989cbc273b5b50fcf98fb0fd978e1e35a3f844acb24254b31f0ce90c447"
+        run: |
+          $url = "https://api.nuget.org/v3-flatcontainer/microsoft.codeanalysis.binskim/$env:BINSKIM_VERSION/microsoft.codeanalysis.binskim.$env:BINSKIM_VERSION.nupkg"
+          $pkg = "$env:RUNNER_TEMP/binskim.zip"   # .zip extension so Expand-Archive accepts the nupkg
+          Invoke-WebRequest -Uri $url -OutFile $pkg
+          $got = (Get-FileHash $pkg -Algorithm SHA256).Hash.ToLower()
+          if ($got -ne $env:BINSKIM_SHA256) {
+            throw "BinSkim nupkg sha256 mismatch: got $got, expected $env:BINSKIM_SHA256"
+          }
+          Expand-Archive -Path $pkg -DestinationPath "$env:RUNNER_TEMP/binskim" -Force
+
+      - name: BinSkim analyze (offline, local PDB; fail-closed on scan errors, report-only on findings)
+        shell: pwsh
+        run: |
+          # ABSOLUTE paths: BinSkim resolves the PDB by the name in the exe's debug directory against
+          # --local-symbol-directories, and a relative dir yields E_PDB_NOT_FOUND (it skips the target).
+          $rel = (Resolve-Path "app/target/x86_64-pc-windows-msvc/release").Path
+          $exe = Join-Path $rel "hp-thermal.exe"
+          Get-ChildItem $rel -Filter *.pdb | ForEach-Object { "pdb present: $($_.Name)" }
+          # exe + hp-thermal.pdb are siblings; --local-symbol-directories points BinSkim at them and
+          # the ABSENCE of --sympath keeps it offline (no remote symbol server). (BinSkim telemetry
+          # is opt-in via an AppInsights key, off by default, so no --disable-telemetry is needed —
+          # and that flag errors "bad format" on this version.)
+          $binskim = "$env:RUNNER_TEMP/binskim/tools/net9.0/win-x64/BinSkim.dll"
+          $sarif = "$env:RUNNER_TEMP/binskim.sarif"
+          # --kind Fail Pass Review Open NotApplicable: emit EVERY rule's disposition, not just
+          # failures. Pass makes a clean scan visibly non-empty (proof it ran); NotApplicable records
+          # WHY a rule didn't fire (no silent gaps); Review/Open are results the tool couldn't
+          # auto-decide and flagged for a human — we must not drop those.
+          dotnet "$binskim" analyze "$exe" `
+            --local-symbol-directories "$rel" `
+            --hashes `
+            --kind Fail Pass Review Open NotApplicable `
+            --output "$sarif"
+          $code = $LASTEXITCODE
+
+          # FAIL-CLOSED: a scan that did not actually evaluate the target is NOT a success condition.
+          # "Report-only" applies to FINDINGS, never to "the tool couldn't run" (0 results + a PDB-load
+          # error is a *couldn't-run*, exactly what we must NOT green-wash). Require overall success,
+          # no error-level notifications (e.g. ERR997 PDB-load), and >=1 result of ANY kind (proof a
+          # target was actually evaluated).
+          if (-not (Test-Path $sarif)) { Write-Error "BinSkim produced no SARIF (fail-closed)."; exit 1 }
+          $o = Get-Content $sarif -Raw | ConvertFrom-Json
+          $inv = $o.runs[0].invocations[0]
+          $results = @($o.runs[0].results)
+          $errNotes = @(@($inv.toolConfigurationNotifications) + @($inv.toolExecutionNotifications)) |
+            Where-Object { $_.level -eq 'error' }
+          $passN = @($results | Where-Object { $_.kind -eq 'pass' }).Count
+          $failN = @($results | Where-Object { $_.kind -eq 'fail' }).Count
+          $reviewN = @($results | Where-Object { $_.kind -eq 'review' }).Count
+          $openN = @($results | Where-Object { $_.kind -eq 'open' }).Count
+          $naN = @($results | Where-Object { $_.kind -eq 'notApplicable' }).Count
+          "binskim: exit=$code executionSuccessful=$($inv.executionSuccessful) pass=$passN fail=$failN review=$reviewN open=$openN na=$naN errNotifications=$($errNotes.Count)"
+          foreach ($n in $errNotes) { "::error::BinSkim could not scan: $($n.descriptor.id): $($n.message.text)" }
+          if ((-not $inv.executionSuccessful) -or ($errNotes.Count -gt 0) -or ($results.Count -eq 0)) {
+            Write-Error "BinSkim did not successfully evaluate the target (fail-closed). See the SARIF artifact."
+            exit 1
+          }
+          # Report-only on FINDINGS + surface Review/Open (tool punted → needs a human) for the
+          # baseline; don't block yet. A follow-up flips these to gating once the baseline is reviewed.
+          foreach ($r in @($results | Where-Object { $_.kind -in @('fail','review','open') })) {
+            "::warning::BinSkim $($r.kind) $($r.ruleId): $($r.message.text)"
+          }
+          exit 0
+
+      - name: Upload SARIF (inert artifact; consumed by sarif-collect)
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact v7.0.1
+        with:
+          name: binskim-sarif
+          path: ${{ runner.temp }}/binskim.sarif
+          if-no-files-found: warn
