@@ -43,6 +43,9 @@ pub const STATUS_OK: u8 = 0x00;
 pub const STATUS_INVALID_CMD: u8 = 0x01;
 pub const STATUS_INVALID_PAYLOAD: u8 = 0x02;
 pub const STATUS_WMI_ERROR: u8 = 0x03;
+/// Write rejected: too many BIOS/EC writes too fast. A compromised Medium-IL tray could otherwise
+/// flood Command=2 writes; reads are never limited. See the write rate-limiter in service (#159).
+pub const STATUS_RATE_LIMITED: u8 = 0x04;
 
 /// Bit flag OR'd into status byte when the response is a cached value
 /// rather than a fresh WMI read. The payload is still valid.
@@ -68,6 +71,17 @@ pub fn unpack_state(b: u8) -> (u8, u8) {
 pub struct Request {
     pub command: u8,
     pub payload: u8,
+}
+
+impl Request {
+    /// True for commands that mutate BIOS/EC state (Command=2). Only these are rate-limited (#159);
+    /// reads never are.
+    pub fn is_write(&self) -> bool {
+        matches!(
+            self.command,
+            CMD_SET_THERMAL | CMD_SET_COOLSENSE | CMD_SET_STACK_MONITOR | CMD_SET_BRIGHTNESS
+        )
+    }
 }
 
 /// Validate a set-command payload against its per-command maximum.

@@ -156,6 +156,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
     signal_svc_start_event();
 
     let mut cache = CacheSet::new();
+    let mut limiter = WriteLimiter::new();
 
     // Accept loop
     loop {
@@ -173,7 +174,7 @@ unsafe extern "system" fn service_main(_argc: u32, _argv: *mut PWSTR) {
         if let Some(buf) = pipe::read_request(pipe) {
             log::trace!(log::KW_WIRE, "req: 0x{:02X} 0x{:02X}", buf[0], buf[1]);
             let response = match Request::try_from(buf) {
-                Ok(req) => dispatch(&wmi, &mut cache, &req),
+                Ok(req) => dispatch(&wmi, &mut cache, &mut limiter, &req),
                 Err(status) => [status, 0],
             };
             log::trace!(
@@ -303,7 +304,51 @@ fn set_result(r: Result<(), u8>) -> [u8; 2] {
     }
 }
 
-fn dispatch<W: ThermalOps>(wmi: &W, cache: &mut CacheSet, req: &Request) -> [u8; 2] {
+/// Token-bucket rate limiter for BIOS/EC WRITE commands (#159). A compromised Medium-IL tray that
+/// passes the pipe checks could still FLOOD writes; this caps sustained writes to REFILL_PER_SEC
+/// with a small burst, while a human's occasional toggles never reach the limit. Reads are never
+/// limited.
+struct WriteLimiter {
+    tokens: f64,
+    last: Instant,
+}
+
+impl WriteLimiter {
+    const BURST: f64 = 5.0; // a few quick mode flips in a row
+    const REFILL_PER_SEC: f64 = 5.0;
+
+    fn new() -> Self {
+        Self {
+            tokens: Self::BURST,
+            last: Instant::now(),
+        }
+    }
+
+    /// Consume one token for a write; false (deny) when the bucket is empty.
+    fn allow_write(&mut self) -> bool {
+        let now = Instant::now();
+        let refill = now.duration_since(self.last).as_secs_f64() * Self::REFILL_PER_SEC;
+        self.tokens = (self.tokens + refill).min(Self::BURST);
+        self.last = now;
+        if self.tokens >= 1.0 {
+            self.tokens -= 1.0;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+fn dispatch<W: ThermalOps>(
+    wmi: &W,
+    cache: &mut CacheSet,
+    limiter: &mut WriteLimiter,
+    req: &Request,
+) -> [u8; 2] {
+    // Rate-limit BIOS/EC writes so a compromised tray can't flood them (#159); reads are unaffected.
+    if req.is_write() && !limiter.allow_write() {
+        return [STATUS_RATE_LIMITED, 0];
+    }
     let result = match req.command {
         CMD_READ_THERMAL => CacheSet::cached_read(&mut cache.thermal, COOLDOWN_THERMAL_MS, || {
             read_result(wmi.read_thermal())
@@ -538,16 +583,17 @@ mod tests {
         let wmi = MockWmi::default();
         wmi.thermal.set(2);
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
 
         // First read hits WMI.
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_THERMAL, 0)),
             [STATUS_OK, 2]
         );
         assert_eq!(wmi.read_thermal_calls.get(), 1);
 
         // Second read within the cooldown is served from cache (flagged), no WMI.
-        let r2 = dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0));
+        let r2 = dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_THERMAL, 0));
         assert_eq!(r2[0], STATUS_OK | STATUS_CACHED);
         assert_eq!(r2[1], 2);
         assert_eq!(
@@ -563,8 +609,9 @@ mod tests {
         wmi.thermal.set(2);
         wmi.coolsense.set(1);
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
 
-        let r = dispatch(&wmi, &mut cache, &req(CMD_READ_STATE, 0));
+        let r = dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_STATE, 0));
         assert!(status_ok(r[0]), "batched read should succeed");
         assert_eq!(unpack_state(r[1]), (2, 1), "packed thermal=2, coolsense=1");
         // One WMI read of each, combined into a single response.
@@ -577,8 +624,9 @@ mod tests {
         let wmi = MockWmi::default();
         wmi.fail.set(true); // read_thermal fails
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_STATE, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_STATE, 0)),
             [STATUS_WMI_ERROR, 0],
             "a failed sub-read propagates as an error, not a partial packed value",
         );
@@ -589,19 +637,20 @@ mod tests {
         let wmi = MockWmi::default();
         wmi.thermal.set(1);
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
 
-        let _ = dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0)); // populate cache
+        let _ = dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_THERMAL, 0)); // populate cache
         assert_eq!(wmi.read_thermal_calls.get(), 1);
 
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_SET_THERMAL, 3)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_SET_THERMAL, 3)),
             [STATUS_OK, 0]
         );
         assert_eq!(wmi.thermal.get(), 3);
 
         // The next read must go back to WMI and reflect the new value.
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_THERMAL, 0)),
             [STATUS_OK, 3]
         );
         assert_eq!(
@@ -616,13 +665,14 @@ mod tests {
         let wmi = MockWmi::default();
         wmi.fail.set(true);
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
 
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_THERMAL, 0)),
             [STATUS_WMI_ERROR, 0]
         );
         // An error must not populate the cache — the next call retries WMI.
-        let _ = dispatch(&wmi, &mut cache, &req(CMD_READ_THERMAL, 0));
+        let _ = dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_THERMAL, 0));
         assert_eq!(wmi.read_thermal_calls.get(), 2, "errors must not be cached");
     }
 
@@ -631,19 +681,20 @@ mod tests {
         let wmi = MockWmi::default();
         wmi.coolsense.set(1);
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
 
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_COOLSENSE, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_COOLSENSE, 0)),
             [STATUS_OK, 1]
         );
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_SET_COOLSENSE, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_SET_COOLSENSE, 0)),
             [STATUS_OK, 0]
         );
         assert_eq!(wmi.coolsense.get(), 0);
         // Set invalidated the cache, so this reflects the new value.
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_COOLSENSE, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_COOLSENSE, 0)),
             [STATUS_OK, 0]
         );
         assert_eq!(wmi.read_coolsense_calls.get(), 2);
@@ -654,12 +705,13 @@ mod tests {
         let wmi = MockWmi::default();
         wmi.temp.set(60);
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
 
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_TEMP, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_TEMP, 0)),
             [STATUS_OK, 60]
         );
-        let r2 = dispatch(&wmi, &mut cache, &req(CMD_READ_TEMP, 0));
+        let r2 = dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_TEMP, 0));
         assert_eq!(r2[0], STATUS_OK | STATUS_CACHED);
         assert_eq!(r2[1], 60);
         assert_eq!(wmi.read_temp_calls.get(), 1);
@@ -670,13 +722,14 @@ mod tests {
         let wmi = MockWmi::default();
         wmi.brightness.set(50);
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
 
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_BRIGHTNESS, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_BRIGHTNESS, 0)),
             [STATUS_OK, 50]
         );
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_SET_BRIGHTNESS, 80)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_SET_BRIGHTNESS, 80)),
             [STATUS_OK, 0]
         );
         assert_eq!(wmi.brightness.get(), 80);
@@ -686,11 +739,36 @@ mod tests {
     fn read_build_id_returns_fingerprint_without_touching_wmi() {
         let wmi = MockWmi::default();
         let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
 
         assert_eq!(
-            dispatch(&wmi, &mut cache, &req(CMD_READ_BUILD_ID, 0)),
+            dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_BUILD_ID, 0)),
             BUILD_FINGERPRINT
         );
         assert_eq!(wmi.read_thermal_calls.get(), 0);
+    }
+
+    // #159: a compromised tray can't flood BIOS writes; reads stay unaffected.
+    #[test]
+    fn write_flood_is_rate_limited_but_reads_are_not() {
+        let wmi = MockWmi::default();
+        let mut cache = CacheSet::new();
+        let mut limiter = WriteLimiter::new();
+
+        // The full burst allowance of back-to-back writes goes through.
+        for _ in 0..WriteLimiter::BURST as u32 {
+            let r = dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_SET_THERMAL, 1));
+            assert_ne!(
+                r[0], STATUS_RATE_LIMITED,
+                "a burst write must not be limited"
+            );
+        }
+        // The next write, back-to-back (no time to refill a token), is rejected.
+        let limited = dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_SET_THERMAL, 1));
+        assert_eq!(limited[0], STATUS_RATE_LIMITED);
+
+        // Reads are never rate-limited, even with the write bucket empty.
+        let read = dispatch(&wmi, &mut cache, &mut limiter, &req(CMD_READ_THERMAL, 0));
+        assert_ne!(read[0], STATUS_RATE_LIMITED);
     }
 }

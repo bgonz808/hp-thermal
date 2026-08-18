@@ -172,24 +172,27 @@ fn client_integrity_ok(pipe: HANDLE) -> bool {
     // checked handle (or we defer); OpenProcessToken yields a token we close;
     // the process handle is closed before the token read. No impersonation.
     unsafe {
+        // Fail-closed (#159): any inability to read the caller's integrity level denies the
+        // connection, rather than the previous fail-open "defer". The mandatory-label SACL on the
+        // pipe is the kernel backstop; this is the belt.
         let mut client_pid: u32 = 0;
         if GetNamedPipeClientProcessId(pipe, &mut client_pid).is_err() {
-            return true; // cannot determine — defer
+            return false; // cannot identify caller — deny (fail-closed, #159)
         }
         let Ok(process) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, client_pid) else {
-            return true; // cannot open — defer
+            return false; // cannot open caller — deny (fail-closed, #159)
         };
         let mut token = HANDLE::default();
         let opened = OpenProcessToken(process, TOKEN_QUERY, &mut token).is_ok();
         let _ = CloseHandle(process);
         if !opened {
-            return true;
+            return false; // cannot open caller token — deny (fail-closed, #159)
         }
         let level = token_integrity_rid(token);
         let _ = CloseHandle(token);
         match level {
             Some(rid) => rid >= SECURITY_MANDATORY_MEDIUM_RID,
-            None => true, // cannot read — defer
+            None => false, // cannot read caller IL — deny (fail-closed, #159)
         }
     }
 }
