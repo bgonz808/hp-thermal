@@ -44,15 +44,27 @@ fn main() {
     println!("cargo:rustc-env=BUILD_DATE={build_date}");
 
     // --- PDB sidecar basename ---
-    // The MSVC linker names the PDB after the crate (hp_thermal.pdb); embed the
-    // package basename instead (hp-thermal.pdb) so the shipped exe and pdb basenames
-    // agree. Derived from CARGO_PKG_NAME — no duplicated literal. /PDBALTPATH also
-    // strips the absolute build path from the exe's debug directory (path hygiene +
-    // reproducibility). https://learn.microsoft.com/cpp/build/reference/pdbaltpath
-    println!(
-        "cargo:rustc-link-arg-bins=/PDBALTPATH:{}.pdb",
-        env("CARGO_PKG_NAME")
-    );
+    // The MSVC linker defaults the PDB to the crate name (hp_thermal.pdb, underscored). We want the
+    // shipped pdb named from the PACKAGE/binary basename (hp-thermal.pdb) AT THE SOURCE, so nothing
+    // renames it post-facto (neither release staging nor CI). Two linker args:
+    //   /PDB       — the emitted pdb FILE PATH (last /PDB wins over rustc's default). It MUST be
+    //                absolute + in the profile dir: a bare basename resolves to the linker's cwd
+    //                (the package root), polluting the tree. OUT_DIR is
+    //                `<target>/<triple>/<profile>/build/<pkg>-<hash>/out`, so its 3rd ancestor is the
+    //                profile dir where the exe lands.
+    //   /PDBALTPATH — the basename EMBEDDED in the exe's debug directory: matches the file, and
+    //                strips the absolute path (hygiene + reproducibility — so /PDB's absolute path
+    //                never leaks into the binary).
+    // https://learn.microsoft.com/cpp/build/reference/pdb  |  .../reference/pdbaltpath
+    let pkg = env("CARGO_PKG_NAME");
+    let out_dir = env("OUT_DIR");
+    let profile_dir = std::path::Path::new(&out_dir)
+        .ancestors()
+        .nth(3)
+        .expect("OUT_DIR should be <profile>/build/<pkg-hash>/out");
+    let pdb_path = profile_dir.join(format!("{pkg}.pdb"));
+    println!("cargo:rustc-link-arg-bins=/PDB:{}", pdb_path.display());
+    println!("cargo:rustc-link-arg-bins=/PDBALTPATH:{pkg}.pdb");
 
     // --- #106: DELAY-LOAD rstrtmgr + powrprof (close the pre-main DLL-hijack window, honestly) ---
     // Both are used only on cold paths (rstrtmgr: install/uninstall; powrprof: SetSuspendState on
