@@ -1519,10 +1519,8 @@ unsafe extern "system" fn black_wnd_proc(
 /// enabled on demand by `enable_shutdown_privilege`). Delegates to the shared, SSoT enforcement
 /// in `win_harden` — the same helper the service uses (#2).
 fn strip_unneeded_privileges() {
-    let (removed, _extras) = crate::win_harden::strip_token_privileges_except(&[
-        w!("SeChangeNotifyPrivilege"),
-        w!("SeShutdownPrivilege"),
-    ]);
+    let (removed, _extras) =
+        crate::win_harden::strip_token_privileges_except(crate::win_harden::TRAY_KEEP_PRIVILEGES);
     crate::log::write(&format!(
         "tray: token right-sized ({removed} unused privilege(s) removed)"
     ));
