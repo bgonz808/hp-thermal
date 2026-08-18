@@ -37,7 +37,9 @@ jobs:
           github-token: ${{ github.token }}
           pattern: "*sarif*"
           path: sarifs
-          merge-multiple: true
+          # NO merge-multiple: keep each artifact in its own sarifs/<artifact-name>/ subdir so two
+          # tools emitting a same-named file (e.g. results.sarif) can't clobber each other on disk.
+          # upload-sarif recurses the parent dir and tracks each result set by its own tool name.
         continue-on-error: true # a triggering run with no SARIF (e.g. binskim path-filter didn't fire) is fine
 
       - name: Any SARIF to upload?
