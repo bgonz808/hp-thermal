@@ -2,10 +2,13 @@
 #
 # These four cargo-* utilities run DURING the build but never ship inside hp-thermal.exe.
 # They are pinned by immutable git rev (content-addressed) + --locked (their whole dependency
-# tree is frozen), so a pinned tool is byte-stable until the `rev` here is deliberately changed.
+# tree is frozen). CAVEAT (#176): `cargo install` is NOT byte-reproducible — the SAME rev builds
+# to DIFFERENT bytes across build-tools.yml runs. So the sha256 (bound to a SPECIFIC producer run),
+# not the rev, is the true anchor. And because build-tools.yml rebuilds + --clobber-republishes ALL
+# tools each run, bumping ANY rev re-digests EVERY tool — re-bless all four from that same run.
 #
 # Fields:  name  repo  rev  sha256(<name>.exe, windows-x86_64)
-#   rev     — human-edited. THE pin. Changing it is the only thing that warrants a rebuild.
+#   rev     — human-edited. THE pin for which source commit to build.
 #   sha256  — OUTPUT of .github/workflows/build-tools.yml, reviewed when committed. This digest
 #             is the immutability ANCHOR: the `tools` GitHub release is just a byte store, and
 #             the release job fails closed on any mismatch. An all-zero digest means
@@ -16,7 +19,7 @@
 # purpose-built substitute: it opens an issue when an upstream cuts a release newer than `rev`.
 #
 # name             repo                               rev                                       sha256
-cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  0000000000000000000000000000000000000000000000000000000000000000
-cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  4c4daef48b475ab62de92caba419fa2bd4975faedcf29392fe57f8012b4620f9
-cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  0000000000000000000000000000000000000000000000000000000000000000
-cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  daaf927db3dddc3761aa203ff6ba4eae95b626830505aa729d20a208a374a242
+cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  666609a93e196cc963b07161d9c2186996255afa8ff1c3fa9b45d56e83ab1b9e
+cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  c54b72defb136b11512122772c2f537b125e02bd203211660f5442467609bccb
+cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  59b41122883da309d6b8a753b2ba0ff5f95f3a4919845616d937b8c664503f2b
+cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  38c57adb0076fc8c40e4781b067de318957189116fffafd054cf971fd8aa688b
