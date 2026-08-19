@@ -2,7 +2,7 @@ cargo-features = ["panic-immediate-abort"]
 
 [package]
 name = "hp-thermal"
-version = "0.3.0"
+version = "0.3.1-rc.2"
 edition = "2024"
 authors = ["Robert J Gonzales"]
 description = "HP laptop thermal mode control - without the bloat"
@@ -42,6 +42,7 @@ features = [
     "Win32_System_SystemInformation",
     "Win32_System_Registry",
     "Win32_System_Memory",
+    "Win32_System_Console",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_Diagnostics_Etw",
     "Win32_System_Diagnostics_ToolHelp",

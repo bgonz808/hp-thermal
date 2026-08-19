@@ -66,8 +66,13 @@ fn main() {
         return;
     }
 
+    let role = classify_role(&args);
+    // Text commands print to stdout, but this is a GUI-subsystem binary with no console of its
+    // own, so attach to the launching console (if any); otherwise --help/--version/--hwinfo are
+    // invisible from PowerShell/cmd. Must run before the first println!.
+    let console_attached = role == win_harden::Role::TextOnly && attach_parent_console();
     // Harden every role as early as possible, per its declared mitigation profile (#157).
-    win_harden::harden_for_role(classify_role(&args));
+    win_harden::harden_for_role(role);
 
     match args.get(1).map(|s| s.as_str()) {
         // Full strong tier (CIG + no-child + no-win32k + ACG) applied by harden_for_role (#157).
@@ -132,6 +137,12 @@ fn main() {
             print_help();
         }
     }
+
+    // If we borrowed the shell's console for text output, nudge it to redraw its prompt — a GUI-
+    // subsystem exe doesn't make the shell wait, so our output otherwise lands behind the prompt.
+    if console_attached {
+        restore_shell_prompt();
+    }
 }
 
 /// Hard manufacturer gate. Reads SMBIOS (unelevated) and rejects non-HP hardware
@@ -153,6 +164,77 @@ fn guarded_setup(op: impl FnOnce()) {
         return;
     };
     op();
+}
+
+/// Attach to the launching process's console (if any) so text output is visible when run from a
+/// shell — a GUI-subsystem binary has no console of its own. Best-effort: no parent console (e.g.
+/// launched from Explorer, or stdout already redirected to a pipe) is fine and changes nothing.
+/// Returns true if a parent console was attached (false when launched from Explorer or with stdout
+/// already redirected to a pipe — both are fine and need no prompt restore).
+fn attach_parent_console() -> bool {
+    // SAFETY: AttachConsole has no preconditions; ATTACH_PARENT_PROCESS attaches to the launching
+    // console if one exists. It won't override an already-redirected stdout.
+    unsafe {
+        use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
+        AttachConsole(ATTACH_PARENT_PROCESS).is_ok()
+    }
+}
+
+/// A GUI-subsystem binary doesn't make the shell wait, so after our console output the shell has
+/// already drawn its prompt and our text lands behind it. Nudge the shell to redraw by submitting a
+/// single Enter to its console input.
+///
+/// Safety of the injection: we write ONLY a `VK_RETURN` key event (never any text, so no command can
+/// be injected), and we `FlushConsoleInputBuffer` first so the Enter submits an EMPTY line (never a
+/// pending command). Worst case is a microsecond race discarding a char of the user's own input at
+/// their own shell — not a boundary crossing. No-op if there's no real console (redirected/piped).
+fn restore_shell_prompt() {
+    use windows::Win32::Foundation::{CloseHandle, GENERIC_READ, GENERIC_WRITE};
+    use windows::Win32::Storage::FileSystem::{
+        CreateFileW, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
+    };
+    use windows::Win32::System::Console::{
+        FlushConsoleInputBuffer, INPUT_RECORD, INPUT_RECORD_0, KEY_EVENT, KEY_EVENT_RECORD,
+        KEY_EVENT_RECORD_0, WriteConsoleInputW,
+    };
+    // SAFETY: CONIN$ opens the attached console's input buffer; we flush it, write two INPUT_RECORDs
+    // (Enter down + up), and close the handle. All args are valid for the calls; failure is ignored.
+    unsafe {
+        let name = wide_null("CONIN$");
+        let Ok(conin) = CreateFileW(
+            PCWSTR(name.as_ptr()),
+            (GENERIC_READ | GENERIC_WRITE).0,
+            FILE_SHARE_READ | FILE_SHARE_WRITE,
+            None,
+            OPEN_EXISTING,
+            Default::default(),
+            None,
+        ) else {
+            return;
+        };
+        // Compensating control: discard any pending input so the Enter submits an EMPTY line.
+        let _ = FlushConsoleInputBuffer(conin);
+        let key = |down: bool| {
+            let rec = INPUT_RECORD {
+                EventType: KEY_EVENT as u16,
+                Event: INPUT_RECORD_0 {
+                    KeyEvent: KEY_EVENT_RECORD {
+                        bKeyDown: down.into(),
+                        wRepeatCount: 1,
+                        wVirtualKeyCode: 0x0D, // VK_RETURN
+                        wVirtualScanCode: 0x1C,
+                        uChar: KEY_EVENT_RECORD_0 { UnicodeChar: 0x0D },
+                        dwControlKeyState: 0,
+                    },
+                },
+            };
+            let mut written = 0u32;
+            let _ = WriteConsoleInputW(conin, &[rec], &mut written);
+        };
+        key(true);
+        key(false);
+        let _ = CloseHandle(conin);
+    }
 }
 
 /// Resolve argv to a hardening [`Role`] (#157). Unrecognized argv falls to `TextOnly` (the
