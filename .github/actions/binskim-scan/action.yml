@@ -59,7 +59,9 @@ runs:
         $code = $LASTEXITCODE
 
         # FAIL-CLOSED (always, regardless of gate): a scan that did not evaluate the target is NOT a
-        # success. Require executionSuccessful, no error-level notifications, and >=1 result of ANY kind.
+        # success. Require executionSuccessful, no error-level notifications, and >=1 PASS result. A
+        # passing rule proves BinSkim actually evaluated the binary, so fail==0 can't be a silent
+        # no-op (an all-NotApplicable or punted run).
         if (-not (Test-Path $env:BS_SARIF)) { Write-Error "BinSkim produced no SARIF (fail-closed)."; exit 1 }
         $o = Get-Content $env:BS_SARIF -Raw | ConvertFrom-Json
         $inv = $o.runs[0].invocations[0]
@@ -72,9 +74,30 @@ runs:
         $openN = @($results | Where-Object { $_.kind -eq 'open' }).Count
         $naN = @($results | Where-Object { $_.kind -eq 'notApplicable' }).Count
         "binskim: exit=$code executionSuccessful=$($inv.executionSuccessful) pass=$passN fail=$failN review=$reviewN open=$openN na=$naN errNotifications=$($errNotes.Count)"
+
+        # GitHub code-scanning needs every result to carry message.text; BinSkim's pass/notApplicable
+        # results reference message.id only, which ingestion rejects ("expected a result message"). Give
+        # any text-less result a concrete message and persist it BEFORE the digest, so the custody chain
+        # and the code-scanning upload both cover the normalized bytes. Kinds and counts are unchanged.
+        $fixed = $false
+        foreach ($run in $o.runs) {
+          foreach ($r in @($run.results)) {
+            if (-not $r.message -or [string]::IsNullOrEmpty([string]$r.message.text)) {
+              $txt = "$($r.ruleId): $($r.kind)"
+              if ($r.PSObject.Properties['message'] -and $r.message) {
+                $r.message | Add-Member -NotePropertyName text -NotePropertyValue $txt -Force
+              } else {
+                $r | Add-Member -NotePropertyName message -NotePropertyValue ([pscustomobject]@{ text = $txt }) -Force
+              }
+              $fixed = $true
+            }
+          }
+        }
+        if ($fixed) { $o | ConvertTo-Json -Depth 100 | Set-Content $env:BS_SARIF -Encoding utf8 }
+
         foreach ($n in $errNotes) { "::error::BinSkim could not scan: $($n.descriptor.id): $($n.message.text)" }
-        if ((-not $inv.executionSuccessful) -or ($errNotes.Count -gt 0) -or ($results.Count -eq 0)) {
-          Write-Error "BinSkim did not successfully evaluate the target (fail-closed). See the SARIF artifact."
+        if ((-not $inv.executionSuccessful) -or ($errNotes.Count -gt 0) -or ($passN -eq 0)) {
+          Write-Error "BinSkim did not evaluate the target: need executionSuccessful, no error notifications, and at least one PASS (fail-closed). See the SARIF artifact."
           exit 1
         }
         # Surface findings + Review/Open (tool punted -> needs a human) as warnings.
