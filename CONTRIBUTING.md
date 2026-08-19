@@ -47,9 +47,9 @@ it can **read and write the HP BIOS thermal interface**, not just look-alike. To
 1. Install and run the tool on your HP machine (the canonical consent flow).
 2. Run `hp-thermal --hwinfo` (or, in the tray, shift-right-click → **Show hardware
    fingerprint...** — same check). It reads the current thermal mode, then does a
-   minimally-invasive **write**: nudges the mode one step, confirms the read-back, and
-   immediately restores it, testing that the **HP BIOS thermal interface (via WMI)** is
-   readable and writable.
+   minimally-invasive **write**: briefly switches to a different thermal mode at similar
+   fan noise, confirms the read-back, then immediately restores the original, testing that
+   the **HP BIOS thermal interface (via WMI)** is readable and writable.
 3. If it reports **`VERIFIED`**, open an issue titled `hardware: <model>` and paste the
    `KNOWN_GOOD line` plus the `Verified by:` line (which chains your submission to the exact
    build). `--hwinfo --json` gives a machine-readable form.

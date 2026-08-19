@@ -3,20 +3,22 @@
 //! Two tiers that check whether the tool can drive the HP BIOS thermal interface (over WMI) on
 //! THIS hardware — the quality check `KNOWN_GOOD` uses when accepting a fingerprint:
 //!   1. READ  — a `CMD_READ_THERMAL` that returns OK. The interface answers. Non-invasive.
-//!   2. WRITE — read the current mode, nudge it one valid step, confirm the read-back, then
+//!   2. WRITE — read the current mode, switch to a different mode, confirm the read-back, then
 //!      restore the original and confirm that too. The interface ACCEPTS a write. This is the
 //!      command path working — NOT proof the fan physically actuated (that's a human/RPM effect
 //!      check, deliberately out of scope so the app takes no extra capability).
 //!
 //! The write probe leverages the consent the user already gave by installing + running thermal
 //! control on their HP hardware (the canonical onboarding flow) — toggling a mode IS the tool's
-//! function — and is minimally invasive: one step, immediately restored. Results are cached
+//! function — and is minimally invasive: a brief switch to another mode at similar fan noise,
+//! immediately restored. Results are cached
 //! write-through per process, so a proven tier never re-probes (and the fan is never re-nudged).
 //! A failed WRITE is also cached, so an explicit "show" action can't re-perturb on every click.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::hwinfo::HwInfo;
+use crate::mode::ThermalMode;
 use crate::protocol::{
     BUILD_FINGERPRINT, CMD_READ_BUILD_ID, CMD_READ_THERMAL, CMD_SET_THERMAL, status_ok,
 };
@@ -30,11 +32,6 @@ const FAILED: u8 = 2;
 // the fan on every attempt, and a proven write never needs repeating).
 static READ: AtomicU8 = AtomicU8::new(UNTESTED);
 static WRITE: AtomicU8 = AtomicU8::new(UNTESTED);
-
-/// Valid thermal modes are 0..=3; mask so a stray high bit can't smuggle an out-of-range write.
-fn mode_of(resp: [u8; 2]) -> u8 {
-    resp[1] & 0x03
-}
 
 /// Verdict 1: a thermal READ succeeds. Non-invasive. Caches only success.
 pub fn read_ok<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
@@ -80,18 +77,24 @@ fn probe_write<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     let Some(cur) = transact(CMD_READ_THERMAL, 0).filter(|r| status_ok(r[0])) else {
         return false;
     };
-    let orig = mode_of(cur);
-    let other = if orig == 0 { 1 } else { 0 }; // any different valid mode; one step
+    let orig = ThermalMode::from_u8(cur[1]);
+    // A different mode at roughly the same fan noise, so the read-back proves the write WITHOUT an
+    // audible fan ramp. (Crossing the loud/quiet band for an audible-confirmation probe is #188.)
+    let other = orig.same_band_partner();
 
-    // Nudge to a different mode and confirm it actually took.
-    let set_ok = matches!(transact(CMD_SET_THERMAL, other), Some(r) if status_ok(r[0]));
-    let took =
-        matches!(transact(CMD_READ_THERMAL, 0), Some(r) if status_ok(r[0]) && mode_of(r) == other);
+    // Switch to the other mode and confirm it actually took.
+    let set_ok = matches!(transact(CMD_SET_THERMAL, other.as_u8()), Some(r) if status_ok(r[0]));
+    let took = matches!(
+        transact(CMD_READ_THERMAL, 0),
+        Some(r) if status_ok(r[0]) && ThermalMode::from_u8(r[1]) == other
+    );
 
     // ALWAYS restore the original (even if the confirm above failed), then verify the restore.
-    let restore_ok = matches!(transact(CMD_SET_THERMAL, orig), Some(r) if status_ok(r[0]));
-    let restored =
-        matches!(transact(CMD_READ_THERMAL, 0), Some(r) if status_ok(r[0]) && mode_of(r) == orig);
+    let restore_ok = matches!(transact(CMD_SET_THERMAL, orig.as_u8()), Some(r) if status_ok(r[0]));
+    let restored = matches!(
+        transact(CMD_READ_THERMAL, 0),
+        Some(r) if status_ok(r[0]) && ThermalMode::from_u8(r[1]) == orig
+    );
 
     set_ok && took && restore_ok && restored
 }
@@ -368,6 +371,28 @@ mod tests {
         assert_eq!(
             ec.mode.get(),
             2,
+            "the write probe must restore the original mode"
+        );
+    }
+
+    // Complements the loud-band case above: a quiet-band start (PowerSaver) probes its same-band
+    // partner (Balanced) and restores. Exercises the `else`/quiet branch of same_band_partner.
+    #[test]
+    fn full_control_quiet_band_restores_original() {
+        reset();
+        let ec = MockEc {
+            mode: Cell::new(3), // PowerSaver (quiet); partner is Balanced, also quiet
+            up: true,
+            read_ok: true,
+            write_ok: true,
+            build: BUILD_FINGERPRINT,
+        };
+        let t = ec.transact();
+        assert!(write_ok(&t), "write must pass on controllable hardware");
+        assert_eq!(verdict(&t), Verdict::Verified);
+        assert_eq!(
+            ec.mode.get(),
+            3,
             "the write probe must restore the original mode"
         );
     }
