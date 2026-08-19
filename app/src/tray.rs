@@ -1,5 +1,5 @@
 use windows::Win32::Foundation::*;
-use windows::Win32::Graphics::Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH};
+use windows::Win32::Graphics::Gdi::{BLACK_BRUSH, DEFAULT_GUI_FONT, GetStockObject, HBRUSH};
 use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Power::*;
 use windows::Win32::System::SystemInformation::{GetSystemDirectoryW, GetTickCount64};
@@ -1239,7 +1239,8 @@ unsafe fn show_text_dialog(text: &str) {
 
     let mut rc = RECT::default();
     let _ = GetClientRect(dlg, &mut rc);
-    let body = wide_null(text);
+    // Multiline EDIT controls need CRLF, not bare LF, or every line collapses into one paragraph.
+    let body = wide_null(&text.replace('\n', "\r\n"));
     if let Ok(edit) = CreateWindowExW(
         WINDOW_EX_STYLE::default(),
         w!("EDIT"),
@@ -1257,6 +1258,10 @@ unsafe fn show_text_dialog(text: &str) {
         Some(hinstance.into()),
         None,
     ) {
+        // Native system GUI font (stock object — no cleanup) instead of the ancient default EDIT
+        // font. WM_SETFONT = 0x0030, redraw = true.
+        let font = GetStockObject(DEFAULT_GUI_FONT);
+        SendMessageW(edit, 0x0030, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
         // Select-all + focus so Ctrl+C copies the exact string immediately. EM_SETSEL = 0x00B1.
         SendMessageW(edit, 0x00B1, Some(WPARAM(0)), Some(LPARAM(-1)));
         let _ = SetFocus(Some(edit));
