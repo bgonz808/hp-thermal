@@ -63,5 +63,17 @@ The verdict tells you whether to submit:
 | `READ-ONLY` | yes | failed | no | The interface reads, but the write test failed: not confirmed writable. |
 | `UNVERIFIED` | no | — | no | No read from the interface (service not running, or unsupported hardware). |
 
-Only `VERIFIED` should be submitted — a fingerprint that only *reads* isn't confirmed writable,
+Only `VERIFIED` should be submitted: a fingerprint that only *reads* isn't confirmed writable,
 and adding it would mislead others.
+
+### What a working toggle sounds like
+
+Changing modes ramps the fan: Performance louder and higher-pitched, Balanced lower and quieter
+(well under an octave of shift). You don't need to record or submit anything; `VERIFIED` is the
+whole bar. [Hear a Balanced/Performance/Balanced capture](docs/fan-noise-bal-perf-bal.flac); the
+same ramp visualized (HP ENVY 16, board 8BE5):
+
+![The fan's harmonic stack ramps up to Performance and back down; time left-to-right, frequency
+bottom-to-top, intensity as brightness.](docs/fan-noise-bal-perf-bal.png)
+
+*Example fan-noise spectrogram, transitioning from Balanced to Performance to Balanced.*
