@@ -41,17 +41,27 @@ checks go green before it merges.
 
 ## Expanding hardware coverage
 
-Especially welcome. `KNOWN_GOOD` (in `consent.rs`) lists hardware where thermal control is
-**confirmed working** — not just look-alike. To add yours:
+Especially welcome. `KNOWN_GOOD` (in `consent.rs`) lists hardware where the tool has confirmed
+it can **read and write the HP BIOS thermal interface**, not just look-alike. To add yours:
 
 1. Install and run the tool on your HP machine (the canonical consent flow).
-2. Run `hp-thermal --hwinfo`. It runs the capability ladder — a thermal **read**, then a
-   minimally-invasive **write** that nudges the mode one step and immediately restores it — to
-   prove the tool actually *controls* your hardware, not just that the interface answers.
+2. Run `hp-thermal --hwinfo` (or, in the tray, shift-right-click → **Show hardware
+   fingerprint...** — same check). It reads the current thermal mode, then does a
+   minimally-invasive **write**: nudges the mode one step, confirms the read-back, and
+   immediately restores it, testing that the **HP BIOS thermal interface (via WMI)** is
+   readable and writable.
 3. If it reports **`VERIFIED`**, open an issue titled `hardware: <model>` and paste the
    `KNOWN_GOOD line` plus the `Verified by:` line (which chains your submission to the exact
-   build that proved it). `--hwinfo --json` gives a machine-readable form.
+   build). `--hwinfo --json` gives a machine-readable form.
 
-Only `VERIFIED` (write-proven) hardware should be submitted: a fingerprint that only *reads*
-isn't confirmed controllable, and adding it would mislead other users. If `--hwinfo` reports
-`READ-ONLY` or `UNVERIFIED`, please don't submit it.
+The verdict tells you whether to submit:
+
+| Verdict | Read? | Write? | Submit? | Meaning |
+|---|:---:|:---:|:---:|---|
+| `VERIFIED` | yes | yes | **yes** | Read + write to the HP BIOS thermal interface (WMI) confirmed. |
+| `SKEW` | yes | skipped | no | Service is a different build, so the write test is skipped for safety. Reinstall to sync versions, then re-run to verify. |
+| `READ-ONLY` | yes | failed | no | The interface reads, but the write test failed: not confirmed writable. |
+| `UNVERIFIED` | no | — | no | No read from the interface (service not running, or unsupported hardware). |
+
+Only `VERIFIED` should be submitted — a fingerprint that only *reads* isn't confirmed writable,
+and adding it would mislead others.
