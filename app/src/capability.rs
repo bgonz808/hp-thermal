@@ -1,11 +1,12 @@
 //! Thermal-control capability ladder + per-process cache (#149).
 //!
-//! Two tiers of proof that the tool actually controls THIS hardware — the property
-//! `KNOWN_GOOD` certifies, and the gate for contributing a fingerprint:
-//!   1. READ  — a `CMD_READ_THERMAL` that returns OK. Proves the WMI/BIOS interface answers.
-//!      Non-invasive.
-//!   2. WRITE — read the current mode, nudge it one valid step, confirm it took, then restore
-//!      the original and confirm the restore. Proves actual CONTROL, not just a live interface.
+//! Two tiers that check whether the tool can drive the HP BIOS thermal interface (over WMI) on
+//! THIS hardware — the quality check `KNOWN_GOOD` uses when accepting a fingerprint:
+//!   1. READ  — a `CMD_READ_THERMAL` that returns OK. The interface answers. Non-invasive.
+//!   2. WRITE — read the current mode, nudge it one valid step, confirm the read-back, then
+//!      restore the original and confirm that too. The interface ACCEPTS a write. This is the
+//!      command path working — NOT proof the fan physically actuated (that's a human/RPM effect
+//!      check, deliberately out of scope so the app takes no extra capability).
 //!
 //! The write probe leverages the consent the user already gave by installing + running thermal
 //! control on their HP hardware (the canonical onboarding flow) — toggling a mode IS the tool's
@@ -55,7 +56,7 @@ pub fn build_matches<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     matches!(transact(CMD_READ_BUILD_ID, 0), Some(fp) if fp == BUILD_FINGERPRINT)
 }
 
-/// Verdict 2: a WRITE takes effect and restores cleanly — the `KNOWN_GOOD` gate. Runs only if the read
+/// Verdict 2: a WRITE is accepted (read-back matches) and restores cleanly — the `KNOWN_GOOD` gate. Runs only if the read
 /// tier passed AND the service is the same build (#183) — a skew skips the write entirely. Minimally
 /// invasive: nudges one mode step and always restores the original, verifying each step.
 pub fn write_ok<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
@@ -95,19 +96,23 @@ fn probe_write<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     set_ok && took && restore_ok && restored
 }
 
-/// The capability verdict for the current hardware. Only [`Verdict::Verified`] (write-control
-/// proven) is safe to contribute to `KNOWN_GOOD`.
+/// The capability verdict for the current hardware. Only [`Verdict::Verified`] (interface read +
+/// write confirmed) is safe to contribute to `KNOWN_GOOD`.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Verdict {
-    /// A write took effect and restored cleanly — proven control. Submittable.
+    /// The interface answered a read AND accepted a write (read-back matched), then restored
+    /// cleanly. Submittable.
     Verified,
-    /// The interface answers a read, but the service is a DIFFERENT build, so the write-test was
-    /// skipped for safety (#183). Reads are fine; control is unproven.
+    /// The interface answers a read, but the service is a DIFFERENT build, so the write test was
+    /// skipped for safety (#183). Reads are fine; the write is unconfirmed.
     Skew,
-    /// The interface answers a read, but write-control was not proven (the write failed).
+    /// The interface answers a read, but the write test failed.
     ReadOnly,
     /// No successful thermal read (service down, or unsupported hardware).
     Unverified,
+    /// This binary is not the installed copy, so the service pipe would reject it (co-location
+    /// check, #159). The ladder is skipped entirely; run the installed copy to verify.
+    NotInstalled,
 }
 
 /// Run the full ladder and report the verdict reached. The single flow shared by the CLI
@@ -125,16 +130,73 @@ pub fn verdict<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> Verdict {
 }
 
 /// Human-readable hardware report shared by the CLI and the tray dialog (#149). `build` is the
-/// provenance telltale that chains a submission to the exact build that proved the hardware.
+/// provenance telltale that chains a submission to the exact build that produced this report.
 pub fn report(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
     let bin = crate::app::BIN_NAME;
+    // Identity + fingerprint block, common to every verdict. ASCII only so the dialog font renders
+    // it cleanly; labels are un-padded so a proportional font doesn't misalign columns.
+    let head = format!(
+        "{bin} {build}\n\
+         \n\
+         Manufacturer: {mfg}\n\
+         Product: {product}\n\
+         Family: {family}\n\
+         Board: {board}\n\
+         BIOS: {bios}\n\
+         Board version: {bver}\n\
+         \n\
+         KNOWN_GOOD line:\n  {fp}\n\
+         \n\
+         HP hardware: {hp}\n",
+        mfg = hw.manufacturer,
+        product = hw.product,
+        family = hw.family,
+        board = hw.board,
+        bios = hw.bios_version,
+        bver = hw.board_version,
+        fp = hw.fingerprint(),
+        hp = if hw.is_hp() { "yes" } else { "no" },
+    );
+
+    // Not the installed copy: NOTHING was tested, so don't fake a "Thermal control:" verdict. Only
+    // point at the installed copy if it actually exists on disk — otherwise the tool isn't installed.
+    if verdict == Verdict::NotInstalled {
+        let installed = crate::app::installed_exe();
+        let tail = if std::path::Path::new(&installed).exists() {
+            // Quote the path if it contains a space (it does — "Program Files"), so it pastes and
+            // runs as one argument instead of the shell splitting it.
+            let cmd = if installed.contains(' ') {
+                format!("\"{installed}\"")
+            } else {
+                installed.clone()
+            };
+            format!(
+                "This copy is not the installed binary, so thermal control was not checked.\n\
+                 Run the installed copy to verify:\n  {cmd} --hwinfo"
+            )
+        } else {
+            "This tool is not installed, so thermal control was not checked. Install it first, then \
+             run it to verify."
+                .to_string()
+        };
+        return format!("{head}\n{tail}\n");
+    }
+
+    // Name the mechanism (the HP BIOS thermal interface over WMI) so the verdict is meaningful.
     let status = match verdict {
-        Verdict::Verified => "VERIFIED — read + write/restore OK (control proven)",
-        Verdict::Skew => {
-            "SKEW — the running service is a DIFFERENT build; write-test skipped for safety"
+        Verdict::Verified => {
+            "VERIFIED - read + write to the HP BIOS thermal interface (WMI) confirmed"
         }
-        Verdict::ReadOnly => "READ-ONLY — interface answers; write-control NOT proven",
-        Verdict::Unverified => "UNVERIFIED — no thermal read (service down or unsupported)",
+        Verdict::Skew => {
+            "SKEW - service is a different build; write skipped for safety (HP BIOS read OK)"
+        }
+        Verdict::ReadOnly => {
+            "READ-ONLY - HP BIOS thermal interface reads, but the write test failed"
+        }
+        Verdict::Unverified => {
+            "UNVERIFIED - no read from the HP BIOS thermal interface (service down or unsupported)"
+        }
+        Verdict::NotInstalled => unreachable!("handled by the early return above"),
     };
     let footer = match verdict {
         Verdict::Verified => {
@@ -146,35 +208,17 @@ pub fn report(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
              write-test was skipped. Reinstall/restart so both match, then re-run."
         }
         Verdict::ReadOnly | Verdict::Unverified => {
-            "Not submittable: write-control could not be proven on this hardware (see status above),\n\
-             so it isn't confirmed working. Please don't submit it to KNOWN_GOOD."
+            "Not submittable: read + write to the HP BIOS thermal interface could not be confirmed\n\
+             (see status above), so it isn't confirmed working. Please don't submit it to KNOWN_GOOD."
         }
+        Verdict::NotInstalled => unreachable!("handled by the early return above"),
     };
     format!(
-        "{bin} {build}\n\
+        "{head}\
+         Thermal control: {status}\n\
+         Verified by: {bin} {build}\n\
          \n\
-         Manufacturer:  {mfg}\n\
-         Product:       {product}\n\
-         Family:        {family}\n\
-         Board:         {board}\n\
-         BIOS:          {bios}\n\
-         Board version: {bver}\n\
-         \n\
-         KNOWN_GOOD line:\n  {fp}\n\
-         \n\
-         HP hardware:      {hp}\n\
-         Thermal control:  {status}\n\
-         Verified by:      {bin} {build}\n\
-         \n\
-         {footer}\n",
-        mfg = hw.manufacturer,
-        product = hw.product,
-        family = hw.family,
-        board = hw.board,
-        bios = hw.bios_version,
-        bver = hw.board_version,
-        fp = hw.fingerprint(),
-        hp = if hw.is_hp() { "yes" } else { "no" },
+         {footer}\n"
     )
 }
 
@@ -185,6 +229,7 @@ pub fn report_json(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
         Verdict::Skew => "skew",
         Verdict::ReadOnly => "read-only",
         Verdict::Unverified => "unverified",
+        Verdict::NotInstalled => "not-installed",
     };
     let e = json_escape;
     format!(
@@ -215,14 +260,23 @@ fn build_id() -> String {
 /// The SINGLE entry both `--hwinfo` and the tray dialog call, so their output is identical by
 /// construction — no near-duplicate read/verdict/format glue on either side (#149).
 pub fn hardware_report() -> String {
-    let transact = |cmd, payload| crate::pipe::client_transact(cmd, payload);
-    report(&HwInfo::read(), verdict(&transact), &build_id())
+    report(&HwInfo::read(), current_verdict(), &build_id())
 }
 
 /// Machine-readable variant of [`hardware_report`] (`--hwinfo --json`).
 pub fn hardware_report_json() -> String {
+    report_json(&HwInfo::read(), current_verdict(), &build_id())
+}
+
+/// The verdict for the real machine. Short-circuits to [`Verdict::NotInstalled`] when this binary
+/// isn't the installed copy: the service pipe would reject it anyway (#159), so skip the ladder
+/// and the pipe call entirely and point the user at the installed copy.
+fn current_verdict() -> Verdict {
+    if !crate::install::is_installed_copy() {
+        return Verdict::NotInstalled;
+    }
     let transact = |cmd, payload| crate::pipe::client_transact(cmd, payload);
-    report_json(&HwInfo::read(), verdict(&transact), &build_id())
+    verdict(&transact)
 }
 
 /// Minimal JSON string escaper (quote + backslash + control chars) — enough for SMBIOS text.
@@ -363,28 +417,32 @@ mod tests {
         }
     }
 
+    // A synthetic build string (NOT a real version): report() interpolates whatever `build` it's
+    // given, so this asserts the formatting, and never goes stale as the real version advances.
+    const FAKE_BUILD: &str = "x.y.z+test.deadbeef";
+
     // #149: only the write-proven tier is submittable; the KNOWN_GOOD line + provenance appear.
     #[test]
     fn report_gates_submission_on_write_proof() {
         let hw = sample_hw();
         let fp = hw.fingerprint();
 
-        let ok = report(&hw, Verdict::Verified, "0.3.1+140.abc");
+        let ok = report(&hw, Verdict::Verified, FAKE_BUILD);
         assert!(ok.contains(&fp), "KNOWN_GOOD line present verbatim");
         assert!(ok.contains("VERIFIED"));
-        assert!(ok.contains("Verified by:      hp-thermal 0.3.1+140.abc"));
+        assert!(ok.contains(&format!("Verified by: hp-thermal {FAKE_BUILD}")));
         assert!(ok.contains("To contribute"));
         assert!(!ok.contains("Not submittable"));
 
         for verdict in [Verdict::Skew, Verdict::ReadOnly, Verdict::Unverified] {
-            let s = report(&hw, verdict, "0.3.1+140.abc");
+            let s = report(&hw, verdict, FAKE_BUILD);
             assert!(
                 s.contains("Not submittable"),
                 "non-verified must not be submittable"
             );
         }
         assert!(
-            report(&hw, Verdict::Skew, "0.3.1+140.abc").contains("SKEW"),
+            report(&hw, Verdict::Skew, FAKE_BUILD).contains("SKEW"),
             "skew must be surfaced"
         );
     }
@@ -393,9 +451,30 @@ mod tests {
     fn report_json_escapes_and_marks_submittable() {
         let mut hw = sample_hw();
         hw.product = "HP \"Quoty\" 16".into();
-        let j = report_json(&hw, Verdict::Verified, "0.3.1");
+        let j = report_json(&hw, Verdict::Verified, FAKE_BUILD);
         assert!(j.contains("\\\"Quoty\\\""), "quotes must be JSON-escaped");
         assert!(j.contains("\"submittable\":true"));
-        assert!(report_json(&hw, Verdict::ReadOnly, "0.3.1").contains("\"submittable\":false"));
+        assert!(report_json(&hw, Verdict::ReadOnly, FAKE_BUILD).contains("\"submittable\":false"));
+    }
+
+    // A non-installed copy shows the fingerprint but does NOT fake a thermal-control verdict, and
+    // is never submittable. (Whether it says "run the installed copy" vs "install it first" depends
+    // on the real install state, so we only assert the invariants that hold either way.)
+    #[test]
+    fn not_installed_does_not_fake_a_thermal_verdict() {
+        let hw = sample_hw();
+        let r = report(&hw, Verdict::NotInstalled, FAKE_BUILD);
+        assert!(r.contains(&hw.fingerprint()), "fingerprint still shown");
+        assert!(
+            !r.contains("Thermal control:"),
+            "must not claim a thermal verdict"
+        );
+        assert!(
+            r.to_lowercase().contains("install"),
+            "must explain the install situation"
+        );
+        let j = report_json(&hw, Verdict::NotInstalled, FAKE_BUILD);
+        assert!(j.contains("\"capability\":\"not-installed\""));
+        assert!(j.contains("\"submittable\":false"));
     }
 }
