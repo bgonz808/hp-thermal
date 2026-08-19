@@ -1,10 +1,10 @@
 use windows::Win32::Foundation::*;
-use windows::Win32::Graphics::Gdi::{BLACK_BRUSH, GetStockObject, HBRUSH};
+use windows::Win32::Graphics::Gdi::{BLACK_BRUSH, DEFAULT_GUI_FONT, GetStockObject, HBRUSH};
 use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Power::*;
 use windows::Win32::System::SystemInformation::{GetSystemDirectoryW, GetTickCount64};
 use windows::Win32::System::Threading::{CreateMutexW, INFINITE, OpenEventW, WaitForSingleObject};
-use windows::Win32::UI::Input::KeyboardAndMouse::GetKeyState;
+use windows::Win32::UI::Input::KeyboardAndMouse::{GetKeyState, SetFocus};
 use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 use windows::core::{PCSTR, PCWSTR, w};
@@ -47,7 +47,11 @@ const ID_FNKEY_SLEEP: u32 = 318;
 const ID_METHOD_BRIGHTNESS: u32 = 319;
 const ID_METHOD_DPMS: u32 = 320;
 const ID_METHOD_BLACK: u32 = 321;
+const ID_SHOW_FINGERPRINT: u32 = 322;
 const WM_SCREEN_ON: u32 = WM_USER + 4;
+
+/// Window class for the read-only, selectable hardware-fingerprint dialog (#149).
+const HWINFO_CLASS: PCWSTR = w!("HpThermalHwInfo");
 
 // Notification-area (NOTIFYICON_VERSION_4) event codes, delivered in LOWORD(lParam) of the
 // WM_TRAYICON callback. Not all are exported by the windows crate; the values are stable
@@ -196,6 +200,18 @@ unsafe fn run_inner() {
         ..Default::default()
     };
     RegisterClassW(&wc);
+
+    // #149: class for the read-only, selectable hardware-fingerprint dialog. Registered once here
+    // (COLOR_WINDOW background so the edit control blends in).
+    let hwinfo_wc = WNDCLASSW {
+        lpfnWndProc: Some(hwinfo_wnd_proc),
+        hInstance: hinstance.into(),
+        lpszClassName: HWINFO_CLASS,
+        // Null background: the edit control fills the whole client area, so it's never painted.
+        hbrBackground: HBRUSH::default(),
+        ..Default::default()
+    };
+    RegisterClassW(&hwinfo_wc);
 
     let title = wide_null(app::NAME);
     HWND_MAIN = CreateWindowExW(
@@ -728,6 +744,26 @@ unsafe fn show_context_menu(hwnd: HWND, anchor_x: i32, anchor_y: i32) {
         id += 1;
         append_item_disabled(hmenu, id, &stack_str);
 
+        // --- Contribute hardware (#149) ---
+        // Enabled once a live thermal read confirms the interface answers; clicking runs the full
+        // read→write/restore ladder and shows the SAME report as `--hwinfo` in a selectable dialog.
+        // Greyed when there's no service to read. Fixed command id — doesn't disturb the running `id`.
+        let _ = AppendMenuW(hmenu, MF_SEPARATOR, 0, None);
+        if matches!(thermal, Some([s, _]) if status_ok(s)) {
+            append_item(
+                hmenu,
+                ID_SHOW_FINGERPRINT,
+                "Show hardware fingerprint...",
+                false,
+            );
+        } else {
+            append_item_disabled(
+                hmenu,
+                ID_SHOW_FINGERPRINT,
+                "Hardware fingerprint (no service)",
+            );
+        }
+
         // --- Noise calibration (opt-in feature) ---
         #[cfg(feature = "noise-adapt")]
         {
@@ -881,6 +917,12 @@ unsafe fn handle_menu(hwnd: HWND, id: u32) {
             };
             pipe::client_transact(CMD_SET_COOLSENSE, new_val);
             cache_store(None, Some(new_val)); // optimistic: next open reflects the toggle
+        }
+        ID_SHOW_FINGERPRINT => {
+            // #149: the SAME unified path as `--hwinfo` — capability::hardware_report runs the
+            // read→write/restore ladder (cached) over the pipe; we just show it in a selectable
+            // dialog instead of printing. No app-side clipboard/shell ops.
+            show_text_dialog(&crate::capability::hardware_report());
         }
         #[cfg(feature = "noise-adapt")]
         ID_NOISE_ADAPTED => {
@@ -1144,6 +1186,86 @@ unsafe fn append_item(hmenu: HMENU, id: u32, text: &str, checked: bool) {
     let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
     let flags = MF_STRING | if checked { MF_CHECKED } else { MF_UNCHECKED };
     let _ = AppendMenuW(hmenu, flags, id as usize, PCWSTR(wide.as_ptr()));
+}
+
+/// Window proc for the #149 fingerprint dialog. MODELESS (it lives on the tray's own message
+/// loop), so WM_DESTROY must NOT PostQuitMessage — that would tear down the whole tray. WM_SIZE
+/// keeps the single edit child filling the client area; the close button / Esc destroy it.
+unsafe extern "system" fn hwinfo_wnd_proc(
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    match msg {
+        WM_SIZE => {
+            if let Ok(edit) = GetDlgItem(Some(hwnd), 1) {
+                let mut rc = RECT::default();
+                let _ = GetClientRect(hwnd, &mut rc);
+                let _ = MoveWindow(edit, 0, 0, rc.right, rc.bottom, true);
+            }
+            LRESULT(0)
+        }
+        WM_CLOSE => {
+            let _ = DestroyWindow(hwnd);
+            LRESULT(0)
+        }
+        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+    }
+}
+
+/// Show `text` in a read-only, SELECTABLE modeless dialog (#149). The user selects + Ctrl+C the
+/// exact string — the app performs no clipboard or shell ops (consent: the copy is the user's own
+/// action). Reuses only user32/gdi the tray already links; adds no imports / no capabilities.
+unsafe fn show_text_dialog(text: &str) {
+    let hinstance = GetModuleHandleW(None).unwrap();
+    let title = wide_null("Hardware fingerprint");
+    let Ok(dlg) = CreateWindowExW(
+        WINDOW_EX_STYLE::default(),
+        HWINFO_CLASS,
+        PCWSTR(title.as_ptr()),
+        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_VISIBLE,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        600,
+        400,
+        None,
+        None,
+        Some(hinstance.into()),
+        None,
+    ) else {
+        return;
+    };
+
+    let mut rc = RECT::default();
+    let _ = GetClientRect(dlg, &mut rc);
+    // Multiline EDIT controls need CRLF, not bare LF, or every line collapses into one paragraph.
+    let body = wide_null(&text.replace('\n', "\r\n"));
+    if let Ok(edit) = CreateWindowExW(
+        WINDOW_EX_STYLE::default(),
+        w!("EDIT"),
+        PCWSTR(body.as_ptr()),
+        WS_CHILD
+            | WS_VISIBLE
+            | WS_VSCROLL
+            | WINDOW_STYLE((ES_MULTILINE | ES_READONLY | ES_AUTOVSCROLL) as u32),
+        0,
+        0,
+        rc.right,
+        rc.bottom,
+        Some(dlg),
+        Some(HMENU(std::ptr::without_provenance_mut(1))), // control id 1 — the WM_SIZE lookup key
+        Some(hinstance.into()),
+        None,
+    ) {
+        // Native system GUI font (stock object — no cleanup) instead of the ancient default EDIT
+        // font. WM_SETFONT = 0x0030, redraw = true.
+        let font = GetStockObject(DEFAULT_GUI_FONT);
+        SendMessageW(edit, 0x0030, Some(WPARAM(font.0 as usize)), Some(LPARAM(1)));
+        // Select-all + focus so Ctrl+C copies the exact string immediately. EM_SETSEL = 0x00B1.
+        SendMessageW(edit, 0x00B1, Some(WPARAM(0)), Some(LPARAM(-1)));
+        let _ = SetFocus(Some(edit));
+    }
 }
 
 unsafe fn append_item_disabled(hmenu: HMENU, id: u32, text: &str) {
