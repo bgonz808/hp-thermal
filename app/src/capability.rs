@@ -16,7 +16,9 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::hwinfo::HwInfo;
-use crate::protocol::{CMD_READ_THERMAL, CMD_SET_THERMAL, status_ok};
+use crate::protocol::{
+    BUILD_FINGERPRINT, CMD_READ_BUILD_ID, CMD_READ_THERMAL, CMD_SET_THERMAL, status_ok,
+};
 
 const UNTESTED: u8 = 0;
 const OK: u8 = 1;
@@ -33,7 +35,7 @@ fn mode_of(resp: [u8; 2]) -> u8 {
     resp[1] & 0x03
 }
 
-/// Tier 1: a thermal READ succeeds. Non-invasive. Caches only success.
+/// Verdict 1: a thermal READ succeeds. Non-invasive. Caches only success.
 pub fn read_ok<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     if READ.load(Ordering::Acquire) == OK {
         return true;
@@ -45,16 +47,29 @@ pub fn read_ok<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     ok
 }
 
-/// Tier 2: a WRITE takes effect and restores cleanly — the `KNOWN_GOOD` gate. Runs only if the
-/// read tier passed; caches both outcomes (write-through). Minimally invasive: nudges one mode
-/// step and always restores the original, verifying each step.
+/// The service must be the SAME build before we WRITE (#183): across versions the opcode/payload
+/// semantics could differ, so a write might not mean what we intend. Client-side check (co-location
+/// already handles malice; this guards accidental skew). READS are safe across versions and are NOT
+/// gated. Full tray/protocol skew handling is deferred to #183.
+pub fn build_matches<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
+    matches!(transact(CMD_READ_BUILD_ID, 0), Some(fp) if fp == BUILD_FINGERPRINT)
+}
+
+/// Verdict 2: a WRITE takes effect and restores cleanly — the `KNOWN_GOOD` gate. Runs only if the read
+/// tier passed AND the service is the same build (#183) — a skew skips the write entirely. Minimally
+/// invasive: nudges one mode step and always restores the original, verifying each step.
 pub fn write_ok<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     match WRITE.load(Ordering::Acquire) {
         OK => return true,
         FAILED => return false,
         _ => {}
     }
-    let proven = read_ok(transact) && probe_write(transact);
+    // No read / a build skew: skip the write WITHOUT caching, so a late service or a post-update
+    // restart can recover this session (the write outcome is cached only once we actually probe).
+    if !read_ok(transact) || !build_matches(transact) {
+        return false;
+    }
+    let proven = probe_write(transact);
     WRITE.store(if proven { OK } else { FAILED }, Ordering::Release);
     proven
 }
@@ -80,45 +95,60 @@ fn probe_write<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     set_ok && took && restore_ok && restored
 }
 
-/// Capability tier reached for the current hardware. Only [`Tier::Verified`] (write-control
+/// The capability verdict for the current hardware. Only [`Verdict::Verified`] (write-control
 /// proven) is safe to contribute to `KNOWN_GOOD`.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub enum Tier {
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Verdict {
     /// A write took effect and restored cleanly — proven control. Submittable.
     Verified,
-    /// The interface answers a read, but write-control was not proven (failed).
+    /// The interface answers a read, but the service is a DIFFERENT build, so the write-test was
+    /// skipped for safety (#183). Reads are fine; control is unproven.
+    Skew,
+    /// The interface answers a read, but write-control was not proven (the write failed).
     ReadOnly,
     /// No successful thermal read (service down, or unsupported hardware).
     Unverified,
 }
 
-/// Run the full ladder and report the tier reached. The single flow shared by the CLI
+/// Run the full ladder and report the verdict reached. The single flow shared by the CLI
 /// (`--hwinfo`) and the tray dialog, so both classify identically.
-pub fn tier<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> Tier {
-    if write_ok(transact) {
-        Tier::Verified
-    } else if read_ok(transact) {
-        Tier::ReadOnly
+pub fn verdict<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> Verdict {
+    if !read_ok(transact) {
+        Verdict::Unverified
+    } else if !build_matches(transact) {
+        Verdict::Skew
+    } else if write_ok(transact) {
+        Verdict::Verified
     } else {
-        Tier::Unverified
+        Verdict::ReadOnly
     }
 }
 
 /// Human-readable hardware report shared by the CLI and the tray dialog (#149). `build` is the
 /// provenance telltale that chains a submission to the exact build that proved the hardware.
-pub fn report(hw: &HwInfo, tier: Tier, build: &str) -> String {
+pub fn report(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
     let bin = crate::app::BIN_NAME;
-    let status = match tier {
-        Tier::Verified => "VERIFIED — read + write/restore OK (control proven)",
-        Tier::ReadOnly => "READ-ONLY — interface answers; write-control NOT proven",
-        Tier::Unverified => "UNVERIFIED — no thermal read (service down or unsupported)",
+    let status = match verdict {
+        Verdict::Verified => "VERIFIED — read + write/restore OK (control proven)",
+        Verdict::Skew => {
+            "SKEW — the running service is a DIFFERENT build; write-test skipped for safety"
+        }
+        Verdict::ReadOnly => "READ-ONLY — interface answers; write-control NOT proven",
+        Verdict::Unverified => "UNVERIFIED — no thermal read (service down or unsupported)",
     };
-    let footer = if tier == Tier::Verified {
-        "To contribute: open an issue `hardware: <model>`, paste the KNOWN_GOOD line above, and\n\
-         include the 'Verified by' line so it chains to this build."
-    } else {
-        "Not submittable: write-control could not be proven on this hardware (see status above),\n\
-         so it isn't confirmed working. Please don't submit it to KNOWN_GOOD."
+    let footer = match verdict {
+        Verdict::Verified => {
+            "To contribute: open an issue `hardware: <model>`, paste the KNOWN_GOOD line above, and\n\
+             include the 'Verified by' line so it chains to this build."
+        }
+        Verdict::Skew => {
+            "Not submittable: this binary and the running service are different builds, so the\n\
+             write-test was skipped. Reinstall/restart so both match, then re-run."
+        }
+        Verdict::ReadOnly | Verdict::Unverified => {
+            "Not submittable: write-control could not be proven on this hardware (see status above),\n\
+             so it isn't confirmed working. Please don't submit it to KNOWN_GOOD."
+        }
     };
     format!(
         "{bin} {build}\n\
@@ -149,11 +179,12 @@ pub fn report(hw: &HwInfo, tier: Tier, build: &str) -> String {
 }
 
 /// Machine-readable report (`--hwinfo --json`). Hand-rolled (no serde dep); fields are escaped.
-pub fn report_json(hw: &HwInfo, tier: Tier, build: &str) -> String {
-    let tier_str = match tier {
-        Tier::Verified => "verified",
-        Tier::ReadOnly => "read-only",
-        Tier::Unverified => "unverified",
+pub fn report_json(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
+    let verdict_str = match verdict {
+        Verdict::Verified => "verified",
+        Verdict::Skew => "skew",
+        Verdict::ReadOnly => "read-only",
+        Verdict::Unverified => "unverified",
     };
     let e = json_escape;
     format!(
@@ -168,8 +199,8 @@ pub fn report_json(hw: &HwInfo, tier: Tier, build: &str) -> String {
         e(&hw.bios_version),
         e(&hw.board_version),
         hw.is_hp(),
-        tier_str,
-        tier == Tier::Verified,
+        verdict_str,
+        verdict == Verdict::Verified,
         e(crate::app::BIN_NAME),
         e(build),
     )
@@ -182,16 +213,16 @@ fn build_id() -> String {
 
 /// End-to-end hardware report: read identity, run the ladder over the real service pipe, format.
 /// The SINGLE entry both `--hwinfo` and the tray dialog call, so their output is identical by
-/// construction — no near-duplicate read/tier/format glue on either side (#149).
+/// construction — no near-duplicate read/verdict/format glue on either side (#149).
 pub fn hardware_report() -> String {
     let transact = |cmd, payload| crate::pipe::client_transact(cmd, payload);
-    report(&HwInfo::read(), tier(&transact), &build_id())
+    report(&HwInfo::read(), verdict(&transact), &build_id())
 }
 
 /// Machine-readable variant of [`hardware_report`] (`--hwinfo --json`).
 pub fn hardware_report_json() -> String {
     let transact = |cmd, payload| crate::pipe::client_transact(cmd, payload);
-    report_json(&HwInfo::read(), tier(&transact), &build_id())
+    report_json(&HwInfo::read(), verdict(&transact), &build_id())
 }
 
 /// Minimal JSON string escaper (quote + backslash + control chars) — enough for SMBIOS text.
@@ -216,22 +247,31 @@ mod tests {
     use super::*;
     use std::cell::Cell;
 
-    /// Mock service: holds a current mode and flags for which ops succeed, so the ladder can be
-    /// exercised without a running service. Reads/writes mutate `mode` like the real EC.
+    /// Mock service: a current mode, which ops succeed, and the build fingerprint it reports, so
+    /// the ladder (incl. the #183 build-parity write gate) runs without a real service. `up=false`
+    /// models a dead service (nothing responds). Reads/writes mutate `mode` like the real EC.
     struct MockEc {
         mode: Cell<u8>,
+        up: bool,
         read_ok: bool,
         write_ok: bool,
+        build: [u8; 2],
     }
     impl MockEc {
         fn transact(&self) -> impl Fn(u8, u8) -> Option<[u8; 2]> + '_ {
-            move |cmd, payload| match cmd {
-                CMD_READ_THERMAL if self.read_ok => Some([0, self.mode.get()]),
-                CMD_SET_THERMAL if self.write_ok => {
-                    self.mode.set(payload & 0x03);
-                    Some([0, 0])
+            move |cmd, payload| {
+                if !self.up {
+                    return None;
                 }
-                _ => None, // no response == failure
+                match cmd {
+                    CMD_READ_BUILD_ID => Some(self.build),
+                    CMD_READ_THERMAL if self.read_ok => Some([0, self.mode.get()]),
+                    CMD_SET_THERMAL if self.write_ok => {
+                        self.mode.set(payload & 0x03);
+                        Some([0, 0])
+                    }
+                    _ => None, // no response == failure
+                }
             }
         }
     }
@@ -246,13 +286,16 @@ mod tests {
         reset();
         let ec = MockEc {
             mode: Cell::new(1),
+            up: true,
             read_ok: true,
             write_ok: false,
+            build: BUILD_FINGERPRINT,
         };
         let t = ec.transact();
         assert!(read_ok(&t), "read must pass");
         assert!(!write_ok(&t), "write must fail on read-only hardware");
         assert_eq!(ec.mode.get(), 1, "a failed write leaves the mode untouched");
+        assert_eq!(verdict(&t), Verdict::ReadOnly);
     }
 
     #[test]
@@ -260,11 +303,14 @@ mod tests {
         reset();
         let ec = MockEc {
             mode: Cell::new(2),
+            up: true,
             read_ok: true,
             write_ok: true,
+            build: BUILD_FINGERPRINT,
         };
         let t = ec.transact();
         assert!(write_ok(&t), "write must pass on controllable hardware");
+        assert_eq!(verdict(&t), Verdict::Verified);
         assert_eq!(
             ec.mode.get(),
             2,
@@ -277,12 +323,33 @@ mod tests {
         reset();
         let ec = MockEc {
             mode: Cell::new(0),
+            up: false,
             read_ok: false,
             write_ok: false,
+            build: BUILD_FINGERPRINT,
         };
         let t = ec.transact();
         assert!(!read_ok(&t));
         assert!(!write_ok(&t));
+        assert_eq!(verdict(&t), Verdict::Unverified);
+    }
+
+    // #183: a different-build service → reads fine, but the write-test is SKIPPED (mode untouched).
+    #[test]
+    fn build_skew_reads_but_skips_write() {
+        reset();
+        let ec = MockEc {
+            mode: Cell::new(3),
+            up: true,
+            read_ok: true,
+            write_ok: true, // the service COULD write, but we must not ask it to on a skew
+            build: [BUILD_FINGERPRINT[0] ^ 0xFF, BUILD_FINGERPRINT[1]], // different build
+        };
+        let t = ec.transact();
+        assert!(read_ok(&t), "reads are allowed across versions");
+        assert!(!write_ok(&t), "writes must be skipped on a build skew");
+        assert_eq!(ec.mode.get(), 3, "no write means the mode is untouched");
+        assert_eq!(verdict(&t), Verdict::Skew);
     }
 
     fn sample_hw() -> HwInfo {
@@ -302,29 +369,33 @@ mod tests {
         let hw = sample_hw();
         let fp = hw.fingerprint();
 
-        let ok = report(&hw, Tier::Verified, "0.3.1+140.abc");
+        let ok = report(&hw, Verdict::Verified, "0.3.1+140.abc");
         assert!(ok.contains(&fp), "KNOWN_GOOD line present verbatim");
         assert!(ok.contains("VERIFIED"));
         assert!(ok.contains("Verified by:      hp-thermal 0.3.1+140.abc"));
         assert!(ok.contains("To contribute"));
         assert!(!ok.contains("Not submittable"));
 
-        for tier in [Tier::ReadOnly, Tier::Unverified] {
-            let s = report(&hw, tier, "0.3.1+140.abc");
+        for verdict in [Verdict::Skew, Verdict::ReadOnly, Verdict::Unverified] {
+            let s = report(&hw, verdict, "0.3.1+140.abc");
             assert!(
                 s.contains("Not submittable"),
                 "non-verified must not be submittable"
             );
         }
+        assert!(
+            report(&hw, Verdict::Skew, "0.3.1+140.abc").contains("SKEW"),
+            "skew must be surfaced"
+        );
     }
 
     #[test]
     fn report_json_escapes_and_marks_submittable() {
         let mut hw = sample_hw();
         hw.product = "HP \"Quoty\" 16".into();
-        let j = report_json(&hw, Tier::Verified, "0.3.1");
+        let j = report_json(&hw, Verdict::Verified, "0.3.1");
         assert!(j.contains("\\\"Quoty\\\""), "quotes must be JSON-escaped");
         assert!(j.contains("\"submittable\":true"));
-        assert!(report_json(&hw, Tier::ReadOnly, "0.3.1").contains("\"submittable\":false"));
+        assert!(report_json(&hw, Verdict::ReadOnly, "0.3.1").contains("\"submittable\":false"));
     }
 }
