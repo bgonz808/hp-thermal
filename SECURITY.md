@@ -27,8 +27,11 @@ gh attestation verify hp-thermal.exe \
 
 The attestation is the real integrity anchor. `SHA256SUMS` is attached as a convenience, but
 a bare checksum only proves a file matches itself; the attestation proves it came from this
-build. The binary is not yet [Authenticode](https://learn.microsoft.com/windows-hardware/drivers/install/authenticode)-signed, so Windows shows "Publisher: Unknown" on
-the UAC prompt — until that lands (see Roadmap), the attestation is the proof of origin.
+build. Since v0.3.0 releases are also [Authenticode](https://learn.microsoft.com/windows-hardware/drivers/install/authenticode)-signed
+(keyless OIDC to an HSM-backed signing service; the pipeline verifies the signature before
+publishing), so the UAC prompt shows a verified publisher. Note that SmartScreen *reputation*
+is a separate system and accrues slowly: a warning wall on a fresh release is expected and is
+not a signature failure.
 
 ## Threat model (tray ↔ service IPC)
 
@@ -83,8 +86,8 @@ kernel backstop behind it.
   process, applied at startup before injected code could act. But they are **self-imposed**,
   so they hold only *assuming the as-built binary is what ran* — a tampered build omits them,
   and the footing check verifies location / ACL / privilege, not authenticity. That
-  assumption — load-time authenticity — is discharged only by Authenticode signing (Roadmap):
-  the OS won't run a tampered image as our publisher. So the self-checks are
+  assumption — load-time authenticity — is discharged by Authenticode signing (in place since
+  v0.3.0): the OS won't run a tampered image as our publisher. So the self-checks are
   tamper-*resistant*; signing is what makes them tamper-*evident*.
 
 ### Weaknesses addressed ([CWE](https://cwe.mitre.org))
@@ -318,6 +321,6 @@ verification but **bounded reward**: least privilege + no secrets + minimal in-r
 
 ## Roadmap
 
-Authenticode signing, `/CETCOMPAT`, formal (Kani) proof of the input parser, and Miri
+`/CETCOMPAT`, formal (Kani) proof of the input parser, and Miri
 UB-checking of the pure-logic tests — the last unblocked by extracting the
 pure logic into a stable `core` crate (which also removes the `build-std` sysroot conflict).
