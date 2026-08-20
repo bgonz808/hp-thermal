@@ -58,16 +58,19 @@ client, even a fully compromised one, can escalate. Security comes from making t
 8. **Anti-injection** — process mitigation policies (`ExtensionPointDisablePolicy`) on both
    roles.
 
-Path/identity checks fail **closed**; integrity-level and server-query checks fail **open**
-(inability to determine ≠ rejection) so a transient API failure never breaks the legitimate
-tray ↔ service path.
+Path/identity **and caller integrity-level** checks fail **closed** (#159): a wrong client
+path, or a caller whose integrity level can't be confirmed, is denied. Only the client→server
+check fails **open** (inability to determine the *server* ≠ rejection), so a transient API
+failure never breaks the legitimate tray ↔ service path; the pipe's mandatory-label SACL is the
+kernel backstop behind it.
 
 ### Privilege-escalation & tamper posture
 
 - **Escalation through the pipe: no path by construction.** The most a fully compromised
   client can make SYSTEM do is toggle a thermal mode or brightness level — range-checked,
-  no code execution, no dangerous parameter. (Stated as "no path by construction," not
-  formally proven.)
+  no code execution, no dangerous parameter. And BIOS/EC writes are token-bucket rate-limited
+  (#159), so a compromised Medium-IL tray can't flood the firmware with mode changes. (Stated
+  as "no path by construction," not formally proven.)
 - **Tamper-proof: no — and that's the correct posture.** The SYSTEM service is
   tamper-*resistant* to non-admins; the tray cannot be tamper-proofed against same-user
   injection, and the design does not depend on it.
