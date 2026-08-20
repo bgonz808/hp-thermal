@@ -796,6 +796,12 @@ jobs:
         with:
           sarif_file: sarif/binskim-release.sarif
           category: binskim-release
+          # A canonical (non-prerelease) tag ships main's authoritative SIGNED posture (incl. BA2022
+          # SignSecurely, which only passes on signed bytes), so attribute it to refs/heads/main and
+          # refresh the Code-scanning tab. Prereleases (v*-rc.*) and dispatch keep their own ref, so
+          # the tab reflects the last SHIPPED release, never a candidate. Semver: a '-' == prerelease.
+          ref: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')) && 'refs/heads/main' || github.ref }}
+          sha: ${{ github.sha }}
 
   publish:
     needs: [verify, binskim-release, attest-sarif]

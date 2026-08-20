@@ -14,6 +14,7 @@ mod consent;
 mod hwinfo;
 mod install;
 mod log;
+mod mode;
 mod nvml;
 mod onboarding;
 mod pipe;

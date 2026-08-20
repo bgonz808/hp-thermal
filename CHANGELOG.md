@@ -4,6 +4,83 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-08-19
+
+A hardware-report command for contributing verified coverage, service hardening
+in the binary, and a supply-chain pass in the release pipeline.
+
+### Added (binary)
+- **`--hwinfo` hardware report.** `hp-thermal --hwinfo` (and a matching tray
+  **Show hardware fingerprint...** item, same code path) prints your machine's
+  fingerprint and runs a capability check: it reads the HP BIOS thermal interface,
+  then performs a minimally-invasive write (briefly switch to another mode at
+  similar fan noise, confirm the read-back, restore the original) to prove the
+  interface is writable, not just present. It reports a verdict (`VERIFIED` /
+  `SKEW` / `READ-ONLY` / `UNVERIFIED`) and, on `VERIFIED`, emits the `KNOWN_GOOD`
+  line to submit for coverage — unless the hardware is already listed, in which
+  case it says so and skips the ask. `--hwinfo --json` gives a machine-readable
+  form. See CONTRIBUTING.md. (#149)
+
+### Security (binary)
+- **Rate-limited BIOS writes, fail-closed client integrity.** The service throttles
+  BIOS thermal writes, and the client-integrity check now fails closed: a caller it
+  cannot integrity-verify is refused, not admitted. (#159)
+- **Role→mitigation-profile dispatcher.** Each role the single binary serves
+  (installer, tray, service, CLI) maps to an explicit process-mitigation profile:
+  maximum by default, with narrow documented opt-outs. The mapping is matched
+  exhaustively, so an unmapped role is a compile error, not a silent
+  under-hardening. (#157)
+- **Single-sourced BIOS selectors and token keep-sets.** The HP-BIOS WMI operation
+  selectors and the service's privilege keep-sets are each defined once, with CI
+  tests guarding them against drift. (#158)
+
+### Supply chain & release integrity (pipeline; no runtime change)
+- **BinSkim PE-hardening analysis.** A shared action runs BinSkim against the
+  binary: a report-only early-warning on pull requests, and a release-gating scan
+  on the signed bytes. Fail-closed: the scan must actually evaluate the target and
+  log at least one pass, or the release fails. (#160, #167, #169, #185)
+- **Attested, self-describing scan report.** The release BinSkim SARIF records its
+  own provenance and is attested, digest-chained from scan to upload; a canonical
+  release surfaces its posture on the default branch's Code-scanning tab. (#171,
+  #172, #173, #174)
+- **Faster, pinned tooling.** The `cargo-*` supply-chain tools are consumed by
+  content digest rather than recompiled per release; cargo-deny and cargo-audit
+  bumped; verify-artifact now also runs in PR CI. (#156, #145, #170, #175)
+
+## [0.3.0] - 2026-08-18
+
+First signed release. The binary's runtime behavior is unchanged from 0.2.2; what
+is new is that the shipped artifact is Authenticode-signed, and the release
+pipeline is hardened around producing and verifying that signature.
+
+### Supply chain & release integrity (pipeline)
+- **Authenticode signing.** Releases are signed, so a downloaded binary can be
+  verified as originating from this project and unmodified since it was built:
+  tamper-evidence and authenticity of origin. Signing is keyless via OIDC (no
+  long-lived signing secret in CI). Verification is two-pass: the pipeline
+  verifies the signature it just produced before publishing; checks the signer by
+  raw `WinVerifyTrust` HRESULT against a durable identity OID rather than a
+  mutable subject name; derives the trust expectation from the release ref, so a
+  dry-run routes to an untrusted test profile and cannot masquerade as production;
+  and refuses to sign under debug logging. (#21, #130, #136, #140, #141)
+- **Prerelease handling and the reputation gap.** Pre-release tags publish as
+  prerelease, never "Latest," and release notes reflect the build's actual signing
+  state. A freshly-signed binary has no SmartScreen/AV reputation yet, so a warning
+  wall is expected until reputation accrues; that is not a signature failure. (#146)
+- **Tag↔binary coupling.** A release refuses to build unless the tag matches the
+  version compiled into the binary; `SHA256SUMS` uses stable LF endings. (#147)
+- **Prebuilt, digest-pinned tooling.** The four `cargo-*` tools are built once, off
+  the release path, and consumed by content digest, so a release never compiles
+  unvetted tool code on the hot path. (#138, #142)
+- **cargo-vet gate + advisory monitor.** A `cargo-vet` audit gate plus a daily
+  RustSec advisory monitor. (#143)
+- **Robust manifest embedding.** The application manifest is embedded via the
+  linker using a pinned canonical `rc.exe`, dropping the `embed-resource` build
+  dependency. (#151)
+
+### Changed (binary)
+- KNOWN_GOOD: added BIOS F.26 on the dev ENVY, EC unchanged. (#150)
+
 ## [0.2.2] - 2026-08-02
 
 Proactive hardening and cleanup. No user-facing behavior change.
@@ -81,7 +158,9 @@ First tagged release.
 - **Reproducible**: build timestamp derives from the commit (`SOURCE_DATE_EPOCH`), so the
   same tag rebuilds to the same bytes.
 
-[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/bgonz808/hp-thermal/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/bgonz808/hp-thermal/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/bgonz808/hp-thermal/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/bgonz808/hp-thermal/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/bgonz808/hp-thermal/compare/v0.1.0...v0.2.0

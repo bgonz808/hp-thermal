@@ -3,20 +3,22 @@
 //! Two tiers that check whether the tool can drive the HP BIOS thermal interface (over WMI) on
 //! THIS hardware — the quality check `KNOWN_GOOD` uses when accepting a fingerprint:
 //!   1. READ  — a `CMD_READ_THERMAL` that returns OK. The interface answers. Non-invasive.
-//!   2. WRITE — read the current mode, nudge it one valid step, confirm the read-back, then
+//!   2. WRITE — read the current mode, switch to a different mode, confirm the read-back, then
 //!      restore the original and confirm that too. The interface ACCEPTS a write. This is the
 //!      command path working — NOT proof the fan physically actuated (that's a human/RPM effect
 //!      check, deliberately out of scope so the app takes no extra capability).
 //!
 //! The write probe leverages the consent the user already gave by installing + running thermal
 //! control on their HP hardware (the canonical onboarding flow) — toggling a mode IS the tool's
-//! function — and is minimally invasive: one step, immediately restored. Results are cached
+//! function — and is minimally invasive: a brief switch to another mode at similar fan noise,
+//! immediately restored. Results are cached
 //! write-through per process, so a proven tier never re-probes (and the fan is never re-nudged).
 //! A failed WRITE is also cached, so an explicit "show" action can't re-perturb on every click.
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use crate::hwinfo::HwInfo;
+use crate::mode::ThermalMode;
 use crate::protocol::{
     BUILD_FINGERPRINT, CMD_READ_BUILD_ID, CMD_READ_THERMAL, CMD_SET_THERMAL, status_ok,
 };
@@ -30,11 +32,6 @@ const FAILED: u8 = 2;
 // the fan on every attempt, and a proven write never needs repeating).
 static READ: AtomicU8 = AtomicU8::new(UNTESTED);
 static WRITE: AtomicU8 = AtomicU8::new(UNTESTED);
-
-/// Valid thermal modes are 0..=3; mask so a stray high bit can't smuggle an out-of-range write.
-fn mode_of(resp: [u8; 2]) -> u8 {
-    resp[1] & 0x03
-}
 
 /// Verdict 1: a thermal READ succeeds. Non-invasive. Caches only success.
 pub fn read_ok<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
@@ -58,7 +55,7 @@ pub fn build_matches<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
 
 /// Verdict 2: a WRITE is accepted (read-back matches) and restores cleanly — the `KNOWN_GOOD` gate. Runs only if the read
 /// tier passed AND the service is the same build (#183) — a skew skips the write entirely. Minimally
-/// invasive: nudges one mode step and always restores the original, verifying each step.
+/// invasive: switches to a same-band mode and always restores the original, verifying each step.
 pub fn write_ok<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     match WRITE.load(Ordering::Acquire) {
         OK => return true,
@@ -80,18 +77,24 @@ fn probe_write<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> bool {
     let Some(cur) = transact(CMD_READ_THERMAL, 0).filter(|r| status_ok(r[0])) else {
         return false;
     };
-    let orig = mode_of(cur);
-    let other = if orig == 0 { 1 } else { 0 }; // any different valid mode; one step
+    let orig = ThermalMode::from_u8(cur[1]);
+    // A different mode at roughly the same fan noise, so the read-back proves the write WITHOUT an
+    // audible fan ramp. (Crossing the loud/quiet band for an audible-confirmation probe is #188.)
+    let other = orig.same_band_partner();
 
-    // Nudge to a different mode and confirm it actually took.
-    let set_ok = matches!(transact(CMD_SET_THERMAL, other), Some(r) if status_ok(r[0]));
-    let took =
-        matches!(transact(CMD_READ_THERMAL, 0), Some(r) if status_ok(r[0]) && mode_of(r) == other);
+    // Switch to the other mode and confirm it actually took.
+    let set_ok = matches!(transact(CMD_SET_THERMAL, other.as_u8()), Some(r) if status_ok(r[0]));
+    let took = matches!(
+        transact(CMD_READ_THERMAL, 0),
+        Some(r) if status_ok(r[0]) && ThermalMode::from_u8(r[1]) == other
+    );
 
     // ALWAYS restore the original (even if the confirm above failed), then verify the restore.
-    let restore_ok = matches!(transact(CMD_SET_THERMAL, orig), Some(r) if status_ok(r[0]));
-    let restored =
-        matches!(transact(CMD_READ_THERMAL, 0), Some(r) if status_ok(r[0]) && mode_of(r) == orig);
+    let restore_ok = matches!(transact(CMD_SET_THERMAL, orig.as_u8()), Some(r) if status_ok(r[0]));
+    let restored = matches!(
+        transact(CMD_READ_THERMAL, 0),
+        Some(r) if status_ok(r[0]) && ThermalMode::from_u8(r[1]) == orig
+    );
 
     set_ok && took && restore_ok && restored
 }
@@ -133,29 +136,26 @@ pub fn verdict<F: Fn(u8, u8) -> Option<[u8; 2]>>(transact: &F) -> Verdict {
 /// provenance telltale that chains a submission to the exact build that produced this report.
 pub fn report(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
     let bin = crate::app::BIN_NAME;
+    let fp = hw.fingerprint();
     // Identity + fingerprint block, common to every verdict. ASCII only so the dialog font renders
     // it cleanly; labels are un-padded so a proportional font doesn't misalign columns.
     let head = format!(
         "{bin} {build}\n\
+         \n\
+         {fp}\n\
          \n\
          Manufacturer: {mfg}\n\
          Product: {product}\n\
          Family: {family}\n\
          Board: {board}\n\
          BIOS: {bios}\n\
-         Board version: {bver}\n\
-         \n\
-         KNOWN_GOOD line:\n  {fp}\n\
-         \n\
-         HP hardware: {hp}\n",
+         Board version: {bver}\n",
         mfg = hw.manufacturer,
         product = hw.product,
         family = hw.family,
         board = hw.board,
         bios = hw.bios_version,
         bver = hw.board_version,
-        fp = hw.fingerprint(),
-        hp = if hw.is_hp() { "yes" } else { "no" },
     );
 
     // Not the installed copy: NOTHING was tested, so don't fake a "Thermal control:" verdict. Only
@@ -198,23 +198,35 @@ pub fn report(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
         }
         Verdict::NotInstalled => unreachable!("handled by the early return above"),
     };
+    let already_known_good = crate::consent::is_known_good(&fp);
     let footer = match verdict {
-        Verdict::Verified => {
-            "To contribute: open an issue `hardware: <model>`, paste the KNOWN_GOOD line above, and\n\
-             include the 'Verified by' line so it chains to this build."
+        // Already in KNOWN_GOOD: it's covered, so don't call the user to contribute what's
+        // already listed (that only invites duplicate issues).
+        Verdict::Verified if already_known_good => {
+            "This hardware is already confirmed supported."
+                .to_string()
         }
-        Verdict::Skew => {
-            "Not submittable: this binary and the running service are different builds, so the\n\
+        // Verified and NOT yet listed: give the exact URL and a pre-filled title (from THIS
+        // machine's product name) so there's nowhere to guess — no bare "open an issue", no
+        // `<model>` placeholder.
+        Verdict::Verified => format!(
+            "To contribute, open a new issue, paste the KNOWN_GOOD line above, and include the\n\
+             'Verified by' line so it chains to this build:\n  {repo}/issues/new\n  \
+             Title: hardware: {model}",
+            repo = crate::app::REPO_URL,
+            model = hw.product,
+        ),
+        Verdict::Skew => "Not submittable: this binary and the running service are different builds, so the\n\
              write-test was skipped. Reinstall/restart so both match, then re-run."
-        }
-        Verdict::ReadOnly | Verdict::Unverified => {
-            "Not submittable: read + write to the HP BIOS thermal interface could not be confirmed\n\
+            .to_string(),
+        Verdict::ReadOnly | Verdict::Unverified => "Not submittable: read + write to the HP BIOS thermal interface could not be confirmed\n\
              (see status above), so it isn't confirmed working. Please don't submit it to KNOWN_GOOD."
-        }
+            .to_string(),
         Verdict::NotInstalled => unreachable!("handled by the early return above"),
     };
     format!(
         "{head}\
+         \n\
          Thermal control: {status}\n\
          Verified by: {bin} {build}\n\
          \n\
@@ -231,12 +243,16 @@ pub fn report_json(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
         Verdict::Unverified => "unverified",
         Verdict::NotInstalled => "not-installed",
     };
+    let fp = hw.fingerprint();
+    let already_known_good = crate::consent::is_known_good(&fp);
+    // Submittable only if the write is proven AND it isn't already covered (nothing to add).
+    let submittable = verdict == Verdict::Verified && !already_known_good;
     let e = json_escape;
     format!(
         "{{\"fingerprint\":\"{}\",\"manufacturer\":\"{}\",\"product\":\"{}\",\"family\":\"{}\",\
          \"board\":\"{}\",\"bios\":\"{}\",\"board_version\":\"{}\",\"is_hp\":{},\
-         \"capability\":\"{}\",\"submittable\":{},\"verified_by\":\"{} {}\"}}\n",
-        e(&hw.fingerprint()),
+         \"capability\":\"{}\",\"already_known_good\":{},\"submittable\":{},\"verified_by\":\"{} {}\"}}\n",
+        e(&fp),
         e(&hw.manufacturer),
         e(&hw.product),
         e(&hw.family),
@@ -245,7 +261,8 @@ pub fn report_json(hw: &HwInfo, verdict: Verdict, build: &str) -> String {
         e(&hw.board_version),
         hw.is_hp(),
         verdict_str,
-        verdict == Verdict::Verified,
+        already_known_good,
+        submittable,
         e(crate::app::BIN_NAME),
         e(build),
     )
@@ -372,6 +389,28 @@ mod tests {
         );
     }
 
+    // Complements the loud-band case above: a quiet-band start (PowerSaver) probes its same-band
+    // partner (Balanced) and restores. Exercises the `else`/quiet branch of same_band_partner.
+    #[test]
+    fn full_control_quiet_band_restores_original() {
+        reset();
+        let ec = MockEc {
+            mode: Cell::new(3), // PowerSaver (quiet); partner is Balanced, also quiet
+            up: true,
+            read_ok: true,
+            write_ok: true,
+            build: BUILD_FINGERPRINT,
+        };
+        let t = ec.transact();
+        assert!(write_ok(&t), "write must pass on controllable hardware");
+        assert_eq!(verdict(&t), Verdict::Verified);
+        assert_eq!(
+            ec.mode.get(),
+            3,
+            "the write probe must restore the original mode"
+        );
+    }
+
     #[test]
     fn no_service_fails_every_tier() {
         reset();
@@ -432,6 +471,14 @@ mod tests {
         assert!(ok.contains("VERIFIED"));
         assert!(ok.contains(&format!("Verified by: hp-thermal {FAKE_BUILD}")));
         assert!(ok.contains("To contribute"));
+        assert!(
+            ok.contains(&format!("{}/issues/new", crate::app::REPO_URL)),
+            "footer gives the exact issue URL, not a bare 'open an issue'"
+        );
+        assert!(
+            ok.contains(&format!("hardware: {}", hw.product)),
+            "footer pre-fills the title with the model (no <model> placeholder)"
+        );
         assert!(!ok.contains("Not submittable"));
 
         for verdict in [Verdict::Skew, Verdict::ReadOnly, Verdict::Unverified] {
@@ -455,6 +502,36 @@ mod tests {
         assert!(j.contains("\\\"Quoty\\\""), "quotes must be JSON-escaped");
         assert!(j.contains("\"submittable\":true"));
         assert!(report_json(&hw, Verdict::ReadOnly, FAKE_BUILD).contains("\"submittable\":false"));
+    }
+
+    // Hardware already in KNOWN_GOOD is covered: confirm the verdict, but don't call the user to
+    // contribute what's already listed (and it isn't submittable).
+    #[test]
+    fn already_known_good_hardware_is_not_asked_to_contribute() {
+        let hw = HwInfo {
+            manufacturer: "HP".into(),
+            product: "HP ENVY Laptop 16-h1xxx".into(),
+            family: "103C_5335M8 HP ENVY".into(),
+            board: "8BE5".into(),
+            bios_version: "F.26".into(),
+            board_version: "72.35".into(),
+        };
+        assert!(
+            crate::consent::is_known_good(&hw.fingerprint()),
+            "fixture must actually be in KNOWN_GOOD, else this test proves nothing"
+        );
+
+        let r = report(&hw, Verdict::Verified, FAKE_BUILD);
+        assert!(r.contains("VERIFIED"), "capability is still reported");
+        assert!(r.contains("already confirmed supported"));
+        assert!(
+            !r.contains("To contribute"),
+            "no CTA for already-covered hardware"
+        );
+
+        let j = report_json(&hw, Verdict::Verified, FAKE_BUILD);
+        assert!(j.contains("\"already_known_good\":true"));
+        assert!(j.contains("\"submittable\":false"));
     }
 
     // A non-installed copy shows the fingerprint but does NOT fake a thermal-control verdict, and

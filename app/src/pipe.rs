@@ -152,8 +152,8 @@ pub fn server_validate_client(pipe: HANDLE) -> bool {
                 .file_name()
                 .is_some_and(|f| f.eq_ignore_ascii_case(app::EXE_NAME));
 
-        // Path check fails closed; integrity-level check fails open (rejects only
-        // a *confirmed* below-Medium caller, never a benign query failure).
+        // Both fail closed (#159): a wrong/unreadable client path OR a caller whose
+        // integrity level we can't confirm denies the connection.
         path_ok && client_integrity_ok(pipe)
     }
 }
@@ -165,8 +165,8 @@ pub fn server_validate_client(pipe: HANDLE) -> bool {
 /// caller's token WITHOUT impersonation — open the client process for a limited
 /// query and read its integrity SID — so the service never runs under a client
 /// token (keeps us clear of the token-manipulation surface, MITRE ATT&CK T1134).
-/// Returns true when the level cannot be determined (defer to the label and the
-/// other layers — never break a legitimate client over a transient API failure).
+/// Returns false when the level cannot be determined (fail-closed, #159): the
+/// mandatory-label SACL is the kernel backstop, this code check is the belt.
 fn client_integrity_ok(pipe: HANDLE) -> bool {
     // SAFETY: GetNamedPipeClientProcessId writes a u32; OpenProcess yields a
     // checked handle (or we defer); OpenProcessToken yields a token we close;

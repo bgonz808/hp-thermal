@@ -83,9 +83,15 @@ pub fn record_acceptance(hw: &HwInfo) {
     }
 }
 
+/// True if this fingerprint is one the maintainers have already validated (it's in `KNOWN_GOOD`),
+/// so the hardware is already covered and there is nothing to contribute.
+pub fn is_known_good(fingerprint: &str) -> bool {
+    KNOWN_GOOD.contains(&fingerprint)
+}
+
 /// Pure decision core (no I/O), so the trust logic is unit-testable.
 fn classify(current: &str, accepted: Option<&str>) -> Consent {
-    if KNOWN_GOOD.contains(&current) {
+    if is_known_good(current) {
         return Consent::Trusted;
     }
     match accepted {

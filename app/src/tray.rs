@@ -1085,12 +1085,7 @@ unsafe fn update_tooltip(hwnd: HWND) {
             if c == 1 {
                 "Smart Sense"
             } else {
-                match t {
-                    0 => "Performance",
-                    1 => "Balanced",
-                    2 => "Cool",
-                    _ => "Power Saver", // unpack_state masks t to 0-3
-                }
+                crate::mode::ThermalMode::from_u8(t).name() // UX label ("Power Saver" has the space)
             }
         }
         _ => "(unavailable)",
