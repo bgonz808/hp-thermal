@@ -67,16 +67,16 @@ jobs:
               continue
             fi
             [ "$code" = "200" ] || { echo "::warning::$key: VT lookup HTTP $code"; continue; }
-            # Engines flagging this hash (category malicious|suspicious), one per line. The parse
-            # must FAIL CLOSED: a broken parse inside process substitution would silently yield an
-            # empty list ("0 detections" while checking nothing) — caught in local testing, hence
-            # the explicit exit-status check on a temp file instead.
-            if ! python3 -c "
-          import json
-          a = json.load(open('resp.json'))['data']['attributes']
-          for e, r in a.get('last_analysis_results', {}).items():
-              if r['category'] in ('malicious', 'suspicious'):
-                  print(e)" > engines.txt 2> parse.err; then
+            # Engines flagging this hash (category malicious|suspicious), one per line. jq, not a
+            # python interpreter: minimal parser surface for semi-trusted input (maintainer review
+            # 2026-08-21 — a full interpreter+stdlib for two JSON fields was disproportionate, and
+            # python3's image presence proved fragile twice: local python3-vs-python, and the
+            # 26.04-preview toolcache gap). jq is already this repo's JSON precedent (#191 gate).
+            # The parse must FAIL CLOSED: a broken parse must never read as "0 detections".
+            if ! jq -r '.data.attributes.last_analysis_results
+                        | to_entries[]
+                        | select(.value.category == "malicious" or .value.category == "suspicious")
+                        | .key' resp.json > engines.txt 2> parse.err; then
               echo "::error::$key: VT response parse FAILED (fail-closed, not all-clear): $(head -c 300 parse.err)"
               fail=1
               continue
@@ -120,10 +120,18 @@ jobs:
             echo "::warning::pinned nightly is ${age_days} days old - consider a reviewed toolchain bump (std fixes ride toolchain updates)"
           fi
           # Newer runner families (runs-on labels are invisible to Dependabot): probe the
-          # runner-images README for families beyond our pins.
+          # runner-images README for families beyond our pins. Preview-aware: a family whose
+          # README table row still carries the preview badge is NOT migration-ready (previews
+          # lack completeness/stability commitments — ubuntu-26.04 only gained the Python
+          # toolcache 2026-08-19), so it logs as info, warning only at GA. Avoids weekly
+          # warning fatigue for months of preview.
           readme=$(curl -sS https://raw.githubusercontent.com/actions/runner-images/main/README.md)
-          for fam in windows-2026 windows-2028 ubuntu-26.04; do
-            if grep -q "$fam" <<<"$readme"; then
-              echo "::warning::runner family '$fam' now exists upstream - evaluate migrating pinned families (#226)"
+          for fam in windows-2026 windows-2028 ubuntu-26.04 ubuntu-28.04; do
+            row=$(grep -m1 -E "\`$fam\`" <<<"$readme" || true)
+            [ -n "$row" ] || continue
+            if grep -qi "preview" <<<"$row"; then
+              echo "runner family '$fam' exists upstream in PREVIEW - not migration-ready, watching for GA"
+            else
+              echo "::warning::runner family '$fam' is GA upstream - evaluate migrating pinned families (#226)"
             fi
           done
