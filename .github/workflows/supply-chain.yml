@@ -30,7 +30,7 @@ jobs:
     # windows-latest (#221): cargo-vet is consumed as a digest-pinned prebuilt exe from
     # TOOLS.lock, and the producer builds Windows binaries for every tool that supports it —
     # one producer target, one blessed artifact, shared with the release path's standard.
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read
     steps:

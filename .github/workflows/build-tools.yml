@@ -32,7 +32,7 @@ permissions:
 
 jobs:
   build-tools-windows:
-    runs-on: windows-latest   # MUST match the release runner OS: these are Windows x86_64 exes.
+    runs-on: windows-2025   # MUST match the release runner OS: these are Windows x86_64 exes.
     permissions:
       contents: write         # create/update the `tools` release + upload assets
     steps:
@@ -108,7 +108,7 @@ jobs:
 
   build-tools-linux:
     needs: build-tools-windows   # serialize: never race the windows job on release creation
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
     steps:

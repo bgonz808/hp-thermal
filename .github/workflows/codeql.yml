@@ -19,7 +19,7 @@ jobs:
     name: Analyze (rust)
     # Rust's CodeQL extractor reads SOURCE (build-mode: none) -- no compile/trace -- so
     # the OS is irrelevant; ubuntu-latest is faster/cheaper than a Windows runner.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       security-events: write   # upload the SARIF results
       contents: read
