@@ -20,6 +20,14 @@ inputs:
   tools-tag:
     description: Release tag of the byte store.
     default: tools
+  verify-attestations:
+    description: >-
+      "true" = additionally require a SLSA provenance attestation on each downloaded binary
+      (gh attestation verify against this repo) AFTER the digest check (#205). Proves the bytes
+      were produced by THIS repo's workflows — an attacker with repo write access cannot mint
+      one without executing the producer, which builds from the pinned rev, not their bytes.
+      Default false until every blessed digest has an attested producer run behind it.
+    default: "false"
 outputs:
   tools-dir:
     description: >-
@@ -40,6 +48,7 @@ runs:
         WANT_TARGET: ${{ inputs.target }}
         ONLY: ${{ inputs.only }}
         TOOLS_TAG: ${{ inputs.tools-tag }}
+        VERIFY_ATTESTATIONS: ${{ inputs.verify-attestations }}
       run: |
         set -euo pipefail
         dest="${RUNNER_TEMP}/pinned-tools"
@@ -61,28 +70,43 @@ runs:
             echo "::error::tools/TOOLS.lock digest for '$name' is unset (all-zero). Run build-tools.yml and commit the printed digest before this tool can be used." >&2
             exit 1
           fi
+          # #225: the CONTENT-ADDRESSED asset name derives from the committed digest — the name
+          # is a locator, never trust; the bytes are re-hashed below regardless of which name
+          # served them. Legacy flat names remain as a transition fallback for digests blessed
+          # before content-addressing (removable once every blessed line post-dates #225).
           case "$WANT_TARGET" in
-            windows-x86_64) asset="$name.exe" ;;
-            *)              asset="$name-$WANT_TARGET" ;;
+            windows-x86_64) ca="$name-${sha:0:12}.exe";           legacy="$name.exe";              local_name="$name.exe" ;;
+            *)              ca="$name-${sha:0:12}-$WANT_TARGET";  legacy="$name-$WANT_TARGET";     local_name="$name" ;;
           esac
-          printf '%s  %s/%s\n' "$sha" "$dest" "$asset" >> "$dest/EXPECTED.sha256"
-          printf '%s\n' "$asset" >> "$dest/ASSETS"
+          printf '%s  %s/%s\n' "$sha" "$dest" "$local_name" >> "$dest/EXPECTED.sha256"
+          printf '%s %s %s\n' "$ca" "$legacy" "$local_name" >> "$dest/ASSETS"
         done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
         [ "$matched" -gt 0 ] || { echo "::error::no TOOLS.lock entries matched target='$WANT_TARGET' only='$ONLY'" >&2; exit 1; }
-        # Pull each asset from the byte store...
-        while read -r asset; do
-          gh release download "$TOOLS_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir "$dest" --clobber
+        # Pull each asset: content-addressed name first, legacy fallback; stage under the plain
+        # binary name either way (so `cargo <sub>`-style invocation resolves it).
+        while read -r ca legacy local_name; do
+          if gh release download "$TOOLS_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$ca" -O "$dest/$local_name" --clobber 2>/dev/null; then
+            echo "fetched $ca (content-addressed)"
+          elif gh release download "$TOOLS_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$legacy" -O "$dest/$local_name" --clobber 2>/dev/null; then
+            echo "fetched $legacy (legacy flat name - pre-#225 blessing)"
+          else
+            echo "::error::neither '$ca' nor '$legacy' found in the '$TOOLS_TAG' store" >&2
+            exit 1
+          fi
         done < "$dest/ASSETS"
-        # ...and CANONICALLY VERIFY every one against the committed digest. Any mismatch OR
+        # CANONICALLY VERIFY every staged binary against the committed digest. Any mismatch OR
         # missing file makes `sha256sum -c` exit non-zero -> `set -e` aborts here, before a
         # single tool runs.
         sha256sum -c "$dest/EXPECTED.sha256"
-        # Non-Windows: strip the target suffix back to the plain binary name (so `cargo <sub>`
-        # resolves it) and restore the executable bit lost in the release round-trip. Renaming
-        # happens AFTER verification, so the digest always covers the bytes as stored.
-        if [ "$WANT_TARGET" != "windows-x86_64" ]; then
-          for f in "$dest"/*-"$WANT_TARGET"; do mv "$f" "${f%-"$WANT_TARGET"}"; done
-          chmod +x "$dest"/*
+        if [ "$WANT_TARGET" != "windows-x86_64" ]; then chmod +x "$dest"/*; fi
+        # #205 (opt-in): require GitHub-signed SLSA provenance on each binary — proves it was
+        # produced by THIS repo's workflows. Runs AFTER the digest check: digest authorizes the
+        # bytes; the attestation proves only producer-built bytes ever get blessed/used.
+        if [ "$VERIFY_ATTESTATIONS" = "true" ]; then
+          while read -r _ca _legacy local_name; do
+            gh attestation verify "$dest/$local_name" --repo "$GITHUB_REPOSITORY" \
+              || { echo "::error::no valid provenance attestation for '$local_name' (fail-closed)" >&2; exit 1; }
+          done < "$dest/ASSETS"
         fi
         # Only now — post-verification — is the directory handed back, as an OUTPUT. Nothing
         # ever writes GITHUB_PATH: consumers invoke the verified binaries by absolute path.

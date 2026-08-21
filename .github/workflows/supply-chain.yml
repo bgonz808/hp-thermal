@@ -54,6 +54,7 @@ jobs:
           token: ${{ github.token }}
           target: windows-x86_64
           only: cargo-vet
+          verify-attestations: "true"
 
       # --locked: vet the graph exactly as committed, no re-resolution. Report-only until baseline.
       # NO PATH exposure (#221): the verified binary is invoked by absolute path, env-bound —

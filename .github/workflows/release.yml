@@ -160,6 +160,7 @@ jobs:
           token: ${{ github.token }}
           target: windows-x86_64
           only: cargo-deny cargo-auditable cargo-audit cargo-cyclonedx
+          verify-attestations: "true"
 
       # NO PATH exposure (#221, maintainer decision after the zizmor github-env finding): the
       # verified tools are consumed by ABSOLUTE PATH only. xtask receives the directory as
