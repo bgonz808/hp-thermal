@@ -182,6 +182,17 @@ jobs:
           # Only now — post-verification — do the binaries become resolvable as `cargo <sub>`.
           echo "$dest" >> "$GITHUB_PATH"
 
+      # --- #130/#195: xtask is pure-std with ZERO dependencies, so it builds to a standalone
+      #     binary in seconds. #195: build it ONCE, up front, in release profile, and invoke
+      #     THAT exe for every xtask step below (no dev-profile compile, no repeated
+      #     `cargo run` overhead). The same exe is uploaded for the POST-SIGN `verify` job,
+      #     so the verifier that re-checks the signed bytes downstream is byte-identical to
+      #     the binary that ran the in-release checks here — a custody improvement, not just
+      #     a wall-clock one. (A Rust toolchain must never exist in the credentialed `sign`
+      #     job, which is why `verify` needs the standalone exe at all.)
+      - name: Build xtask once (release; used for every xtask step + shipped to verify)
+        run: cargo build --release --manifest-path xtask/Cargo.toml
+
       # #196: production-artifact tier ONLY — cargo-deny policy + cargo-auditable release
       # build (embeds the dep tree in the binary) + `cargo audit bin` on the artifact + PE
       # exploit-mitigation verification. fmt/clippy/tests are NOT re-run here: source-gate
@@ -191,7 +202,7 @@ jobs:
       # attacker editing release.yml can edit the re-run too); the verified out-of-band CI
       # verdict is the stronger control, and this drops ~2m24s of duplicate work.
       - name: Attest build (deny / auditable / audit-bin / verify-hardening)
-        run: cargo run --manifest-path xtask/Cargo.toml -- release-attest
+        run: xtask/target/release/xtask.exe release-attest
 
       - name: Generate SBOM (CycloneDX)
         working-directory: app
@@ -206,15 +217,8 @@ jobs:
         shell: bash
         run: |
           EPOCH="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}"
-          cargo run --manifest-path xtask/Cargo.toml -- stamp-time \
+          xtask/target/release/xtask.exe stamp-time \
             app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe "$EPOCH"
-
-      # --- #130: xtask is pure-std with ZERO dependencies, so it builds to a standalone
-      #     verifier binary in seconds. Shipping it as an artifact lets the POST-SIGN
-      #     `verify` job re-run these exact checks on the signed bytes without a Rust
-      #     toolchain — which must never exist in the credentialed `sign` job.
-      - name: Build standalone xtask verifier
-        run: cargo build --release --manifest-path xtask/Cargo.toml
 
       # Stage the UNSIGNED bytes. SHA256SUMS is deliberately NOT written here: it must cover
       # the SIGNED bytes, so the `sign` job produces it. Only the out-of-band pre-sign digests
@@ -242,14 +246,14 @@ jobs:
       # signing. Pass 2 in `verify` re-asserts it on the signed bytes rather than assuming it,
       # which is what keeps the "validate the EXACT bytes that ship" invariant intact.
       - name: Verify staged artifact (pre-sign, fail-fast)
-        run: cargo run --manifest-path xtask/Cargo.toml -- verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
+        run: xtask/target/release/xtask.exe verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
 
       # #104/#109 gate: fail closed if the stamp step didn't run or left a field behind —
       # implausible (zero / pre-project / future) or inconsistent (debug-dir != COFF,
       # surviving REPRO marker). Runs on dist/ only (post-stamp); the pre-stamp `ci` pass on
       # target/ still carries the /Brepro hash and must NOT be gated here.
       - name: Verify PE timestamps (pre-sign, fail-fast)
-        run: cargo run --manifest-path xtask/Cargo.toml -- verify-timestamp dist/hp-thermal.exe
+        run: xtask/target/release/xtask.exe verify-timestamp dist/hp-thermal.exe
 
       - name: Upload unsigned artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
