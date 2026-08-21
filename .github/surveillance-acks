@@ -1,0 +1,8 @@
+# Acknowledged VT surveillance findings: "<sha256> <engine>" per line, with the triage reason
+# in a trailing comment. An acked (hash, engine) pair downgrades from job-failing error to
+# warning — it stays VISIBLE in every run, it just stops re-paging. NEW engines or NEW hashes
+# still fail. Remove a line when the finding is resolved (FP dispute cleared / rescan clean).
+# Triage context for the two below: #205 (2026-08-21 scan) — single static-ML engine, no family,
+# no corroboration across ~70 engines; discriminators pending (sandbox rescan, next-build check).
+8565440a3b19a7978bed3992e712f1aed148e7f641456d382d7dc3f472975c19 APEX  # cargo-auditable 2026-08-21, monitored FP-candidate
+496f4b9f2abccbd554271a588f2d5ce5d2a4ed4c7c04e0bd13778570fca799a5 APEX  # cargo-cyclonedx 2026-08-21, monitored FP-candidate
