@@ -111,6 +111,7 @@ jobs:
     outputs:
       exe_unsigned_sha256: ${{ steps.stage.outputs.exe_unsigned_sha256 }}
       pdb_sha256: ${{ steps.stage.outputs.pdb_sha256 }}
+      xtask_sha256: ${{ steps.seal_xtask.outputs.xtask_sha256 }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
@@ -261,6 +262,18 @@ jobs:
           name: dist-unsigned
           path: dist/
           if-no-files-found: error
+
+      # #195: seal the verifier's digest as an out-of-band job output (same channel as the
+      # exe/pdb digests). The `verify` job asserts the downloaded xtask.exe against this
+      # BEFORE executing it — previously the CHECKER was the one artifact crossing the
+      # store un-asserted, inverted from the TOOLS.lock doctrine (byte stores are
+      # untrusted; digests authorize execution).
+      - name: Seal xtask verifier digest
+        id: seal_xtask
+        shell: pwsh
+        run: |
+          $x = (Get-FileHash xtask/target/release/xtask.exe -Algorithm SHA256).Hash.ToLower()
+          "xtask_sha256=$x" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
 
       # The verifier travels separately so `verify` needs neither the repo nor a toolchain.
       - name: Upload xtask verifier
@@ -552,6 +565,20 @@ jobs:
         with:
           name: xtask-verifier
           path: verifier
+
+      # #195: the verifier must prove ITS OWN custody before it verifies anything else —
+      # assert the downloaded bytes against the build job's sealed digest, fail-closed,
+      # BEFORE first execution. (Within a job no such check is meaningful — same runner
+      # computes both sides; across the artifact-store hop it is load-bearing.)
+      - name: Assert verifier digest (build->verify custody, fail-closed)
+        shell: pwsh
+        env:
+          EXPECT_XTASK: ${{ needs.build.outputs.xtask_sha256 }}
+        run: |
+          if ([string]::IsNullOrEmpty($env:EXPECT_XTASK)) { throw "no sealed xtask digest from build (fail-closed)" }
+          $x = (Get-FileHash verifier/xtask.exe -Algorithm SHA256).Hash.ToLower()
+          if ($x -ne $env:EXPECT_XTASK) { throw "xtask verifier digest mismatch vs build output (build->verify custody break)" }
+          Write-Output "verifier custody OK: executing the exact binary the build job produced"
 
       # Digests bound via env (not inlined as ${{ }} in the script) so zizmor's
       # template-injection audit stays clean. Anchored on the SIGN job's outputs: those
