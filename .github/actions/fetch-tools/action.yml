@@ -20,10 +20,19 @@ inputs:
   tools-tag:
     description: Release tag of the byte store.
     default: tools
+outputs:
+  tools-dir:
+    description: >-
+      Directory holding ONLY the digest-verified binaries. Deliberately returned as DATA rather
+      than written to GITHUB_PATH here: exposing a directory to PATH is ambient authority for
+      every later step, so that trust decision belongs to the calling workflow, in context,
+      where zizmor can audit the data flow (bind via env, not ${{ }} inline).
+    value: ${{ steps.fetch.outputs.dir }}
 runs:
   using: composite
   steps:
     - name: Fetch + verify (digest-pinned, fail-closed)
+      id: fetch
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.token }}
@@ -74,5 +83,7 @@ runs:
           for f in "$dest"/*-"$WANT_TARGET"; do mv "$f" "${f%-"$WANT_TARGET"}"; done
           chmod +x "$dest"/*
         fi
-        # Only now — post-verification — do the binaries become resolvable as `cargo <sub>`.
-        echo "$dest" >> "$GITHUB_PATH"
+        # Only now — post-verification — is the directory handed back, as an OUTPUT. This action
+        # never writes GITHUB_PATH: PATH exposure is ambient authority over every later step, so
+        # the caller performs that write itself, visibly, in the workflow.
+        echo "dir=$dest" >> "$GITHUB_OUTPUT"

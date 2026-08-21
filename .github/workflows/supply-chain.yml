@@ -44,11 +44,20 @@ jobs:
       # run); the committed digest is a CONTENT COMMITMENT reviewed into this repo. The previous
       # `cargo install cargo-vet --locked --version 0.10.0` here violated that standard.
       - name: Fetch + verify cargo-vet (digest-pinned, fail-closed)
+        id: tools
         uses: ./.github/actions/fetch-tools
         with:
           token: ${{ github.token }}
           target: windows-x86_64
           only: cargo-vet
+
+      # PATH write caller-side, same rationale as release.yml: the composite returns data; the
+      # workflow makes the (post-digest-verification) trust decision visibly. Env-bound.
+      - name: Expose verified cargo-vet on PATH
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: echo "$TOOLS_DIR" >> "$GITHUB_PATH"
 
       # --locked: vet the graph exactly as committed, no re-resolution. Report-only until baseline.
       - name: cargo vet
