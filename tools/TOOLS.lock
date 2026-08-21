@@ -22,9 +22,9 @@
 #             time; #205 will have the producer verify it against the built exe's --version.
 #
 # Consumers fetch + verify via .github/actions/fetch-tools (release.yml, supply-chain.yml).
-cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  windows-x86_64  a86485a454504ef38ae573e6a4ac46b731051418686a87c2fea1c4a33dc5649c  # v0.20.2
-cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  windows-x86_64  8565440a3b19a7978bed3992e712f1aed148e7f641456d382d7dc3f472975c19  # v0.7.5
-cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  windows-x86_64  76a102c37ec06002f3a6fcd6a050867e413701ca5de01a442b0a0324e5be375e  # v0.22.2
-cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  windows-x86_64  496f4b9f2abccbd554271a588f2d5ce5d2a4ed4c7c04e0bd13778570fca799a5  # v0.5.9
-cargo-vet          mozilla/cargo-vet                  c23b21659b9902d97bef2f54c8e14529031092c5  windows-x86_64  042c8d32b7df5667fd39d8ec59b2cc32087290fc79daf33fddfba9e0a3424c4b  # v0.10.0
+cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  windows-x86_64  716b16db6e9c8f1aa9c9cc7f50701de775ebe27ab95200f09ddcee289804f80f  # v0.20.2
+cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  windows-x86_64  438d75e564c1e21fef8f3394b4745fa68487fe02dc87f7a3974b791a383be8de  # v0.7.5
+cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  windows-x86_64  cb65afefc83334d47aa7bdeebf92a92140ecb54b164448fc330fa598214bde56  # v0.22.2
+cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  windows-x86_64  f65a3f45e65592f08cc291bc1d5f410232817a94be03a4e68c9d912870710df0  # v0.5.9
+cargo-vet          mozilla/cargo-vet                  c23b21659b9902d97bef2f54c8e14529031092c5  windows-x86_64  f78f6916ef995c55d0d95f8fad19eee092ceb47208e2d98459ca42accabb34c0  # v0.10.0
 cargo-acl          cackle-rs/cackle                   e7109a3174378976ea881f1883439ba82524f061  linux-x86_64    085684885c3283172eb07e7b3c6716246ac936db536596eb6eadab57d8c0f428  # v0.9.1

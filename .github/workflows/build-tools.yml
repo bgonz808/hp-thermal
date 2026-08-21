@@ -71,6 +71,7 @@ jobs:
           token: ${{ github.token }}
           target: windows-x86_64
           only: cargo-audit
+          verify-attestations: "true"
 
       - name: Build windows tools (content-addressed) + posture for ALL tools
         shell: bash
