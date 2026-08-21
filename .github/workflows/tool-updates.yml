@@ -47,7 +47,7 @@ jobs:
           }
 
           rows=""; behind=0
-          while read -r name repo rev _sha; do
+          while read -r name repo rev _target _sha; do
             [ -n "${name:-}" ] || continue
             # Newest release tag matching this tool, then resolve it to a commit SHA.
             latest_tag=$(gh api "repos/$repo/releases" --jq '.[].tag_name' 2>/dev/null \
@@ -63,7 +63,7 @@ jobs:
             else
               rows+="| $name | \`${rev:0:12}\` | up to date ($latest_tag) | |\n"
             fi
-          done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock)
+          done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
 
           {
             echo "behind=$behind"

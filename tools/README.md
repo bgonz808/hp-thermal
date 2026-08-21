@@ -14,11 +14,17 @@ reviewed into this repo.
 
 ## Files
 
-- **`TOOLS.lock`** — the anchor. `name repo rev target sha256` per tool. `rev` is the
-  human-edited pin; `target` selects the producer job and asset naming (`windows-x86_64` →
-  `<name>.exe`, `linux-x86_64` → `<name>-linux-x86_64`; cackle is Linux-only); `sha256` is
-  filled from a `build-tools.yml` run and reviewed on commit. The digest is the integrity
-  anchor — the `tools` release is only a byte store.
+- **`TOOLS.lock`** — the anchor. `name repo rev target sha256  # vX.Y.Z` per tool. `rev` is the
+  human-edited pin; `target` selects the producer job (`windows-x86_64` / `linux-x86_64`;
+  cackle is Linux-only); `sha256` is filled from a `build-tools.yml` run and reviewed on
+  commit. The digest is the integrity anchor — the `tools` release is only a byte store.
+  Assets are **content-addressed** (#225): `<name>-<sha256:0:12>[.exe|-linux-x86_64]`, derived
+  from the digest by consumers (the name is a locator, never trust — bytes are re-hashed).
+  Nothing is ever overwritten, so every blessed binary remains retrievable forever and a
+  re-bless never breaks in-flight consumers. Each asset carries a **SLSA provenance
+  attestation** (#205): `gh attestation verify <asset> --repo bgonz808/hp-thermal` proves it
+  was built by this repo's producer — blessing-time verification makes non-producer bytes
+  unblessable, closing the "swap digest to an attacker binary in one PR" seam.
 - **`.github/actions/fetch-tools`** — the shared consumer: parses `TOOLS.lock`, downloads,
   digest-verifies fail-closed, and only then puts the binaries on `PATH`. Used by `release.yml`
   (the four release tools, least-privilege `only` list) and `supply-chain.yml` (`cargo-vet`).
