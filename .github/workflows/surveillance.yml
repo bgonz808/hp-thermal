@@ -67,16 +67,16 @@ jobs:
               continue
             fi
             [ "$code" = "200" ] || { echo "::warning::$key: VT lookup HTTP $code"; continue; }
-            # Engines flagging this hash (category malicious|suspicious), one per line. The parse
-            # must FAIL CLOSED: a broken parse inside process substitution would silently yield an
-            # empty list ("0 detections" while checking nothing) — caught in local testing, hence
-            # the explicit exit-status check on a temp file instead.
-            if ! python3 -c "
-          import json
-          a = json.load(open('resp.json'))['data']['attributes']
-          for e, r in a.get('last_analysis_results', {}).items():
-              if r['category'] in ('malicious', 'suspicious'):
-                  print(e)" > engines.txt 2> parse.err; then
+            # Engines flagging this hash (category malicious|suspicious), one per line. jq, not a
+            # python interpreter: minimal parser surface for semi-trusted input (maintainer review
+            # 2026-08-21 — a full interpreter+stdlib for two JSON fields was disproportionate, and
+            # python3's image presence proved fragile twice: local python3-vs-python, and the
+            # 26.04-preview toolcache gap). jq is already this repo's JSON precedent (#191 gate).
+            # The parse must FAIL CLOSED: a broken parse must never read as "0 detections".
+            if ! jq -r '.data.attributes.last_analysis_results
+                        | to_entries[]
+                        | select(.value.category == "malicious" or .value.category == "suspicious")
+                        | .key' resp.json > engines.txt 2> parse.err; then
               echo "::error::$key: VT response parse FAILED (fail-closed, not all-clear): $(head -c 300 parse.err)"
               fail=1
               continue
