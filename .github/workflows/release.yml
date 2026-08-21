@@ -931,11 +931,17 @@ jobs:
             --predicate-type https://cyclonedx.org/bom \
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
           echo "::endgroup::"
+          # #202: stage the just-verified bundles under stable names for release attachment.
+          cp "$PROVENANCE_BUNDLE" dist/hp-thermal.provenance.sigstore.jsonl
+          cp "$SBOM_BUNDLE"       dist/hp-thermal.sbom.sigstore.jsonl
 
-      # The attestations are still CREATED and self-verified above; they live in GitHub's
-      # attestation store keyed by the exe's digest, so `gh attestation verify` works with
-      # no bundle file. We ship only legible assets (exe + SBOM + SHA256SUMS), not the
-      # cryptic *.sigstore bundles. Bundles come back if/when the offline updater needs them.
+      # #202 (reverses the earlier ship-nothing decision, per the 2026-08 audit): the
+      # *.sigstore.jsonl bundles ARE attached, so verification does not depend on GitHub's
+      # attestation API existing in its current form — `gh attestation verify --bundle`
+      # works fully offline against the release assets. "Ugly artifact" matters less than
+      # durable trust evidence. The attached bundles are the exact files self-verified
+      # above. (Not listed in SHA256SUMS: it is written at sign time, before these exist;
+      # the bundles are Sigstore-signed objects and carry their own integrity.)
 
       # First-party gh CLI (no third-party release action). Token is the job-scoped
       # GITHUB_TOKEN with contents: write only.
@@ -973,6 +979,10 @@ jobs:
             echo
             echo "    gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release.yml"
             echo
+            echo "Offline (no GitHub API): the attached *.sigstore.jsonl bundles carry the same attestations —"
+            echo
+            echo "    gh attestation verify hp-thermal.exe --bundle hp-thermal.provenance.sigstore.jsonl --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+            echo
             if [ "${SIGNING_ENABLED:-}" = "true" ]; then
               echo "Authenticode-signed: Windows shows the verified publisher on the UAC prompt. Inspect the signature with:"
               echo
@@ -987,6 +997,7 @@ jobs:
           } > notes.md
           gh release create "${GITHUB_REF_NAME}" \
             dist/hp-thermal.exe dist/hp-thermal.pdb dist/hp-thermal.cdx.json dist/SHA256SUMS \
+            dist/hp-thermal.provenance.sigstore.jsonl dist/hp-thermal.sbom.sigstore.jsonl \
             --repo "${GITHUB_REPOSITORY}" \
             --title "hp-thermal ${GITHUB_REF_NAME}" \
             --notes-file notes.md \
