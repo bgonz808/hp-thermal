@@ -26,7 +26,8 @@ outputs:
       Directory holding ONLY the digest-verified binaries, returned as DATA. Nothing here (or
       in any caller) writes GITHUB_PATH — PATH exposure is ambient authority over every later
       step (the zizmor github-env class). Callers invoke each tool by ABSOLUTE path from this
-      directory, env-bound (not ${{ }} inlined).
+      directory, env-bound (never inlined as a template expression — the Actions template
+      engine parses even description strings, so the syntax itself cannot be written here).
     value: ${{ steps.fetch.outputs.dir }}
 runs:
   using: composite
