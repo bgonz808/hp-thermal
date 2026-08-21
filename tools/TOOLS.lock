@@ -26,5 +26,5 @@ cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b
 cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  windows-x86_64  438d75e564c1e21fef8f3394b4745fa68487fe02dc87f7a3974b791a383be8de  # v0.7.5
 cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  windows-x86_64  cb65afefc83334d47aa7bdeebf92a92140ecb54b164448fc330fa598214bde56  # v0.22.2
 cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  windows-x86_64  f65a3f45e65592f08cc291bc1d5f410232817a94be03a4e68c9d912870710df0  # v0.5.9
-cargo-vet          mozilla/cargo-vet                  fb5cc28663eb4ec5e7b136413c012457063b4d81  windows-x86_64  0000000000000000000000000000000000000000000000000000000000000000  # v0.10.0+main.20260419 (rev soak: 124d)
+cargo-vet          mozilla/cargo-vet                  28f617ea97392d527799649db588a6dbb695da8d  windows-x86_64  0000000000000000000000000000000000000000000000000000000000000000  # v0.10.2 (released 2026-01-13; 7mo soak)
 cargo-acl          cackle-rs/cackle                   e7109a3174378976ea881f1883439ba82524f061  linux-x86_64    085684885c3283172eb07e7b3c6716246ac936db536596eb6eadab57d8c0f428  # v0.9.1
