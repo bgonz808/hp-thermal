@@ -148,40 +148,24 @@ jobs:
       # Bumping a tool stays a reviewed change: edit its rev in tools/TOOLS.lock -> run
       # build-tools.yml -> commit the printed digest (see tools/README.md). #145 tracks upstream
       # drift; adopting a newer rev is deliberate, never automatic.
+      #
+      # #221: the fetch+verify logic is factored into .github/actions/fetch-tools so every
+      # consumer (this job, supply-chain.yml) shares ONE parser and verification path. `only`
+      # is least-privilege: the release takes exactly the four tools it runs — cargo-vet (also
+      # in TOOLS.lock) never lands on this job's PATH.
       - name: Fetch + verify prebuilt release tools (digest-pinned, fail-closed)
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TOOLS_TAG: tools
-        run: |
-          set -euo pipefail
-          dest="${RUNNER_TEMP}/release-tools"
-          rm -rf "$dest"; mkdir -p "$dest"
-          zero="0000000000000000000000000000000000000000000000000000000000000000"
-          : > "$dest/EXPECTED.sha256"; : > "$dest/NAMES"
-          # Parse the committed anchor (name repo rev sha256). Process substitution (NOT a pipe)
-          # keeps the loop in THIS shell, so `exit 1` aborts the step — a `| while` subshell would
-          # swallow the fail-closed and silently continue. Fail-open here would defeat the point.
-          while read -r name _repo _rev sha; do
-            [ -n "${name:-}" ] || continue
-            if [ "$sha" = "$zero" ] || [ -z "${sha:-}" ]; then
-              echo "::error::tools/TOOLS.lock digest for '$name' is unset (all-zero). Run build-tools.yml and commit the printed digest before the prebuilt flow can be used." >&2
-              exit 1
-            fi
-            printf '%s  %s/%s.exe\n' "$sha" "$dest" "$name" >> "$dest/EXPECTED.sha256"
-            printf '%s\n' "$name" >> "$dest/NAMES"
-          done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock)
-          test -s "$dest/NAMES" || { echo "::error::no tools parsed from tools/TOOLS.lock" >&2; exit 1; }
-          # Pull each asset from the byte store...
-          while read -r name; do
-            gh release download "$TOOLS_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$name.exe" --dir "$dest" --clobber
-          done < "$dest/NAMES"
-          # ...and CANONICALLY VERIFY every one against the committed digest. Any mismatch OR
-          # missing file makes `sha256sum -c` exit non-zero -> `set -e` aborts the release here,
-          # before a single tool runs.
-          sha256sum -c "$dest/EXPECTED.sha256"
-          # Only now — post-verification — do the binaries become resolvable as `cargo <sub>`.
-          echo "$dest" >> "$GITHUB_PATH"
+        id: tools
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-deny cargo-auditable cargo-audit cargo-cyclonedx
+
+      # NO PATH exposure (#221, maintainer decision after the zizmor github-env finding): the
+      # verified tools are consumed by ABSOLUTE PATH only. xtask receives the directory as
+      # PINNED_TOOLS_DIR (env-bound below) and invokes each cargo-<sub> binary directly —
+      # nothing is shadowable, no later step inherits ambient authority, and the finding is
+      # eliminated structurally rather than suppressed or relocated.
 
       # --- #130/#195: xtask is pure-std with ZERO dependencies, so it builds to a standalone
       #     binary in seconds. #195: build it ONCE, up front, in release profile, and invoke
@@ -203,11 +187,16 @@ jobs:
       # attacker editing release.yml can edit the re-run too); the verified out-of-band CI
       # verdict is the stronger control, and this drops ~2m24s of duplicate work.
       - name: Attest build (deny / auditable / audit-bin / verify-hardening)
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
         run: xtask/target/release/xtask.exe release-attest
 
       - name: Generate SBOM (CycloneDX)
         working-directory: app
-        run: cargo cyclonedx --format json
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: '"$TOOLS_DIR/cargo-cyclonedx.exe" cyclonedx --format json'
 
       # #104: MUTATION before any seal. Patch the /Brepro hash timestamp (which decodes to an
       # implausible year and can trip timestomp heuristics) to the reproducible commit epoch —

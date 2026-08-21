@@ -1,12 +1,19 @@
 name: Build release tools
 
-# PRODUCER (#138). Compiles the four pinned cargo-* build tools ONCE, off the release
-# critical path, and publishes them as assets on the `tools` release. The release job then
-# downloads + digest-verifies them instead of recompiling 1192 packages every release.
+# PRODUCER (#138/#221). Compiles the pinned cargo-* tools ONCE, off every consumer's critical
+# path, and publishes them as assets on the `tools` release. Consumers (release.yml,
+# supply-chain.yml) download + digest-verify them instead of recompiling dependency trees
+# per run.
 #
 # Trigger is manual: you run this only when a `rev` in tools/TOOLS.lock changes (a deliberate,
 # reviewed pin bump — see tools/README.md). Their dependencies are frozen by rev + --locked, so
 # nothing else warrants a rebuild.
+#
+# Two jobs, one per TOOLS.lock `target` (#221: cackle/cargo-acl is Linux-only, everything else
+# matches the Windows release runner). The linux job runs AFTER the windows job so the two never
+# race on creating the `tools` release; each uploads only its own target's assets. Because a run
+# rebuilds and clobber-republishes EVERY tool of a target, bless all printed digests from the
+# same run (#176).
 #
 # This workflow SIGNS nothing and holds no signing credential. It builds public pinned source
 # and uploads binaries; contents:write is only for the `tools` release. The immutability anchor
@@ -24,7 +31,7 @@ permissions:
   contents: read
 
 jobs:
-  build-tools:
+  build-tools-windows:
     runs-on: windows-latest   # MUST match the release runner OS: these are Windows x86_64 exes.
     permissions:
       contents: write         # create/update the `tools` release + upload assets
@@ -47,44 +54,45 @@ jobs:
           New-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem" `
             -Name LongPathsEnabled -Value 1 -PropertyType DWORD -Force | Out-Null
 
-      # Build every tool from its pinned rev in tools/TOOLS.lock into a staging root. One shared
-      # CARGO_TARGET_DIR (the #139 dedup, relocated here off the release path) lets the four
-      # tools reuse each other's compiled dependencies. `--root` keeps the exes out of ~/.cargo.
-      - name: Build tools from TOOLS.lock pins
+      # Build every windows-x86_64 tool from its pinned rev into a staging root. One shared
+      # CARGO_TARGET_DIR (the #139 dedup, relocated here off the release path) lets the tools
+      # reuse each other's compiled dependencies. `--root` keeps the exes out of ~/.cargo.
+      - name: Build windows-x86_64 tools from TOOLS.lock pins
         shell: bash
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/tool-build
         run: |
           set -euo pipefail
           mkdir -p out toolroot
-          # Parse non-comment, non-blank lines: name repo rev sha256. Repo-relative --root and
-          # out/ avoid Windows/MSYS path-separator issues on the bash shell.
-          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev _sha; do
+          # Parse non-comment lines: name repo rev target sha256; build only this job's target.
+          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev target _sha; do
+            [ "$target" = "windows-x86_64" ] || continue
             echo "::group::building $name @ $rev"
             cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
             cp "./toolroot/bin/$name.exe" "out/$name.exe"
             echo "::endgroup::"
           done
 
-      # Compute digests and emit a ready-to-commit TOOLS.lock. The maintainer copies these
-      # digests into tools/TOOLS.lock in a reviewed PR — that commit is what "blesses" the build.
-      - name: Compute digests + emit TOOLS.lock block
+      # Compute digests and emit ready-to-commit TOOLS.lock lines. The maintainer copies these
+      # into tools/TOOLS.lock in a reviewed PR — that commit is what "blesses" the build.
+      - name: Compute digests + emit TOOLS.lock lines
         shell: bash
         run: |
           set -euo pipefail
-          : > out/SHA256SUMS
+          : > out/SHA256SUMS-windows-x86_64
           echo "=================== copy these digests into tools/TOOLS.lock ==================="
-          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev _sha; do
+          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev target _sha; do
+            [ "$target" = "windows-x86_64" ] || continue
             d=$(sha256sum "out/$name.exe" | cut -d' ' -f1)
-            printf '%s  %s.exe\n' "$d" "$name" >> out/SHA256SUMS
-            printf '%-18s %-34s %s  %s\n' "$name" "$repo" "$rev" "$d"
+            printf '%s  %s.exe\n' "$d" "$name" >> out/SHA256SUMS-windows-x86_64
+            printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d"
           done
           echo "==============================================================================="
 
-      # Publish the binaries to the `tools` release. This is a byte store only; integrity comes
-      # from the committed TOOLS.lock digest, so even a tampered release asset fails the release
-      # job's verify. Idempotent: (re)create the tag's release and overwrite assets.
-      - name: Publish tool binaries to the tools release
+      # Publish to the `tools` release. This is a byte store only; integrity comes from the
+      # committed TOOLS.lock digest, so even a tampered release asset fails a consumer's verify.
+      # Idempotent: (re)create the tag's release and overwrite this target's assets.
+      - name: Publish windows tool binaries to the tools release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -93,7 +101,61 @@ jobs:
           set -euo pipefail
           if ! gh release view "$TAG" >/dev/null 2>&1; then
             gh release create "$TAG" --title "Prebuilt build tools" \
-              --notes "Prebuilt cargo-* build tools consumed by the release workflow. Integrity is anchored by tools/TOOLS.lock digests, NOT by this release. Rebuilt by .github/workflows/build-tools.yml." \
+              --notes "Prebuilt cargo-* build tools consumed by the release + supply-chain workflows. Integrity is anchored by tools/TOOLS.lock digests, NOT by this release. Rebuilt by .github/workflows/build-tools.yml." \
               --latest=false
           fi
-          gh release upload "$TAG" out/*.exe out/SHA256SUMS --clobber
+          gh release upload "$TAG" out/*.exe out/SHA256SUMS-windows-x86_64 --clobber
+
+  build-tools-linux:
+    needs: build-tools-windows   # serialize: never race the windows job on release creation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain
+        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+
+      - name: Build linux-x86_64 tools from TOOLS.lock pins
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/tool-build
+        run: |
+          set -euo pipefail
+          mkdir -p out toolroot
+          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev target _sha; do
+            [ "$target" = "linux-x86_64" ] || continue
+            echo "::group::building $name @ $rev"
+            cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
+            cp "./toolroot/bin/$name" "out/$name-linux-x86_64"
+            echo "::endgroup::"
+          done
+
+      - name: Compute digests + emit TOOLS.lock lines
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > out/SHA256SUMS-linux-x86_64
+          echo "=================== copy these digests into tools/TOOLS.lock ==================="
+          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev target _sha; do
+            [ "$target" = "linux-x86_64" ] || continue
+            d=$(sha256sum "out/$name-linux-x86_64" | cut -d' ' -f1)
+            printf '%s  %s-linux-x86_64\n' "$d" "$name" >> out/SHA256SUMS-linux-x86_64
+            printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d"
+          done
+          echo "==============================================================================="
+
+      - name: Publish linux tool binaries to the tools release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tools_tag }}
+        run: |
+          set -euo pipefail
+          # cargo-* prefix: the bare *-linux-x86_64 glob ALSO matched SHA256SUMS-linux-x86_64,
+          # duplicating it in one gh invocation — the second (self-clobbered) upload 404s.
+          gh release upload "$TAG" out/cargo-*-linux-x86_64 out/SHA256SUMS-linux-x86_64 --clobber

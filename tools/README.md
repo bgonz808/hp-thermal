@@ -1,20 +1,30 @@
-# Prebuilt build tools (#138)
+# Prebuilt build tools (#138, #221)
 
-The release build needs four `cargo-*` utilities — `cargo-deny`, `cargo-auditable`,
-`cargo-audit`, `cargo-cyclonedx` — that run *during* the build but never ship inside
-`hp-thermal.exe`. Compiling them from source cost ~970s (≈75%) of every release build and ran
-~1192 dependency build scripts inside the job that produces the signed bytes.
+CI needs `cargo-*` utilities that run *during* builds/checks but never ship inside
+`hp-thermal.exe`: the release build's four (`cargo-deny`, `cargo-auditable`, `cargo-audit`,
+`cargo-cyclonedx`), the supply-chain gate's `cargo-vet`, and `cargo-acl` (cackle, #50).
+Compiling the release four from source cost ~970s (≈75%) of every release build and ran ~1192
+dependency build scripts inside the job that produces the signed bytes.
 
-This directory moves that work **out of the release path**: build the tools once, publish the
-binaries, and have the release job **download + digest-verify** them instead of recompiling.
+This directory moves that work **out of every consumer's path**: build the tools once, publish
+the binaries, and have consumers **download + digest-verify** them instead of recompiling.
+**#221 standard: no CI job may `cargo install`/compile/run any tool not digest-pinned here.**
+A version pin is a *name* the registry resolves; the committed digest is a *content commitment*
+reviewed into this repo.
 
 ## Files
 
-- **`TOOLS.lock`** — the anchor. `name repo rev sha256` per tool. `rev` is the human-edited pin;
-  `sha256` is filled from a `build-tools.yml` run and reviewed on commit. The digest is the
-  integrity anchor — the `tools` release is only a byte store.
-- **`.github/workflows/build-tools.yml`** — the producer (manual dispatch). Builds each tool from
-  its pinned rev, publishes the binaries to the `tools` release, and prints the digests to commit.
+- **`TOOLS.lock`** — the anchor. `name repo rev target sha256` per tool. `rev` is the
+  human-edited pin; `target` selects the producer job and asset naming (`windows-x86_64` →
+  `<name>.exe`, `linux-x86_64` → `<name>-linux-x86_64`; cackle is Linux-only); `sha256` is
+  filled from a `build-tools.yml` run and reviewed on commit. The digest is the integrity
+  anchor — the `tools` release is only a byte store.
+- **`.github/actions/fetch-tools`** — the shared consumer: parses `TOOLS.lock`, downloads,
+  digest-verifies fail-closed, and only then puts the binaries on `PATH`. Used by `release.yml`
+  (the four release tools, least-privilege `only` list) and `supply-chain.yml` (`cargo-vet`).
+- **`.github/workflows/build-tools.yml`** — the producer (manual dispatch; one job per target,
+  serialized). Builds each tool from its pinned rev, publishes the binaries to the `tools`
+  release, and prints the digests to commit.
 - **`.github/workflows/tool-updates.yml`** — the hook (weekly). Flags when an upstream is newer
   than a pin.
 
