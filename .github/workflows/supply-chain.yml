@@ -23,7 +23,10 @@ permissions:
 
 jobs:
   vet:
-    runs-on: ubuntu-latest
+    # windows-latest (#221): cargo-vet is consumed as a digest-pinned prebuilt exe from
+    # TOOLS.lock, and the producer builds Windows binaries for every tool that supports it —
+    # one producer target, one blessed artifact, shared with the release path's standard.
+    runs-on: windows-latest
     permissions:
       contents: read
     steps:
@@ -35,11 +38,17 @@ jobs:
       - name: Install pinned toolchain
         run: rustup toolchain install nightly-2026-07-23
 
-      # cargo-vet is a CI-only vetting tool — it is NOT shipped and never touches the release or
-      # signing path, so a crates.io --version + --locked pin is acceptable here (vs the git-rev
-      # pins the release-path tools use). Compiles from source; fine for a non-blocking gate.
-      - name: Install cargo-vet
-        run: cargo install cargo-vet --locked --version 0.10.0
+      # #221 (maintainer-declared standard): NOTHING runs in CI unless digest-pinned via
+      # TOOLS.lock. A crates.io version pin is a NAME the registry resolves (bytes + checksum
+      # from one trust domain, plus a full dependency-tree compile executing build scripts every
+      # run); the committed digest is a CONTENT COMMITMENT reviewed into this repo. The previous
+      # `cargo install cargo-vet --locked --version 0.10.0` here violated that standard.
+      - name: Fetch + verify cargo-vet (digest-pinned, fail-closed)
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-vet
 
       # --locked: vet the graph exactly as committed, no re-resolution. Report-only until baseline.
       - name: cargo vet

@@ -1,25 +1,26 @@
-# TOOLS.lock — prebuilt build-tool binaries, verified by digest when the release job consumes them.
+# TOOLS.lock — prebuilt build-tool binaries, verified by digest when a consumer job runs them.
 #
-# These four cargo-* utilities run DURING the build but never ship inside hp-thermal.exe.
+# These cargo-* utilities run DURING builds/CI but never ship inside hp-thermal.exe.
 # They are pinned by immutable git rev (content-addressed) + --locked (their whole dependency
 # tree is frozen). CAVEAT (#176): `cargo install` is NOT byte-reproducible — the SAME rev builds
 # to DIFFERENT bytes across build-tools.yml runs. So the sha256 (bound to a SPECIFIC producer run),
 # not the rev, is the true anchor. And because build-tools.yml rebuilds + --clobber-republishes ALL
-# tools each run, bumping ANY rev re-digests EVERY tool — re-bless all four from that same run.
+# tools each run, bumping ANY rev re-digests EVERY tool — re-bless all six from that same run.
 #
-# Fields:  name  repo  rev  sha256(<name>.exe, windows-x86_64)
+# Fields:  name  repo  rev  target  sha256
+#   name    — crate AND binary name (`cargo install <name>`).
 #   rev     — human-edited. THE pin for which source commit to build.
+#   target  — which producer job builds it and which asset name it publishes under (#221):
+#               windows-x86_64 -> asset `<name>.exe`
+#               linux-x86_64   -> asset `<name>-linux-x86_64`   (cackle/cargo-acl is Linux-only)
 #   sha256  — OUTPUT of .github/workflows/build-tools.yml, reviewed when committed. This digest
-#             is the immutability ANCHOR: the `tools` GitHub release is just a byte store, and
-#             the release job fails closed on any mismatch. An all-zero digest means
-#             "not built yet — run build-tools.yml and commit the printed value".
+#             is the execution authorization; an all-zero digest means "not blessed yet" and
+#             fails closed in every consumer.
 #
-# Dependabot does NOT track these (it manages Cargo.lock deps and `uses:` action pins, not
-# `cargo install --git --rev`). The scheduled .github/workflows/tool-updates.yml is the
-# purpose-built substitute: it opens an issue when an upstream cuts a release newer than `rev`.
-#
-# name             repo                               rev                                       sha256
-cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  666609a93e196cc963b07161d9c2186996255afa8ff1c3fa9b45d56e83ab1b9e
-cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  c54b72defb136b11512122772c2f537b125e02bd203211660f5442467609bccb
-cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  59b41122883da309d6b8a753b2ba0ff5f95f3a4919845616d937b8c664503f2b
-cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  38c57adb0076fc8c40e4781b067de318957189116fffafd054cf971fd8aa688b
+# Consumers fetch + verify via .github/actions/fetch-tools (release.yml, supply-chain.yml).
+cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  windows-x86_64  666609a93e196cc963b07161d9c2186996255afa8ff1c3fa9b45d56e83ab1b9e
+cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  windows-x86_64  c54b72defb136b11512122772c2f537b125e02bd203211660f5442467609bccb
+cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  windows-x86_64  59b41122883da309d6b8a753b2ba0ff5f95f3a4919845616d937b8c664503f2b
+cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  windows-x86_64  38c57adb0076fc8c40e4781b067de318957189116fffafd054cf971fd8aa688b
+cargo-vet          mozilla/cargo-vet                  c23b21659b9902d97bef2f54c8e14529031092c5  windows-x86_64  0000000000000000000000000000000000000000000000000000000000000000
+cargo-acl          cackle-rs/cackle                   e7109a3174378976ea881f1883439ba82524f061  linux-x86_64    0000000000000000000000000000000000000000000000000000000000000000

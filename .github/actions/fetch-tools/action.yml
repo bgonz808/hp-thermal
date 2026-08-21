@@ -1,0 +1,78 @@
+name: Fetch prebuilt tools
+description: >-
+  Download pinned tool binaries from the `tools` release (treated as an UNTRUSTED byte store) and
+  CANONICALLY verify each against the sha256 committed in tools/TOOLS.lock BEFORE it becomes
+  executable (#138/#221). Any mismatch, missing asset, or all-zero ("not blessed") digest aborts
+  fail-closed, before a single tool runs. Factored out of release.yml so every consumer
+  (release.yml, supply-chain.yml) shares ONE parser and one verification path.
+inputs:
+  token:
+    description: GitHub token for `gh release download`.
+    required: true
+  target:
+    description: "Which platform's binaries to fetch: windows-x86_64 or linux-x86_64."
+    default: windows-x86_64
+  only:
+    description: >-
+      Space-separated tool names to fetch (least privilege: a consumer takes only what it runs).
+      Empty = every tool matching `target`.
+    default: ""
+  tools-tag:
+    description: Release tag of the byte store.
+    default: tools
+runs:
+  using: composite
+  steps:
+    - name: Fetch + verify (digest-pinned, fail-closed)
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        WANT_TARGET: ${{ inputs.target }}
+        ONLY: ${{ inputs.only }}
+        TOOLS_TAG: ${{ inputs.tools-tag }}
+      run: |
+        set -euo pipefail
+        dest="${RUNNER_TEMP}/pinned-tools"
+        rm -rf "$dest"; mkdir -p "$dest"
+        zero="0000000000000000000000000000000000000000000000000000000000000000"
+        : > "$dest/EXPECTED.sha256"; : > "$dest/ASSETS"
+        # Parse the committed anchor (name repo rev target sha256). Process substitution (NOT a
+        # pipe) keeps the loop in THIS shell so `exit 1` aborts the step — a `| while` subshell
+        # would swallow the fail-closed and silently continue.
+        matched=0
+        while read -r name _repo _rev target sha; do
+          [ -n "${name:-}" ] || continue
+          [ "$target" = "$WANT_TARGET" ] || continue
+          if [ -n "$ONLY" ]; then
+            case " $ONLY " in *" $name "*) ;; *) continue ;; esac
+          fi
+          matched=$((matched+1))
+          if [ "$sha" = "$zero" ] || [ -z "${sha:-}" ]; then
+            echo "::error::tools/TOOLS.lock digest for '$name' is unset (all-zero). Run build-tools.yml and commit the printed digest before this tool can be used." >&2
+            exit 1
+          fi
+          case "$WANT_TARGET" in
+            windows-x86_64) asset="$name.exe" ;;
+            *)              asset="$name-$WANT_TARGET" ;;
+          esac
+          printf '%s  %s/%s\n' "$sha" "$dest" "$asset" >> "$dest/EXPECTED.sha256"
+          printf '%s\n' "$asset" >> "$dest/ASSETS"
+        done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock)
+        [ "$matched" -gt 0 ] || { echo "::error::no TOOLS.lock entries matched target='$WANT_TARGET' only='$ONLY'" >&2; exit 1; }
+        # Pull each asset from the byte store...
+        while read -r asset; do
+          gh release download "$TOOLS_TAG" --repo "$GITHUB_REPOSITORY" --pattern "$asset" --dir "$dest" --clobber
+        done < "$dest/ASSETS"
+        # ...and CANONICALLY VERIFY every one against the committed digest. Any mismatch OR
+        # missing file makes `sha256sum -c` exit non-zero -> `set -e` aborts here, before a
+        # single tool runs.
+        sha256sum -c "$dest/EXPECTED.sha256"
+        # Non-Windows: strip the target suffix back to the plain binary name (so `cargo <sub>`
+        # resolves it) and restore the executable bit lost in the release round-trip. Renaming
+        # happens AFTER verification, so the digest always covers the bytes as stored.
+        if [ "$WANT_TARGET" != "windows-x86_64" ]; then
+          for f in "$dest"/*-"$WANT_TARGET"; do mv "$f" "${f%-"$WANT_TARGET"}"; done
+          chmod +x "$dest"/*
+        fi
+        # Only now — post-verification — do the binaries become resolvable as `cargo <sub>`.
+        echo "$dest" >> "$GITHUB_PATH"
