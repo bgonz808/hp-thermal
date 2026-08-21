@@ -67,7 +67,7 @@ runs:
           esac
           printf '%s  %s/%s\n' "$sha" "$dest" "$asset" >> "$dest/EXPECTED.sha256"
           printf '%s\n' "$asset" >> "$dest/ASSETS"
-        done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock)
+        done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
         [ "$matched" -gt 0 ] || { echo "::error::no TOOLS.lock entries matched target='$WANT_TARGET' only='$ONLY'" >&2; exit 1; }
         # Pull each asset from the byte store...
         while read -r asset; do
