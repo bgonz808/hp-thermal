@@ -86,7 +86,7 @@ jobs:
             for eng in "${engines[@]}"; do
               # Acked (hash, engine) pairs (.github/surveillance-acks) downgrade to warnings:
               # visible every run, no re-paging. New engines/hashes still fail the job.
-              if grep -qE "^$h[[:space:]]+$eng([[:space:]]|$)" .github/surveillance-acks 2>/dev/null; then
+              if grep -qE "^${h}[[:space:]]+${eng}([[:space:]]|$)" .github/surveillance-acks 2>/dev/null; then
                 echo "::warning::$key: $eng detection is ACKNOWLEDGED (see .github/surveillance-acks) - monitored, not paging"
               else
                 echo "::error::$key: NEW detection by $eng - review before further use/bless"
