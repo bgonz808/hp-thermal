@@ -25,9 +25,15 @@ runs:
     - name: Fetch + verify BinSkim (pinned nupkg by sha256)
       shell: pwsh
       env:
-        BINSKIM_VERSION: "4.4.9.11"
-        BINSKIM_SHA256: "69678989cbc273b5b50fcf98fb0fd978e1e35a3f844acb24254b31f0ce90c447"
+        # Version comes from packages.config beside this file (#226: Dependabot's nuget ecosystem
+        # watches it and proposes bumps). The sha256 stays HERE as the execution authorization: a
+        # Dependabot version bump alone mismatches the digest and fails closed until a human
+        # verifies the new nupkg and updates the pin — the version is visibility, the digest is trust.
+        BINSKIM_SHA256: "69678989cbc273b5b50fcf98fb0fd978e1e35a3f844acb24254b31f0ce90c447"  # nupkg sha256 for v4.4.9.11 — keep paired with packages.config's version on every bump
       run: |
+        [xml]$pkgs = Get-Content "$env:GITHUB_ACTION_PATH/packages.config"
+        $env:BINSKIM_VERSION = ($pkgs.packages.package | Where-Object { $_.id -eq "Microsoft.CodeAnalysis.BinSkim" }).version
+        if ([string]::IsNullOrEmpty($env:BINSKIM_VERSION)) { throw "BinSkim version not found in packages.config (fail-closed)" }
         $url = "https://api.nuget.org/v3-flatcontainer/microsoft.codeanalysis.binskim/$env:BINSKIM_VERSION/microsoft.codeanalysis.binskim.$env:BINSKIM_VERSION.nupkg"
         $pkg = "$env:RUNNER_TEMP/binskim.zip"   # .zip so Expand-Archive accepts the nupkg
         Invoke-WebRequest -Uri $url -OutFile $pkg

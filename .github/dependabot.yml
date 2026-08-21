@@ -14,6 +14,17 @@ updates:
     cooldown:
       default-days: 7   # soak: don't adopt <7-day-old releases (zizmor: dependabot-cooldown)
 
+  # #226: BinSkim nupkg pin, exposed for Dependabot visibility via a packages.config inside the
+  # composite's own directory (covered by the release job's sparse checkout). Dependabot proposes
+  # version bumps; the composite's sha256 stays the execution authorization and fails closed on a
+  # version-only bump until a human verifies + updates the digest.
+  - package-ecosystem: nuget
+    directory: /.github/actions/binskim-scan
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
   # Keep the SHA-pinned GitHub Actions current: Dependabot proposes SHA bumps for you
   # to review. This is the maintenance complement to pinning actions by SHA — you get
   # immutability (the pin) AND freshness (reviewed bumps), instead of trusting a
