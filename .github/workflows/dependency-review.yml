@@ -1,0 +1,38 @@
+name: dependency-review
+
+# #227 Stage A (observational): diff every PR's dependency changes against the GitHub Advisory
+# Database (which imports RustSec) and FAIL the check on critical-severity findings. The only
+# GitHub-native merge gate on the vuln axis. Staged like cargo-vet was:
+#   Stage A (this): runs on every PR, fail-on-severity critical, NOT in the required-check set —
+#     observational evidence-building; a failure is visible but does not block merge.
+#   Stage B: add to branch-protection required checks + tighten severity.
+#   Stage C: triage framework — severity x EPSS x human reachability judgment (no native Rust
+#     reachability exists), reviewed exceptions via allow-ghsas.
+# License gating is deliberately ABSENT here: cargo-deny's [licenses] allowlist is the single
+# source of license policy; a second, independently-drifting list would be worse than one.
+# Malware-type advisories: crates.io malware GHSAs exist (2026-07); whether they surface in
+# review results is UNVERIFIED per docs — Dependabot alerts cover that channel regardless.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      # high (not critical): Stage A is observational, so the stricter bar costs nothing and
+      # gathers evidence on exactly what Stage B would block. The dep tree is tiny (~30 crates,
+      # mostly windows-*), so high-severity advisory frequency — and thus friction — is low.
+      - name: Dependency review (fail on high+)
+        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
+        with:
+          fail-on-severity: high
+          comment-summary-in-pr: on-failure
