@@ -24,6 +24,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let code = match args.first().map(String::as_str) {
         Some("ci") => cmd_ci(args.iter().any(|a| a == "--fast")),
+        Some("release-attest") => cmd_release_attest(),
         Some("verify-hardening") => cmd_verify_hardening(args.get(1).map(String::as_str)),
         Some("capabilities") => cmd_capabilities(args.get(1).map(String::as_str)),
         Some("verify-artifact") => cmd_verify_artifact(
@@ -48,6 +49,7 @@ fn main() {
         _ => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!("  ci [--fast]              run checks (fast = fmt + clippy + test)");
+            eprintln!("  release-attest           production-artifact checks only (deny, auditable build, audit bin, verify-artifact)");
             eprintln!("  verify-hardening [EXE]   check PE exploit-mitigation flags");
             eprintln!(
                 "  capabilities [EXE]       list imports (+ delay-load); fail off the golden allowlist"
@@ -344,10 +346,27 @@ fn step(desc: &str, dir: &str, program: &str, args: &[&str]) -> bool {
     }
 }
 
+// #192: two semantically distinct tiers. `ci` proves SOURCE quality (what PR CI and the
+// pre-commit hook need); `release-attest` proves PRODUCTION ARTIFACT quality (what the
+// release pipeline needs). `ci` without --fast still runs both, so its behavior is
+// unchanged; release.yml switching to `release-attest` alone is #196 (gated on the #191
+// provenance-verified source gate).
 fn cmd_ci(fast: bool) -> i32 {
-    let mut ok = true;
+    let mut ok = ci_source_checks();
+    if fast {
+        return finish(ok);
+    }
+    ok &= release_attest_checks();
+    finish(ok)
+}
 
-    // Fast tier: format, lint, test — both feature configs.
+fn cmd_release_attest() -> i32 {
+    finish(release_attest_checks())
+}
+
+/// Source-quality tier: format, lint, test — both feature configs.
+fn ci_source_checks() -> bool {
+    let mut ok = true;
     ok &= step("fmt", APP_DIR, "cargo", &["fmt", "--check"]);
     ok &= step(
         "clippy (default)",
@@ -375,16 +394,16 @@ fn cmd_ci(fast: bool) -> i32 {
         "cargo",
         &["test", "--features", "noise-adapt"],
     );
+    ok
+}
 
-    if fast {
-        return finish(ok);
-    }
-
-    // Full tier: supply-chain policy + artifact attestation. Run in release.yml (which
-    // installs cargo-deny + cargo-auditable + cargo-audit by git-rev). osv-scanner is
-    // intentionally NOT invoked here — RustSec exports to OSV in real time, so cargo-deny/
-    // cargo-audit already cover it; continuous scanning is Dependabot's job off-workflow.
-    // Run `osv-scanner --lockfile=app/Cargo.lock` locally if you want the extra cross-check.
+/// Production-artifact tier: supply-chain policy + artifact attestation. Run in release.yml
+/// (which installs cargo-deny + cargo-auditable + cargo-audit by git-rev). osv-scanner is
+/// intentionally NOT invoked here — RustSec exports to OSV in real time, so cargo-deny/
+/// cargo-audit already cover it; continuous scanning is Dependabot's job off-workflow.
+/// Run `osv-scanner --lockfile=app/Cargo.lock` locally if you want the extra cross-check.
+fn release_attest_checks() -> bool {
+    let mut ok = true;
     ok &= step("cargo-deny", APP_DIR, "cargo", &["deny", "check"]);
     ok &= step(
         "auditable release build",
@@ -399,8 +418,7 @@ fn cmd_ci(fast: bool) -> i32 {
         &["audit", "bin", RELEASE_EXE],
     );
     ok &= cmd_verify_artifact(Some(RELEASE_EXE), Some(RELEASE_PDB)) == 0;
-
-    finish(ok)
+    ok
 }
 
 fn finish(ok: bool) -> i32 {

@@ -64,7 +64,8 @@ Cross-platform Rust tooling lives in `xtask/`:
 
 ```sh
 cargo xtask ci --fast                # fmt, clippy -D warnings, tests (the PR + pre-commit tier)
-cargo xtask ci                       # + cargo-deny, cargo-auditable build, audit bin, verify-hardening
+cargo xtask ci                       # + the release-attest tier below
+cargo xtask release-attest           # production-artifact checks: cargo-deny, auditable build, audit bin, verify-artifact
 cargo xtask verify-hardening <exe>   # check the PE exploit-mitigation flags (CFG/ASLR/DEP)
 ```
 
