@@ -182,11 +182,16 @@ jobs:
           # Only now — post-verification — do the binaries become resolvable as `cargo <sub>`.
           echo "$dest" >> "$GITHUB_PATH"
 
-      # Full tier: fmt/clippy/test + cargo-deny policy + cargo-auditable release build
-      # (embeds the dep tree in the binary) + `cargo audit bin` on the artifact + PE
-      # exploit-mitigation verification.
+      # #196: production-artifact tier ONLY — cargo-deny policy + cargo-auditable release
+      # build (embeds the dep tree in the binary) + `cargo audit bin` on the artifact + PE
+      # exploit-mitigation verification. fmt/clippy/tests are NOT re-run here: source-gate
+      # already requires a provenance-verified green `ci` check on this exact SHA (#191 —
+      # posted by the GitHub Actions app, from ci.yml, SHA-bound), which ran that source
+      # tier. Re-running it in this workflow was never an independent trust domain (an
+      # attacker editing release.yml can edit the re-run too); the verified out-of-band CI
+      # verdict is the stronger control, and this drops ~2m24s of duplicate work.
       - name: Attest build (deny / auditable / audit-bin / verify-hardening)
-        run: cargo run --manifest-path xtask/Cargo.toml -- ci
+        run: cargo run --manifest-path xtask/Cargo.toml -- release-attest
 
       - name: Generate SBOM (CycloneDX)
         working-directory: app
