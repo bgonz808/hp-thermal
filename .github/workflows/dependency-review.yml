@@ -28,8 +28,11 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Dependency review (fail on critical)
+      # high (not critical): Stage A is observational, so the stricter bar costs nothing and
+      # gathers evidence on exactly what Stage B would block. The dep tree is tiny (~30 crates,
+      # mostly windows-*), so high-severity advisory frequency — and thus friction — is low.
+      - name: Dependency review (fail on high+)
         uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294  # v5.0.0
         with:
-          fail-on-severity: critical
+          fail-on-severity: high
           comment-summary-in-pr: on-failure
