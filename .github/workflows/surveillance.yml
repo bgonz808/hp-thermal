@@ -120,10 +120,18 @@ jobs:
             echo "::warning::pinned nightly is ${age_days} days old - consider a reviewed toolchain bump (std fixes ride toolchain updates)"
           fi
           # Newer runner families (runs-on labels are invisible to Dependabot): probe the
-          # runner-images README for families beyond our pins.
+          # runner-images README for families beyond our pins. Preview-aware: a family whose
+          # README table row still carries the preview badge is NOT migration-ready (previews
+          # lack completeness/stability commitments — ubuntu-26.04 only gained the Python
+          # toolcache 2026-08-19), so it logs as info, warning only at GA. Avoids weekly
+          # warning fatigue for months of preview.
           readme=$(curl -sS https://raw.githubusercontent.com/actions/runner-images/main/README.md)
-          for fam in windows-2026 windows-2028 ubuntu-26.04; do
-            if grep -q "$fam" <<<"$readme"; then
-              echo "::warning::runner family '$fam' now exists upstream - evaluate migrating pinned families (#226)"
+          for fam in windows-2026 windows-2028 ubuntu-26.04 ubuntu-28.04; do
+            row=$(grep -m1 -E "\`$fam\`" <<<"$readme" || true)
+            [ -n "$row" ] || continue
+            if grep -qi "preview" <<<"$row"; then
+              echo "runner family '$fam' exists upstream in PREVIEW - not migration-ready, watching for GA"
+            else
+              echo "::warning::runner family '$fam' is GA upstream - evaluate migrating pinned families (#226)"
             fi
           done
