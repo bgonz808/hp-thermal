@@ -45,7 +45,7 @@ jobs:
       contents: read # NO security-events:write here — SARIF is an inert artifact (sarif-collect uploads it)
     steps:
       - name: Harden runner (egress audited)
-        uses: step-security/harden-runner@b09bb98e06d4d774595224525879c09bc6e98c40 # v2.20.1
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
         with:
           # AUDIT for the first cut: log egress so a BLOCK allowlist (rustup + static.rust-lang.org
           # + crates.io for build-std, NuGet + dotnet feeds for BinSkim) can be reconciled against a
