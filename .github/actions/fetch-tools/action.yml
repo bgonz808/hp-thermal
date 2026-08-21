@@ -23,10 +23,10 @@ inputs:
 outputs:
   tools-dir:
     description: >-
-      Directory holding ONLY the digest-verified binaries. Deliberately returned as DATA rather
-      than written to GITHUB_PATH here: exposing a directory to PATH is ambient authority for
-      every later step, so that trust decision belongs to the calling workflow, in context,
-      where zizmor can audit the data flow (bind via env, not ${{ }} inline).
+      Directory holding ONLY the digest-verified binaries, returned as DATA. Nothing here (or
+      in any caller) writes GITHUB_PATH — PATH exposure is ambient authority over every later
+      step (the zizmor github-env class). Callers invoke each tool by ABSOLUTE path from this
+      directory, env-bound (not ${{ }} inlined).
     value: ${{ steps.fetch.outputs.dir }}
 runs:
   using: composite
@@ -83,7 +83,6 @@ runs:
           for f in "$dest"/*-"$WANT_TARGET"; do mv "$f" "${f%-"$WANT_TARGET"}"; done
           chmod +x "$dest"/*
         fi
-        # Only now — post-verification — is the directory handed back, as an OUTPUT. This action
-        # never writes GITHUB_PATH: PATH exposure is ambient authority over every later step, so
-        # the caller performs that write itself, visibly, in the workflow.
+        # Only now — post-verification — is the directory handed back, as an OUTPUT. Nothing
+        # ever writes GITHUB_PATH: consumers invoke the verified binaries by absolute path.
         echo "dir=$dest" >> "$GITHUB_OUTPUT"

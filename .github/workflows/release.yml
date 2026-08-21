@@ -161,15 +161,11 @@ jobs:
           target: windows-x86_64
           only: cargo-deny cargo-auditable cargo-audit cargo-cyclonedx
 
-      # The PATH write happens HERE, not inside the composite: exposing a directory to PATH is
-      # ambient authority over every later step, so the trust decision is made visibly by this
-      # workflow, on a directory whose contents just passed digest verification. Bound via env
-      # (not ${{ }} inlined) so zizmor's template-injection audit stays clean.
-      - name: Expose verified tools on PATH
-        shell: bash
-        env:
-          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
-        run: echo "$TOOLS_DIR" >> "$GITHUB_PATH"
+      # NO PATH exposure (#221, maintainer decision after the zizmor github-env finding): the
+      # verified tools are consumed by ABSOLUTE PATH only. xtask receives the directory as
+      # PINNED_TOOLS_DIR (env-bound below) and invokes each cargo-<sub> binary directly —
+      # nothing is shadowable, no later step inherits ambient authority, and the finding is
+      # eliminated structurally rather than suppressed or relocated.
 
       # --- #130/#195: xtask is pure-std with ZERO dependencies, so it builds to a standalone
       #     binary in seconds. #195: build it ONCE, up front, in release profile, and invoke
@@ -191,11 +187,16 @@ jobs:
       # attacker editing release.yml can edit the re-run too); the verified out-of-band CI
       # verdict is the stronger control, and this drops ~2m24s of duplicate work.
       - name: Attest build (deny / auditable / audit-bin / verify-hardening)
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
         run: xtask/target/release/xtask.exe release-attest
 
       - name: Generate SBOM (CycloneDX)
         working-directory: app
-        run: cargo cyclonedx --format json
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: '"$TOOLS_DIR/cargo-cyclonedx.exe" cyclonedx --format json'
 
       # #104: MUTATION before any seal. Patch the /Brepro hash timestamp (which decodes to an
       # implausible year and can trip timestomp heuristics) to the reproducible commit epoch —

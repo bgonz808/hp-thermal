@@ -328,9 +328,19 @@ fn civil_date(epoch: u32) -> (i64, u32, u32) {
 /// Run a step, streaming its output. Returns true on success.
 fn step(desc: &str, dir: &str, program: &str, args: &[&str]) -> bool {
     eprintln!("\n=== {desc} ===");
+    // Toolchain-env scrub: when xtask itself runs under `cargo xtask`, the parent shim exports
+    // CARGO/RUSTC pointing at the REAL binaries of whatever toolchain resolved at the parent's
+    // cwd (repo root -> the default, often stable — rust-toolchain.toml lives in app/ only).
+    // A child invoked as `cargo` re-resolves via the rustup shim per-cwd and is immune, but a
+    // directly-invoked tool (#221 pinned binaries) honors the inherited CARGO env and silently
+    // uses the WRONG toolchain (observed: stable cargo failing on panic-immediate-abort).
+    // Scrubbing forces every child to resolve cargo/rustc via the shim at ITS cwd — the
+    // committed rust-toolchain.toml decides, never ambient env.
     match Command::new(program)
         .current_dir(dir)
         .env_remove("RUSTUP_TOOLCHAIN")
+        .env_remove("CARGO")
+        .env_remove("RUSTC")
         .args(args)
         .status()
     {
@@ -397,26 +407,36 @@ fn ci_source_checks() -> bool {
     ok
 }
 
+/// #221: run a `cargo-<sub>` tool with zero ambient authority. With PINNED_TOOLS_DIR set
+/// (CI: the digest-verified prebuilt dir from .github/actions/fetch-tools), the tool binary
+/// is invoked by ABSOLUTE PATH — no PATH lookup, nothing shadowable. The argv is identical
+/// either way: cargo itself executes `cargo-<sub>` with the subcommand name as argv[1], so
+/// the same args slice works for both (verified against the pinned exes for deny/auditable/
+/// audit). Unset (local dev): fall back to `cargo <sub>` resolution.
+fn cargo_tool_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
+    match std::env::var("PINNED_TOOLS_DIR") {
+        Ok(dir) => {
+            let exe = format!("{dir}/cargo-{}{}", args[0], std::env::consts::EXE_SUFFIX);
+            step(desc, cwd, &exe, args)
+        }
+        Err(_) => step(desc, cwd, "cargo", args),
+    }
+}
+
 /// Production-artifact tier: supply-chain policy + artifact attestation. Run in release.yml
-/// (which installs cargo-deny + cargo-auditable + cargo-audit by git-rev). osv-scanner is
+/// (which fetches the digest-pinned prebuilt tools, #138/#221). osv-scanner is
 /// intentionally NOT invoked here — RustSec exports to OSV in real time, so cargo-deny/
 /// cargo-audit already cover it; continuous scanning is Dependabot's job off-workflow.
 /// Run `osv-scanner --lockfile=app/Cargo.lock` locally if you want the extra cross-check.
 fn release_attest_checks() -> bool {
     let mut ok = true;
-    ok &= step("cargo-deny", APP_DIR, "cargo", &["deny", "check"]);
-    ok &= step(
+    ok &= cargo_tool_step("cargo-deny", APP_DIR, &["deny", "check"]);
+    ok &= cargo_tool_step(
         "auditable release build",
         APP_DIR,
-        "cargo",
         &["auditable", "build", "--release"],
     );
-    ok &= step(
-        "audit shipped binary",
-        ".",
-        "cargo",
-        &["audit", "bin", RELEASE_EXE],
-    );
+    ok &= cargo_tool_step("audit shipped binary", ".", &["audit", "bin", RELEASE_EXE]);
     ok &= cmd_verify_artifact(Some(RELEASE_EXE), Some(RELEASE_PDB)) == 0;
     ok
 }
