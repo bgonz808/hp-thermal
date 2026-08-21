@@ -26,7 +26,7 @@ jobs:
   #     so dry-runs still exercise the pipeline. This complements branch protection +
   #     tag rulesets: even if a tag is somehow placed on a non-green commit, no build runs.
   source-gate:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       checks: read
@@ -100,7 +100,7 @@ jobs:
   #     job is bounded to reading public source: it cannot push, publish, or exfiltrate.
   build:
     needs: source-gate
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read
     # Digest chain (#42/#130): publish the PRE-SIGN bytes' SHA-256 as job outputs — an
@@ -289,7 +289,7 @@ jobs:
   #     Signing Certificate Profile Signer — scoped to a single certificate profile.
   sign:
     needs: build
-    runs-on: windows-latest
+    runs-on: windows-2025
     # Two environments, deliberately. A real release (v* tag) deploys to `release`, whose
     # ONLY deployment policy is the v* TAG rule -- so the production signing path cannot be
     # reached from a branch at all. A workflow_dispatch dry-run deploys to `release-dryrun`,
@@ -538,7 +538,7 @@ jobs:
   #     BEFORE publish. Pure hashing: no toolchain, no secrets.
   verify:
     needs: [build, sign]
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read
     steps:
@@ -704,7 +704,7 @@ jobs:
   # `publish` via its `needs`, so a hardening regression can never ship.
   binskim-release:
     needs: [build, sign]
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read
     # Publish the SARIF's sha256 as a JOB OUTPUT — a run-metadata channel, separate from the
@@ -758,7 +758,7 @@ jobs:
   # job holds id-token/attestations:write; the scanner stayed contents:read. Gates publish.
   attest-sarif:
     needs: [verify, binskim-release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       id-token: write # OIDC -> Sigstore (keyless)
@@ -815,7 +815,7 @@ jobs:
   # SARIF against binskim-release's out-of-band digest, so we never publish a corrupted report.
   upload-sarif-release:
     needs: [binskim-release]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
       security-events: write # the ONLY code-scanning write in the repo; release-scoped, isolated here
@@ -854,7 +854,7 @@ jobs:
 
   publish:
     needs: [verify, binskim-release, attest-sarif]
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: write        # create the Release + upload assets
       id-token: write        # OIDC -> Sigstore (keyless attestation)

@@ -17,7 +17,7 @@ permissions:
 # secret-less runner.
 jobs:
   ci:
-    runs-on: windows-latest
+    runs-on: windows-2025
     steps:
       # SHA-pinned (resolved 2026-07-24 via `gh api repos/<r>/commits/<tag> --jq .sha`).
       # Dependabot (github-actions) proposes reviewed bumps.
@@ -46,7 +46,7 @@ jobs:
   # so pins stay fresh. Residual gap: native C libs behind *-sys crates aren't in
   # Cargo.lock/RustSec (only trivy's OS scan can reach them).
   scan:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:

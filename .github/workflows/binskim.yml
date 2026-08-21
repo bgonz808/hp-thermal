@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   binskim:
-    runs-on: windows-latest
+    runs-on: windows-2025
     permissions:
       contents: read # NO security-events:write here — SARIF is an inert artifact (sarif-collect uploads it)
     steps:
