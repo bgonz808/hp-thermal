@@ -16,6 +16,10 @@ on:
       - app/Cargo.lock
       - app/supply-chain/**
       - .github/workflows/supply-chain.yml
+      # The vet job EXECUTES the digest-pinned cargo-vet via these — a change to either alters
+      # what this workflow runs, so it must re-run to prove itself (#221 follow-up).
+      - tools/TOOLS.lock
+      - .github/actions/fetch-tools/**
   workflow_dispatch: {}
 
 permissions:
