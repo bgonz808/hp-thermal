@@ -91,7 +91,10 @@ jobs:
                 echo "posture($name): cargo-audit clean"
               else
                 echo "::warning::posture($name): cargo-audit reported findings (evidence, not gate):"
-                tail -20 audit.out
+                # COMPLETE output, never truncated: the tail -20 this replaces hid the majority
+                # of findings on the first run (including vuln-class entries) — truncated
+                # evidence corrupts triage decisions (#235).
+                cat audit.out
               fi
             else
               echo "::warning::posture($name): no Cargo.lock at repo root of $repo@$rev - posture not evaluated"
