@@ -31,24 +31,48 @@ jobs:
       contents: read
       checks: read
     steps:
-      - name: Require the tagged commit to be CI-green
+      # #191: names are not identities. A check named "ci" could be posted by ANY GitHub App
+      # with checks:write, and a workflow at a different path can emit a job named "ci". So
+      # each required check must ALSO prove its provenance: posted by the GitHub Actions app
+      # (numeric id 15368 — can't be name-squatted), bound to THIS commit, and produced by a
+      # workflow run whose file path is the expected one (check_suite.id joins check-runs to
+      # workflow runs). What this deliberately does NOT solve: the workflow CONTENT at that
+      # path is still in-tree and attacker-editable — the externally-controlled-policy leg is
+      # #203/#210. This closes check spoofing/renaming; those close policy substitution.
+      - name: Require the tagged commit to be CI-green (provenance-verified, #191)
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs" > checks.json
+          GH_ACTIONS_APP_ID=15368
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100" > checks.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${GITHUB_SHA}&per_page=100" > runs.json
           fail=0
-          for name in "ci" "scan" "Analyze (rust)"; do
-            concl=$(jq -r --arg n "$name" \
-              '[.check_runs[] | select(.name==$n)] | (sort_by(.started_at) | last | .conclusion) // "missing"' \
-              checks.json)
-            echo "required check '$name' => $concl"
-            [ "$concl" = "success" ] || { echo "::error::required check '$name' is '$concl' (need success)"; fail=1; }
+          for pair in "ci|.github/workflows/ci.yml" \
+                      "scan|.github/workflows/ci.yml" \
+                      "Analyze (rust)|.github/workflows/codeql.yml"; do
+            name="${pair%%|*}"; want_wf="${pair##*|}"
+            # Latest check-run with this name; extract every field the predicate needs.
+            # (tr -d '\r': keep the comparisons byte-exact even where tools emit CRLF.)
+            read -r concl app_id suite run_sha < <(jq -r --arg n "$name" \
+              '[.check_runs[] | select(.name==$n)] | (sort_by(.started_at) | last) as $c
+               | if $c == null then "missing - - -"
+                 else "\($c.conclusion) \($c.app.id) \($c.check_suite.id) \($c.head_sha)" end' \
+              checks.json | tr -d '\r')
+            # Join the check-run's suite to the workflow run that produced it -> workflow file path.
+            wf_path=$(jq -r --arg s "$suite" \
+              '[.workflow_runs[] | select((.check_suite_id|tostring)==$s)] | (first | .path) // "unjoined"' \
+              runs.json | tr -d '\r')
+            echo "required check '$name' => conclusion=$concl app=$app_id sha=${run_sha:0:7} workflow=$wf_path"
+            [ "$concl" = "success" ]              || { echo "::error::'$name' conclusion is '$concl' (need success)"; fail=1; }
+            [ "$app_id" = "$GH_ACTIONS_APP_ID" ]  || { echo "::error::'$name' posted by app id '$app_id' (need GitHub Actions, $GH_ACTIONS_APP_ID) — check-name spoofing?"; fail=1; }
+            [ "$run_sha" = "$GITHUB_SHA" ]        || { echo "::error::'$name' is bound to '$run_sha' (need ${GITHUB_SHA})"; fail=1; }
+            [ "$wf_path" = "$want_wf" ]           || { echo "::error::'$name' came from workflow '$wf_path' (need $want_wf)"; fail=1; }
           done
-          [ "$fail" -eq 0 ] || { echo "Source-integrity gate FAILED: tag is not on a CI-green commit."; exit 1; }
-          echo "Source-integrity gate PASSED."
+          [ "$fail" -eq 0 ] || { echo "Source-integrity gate FAILED: tag is not on a commit with provenance-verified green CI."; exit 1; }
+          echo "Source-integrity gate PASSED: all required checks are success, GitHub-Actions-posted, SHA-bound, and from the expected workflow files."
 
       # Version-coupling gate: the tag and the version COMPILED INTO the binary must match. The
       # binary's version is CARGO_PKG_VERSION (app/Cargo.toml) -- it drives the version display,
