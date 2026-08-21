@@ -65,7 +65,7 @@ jobs:
           set -euo pipefail
           mkdir -p out toolroot
           # Parse non-comment lines: name repo rev target sha256; build only this job's target.
-          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev target _sha; do
+          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' | while read -r name repo rev target _sha; do
             [ "$target" = "windows-x86_64" ] || continue
             echo "::group::building $name @ $rev"
             cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
@@ -81,7 +81,7 @@ jobs:
           set -euo pipefail
           : > out/SHA256SUMS-windows-x86_64
           echo "=================== copy these digests into tools/TOOLS.lock ==================="
-          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev target _sha; do
+          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' | while read -r name repo rev target _sha; do
             [ "$target" = "windows-x86_64" ] || continue
             d=$(sha256sum "out/$name.exe" | cut -d' ' -f1)
             printf '%s  %s.exe\n' "$d" "$name" >> out/SHA256SUMS-windows-x86_64
@@ -127,7 +127,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p out toolroot
-          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev target _sha; do
+          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' | while read -r name repo rev target _sha; do
             [ "$target" = "linux-x86_64" ] || continue
             echo "::group::building $name @ $rev"
             cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
@@ -141,7 +141,7 @@ jobs:
           set -euo pipefail
           : > out/SHA256SUMS-linux-x86_64
           echo "=================== copy these digests into tools/TOOLS.lock ==================="
-          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | while read -r name repo rev target _sha; do
+          grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' | while read -r name repo rev target _sha; do
             [ "$target" = "linux-x86_64" ] || continue
             d=$(sha256sum "out/$name-linux-x86_64" | cut -d' ' -f1)
             printf '%s  %s-linux-x86_64\n' "$d" "$name" >> out/SHA256SUMS-linux-x86_64
