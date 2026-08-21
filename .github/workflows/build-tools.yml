@@ -156,4 +156,6 @@ jobs:
           TAG: ${{ inputs.tools_tag }}
         run: |
           set -euo pipefail
-          gh release upload "$TAG" out/*-linux-x86_64 out/SHA256SUMS-linux-x86_64 --clobber
+          # cargo-* prefix: the bare *-linux-x86_64 glob ALSO matched SHA256SUMS-linux-x86_64,
+          # duplicating it in one gh invocation — the second (self-clobbered) upload 404s.
+          gh release upload "$TAG" out/cargo-*-linux-x86_64 out/SHA256SUMS-linux-x86_64 --clobber

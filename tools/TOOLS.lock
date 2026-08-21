@@ -18,9 +18,9 @@
 #             fails closed in every consumer.
 #
 # Consumers fetch + verify via .github/actions/fetch-tools (release.yml, supply-chain.yml).
-cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  windows-x86_64  666609a93e196cc963b07161d9c2186996255afa8ff1c3fa9b45d56e83ab1b9e
-cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  windows-x86_64  c54b72defb136b11512122772c2f537b125e02bd203211660f5442467609bccb
-cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  windows-x86_64  59b41122883da309d6b8a753b2ba0ff5f95f3a4919845616d937b8c664503f2b
-cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  windows-x86_64  38c57adb0076fc8c40e4781b067de318957189116fffafd054cf971fd8aa688b
-cargo-vet          mozilla/cargo-vet                  c23b21659b9902d97bef2f54c8e14529031092c5  windows-x86_64  0000000000000000000000000000000000000000000000000000000000000000
-cargo-acl          cackle-rs/cackle                   e7109a3174378976ea881f1883439ba82524f061  linux-x86_64    0000000000000000000000000000000000000000000000000000000000000000
+cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  windows-x86_64  a86485a454504ef38ae573e6a4ac46b731051418686a87c2fea1c4a33dc5649c
+cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  windows-x86_64  8565440a3b19a7978bed3992e712f1aed148e7f641456d382d7dc3f472975c19
+cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  windows-x86_64  76a102c37ec06002f3a6fcd6a050867e413701ca5de01a442b0a0324e5be375e
+cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  windows-x86_64  496f4b9f2abccbd554271a588f2d5ce5d2a4ed4c7c04e0bd13778570fca799a5
+cargo-vet          mozilla/cargo-vet                  c23b21659b9902d97bef2f54c8e14529031092c5  windows-x86_64  042c8d32b7df5667fd39d8ec59b2cc32087290fc79daf33fddfba9e0a3424c4b
+cargo-acl          cackle-rs/cackle                   e7109a3174378976ea881f1883439ba82524f061  linux-x86_64    085684885c3283172eb07e7b3c6716246ac936db536596eb6eadab57d8c0f428
