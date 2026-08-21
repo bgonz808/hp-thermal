@@ -49,8 +49,11 @@ jobs:
           rows=""; behind=0
           while read -r name repo rev _target _sha; do
             [ -n "${name:-}" ] || continue
-            # Newest release tag matching this tool, then resolve it to a commit SHA.
-            latest_tag=$(gh api "repos/$repo/releases" --jq '.[].tag_name' 2>/dev/null \
+            # Newest TAG matching this tool (not release objects: tags are the superset —
+            # upstreams ship point releases as tag+crates.io with no GitHub release object;
+            # the releases API was blind to cargo-vet v0.10.1/v0.10.2 for 18 months of weekly
+            # checks until a maintainer review caught it). Tags API returns newest-first.
+            latest_tag=$(gh api "repos/$repo/tags?per_page=50" --jq '.[].name' 2>/dev/null \
                           | grep -E "$(tag_filter "$name")" | head -1 || true)
             if [ -z "$latest_tag" ]; then
               rows+="| $name | \`${rev:0:12}\` | ⚠️ could not resolve latest — check manually | |\n"
