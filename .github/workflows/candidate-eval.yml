@@ -1,0 +1,102 @@
+name: Candidate evaluation
+
+# 3-AXIS GATE (#241) — THIN INVOKER ONLY. The verdict algebra (policy) lives in
+# xtask/src/gate.rs: reviewed, unit-tested Rust — never workflow bash (bash+jq stays
+# display glue at most). Runs on every PR touching TOOLS.lock or the evidence store,
+# evaluates each candidate (base vs head) per #241, and posts the evidence table as a
+# PR comment. The job FAILS while any RAISE item lacks a committed ack in
+# tools/evidence/<tool>/acks.jsonl — the maintainer signs residual risk by committing
+# the exact ack line the report prints (attributed, in-history), after which the
+# re-run goes green; merging then completes the record. HARD-STOP and UNEVALUATED
+# cannot be acked (fail-secure, #241 §3-4).
+#
+# VT is NEVER called here (VT_API_KEY is schedule/dispatch-only): the mal axis reads
+# the persisted per-digest evidence. The vuln axis re-scans BOTH revs in this run
+# against one advisory-DB state (#241 §5) using the PRIOR-blessed cargo-audit,
+# digest- and attestation-verified before execution (#221) — which is why this runs
+# on windows-2025: the blessed auditor is a Windows PE.
+#
+# Streams (#241 §1): v1 covers TOOLS.lock bumps. The Dependabot-PR and release
+# streams reuse the same gate with different (baseline, candidate) selectors.
+
+on:
+  pull_request:
+    paths:
+      - "tools/TOOLS.lock"
+      - "tools/evidence/**"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  evaluate:
+    runs-on: windows-2025
+    permissions:
+      contents: read
+      pull-requests: write # the evidence comment on the bump PR
+    steps:
+      - name: Checkout (full history for the base TOOLS.lock)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch prior-blessed auditor (digest + attestation verified)
+        id: auditor
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-audit
+          verify-attestations: "true"
+
+      - name: Run the gate
+        id: gate
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          # Base = the PR base commit's TOOLS.lock. On workflow_dispatch there is no
+          # base — evaluate head against itself (no candidates; proves the plumbing).
+          if [ -n "${BASE_SHA:-}" ]; then
+            git show "$BASE_SHA:tools/TOOLS.lock" > /tmp/base-tools.lock
+          else
+            cp tools/TOOLS.lock /tmp/base-tools.lock
+          fi
+          # Capture the verdict, always produce the report; enforcement is the last step
+          # so the comment posts even when the gate blocks.
+          set +e
+          cargo run --manifest-path xtask/Cargo.toml -- gate \
+            --base /tmp/base-tools.lock --report gate-report.md
+          echo "code=$?" >> "$GITHUB_OUTPUT"
+
+      - name: Post / update the evidence comment
+        if: always() && github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          [ -f gate-report.md ] || { echo "no report produced (gate crashed before writing)"; exit 0; }
+          marker='<!-- candidate-eval -->'
+          cid=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
+                 --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+          if [ -n "${cid:-}" ]; then
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" \
+              -F body=@gate-report.md >/dev/null
+          else
+            gh pr comment "$PR" --body-file gate-report.md
+          fi
+
+      - name: Enforce the verdict
+        shell: bash
+        env:
+          CODE: ${{ steps.gate.outputs.code }}
+        run: |
+          set -euo pipefail
+          echo "gate exit: ${CODE:-missing}"
+          [ "${CODE:-1}" = "0" ]
