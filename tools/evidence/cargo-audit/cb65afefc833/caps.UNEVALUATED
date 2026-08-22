@@ -1,0 +1,4 @@
+UNEVALUATED (fail-secure, #241 s3): auto-accept deterministically re-proposes bare
+"core"/"connect" matchers on the rustsec workspace, tripping the instrument-integrity
+assert (#50). Pending: non-auto-accept problem-stream capture to identify the driver,
+then reviewed instrument curation. This axis is recorded as NO-DATA, not clean.

@@ -1,0 +1,9 @@
+{"schema":"hp-thermal/evidence-vuln/v1","subject":{"name":"cargo-audit","sha256":"cb65afefc83334d47aa7bdeebf92a92140ecb54b164448fc330fa598214bde56"},"scanner":{"uri":"github.com/rustsec/rustsec#cargo-audit","version":"0.22.2","digest":"cb65afefc83334d47aa7bdeebf92a92140ecb54b164448fc330fa598214bde56","db":{"uri":"github.com/rustsec/advisory-db","version":"bf5c0d245a92671908518d7e765914d437954ed6","lastUpdate":"2026-08-21T08:28:40+02:00"}},"scanFinishedOn":"2026-08-21","note":"single-DB paired batch, complete untruncated output; text-mode scan, raw JSON not retained (json-mode + release-store retention begins with candidate-eval)"}
+{"id":"RUSTSEC-2026-0185","package":"quinn-proto","version":"0.11.14","kind":"vulnerability"}
+{"id":"RUSTSEC-2026-0186","package":"memmap2","version":"0.9.10","kind":"unsound"}
+{"id":"RUSTSEC-2026-0190","package":"anyhow","version":"1.0.102","kind":"unsound"}
+{"id":"RUSTSEC-2026-0194","package":"quick-xml","version":"0.39.4","kind":"vulnerability"}
+{"id":"RUSTSEC-2026-0195","package":"quick-xml","version":"0.39.4","kind":"vulnerability"}
+{"id":"RUSTSEC-2026-0204","package":"crossbeam-epoch","version":"0.9.18","kind":"vulnerability"}
+{"id":"RUSTSEC-2026-0214","package":"gumdrop","version":"0.8.1","kind":"unmaintained"}
+{"id":"RUSTSEC-2026-0258","package":"h2","version":"0.4.14","kind":"vulnerability"}
