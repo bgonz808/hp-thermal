@@ -12,6 +12,11 @@ use std::process::{Command, exit};
 #[cfg(windows)]
 mod vsa;
 
+// #241: the 3-axis candidate-evaluation gate (TOOLS.lock bumps vs the per-digest
+// evidence store). Policy-as-code: the verdict algebra lives here, unit-tested,
+// not in workflow bash. See gate.rs.
+mod gate;
+
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
@@ -44,12 +49,15 @@ fn main() {
             args.get(1).map(String::as_str),
             args.get(2).map(String::as_str),
         ),
+        Some("gate") => gate::run(&args),
         #[cfg(windows)]
         Some("vsa-spike") => vsa::run(&args[1..]),
         _ => {
             eprintln!("usage: cargo xtask <command>");
             eprintln!("  ci [--fast]              run checks (fast = fmt + clippy + test)");
-            eprintln!("  release-attest           production-artifact checks only (deny, auditable build, audit bin, verify-artifact)");
+            eprintln!(
+                "  release-attest           production-artifact checks only (deny, auditable build, audit bin, verify-artifact)"
+            );
             eprintln!("  verify-hardening [EXE]   check PE exploit-mitigation flags");
             eprintln!(
                 "  capabilities [EXE]       list imports (+ delay-load); fail off the golden allowlist"
@@ -69,6 +77,7 @@ fn main() {
             eprintln!(
                 "  audit-dll-planting [EXE] [DLL]  DEV: plant a forwarding proxy, test run-dir load (#106)"
             );
+            eprintln!("  gate --base <TOOLS.lock>  3-axis candidate gate vs tools/evidence (#241)");
             eprintln!(
                 "  vsa-spike [--recover]    DEV #61: test the service under a virtual account (elevated)"
             );
@@ -431,6 +440,27 @@ fn cargo_tool_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
 fn release_attest_checks() -> bool {
     let mut ok = true;
     ok &= cargo_tool_step("cargo-deny", APP_DIR, &["deny", "check"]);
+    // xtask grew a real dependency tree (serde_json, for the #241 gate), so it gets
+    // the SAME policy + advisory checks as the app tree — under app's deny config
+    // (one shared policy, no drift) and the same pinned auditor. The toolchain that
+    // attests the release must itself be clean.
+    ok &= cargo_tool_step(
+        "cargo-deny (xtask tree, shared policy)",
+        ".",
+        &[
+            "deny",
+            "--manifest-path",
+            "xtask/Cargo.toml",
+            "--config",
+            "app/deny.toml",
+            "check",
+        ],
+    );
+    ok &= cargo_tool_step(
+        "audit xtask lockfile",
+        ".",
+        &["audit", "--file", "xtask/Cargo.lock"],
+    );
     ok &= cargo_tool_step(
         "auditable release build",
         APP_DIR,

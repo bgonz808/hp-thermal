@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-auditable","sha256":"438d75e564c1e21fef8f3394b4745fa68487fe02dc87f7a3974b791a383be8de"},"panelDate":"2026-08-21","detections":{"malicious":1,"total":70},"flags":[{"engine":"Microsoft","result":"Trojan:Win32/Wacatac.B!ml"}],"sandbox":[{"name":"Zenbox","category":"harmless"}],"timesSubmitted":1,"reputation":0}

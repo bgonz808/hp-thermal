@@ -6,6 +6,17 @@ license = "MIT"
 publish = false
 description = "Cross-platform dev tooling for hp-thermal (check runner + binary hardening verifier)"
 
-# Pure std, no dependencies — runs on any OS. The app-compiling checks it invokes
-# need Windows (the app is Windows-only), but xtask itself is portable.
+# Near-pure std — runs on any OS. The app-compiling checks it invokes need Windows
+# (the app is Windows-only), but xtask itself is portable.
+#
+# serde_json is the ONE dependency (gate.rs, #241): the evidence store is canonical
+# JSONL (OpenVEX/in-toto-aligned), and a hand-rolled JSON parser in the path that
+# evaluates security evidence trades a well-vetted dependency for bespoke-parser
+# risk. serde_json has zero RustSec advisories on record (checked 2026-08-21).
+# Value-navigation only — serde's derive feature stays OFF: the BUILD graph is
+# serde_json -> {itoa, memchr, serde_core, zmij}, no proc-macros compiled
+# (serde_derive/syn appear in Cargo.lock as unselected optionals only; the
+# auditor scans them anyway — conservative, fine). NOTE: this lockfile must stay
+# under Dependabot + audit coverage (it no longer has an empty tree).
 [dependencies]
+serde_json = "1"
