@@ -54,5 +54,14 @@ updates:
         patterns:
           - "github/codeql-action/*"
 
-  # experiments/ (publish=false) and xtask/ (currently zero deps) can be added here
-  # later if their dependency surfaces grow.
+  # xtask/ grew its first dependency (serde_json, for the #241 gate's evidence
+  # parsing) — its lockfile is now a real tree and gets the same coverage + soak.
+  - package-ecosystem: cargo
+    directory: /xtask
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  # experiments/ (publish=false) can be added here later if its dependency
+  # surface grows.
