@@ -440,6 +440,27 @@ fn cargo_tool_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
 fn release_attest_checks() -> bool {
     let mut ok = true;
     ok &= cargo_tool_step("cargo-deny", APP_DIR, &["deny", "check"]);
+    // xtask grew a real dependency tree (serde_json, for the #241 gate), so it gets
+    // the SAME policy + advisory checks as the app tree — under app's deny config
+    // (one shared policy, no drift) and the same pinned auditor. The toolchain that
+    // attests the release must itself be clean.
+    ok &= cargo_tool_step(
+        "cargo-deny (xtask tree, shared policy)",
+        ".",
+        &[
+            "deny",
+            "--manifest-path",
+            "xtask/Cargo.toml",
+            "--config",
+            "app/deny.toml",
+            "check",
+        ],
+    );
+    ok &= cargo_tool_step(
+        "audit xtask lockfile",
+        ".",
+        &["audit", "--file", "xtask/Cargo.lock"],
+    );
     ok &= cargo_tool_step(
         "auditable release build",
         APP_DIR,
