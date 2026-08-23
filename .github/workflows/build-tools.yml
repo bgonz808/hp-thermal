@@ -102,9 +102,32 @@ jobs:
             # Build only this job's target.
             [ "$target" = "windows-x86_64" ] || continue
             echo "::group::building $name @ $rev"
-            cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
-            # #245: capability-manifest gate BEFORE the binary can be published. Fail-closed:
-            # a missing manifest, off-allowlist import, or denied function aborts the produc
+            if [ -f "tools/locks/$name.lock" ]; then
+              # FROZEN-LOCK build (#241): upstream's own Cargo.lock pins versions we have
+              # deliberately moved off (e.g. yanked/soundness-fixed deps upstream still
+              # ships). `cargo xtask freeze` produced this reviewed resolution and proved
+              # its advisory delta; we build --locked against IT. Still fully pinned — the
+              # deviation is a committed, diffable artifact, not a floating resolve.
+              echo "using frozen lock tools/locks/$name.lock"
+              rm -rf "src-$name"
+              git init -q "src-$name"
+              git -C "src-$name" remote add origin "https://github.com/$repo"
+              git -C "src-$name" fetch -q --depth 1 origin "$rev"
+              git -C "src-$name" checkout -q FETCH_HEAD
+              cp "tools/locks/$name.lock" "src-$name/Cargo.lock"
+              # Locate the crate BY NAME inside a possibly-monorepo tree — never a
+              # hardcoded per-tool path (rustsec/ and cyclonedx-rust-cargo are monorepos).
+              manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1 \
+                          | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
+              [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
+              cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot
+            else
+              cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
+            fi
+            d=$(sha256sum "./toolroot/bin/$name.exe" | cut -d' ' -f1)
+            # #225: digest computed FIRST, the asset name derives from it; consumers re-derive
+            # the name and re-hash the bytes — the name itself is never trusted.
+            cp "./toolroot/bin/$name.exe" "out/$name-${d:0:12}.exe"
             printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d" >> out/DIGEST-BLOCK.txt
             echo "::endgroup::"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
@@ -184,7 +207,21 @@ jobs:
           while read -r name repo rev target _sha; do
             [ "$target" = "linux-x86_64" ] || continue
             echo "::group::building $name @ $rev"
-            cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
+            if [ -f "tools/locks/$name.lock" ]; then
+              # FROZEN-LOCK build (#241) — see the windows job for the full rationale.
+              echo "using frozen lock tools/locks/$name.lock"
+              rm -rf "src-$name"
+              git init -q "src-$name"
+              git -C "src-$name" remote add origin "https://github.com/$repo"
+              git -C "src-$name" fetch -q --depth 1 origin "$rev"
+              git -C "src-$name" checkout -q FETCH_HEAD
+              cp "tools/locks/$name.lock" "src-$name/Cargo.lock"
+              manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
+              [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
+              cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot
+            else
+              cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
+            fi
             d=$(sha256sum "./toolroot/bin/$name" | cut -d' ' -f1)
             cp "./toolroot/bin/$name" "out/$name-${d:0:12}-linux-x86_64"
             printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d" >> out/DIGEST-BLOCK.txt
