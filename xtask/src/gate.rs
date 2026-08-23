@@ -499,6 +499,35 @@ pub(crate) fn fetch_lockfile(repo: &str, rev: &str, dest: &Path) -> Result<(), S
     }
 }
 
+/// The committed FROZEN lock for a tool, if one exists in `locks_dir` (#255 §5).
+pub(crate) fn frozen_lock(locks_dir: &Path, tool: &str) -> Option<PathBuf> {
+    let p = locks_dir.join(format!("{tool}.lock"));
+    p.is_file().then_some(p)
+}
+
+/// Resolve THE lock a tool's binary is (or would be) built from — the only artifact whose
+/// posture is honest to evaluate (#255 §5). A committed frozen lock (tools/locks/<name>.lock)
+/// overrides upstream's resolution in the producer, so it must override here too; otherwise
+/// the evaluation is systematically stale toward upstream's OLD versions — over-reporting
+/// advisories we fixed, and (the fail-open direction) MISSING advisories that only apply to
+/// the newer versions we froze forward to. Returns (path, source-label); the label goes into
+/// the report so every evaluation names its instrument.
+pub(crate) fn resolve_lock(
+    tool: &str,
+    repo: &str,
+    rev: &str,
+    locks_dir: Option<&Path>,
+    dest: &Path,
+) -> Result<(PathBuf, String), String> {
+    if let Some(dir) = locks_dir
+        && let Some(p) = frozen_lock(dir, tool)
+    {
+        return Ok((p, format!("frozen {}", dir.display())));
+    }
+    fetch_lockfile(repo, rev, dest)?;
+    Ok((dest.to_path_buf(), "upstream".to_string()))
+}
+
 // ---------- the gate ----------
 
 struct CandidateReport {
@@ -512,6 +541,12 @@ pub fn run(args: &[String]) -> i32 {
     let mut head_path = PathBuf::from("tools/TOOLS.lock");
     let mut evidence_dir = PathBuf::from("supply-chain/evidence");
     let mut report_path: Option<PathBuf> = None;
+    // #255 §5: each side evaluates the lock its digest was built from. Head candidates use
+    // the working tree's frozen locks; the base side needs the BASE COMMIT's frozen locks
+    // (extracted by the workflow), because a frozen lock added in this very PR must not be
+    // retro-applied to a baseline digest that was built from upstream's resolution.
+    let mut locks_dir = PathBuf::from("tools/locks");
+    let mut base_locks_dir: Option<PathBuf> = None;
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -527,6 +562,12 @@ pub fn run(args: &[String]) -> i32 {
                 }
             }
             "--report" => report_path = it.next().map(PathBuf::from),
+            "--locks-dir" => {
+                if let Some(v) = it.next() {
+                    locks_dir = PathBuf::from(v);
+                }
+            }
+            "--base-locks-dir" => base_locks_dir = it.next().map(PathBuf::from),
             other => {
                 eprintln!("gate: unknown arg {other}");
                 return 2;
@@ -535,7 +576,8 @@ pub fn run(args: &[String]) -> i32 {
     }
     let Some(base_path) = base_path else {
         eprintln!(
-            "usage: cargo xtask gate --base <base TOOLS.lock> [--head <head TOOLS.lock>] [--evidence <dir>] [--report <md>]"
+            "usage: cargo xtask gate --base <base TOOLS.lock> [--head <head TOOLS.lock>] \
+             [--evidence <dir>] [--report <md>] [--locks-dir <d>] [--base-locks-dir <d>]"
         );
         return 2;
     };
@@ -592,11 +634,13 @@ pub fn run(args: &[String]) -> i32 {
             continue;
         }
 
-        // --- vuln: contemporaneous paired scan, one DB state ---
+        // --- vuln: contemporaneous paired scan, one DB state, each side on the lock its
+        //     digest is built from (#255 §5) ---
         let tmp = std::env::temp_dir();
-        let head_lock = tmp.join(format!("gate-{}-head.lock", h.name));
+        let head_dest = tmp.join(format!("gate-{}-head.lock", h.name));
         let vuln = (|| -> Result<Verdict, String> {
-            fetch_lockfile(&h.repo, &h.rev, &head_lock)?;
+            let (head_lock, head_src) =
+                resolve_lock(&h.name, &h.repo, &h.rev, Some(&locks_dir), &head_dest)?;
             let head_json = run_audit(&head_lock, !first_scan)?;
             first_scan = false;
             if db_stamp.is_empty() {
@@ -607,20 +651,32 @@ pub fn run(args: &[String]) -> i32 {
                 );
             }
             let head_inst = extract_instances(&head_json);
-            let (added, fixed, carried) = match b {
+            let (added, fixed, carried, base_src) = match b {
                 Some(b) => {
-                    let base_lock = tmp.join(format!("gate-{}-base.lock", h.name));
-                    fetch_lockfile(&b.repo, &b.rev, &base_lock)?;
+                    let base_dest = tmp.join(format!("gate-{}-base.lock", h.name));
+                    let (base_lock, base_src) = resolve_lock(
+                        &b.name,
+                        &b.repo,
+                        &b.rev,
+                        base_locks_dir.as_deref(),
+                        &base_dest,
+                    )?;
                     let base_json = run_audit(&base_lock, true)?; // SAME DB: --no-fetch
                     let base_inst = extract_instances(&base_json);
-                    diff_instances(&base_inst, &head_inst)
+                    let (a, f, c) = diff_instances(&base_inst, &head_inst);
+                    (a, f, c, base_src)
                 }
                 // New tool: no baseline exists — every instance needs a sign-off.
-                None => (head_inst.iter().cloned().collect(), Vec::new(), Vec::new()),
+                None => (
+                    head_inst.iter().cloned().collect(),
+                    Vec::new(),
+                    Vec::new(),
+                    "n/a (new tool)".to_string(),
+                ),
             };
             let _ = write!(
                 summary,
-                "vuln: {} added / {} fixed / {} carried",
+                "vuln: {} added / {} fixed / {} carried  [head lock: {head_src}; base lock: {base_src}]",
                 added.len(),
                 fixed.len(),
                 carried.len()
@@ -856,6 +912,36 @@ mod tests {
         let set = extract_instances(&j);
         assert_eq!(set.len(), 3);
         assert!(set.iter().any(|i| i.id == "yanked" && i.package == "c"));
+    }
+
+    #[test]
+    fn frozen_lock_overrides_upstream_and_absence_falls_through() {
+        // #255 §5: a committed frozen lock is THE lock the producer builds from, so it must
+        // be the lock evaluated; without one, resolution falls through to upstream fetch.
+        let dir = std::env::temp_dir().join(format!("gate-locks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("mytool.lock"),
+            "# lock
+",
+        )
+        .unwrap();
+        assert!(frozen_lock(&dir, "mytool").is_some());
+        assert!(
+            frozen_lock(&dir, "othertool").is_none(),
+            "absence must fall through"
+        );
+        // resolve_lock with a frozen lock present never needs the network:
+        let dest = dir.join("dest.lock");
+        let (path, src) = resolve_lock("mytool", "x/y", "deadbeef", Some(&dir), &dest).unwrap();
+        assert_eq!(path, dir.join("mytool.lock"));
+        assert!(
+            src.starts_with("frozen"),
+            "source label must say frozen, got {src}"
+        );
+        // and with NO locks dir at all (base side pre-freeze), the label must be upstream —
+        // not silently reusing the head's frozen lock for a digest built without it.
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
