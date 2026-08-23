@@ -22,6 +22,14 @@ mod gate;
 // divergence. One engine for every binary we produce (tools + releases). See caps.rs.
 mod caps;
 
+// #241/#239: candidate ENUMERATION (discovery) for the promotion pipeline. Proposes
+// per-line representatives with soak + tier facts; promotes nothing. See explore.rs.
+mod explore;
+
+// #226/#241: knowledge-delta loop for the vuln axis — same bytes, newer advisory DB.
+// Read-only, writes nothing (observations are recomputable; decisions live in acks).
+mod monitor;
+
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
@@ -55,6 +63,8 @@ fn main() {
             args.get(2).map(String::as_str),
         ),
         Some("gate") => gate::run(&args),
+        Some("explore") => explore::run(&args),
+        Some("monitor-vuln") => monitor::run(&args),
         Some("verify-caps") => caps::run(args.get(1).map(String::as_str), {
             // optional --manifest <path>
             let mut mpath = None;

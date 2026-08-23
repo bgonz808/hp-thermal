@@ -9,11 +9,12 @@ name: supply-chain monitor (static-pin posture)
 #
 # AXIS COVERAGE (honest, #241): this is the MAL axis today, plus environment staleness.
 #   * mal   — COVERED by vt-monitor below.
-#   * vuln  — NOT COVERED YET. Nothing here re-audits the blessed lockfiles against the moving
-#             advisory DB, so an advisory published between bumps is invisible until the next
-#             bump runs the gate. Tracked as the #226 follow-up; the pieces exist (evidence
-#             vuln.jsonl records the DB commit they were scanned at, so a weekly re-audit is a
-#             diff against a recorded instrument).
+#   * vuln  — COVERED by vuln-monitor below: re-audits every pinned tool's lockfile against a
+#             FRESH advisory DB and diffs the instance set against the recorded baseline (whose
+#             header names the DB commit it was blessed at). New instance + no ack => fail.
+#             Writes nothing: an observation is recomputable (baseline DB commit + RustSec's own
+#             dated history), while the human DECISION is already recorded in acks.jsonl — so
+#             this workflow never needs contents:write.
 #   * caps  — N/A as knowledge-delta (same bytes + same instrument = same surface). Its
 #             monitoring value is INTEGRITY, not knowledge: re-measure a pinned binary and
 #             assert it still matches its committed manifest + stored evidence (catches store
@@ -24,6 +25,7 @@ name: supply-chain monitor (static-pin posture)
 #                     design with its own least-privilege stage) for every blessed TOOLS.lock
 #                     digest + the latest release exe. New detections on old bytes fail the
 #                     job -> scheduled-failure notification.
+#   vuln-monitor    — same bytes, newer advisory DB: has anything appeared since bless?
 #   pin-staleness   — rust-toolchain nightly age; newer runner families (windows-2026 etc.).
 #
 # Name: "monitor", not the former "surveillance" — the object watched is our own pinned
@@ -154,3 +156,32 @@ jobs:
               echo "::warning::runner family '$fam' is GA upstream - evaluate migrating pinned families (#226)"
             fi
           done
+
+  vuln-monitor:
+    # #226/#241 §5 — the knowledge-delta loop for the vuln axis. Separate job from vt-monitor
+    # so the VT secret is never in scope here (secrets reach only steps that reference them),
+    # and contents:read only: this job cannot mutate the repo. windows-2025 because the blessed
+    # cargo-audit is a Windows PE.
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch prior-blessed auditor (digest + attestation verified)
+        id: auditor
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-audit
+          verify-attestations: "true"
+
+      - name: Advisory knowledge delta vs recorded baselines
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
+        run: cargo run --manifest-path xtask/Cargo.toml -- monitor-vuln

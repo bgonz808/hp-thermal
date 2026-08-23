@@ -1,0 +1,107 @@
+name: Candidate exploration (sandboxed)
+
+# DISCOVERY, never blessing (#241/#239). Enumerates upgrade candidates for the pinned
+# tools' dependency findings and publishes the report as DATA. It cannot promote, sign,
+# attest, or upload anything — that asymmetry IS the security design.
+#
+# THREAT: exploration is the one place we deliberately reason about un-vetted newer
+# versions. Defence in depth, each layer assuming the others might fail:
+#
+#   1. NO TARGET — this job holds NO secrets: no signing credential, no VT key, and only
+#      `contents: read` + `issues: write` (to file the report). A malicious dependency
+#      that somehow executed here has nothing to steal and nothing to publish.
+#   2. NO BUILD — v1 does not compile candidates at all. It reads lockfiles and queries
+#      crates.io metadata; NO dependency code, build script, or proc-macro is fetched or
+#      executed. (When candidate BUILDING lands, it must run bubblewrap-caged with an
+#      egress allowlist — see the ticket; until then this stays read-only by construction.)
+#   3. SOAK FILTER — only versions past the quarantine window are ever proposed, so a
+#      fresh-malicious release is excluded by construction, not by detection.
+#   4. OUTPUT IS DATA — a candidate report. The trust boundary is the freeze: whoever
+#      owns this job owns a PROPOSAL; blessing happens later, in a separate gated flow
+#      (`xtask gate` + maintainer sign-off) over a frozen, reproducible lock.
+#
+# The auditor it runs is the digest-pinned, attestation-verified cargo-audit (#221).
+
+on:
+  schedule:
+    - cron: "37 6 * * 1"   # weekly, Monday 06:37 UTC — after the supply-chain monitor
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: "Explore a single tool by name (empty = all pinned tools)."
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  explore:
+    runs-on: windows-2025   # the blessed cargo-audit is a Windows PE
+    permissions:
+      contents: read
+      issues: write   # publish the candidate report; NOT contents:write — cannot bless
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch prior-blessed auditor (digest + attestation verified)
+        id: auditor
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-audit
+          verify-attestations: "true"
+
+      - name: Enumerate candidates for each pinned tool
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
+          ONLY: ${{ inputs.tool }}
+        run: |
+          set -euo pipefail
+          : > report.md
+          {
+            echo "Weekly candidate exploration for the pinned tools' dependency findings."
+            echo
+            echo "Enumerated from crates.io metadata + the blessed auditor. **Nothing is promoted"
+            echo "here** — each candidate is a proposal to freeze and run through \`xtask gate\`."
+            echo "Per-line representatives are listed **minimal-step first**; versions younger than"
+            echo "the soak window are withheld and named. Findings are marked **NEW** (appeared"
+            echo "since bless — needs a decision), \`acked\` (residual risk already signed off), or"
+            echo "\`carried\` (known at bless, not separately acked)."
+            echo
+          } >> report.md
+          while read -r name repo rev _target sha; do
+            [ -n "${name:-}" ] || continue
+            if [ -n "${ONLY:-}" ] && [ "$name" != "$ONLY" ]; then continue; fi
+            echo "## $name (\`${rev:0:12}\`)" >> report.md
+            if ! curl -sSfL "https://raw.githubusercontent.com/$repo/$rev/Cargo.lock" -o "$name.lock"; then
+              echo "  UNEVALUATED: no root Cargo.lock at $repo@$rev" >> report.md
+              continue
+            fi
+            echo '```' >> report.md
+            # Findings-driven; a tool with no findings prints the no-op line.
+            cargo run --quiet --manifest-path xtask/Cargo.toml -- \
+              explore --lockfile "$name.lock" --tool "$name" --digest "$sha" >> report.md 2>&1 || true
+            echo '```' >> report.md
+          done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
+          wc -l report.md
+
+      - name: Publish the candidate report (open or refresh one tracking issue)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          title="Candidate exploration: upgrade options for pinned tool dependencies"
+          num=$(gh issue list --state open --search "in:title Candidate exploration" \
+                 --json number --jq '.[0].number' || true)
+          if [ -n "${num:-}" ] && [ "$num" != "null" ]; then
+            gh issue edit "$num" --title "$title" --body-file report.md
+          else
+            gh issue create --title "$title" --body-file report.md --label dependencies
+          fi

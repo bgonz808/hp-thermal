@@ -30,17 +30,17 @@ const ZERO_DIGEST: &str = "00000000000000000000000000000000000000000000000000000
 // ---------- TOOLS.lock ----------
 
 #[derive(Debug, Clone, PartialEq)]
-struct ToolLine {
-    name: String,
-    repo: String,
-    rev: String,
-    target: String,
-    sha: String,
+pub(crate) struct ToolLine {
+    pub(crate) name: String,
+    pub(crate) repo: String,
+    pub(crate) rev: String,
+    pub(crate) target: String,
+    pub(crate) sha: String,
 }
 
 /// Parse TOOLS.lock: strip comments/blank lines, take the 5 whitespace-separated
 /// columns (`name repo rev target sha256`), ignoring the trailing `# vX` comment.
-fn parse_tools_lock(text: &str) -> Vec<ToolLine> {
+pub(crate) fn parse_tools_lock(text: &str) -> Vec<ToolLine> {
     text.lines()
         .map(|l| l.find('#').map_or(l, |i| &l[..i]).trim())
         .filter(|l| !l.is_empty())
@@ -75,15 +75,15 @@ fn candidates(base: &[ToolLine], head: &[ToolLine]) -> Vec<(Option<ToolLine>, To
 /// (advisory-ID, package, resident-version). `kind` is display-only — matching uses
 /// the triple, so an advisory reclassified vuln<->warning still pairs up.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct Instance {
-    id: String,
-    package: String,
-    version: String,
-    kind: String,
+pub(crate) struct Instance {
+    pub(crate) id: String,
+    pub(crate) package: String,
+    pub(crate) version: String,
+    pub(crate) kind: String,
 }
 
 /// Extract instance tuples from `cargo audit --json` output.
-fn extract_instances(audit: &Value) -> BTreeSet<Instance> {
+pub(crate) fn extract_instances(audit: &Value) -> BTreeSet<Instance> {
     let mut out = BTreeSet::new();
     if let Some(list) = audit
         .get("vulnerabilities")
@@ -155,12 +155,12 @@ fn diff_instances(
 /// A loaded, QUALITY-CHECKED ack. Acks failing the quality bar (empty/TODO reason,
 /// missing author or timestamp) are reported and DO NOT COUNT — a sign-off must
 /// actually say who accepted what and why.
-struct Acks {
-    entries: Vec<Value>,
-    rejected: Vec<String>,
+pub(crate) struct Acks {
+    pub(crate) entries: Vec<Value>,
+    pub(crate) rejected: Vec<String>,
 }
 
-fn load_acks(path: &Path) -> Result<Acks, String> {
+pub(crate) fn load_acks(path: &Path) -> Result<Acks, String> {
     let text = match std::fs::read_to_string(path) {
         Ok(t) => t,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -225,7 +225,7 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     cur.as_str().unwrap_or("")
 }
 
-fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
+pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
     acks.entries.iter().any(|a| {
         s(a, &["axis"]) == "vuln"
             && s(a, &["vulnerability", "name"]) == inst.id
@@ -251,7 +251,7 @@ fn ack_covers_caps(acks: &Acks, digest: &str) -> bool {
 /// The exact line a maintainer commits to sign off — printed by the failing gate.
 /// status_notes is deliberately empty: the quality bar refuses it until a human
 /// writes the reason (no rubber-stamp path).
-fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
+pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "vuln",
@@ -453,7 +453,7 @@ fn caps_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) -
 /// Invoke the PINNED cargo-audit (#221: absolute path from PINNED_TOOLS_DIR, env-scrubbed;
 /// local-dev fallback `cargo audit`). Returns parsed JSON; audit exits non-zero when it
 /// has findings, so exit status is NOT an error signal — parse failure is.
-fn run_audit(lockfile: &Path, no_fetch: bool) -> Result<Value, String> {
+pub(crate) fn run_audit(lockfile: &Path, no_fetch: bool) -> Result<Value, String> {
     let (prog, mut args): (String, Vec<String>) = match std::env::var("PINNED_TOOLS_DIR") {
         Ok(dir) => (
             format!("{dir}/cargo-audit{}", std::env::consts::EXE_SUFFIX),
@@ -483,7 +483,7 @@ fn run_audit(lockfile: &Path, no_fetch: bool) -> Result<Value, String> {
 }
 
 /// Fetch a rev's root Cargo.lock via curl (ambient like git/gh; std has no HTTP).
-fn fetch_lockfile(repo: &str, rev: &str, dest: &Path) -> Result<(), String> {
+pub(crate) fn fetch_lockfile(repo: &str, rev: &str, dest: &Path) -> Result<(), String> {
     let url = format!("https://raw.githubusercontent.com/{repo}/{rev}/Cargo.lock");
     let st = Command::new("curl")
         .args(["-sSfL", &url, "-o"])
