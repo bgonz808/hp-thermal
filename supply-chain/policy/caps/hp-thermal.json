@@ -1,0 +1,42 @@
+{
+  "allow_import_prefixes": [
+    "api-ms-win-"
+  ],
+  "allow_imports": [
+    "advapi32.dll",
+    "combase.dll",
+    "comctl32.dll",
+    "gdi32.dll",
+    "kernel32.dll",
+    "ntdll.dll",
+    "ole32.dll",
+    "oleaut32.dll",
+    "powrprof.dll",
+    "rstrtmgr.dll",
+    "shell32.dll",
+    "user32.dll"
+  ],
+  "binary": "hp-thermal",
+  "deny_functions": [
+    "createremotethread",
+    "createremotethreadex",
+    "writeprocessmemory",
+    "virtualallocex",
+    "virtualprotectex",
+    "queueuserapc",
+    "ntqueueapcthread",
+    "setthreadcontext",
+    "setwindowshookexw",
+    "setwindowshookexa",
+    "ntmapviewofsection",
+    "rtlcreateuserthread",
+    "winexec"
+  ],
+  "expected_dynamic": [
+    "loadlibraryexw",
+    "loadlibraryexa",
+    "getprocaddress"
+  ],
+  "format": "pe",
+  "schema": "hp-thermal/caps-manifest/v1"
+}
