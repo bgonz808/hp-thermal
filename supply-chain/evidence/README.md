@@ -42,7 +42,7 @@ truncation). Triggered by store size, not calendar.
 ## Lifecycle — scan the live frontier only (#226/#241)
 
 - **Evidence is written at bless time** and becomes the next bump's baseline.
-- **The knowledge-delta rescan (surveillance) runs ONLY on the live frontier** — the digests
+- **The knowledge-delta rescan (supply-chain-monitor) runs ONLY on the live frontier** — the digests
   currently pinned in `TOOLS.lock` (constant N) plus any candidate under evaluation. Superseded
   records are immutable audit trail, never re-scanned: no gate consumes a finding on a binary
   nobody runs, so scanning it is unactionable noise. This bounds VT quota + CI to O(pinned), flat.
