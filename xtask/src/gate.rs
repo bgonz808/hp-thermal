@@ -369,7 +369,7 @@ fn mal_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) ->
         Ok(t) => t,
         Err(_) => {
             return Verdict::Unevaluated(format!(
-                "no mal evidence at {} — populate via a surveillance/producer dispatch run \
+                "no mal evidence at {} — populate via a monitor/producer dispatch run \
                  (VT is never called from PR workflows)",
                 path.display()
             ));
