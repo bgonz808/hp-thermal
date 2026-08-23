@@ -103,13 +103,27 @@ jobs:
             [ "$target" = "windows-x86_64" ] || continue
             echo "::group::building $name @ $rev"
             cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
-            d=$(sha256sum "./toolroot/bin/$name.exe" | cut -d' ' -f1)
-            # #225: digest computed FIRST, the asset name derives from it; consumers re-derive
-            # the name and re-hash the bytes — the name itself is never trusted.
-            cp "./toolroot/bin/$name.exe" "out/$name-${d:0:12}.exe"
+            # #245: capability-manifest gate BEFORE the binary can be published. Fail-closed:
+            # a missing manifest, off-allowlist import, or denied function aborts the produc
             printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d" >> out/DIGEST-BLOCK.txt
             echo "::endgroup::"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
+
+      # #245: caps-manifest gate BEFORE attest/upload — a tool binary whose import surface
+      # diverges from its committed manifest (supply-chain/policy/caps/<name>.json) never
+      # gets blessed. Fail-secure: a tool with NO manifest fails here (absence is not a
+      # skip), so a newly-added tool must land its reviewed manifest first. This is the
+      # binary vantage of the #241 caps axis, the same engine release-attest runs on the
+      # app exe — every binary we produce is caps-gated at birth.
+      - name: Caps-manifest gate (each produced tool binary)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for exe in out/*.exe; do
+            name="$(basename "$exe" .exe)"; name="${name%-*}"   # strip -<sha12>
+            cargo run --manifest-path xtask/Cargo.toml -- \
+              verify-caps "$exe" --manifest "supply-chain/policy/caps/$name.json"
+          done
 
       # #205: SLSA provenance, one attestation per subject file, signed via GitHub OIDC ->
       # Sigstore. Verify later with: gh attestation verify <asset> --repo <this repo>

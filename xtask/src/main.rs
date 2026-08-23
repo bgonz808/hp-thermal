@@ -765,6 +765,12 @@ fn cmd_verify_artifact(exe: Option<&str>, pdb: Option<&str>) -> i32 {
     ok &= cmd_verify_hardening(Some(exe_path)) == 0;
     ok &= cmd_capabilities(Some(exe_path)) == 0;
     ok &= cmd_imports_scan(exe_path) == 0;
+    // #245: manifest-driven caps gate on the SHIPPED bytes — the binary vantage that
+    // applies the same engine to hp-thermal.exe as to every prebuilt tool. Runs
+    // alongside cmd_capabilities during transition (the hp-thermal manifest is
+    // byte-identical to that hardcoded allowlist, so they agree); once proven in CI,
+    // cmd_capabilities + the imports-scan denylist retire into the manifest.
+    ok &= caps::run(Some(exe_path), None) == 0;
     ok &= cmd_pdb_link(exe_path, pdb_path) == 0;
     ok &= cmd_verify_manifest(exe_path) == 0;
     if ok { 0 } else { 1 }
