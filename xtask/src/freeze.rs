@@ -16,8 +16,11 @@
 //! Safety properties, all enforced here rather than assumed:
 //!   * every target version is checked NON-YANKED and PAST SOAK on crates.io before use;
 //!   * the advisory delta is computed at ONE DB state (before vs after, same instrument);
-//!   * a freeze that would ADD an advisory instance is refused by default — freezing is for
-//!     provable improvements, and trading one advisory for another is a human decision;
+//!   * a freeze that introduces a GENUINELY NEW advisory — a new (advisory, package) key, or
+//!     a second vulnerable resident version — is refused by default (#255 §4). The same
+//!     advisory carried onto a bumped version is reported as UNFIXED but never blocks:
+//!     refusal keys on risk, not version movement. Trading one advisory for another
+//!     remains a human decision (--allow-added-advisories records it deliberately);
 //!   * nothing is blessed: the digest still comes from a producer run over this lock, and the
 //!     #241 gate still evaluates it. This only makes the candidate reproducible.
 
@@ -118,6 +121,53 @@ pub fn removed_instances(before: &BTreeSet<Instance>, after: &BTreeSet<Instance>
         .filter(|i| !after_keys.contains(&key(i)))
         .cloned()
         .collect()
+}
+
+/// Split the instance-level "added" set into what actually matters for REFUSAL (#255 §4).
+///
+/// Instance tuples (id, package, version) stay the identity for evidence and acks
+/// (#241 §6), but the refusal rule must key on RISK, not on version movement: a bump
+/// that carries the SAME advisory onto the new version (h2 0.3.13 -> 0.3.27, both
+/// hit by RUSTSEC-2026-0258) did not fix that advisory — but it introduced no new
+/// risk either, and refusing it blocks a batch that is otherwise a pure improvement.
+///
+/// Per (advisory-id, package) key:
+///   * key absent before, present after            -> GENUINE regression (refuse);
+///   * key present in both, instance COUNT grew    -> GENUINE regression (a second
+///     vulnerable resident version doubles exposure — the #241 §6 case);
+///   * key present in both, count same/shrunk, but
+///     the version moved                           -> UNFIXED-carried (report, allow).
+///
+/// The (id, package) pair — not the bare id — is the key because warning kinds
+/// without an advisory id (`yanked`) use the kind as the id: bare-id keying would
+/// let a NEWLY-yanked package hide behind any pre-existing yanked finding.
+pub fn split_regressions(
+    before: &BTreeSet<Instance>,
+    after: &BTreeSet<Instance>,
+) -> (Vec<Instance>, Vec<Instance>) {
+    use std::collections::BTreeMap;
+    let count_by_key = |set: &BTreeSet<Instance>| -> BTreeMap<(String, String), usize> {
+        let mut m = BTreeMap::new();
+        for i in set {
+            *m.entry((i.id.clone(), i.package.clone())).or_insert(0) += 1;
+        }
+        m
+    };
+    let before_counts = count_by_key(before);
+    let after_counts = count_by_key(after);
+    let mut genuine = Vec::new();
+    let mut unfixed = Vec::new();
+    for inst in added_instances(before, after) {
+        let k = (inst.id.clone(), inst.package.clone());
+        let was = before_counts.get(&k).copied().unwrap_or(0);
+        let now = after_counts.get(&k).copied().unwrap_or(0);
+        if was == 0 || now > was {
+            genuine.push(inst);
+        } else {
+            unfixed.push(inst);
+        }
+    }
+    (genuine, unfixed)
 }
 
 fn git(args: &[&str], cwd: Option<&Path>) -> Result<(), String> {
@@ -284,27 +334,50 @@ pub fn run(args: &[String]) -> i32 {
             return 1;
         }
     };
-    let added = added_instances(&before, &after);
     let removed = removed_instances(&before, &after);
+    // #255 §4: refusal keys on RISK, not version movement. The same advisory carried
+    // onto a bumped version ("unfixed") is reported loudly but never blocks; only a
+    // genuinely new (advisory, package) — or a grown instance count — refuses.
+    let (genuine, unfixed) = split_regressions(&before, &after);
     println!(
-        "\n# advisory delta at one DB state: {} removed / {} added ({} -> {} instances)",
-        removed.len(),
-        added.len(),
+        "\n# advisory delta at one DB state: {} fixed / {} unfixed-carried / {} genuinely added \
+         ({} -> {} instances)",
+        removed.len() - unfixed.len(),
+        unfixed.len(),
+        genuine.len(),
         before.len(),
         after.len()
     );
+    let unfixed_keys: BTreeSet<(String, String)> = unfixed
+        .iter()
+        .map(|i| (i.id.clone(), i.package.clone()))
+        .collect();
     for i in &removed {
-        println!("  - {} {} {}", i.id, i.package, i.version);
+        if unfixed_keys.contains(&(i.id.clone(), i.package.clone())) {
+            continue; // shown below as unfixed movement, not as a fix
+        }
+        println!("  - {} {} {}  (fixed)", i.id, i.package, i.version);
     }
-    for i in &added {
-        println!("  + {} {} {}  <-- ADDED", i.id, i.package, i.version);
+    for i in &unfixed {
+        println!(
+            "  ~ {} {}: still present at {} — this bump did NOT fix it",
+            i.id, i.package, i.version
+        );
     }
-    if !added.is_empty() && !allow_added {
+    for i in &genuine {
+        println!(
+            "  + {} {} {}  <-- GENUINELY ADDED",
+            i.id, i.package, i.version
+        );
+    }
+    if !genuine.is_empty() && !allow_added {
         eprintln!(
-            "\nfreeze: REFUSED — this resolution ADDS {} advisory instance(s). Freezing is for\n\
-             provable improvements; trading one advisory for another is a human decision.\n\
-             Re-run with --allow-added-advisories to record that trade deliberately.",
-            added.len()
+            "\nfreeze: REFUSED — this resolution introduces {} genuinely new advisory \
+             instance(s)\n(new advisory on a package, or a second vulnerable resident \
+             version). Freezing is for\nprovable non-regressions; trading one advisory for \
+             another is a human decision.\nRe-run with --allow-added-advisories to record \
+             that trade deliberately.",
+            genuine.len()
         );
         let _ = std::fs::remove_dir_all(&work);
         return 1;
@@ -412,5 +485,65 @@ mod tests {
         let after: BTreeSet<Instance> = [inst("B", "q", "2")].into();
         assert!(added_instances(&before, &after).is_empty());
         assert_eq!(removed_instances(&before, &after).len(), 1);
+    }
+
+    // ---- #255 §4: refusal keys on risk, not version movement ----
+
+    #[test]
+    fn same_advisory_moved_version_is_unfixed_not_genuine() {
+        // The real h2 case: RUSTSEC-2026-0258 on 0.3.13 before, on 0.3.27 after.
+        // Same advisory, same package, moved version: report as unfixed, do not refuse.
+        let before: BTreeSet<Instance> = [inst("RUSTSEC-2026-0258", "h2", "0.3.13")].into();
+        let after: BTreeSet<Instance> = [inst("RUSTSEC-2026-0258", "h2", "0.3.27")].into();
+        let (genuine, unfixed) = split_regressions(&before, &after);
+        assert!(genuine.is_empty(), "version movement must not refuse");
+        assert_eq!(unfixed, vec![inst("RUSTSEC-2026-0258", "h2", "0.3.27")]);
+    }
+
+    #[test]
+    fn new_advisory_key_is_genuine() {
+        let before: BTreeSet<Instance> = [inst("A", "p", "1")].into();
+        let after: BTreeSet<Instance> = [inst("A", "p", "1"), inst("B", "q", "2")].into();
+        let (genuine, unfixed) = split_regressions(&before, &after);
+        assert_eq!(genuine, vec![inst("B", "q", "2")]);
+        assert!(unfixed.is_empty());
+    }
+
+    #[test]
+    fn grown_instance_count_is_genuine() {
+        // Same advisory gains a SECOND vulnerable resident version: doubled exposure,
+        // the #241 §6 regression — refuse even though the (id, package) key existed.
+        let before: BTreeSet<Instance> = [inst("A", "p", "1.0")].into();
+        let after: BTreeSet<Instance> = [inst("A", "p", "1.0"), inst("A", "p", "2.0")].into();
+        let (genuine, unfixed) = split_regressions(&before, &after);
+        assert_eq!(genuine, vec![inst("A", "p", "2.0")]);
+        assert!(unfixed.is_empty());
+    }
+
+    #[test]
+    fn newly_yanked_package_cannot_hide_behind_existing_yanked_findings() {
+        // `yanked` warnings use the kind as the id, so the key must be (id, PACKAGE):
+        // a pre-existing yanked finding on one package must not launder a NEW yanked
+        // package as "unfixed movement".
+        let before: BTreeSet<Instance> = [inst("yanked", "futures-util", "0.3.21")].into();
+        let after: BTreeSet<Instance> = [
+            inst("yanked", "futures-util", "0.3.21"),
+            inst("yanked", "xml-rs", "0.8.19"),
+        ]
+        .into();
+        let (genuine, unfixed) = split_regressions(&before, &after);
+        assert_eq!(genuine, vec![inst("yanked", "xml-rs", "0.8.19")]);
+        assert!(unfixed.is_empty());
+    }
+
+    #[test]
+    fn shrunk_count_with_moved_version_is_unfixed_only() {
+        // Two vulnerable copies collapse to one still-vulnerable copy at a new version:
+        // progress (one copy eliminated) plus an unfixed remainder — never a refusal.
+        let before: BTreeSet<Instance> = [inst("A", "p", "1.0"), inst("A", "p", "2.0")].into();
+        let after: BTreeSet<Instance> = [inst("A", "p", "3.0")].into();
+        let (genuine, unfixed) = split_regressions(&before, &after);
+        assert!(genuine.is_empty());
+        assert_eq!(unfixed, vec![inst("A", "p", "3.0")]);
     }
 }
