@@ -17,6 +17,11 @@ mod vsa;
 // not in workflow bash. See gate.rs.
 mod gate;
 
+// #245: per-binary capability-manifest gate (binary vantage of the #241 caps axis).
+// Measures a binary's import surface against a committed manifest, fails closed on
+// divergence. One engine for every binary we produce (tools + releases). See caps.rs.
+mod caps;
+
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
@@ -50,6 +55,17 @@ fn main() {
             args.get(2).map(String::as_str),
         ),
         Some("gate") => gate::run(&args),
+        Some("verify-caps") => caps::run(args.get(1).map(String::as_str), {
+            // optional --manifest <path>
+            let mut mpath = None;
+            let mut it = args.iter();
+            while let Some(a) = it.next() {
+                if a == "--manifest" {
+                    mpath = it.next().map(String::as_str);
+                }
+            }
+            mpath
+        }),
         #[cfg(windows)]
         Some("vsa-spike") => vsa::run(&args[1..]),
         _ => {
@@ -77,7 +93,10 @@ fn main() {
             eprintln!(
                 "  audit-dll-planting [EXE] [DLL]  DEV: plant a forwarding proxy, test run-dir load (#106)"
             );
-            eprintln!("  gate --base <TOOLS.lock>  3-axis candidate gate vs tools/evidence (#241)");
+            eprintln!(
+                "  gate --base <TOOLS.lock>  3-axis candidate gate vs supply-chain/evidence (#241)"
+            );
+            eprintln!("  verify-caps <EXE> [--manifest <p>]  per-binary caps manifest gate (#245)");
             eprintln!(
                 "  vsa-spike [--recover]    DEV #61: test the service under a virtual account (elevated)"
             );
@@ -676,12 +695,12 @@ fn pe_import_dir_dlls(
 }
 
 /// Statically-imported DLLs (import directory #1; 20-byte descriptors, name RVA at +12).
-fn pe_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
+pub(crate) fn pe_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
     pe_import_dir_dlls(b, 1, 20, 12)
 }
 
 /// Delay-loaded DLLs (delay-import directory #13; 32-byte descriptors, name RVA at +4).
-fn pe_delay_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
+pub(crate) fn pe_delay_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
     pe_import_dir_dlls(b, 13, 32, 4)
 }
 
@@ -746,6 +765,12 @@ fn cmd_verify_artifact(exe: Option<&str>, pdb: Option<&str>) -> i32 {
     ok &= cmd_verify_hardening(Some(exe_path)) == 0;
     ok &= cmd_capabilities(Some(exe_path)) == 0;
     ok &= cmd_imports_scan(exe_path) == 0;
+    // #245: manifest-driven caps gate on the SHIPPED bytes — the binary vantage that
+    // applies the same engine to hp-thermal.exe as to every prebuilt tool. Runs
+    // alongside cmd_capabilities during transition (the hp-thermal manifest is
+    // byte-identical to that hardcoded allowlist, so they agree); once proven in CI,
+    // cmd_capabilities + the imports-scan denylist retire into the manifest.
+    ok &= caps::run(Some(exe_path), None) == 0;
     ok &= cmd_pdb_link(exe_path, pdb_path) == 0;
     ok &= cmd_verify_manifest(exe_path) == 0;
     if ok { 0 } else { 1 }
@@ -1314,7 +1339,7 @@ fn pdb_guid_age(b: &[u8]) -> Option<([u8; 16], u32)> {
 
 /// Imported FUNCTION names across the whole import directory. Ordinal-only imports (no
 /// name) are skipped. Pure byte parsing; walks each descriptor's import-name-table thunks.
-fn pe_imported_functions(b: &[u8]) -> Option<Vec<String>> {
+pub(crate) fn pe_imported_functions(b: &[u8]) -> Option<Vec<String>> {
     let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
     if b.get(pe..pe + 4)? != b"PE\0\0" {
         return None;
