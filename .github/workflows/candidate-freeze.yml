@@ -1,0 +1,106 @@
+name: Candidate freeze (dry-run by default)
+
+# PROMOTION step 1, run in CI rather than on a maintainer's machine (#241).
+#
+# Two reasons this belongs here and not locally:
+#   1. ARCHITECTURE — freezing re-resolves dependency versions, which is the one place we
+#      deliberately reason about un-vetted newer releases. It runs on an ephemeral runner
+#      holding NO secrets (contents: read only), so a hostile dependency has nothing to take
+#      and no way to publish. Output is DATA: a report, and an artifact you review.
+#   2. PRACTICALITY — a freshly built, unsigned Rust dev binary is exactly the profile
+#      Microsoft's cloud-ML heuristics flag (the Wacatac.*!ml class), and Defender will
+#      quarantine `xtask.exe` mid-run on a developer workstation. The fix is to run it on a
+#      clean CI runner, never to weaken a developer's AV.
+#
+# DRY RUN IS THE DEFAULT. A dry run evaluates every directive, reports the full advisory
+# delta, and writes nothing. Only an explicit `dry_run: false` produces the frozen lock, and
+# even then this workflow BLESSES NOTHING: the lock is uploaded as an artifact for review and
+# commit, the digest still comes from build-tools.yml, and `xtask gate` still evaluates it.
+#
+# `freeze` refuses unless the move is provably safe AND better: every target must exist, be
+# non-yanked and past soak; the advisory delta is measured before-vs-after at ONE DB state;
+# and a resolution that ADDS an advisory instance is refused unless allow_added is set.
+#
+# NOTE: the frozen lock is a pure function of (rev, directives) — freeze always starts from
+# UPSTREAM's lock. So the directive list must be COMPLETE: re-freezing without an earlier
+# directive silently drops that fix. Keep the full list in the dispatch input.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: "Tool name as it appears in tools/TOOLS.lock (e.g. cargo-vet)."
+        type: string
+        required: true
+      updates:
+        description: "Space-separated pkg=version directives (the COMPLETE list)."
+        type: string
+        required: true
+      dry_run:
+        description: "Evaluate and report only; write no lock."
+        type: boolean
+        default: true
+      allow_added:
+        description: "Permit a resolution that ADDS an advisory instance (a deliberate trade)."
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  freeze:
+    runs-on: windows-2025   # the blessed cargo-audit is a Windows PE
+    permissions:
+      contents: read   # cannot bless, publish, or mutate the repo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch prior-blessed auditor (digest + attestation verified)
+        id: auditor
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-audit
+          verify-attestations: "true"
+
+      - name: Freeze
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
+          TOOL: ${{ inputs.tool }}
+          UPDATES: ${{ inputs.updates }}
+          DRY: ${{ inputs.dry_run }}
+          ALLOW_ADDED: ${{ inputs.allow_added }}
+        run: |
+          set -euo pipefail
+          # repo + rev come from the committed pin — never from dispatch input, so a freeze
+          # can only ever target the rev we already trust.
+          line=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' \
+                  | awk -v t="$TOOL" '$1==t {print; exit}')
+          [ -n "$line" ] || { echo "::error::'$TOOL' is not pinned in tools/TOOLS.lock"; exit 1; }
+          repo=$(echo "$line" | awk '{print $2}')
+          rev=$(echo "$line" | awk '{print $3}')
+          echo "freezing $TOOL from $repo@$rev"
+
+          args=(freeze --tool "$TOOL" --repo "$repo" --rev "$rev")
+          for u in $UPDATES; do args+=(--update "$u"); done
+          [ "$DRY" = "true" ] && args+=(--dry-run)
+          [ "$ALLOW_ADDED" = "true" ] && args+=(--allow-added-advisories)
+
+          cargo run --quiet --manifest-path xtask/Cargo.toml -- "${args[@]}" | tee freeze-report.txt
+
+      - name: Upload the report (and the lock, if one was written)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4.6.2
+        with:
+          name: freeze-${{ inputs.tool }}
+          path: |
+            freeze-report.txt
+            tools/locks/*.lock
+          if-no-files-found: warn
+          retention-days: 30

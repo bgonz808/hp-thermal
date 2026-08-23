@@ -141,6 +141,7 @@ pub fn run(args: &[String]) -> i32 {
     let mut soak = crate::explore::SOAK_DAYS;
     let mut now_epoch: i64 = 0;
     let mut allow_added = false;
+    let mut dry_run = false;
     let mut it = args.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -161,6 +162,9 @@ pub fn run(args: &[String]) -> i32 {
             "--now-epoch" => now_epoch = it.next().and_then(|v| v.parse().ok()).unwrap_or(0),
             // Escape hatch for a deliberate, reviewed trade — never the default.
             "--allow-added-advisories" => allow_added = true,
+            // Evaluate + report the full delta, write NOTHING. The safe way to try a batch:
+            // see which directives are reachable and what they'd buy before committing a lock.
+            "--dry-run" => dry_run = true,
             other => {
                 eprintln!("freeze: unknown arg {other}");
                 return 2;
@@ -170,7 +174,7 @@ pub fn run(args: &[String]) -> i32 {
     if tool.is_empty() || repo.is_empty() || rev.is_empty() || directives.is_empty() {
         eprintln!(
             "usage: cargo xtask freeze --tool <name> --repo <owner/repo> --rev <sha> \\\n\
-             \x20         --update <pkg>=<ver> [--update ...] [--soak-days N] [--out-dir DIR]"
+             \x20         --update <pkg>=<ver> [--update ...] [--soak-days N] [--out-dir DIR] [--dry-run]"
         );
         return 2;
     }
@@ -307,6 +311,15 @@ pub fn run(args: &[String]) -> i32 {
     }
     if removed.is_empty() {
         println!("  (no advisory instance removed — freeze records a resolution change only)");
+    }
+
+    if dry_run {
+        println!(
+            "
+# DRY RUN — no lock written. Re-run without --dry-run to commit this resolution."
+        );
+        let _ = std::fs::remove_dir_all(&work);
+        return 0;
     }
 
     // 6. Emit the frozen lock. From here the candidate is fully pinned: the producer builds
