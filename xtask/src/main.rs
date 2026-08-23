@@ -30,6 +30,10 @@ mod explore;
 // Read-only, writes nothing (observations are recomputable; decisions live in acks).
 mod monitor;
 
+// #241: turn an explored candidate into a REPRODUCIBLE build input (frozen resolved
+// lock). The promotion pipeline's trust boundary — discovery may float, builds never do.
+mod freeze;
+
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
@@ -65,6 +69,7 @@ fn main() {
         Some("gate") => gate::run(&args),
         Some("explore") => explore::run(&args),
         Some("monitor-vuln") => monitor::run(&args),
+        Some("freeze") => freeze::run(&args),
         Some("verify-caps") => caps::run(args.get(1).map(String::as_str), {
             // optional --manifest <path>
             let mut mpath = None;
