@@ -29,8 +29,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::gate::{
-    Instance, ack_covers_vuln, ack_template_vuln, extract_instances, fetch_lockfile, load_acks,
-    parse_tools_lock, run_audit,
+    Instance, ack_covers_vuln, ack_template_vuln, extract_instances, load_acks, parse_tools_lock,
+    resolve_lock, run_audit,
 };
 
 /// Load the recorded baseline instance set for a blessed digest. `None` = no baseline
@@ -176,13 +176,27 @@ pub fn run(args: &[String]) -> i32 {
             fail = true;
             continue;
         };
-        let lock = tmp.join(format!("monitor-{}.lock", p.name));
-        if let Err(e) = fetch_lockfile(&p.repo, &p.rev, &lock) {
-            println!("## {}\n  UNEVALUATED: {e}", p.name);
-            unevaluated += 1;
-            fail = true;
-            continue;
-        }
+        // #255 §5: evaluate the lock the blessed binary was BUILT from — a committed frozen
+        // lock (tools/locks/<name>.lock) overrides upstream's resolution, exactly as it does
+        // in the producer. Evaluating upstream's lock for a frozen tool is stale toward old
+        // versions: over-reports what we fixed and MISSES advisories on the versions we
+        // froze forward to (the fail-open direction).
+        let dest = tmp.join(format!("monitor-{}.lock", p.name));
+        let (lock, lock_src) = match resolve_lock(
+            &p.name,
+            &p.repo,
+            &p.rev,
+            Some(Path::new("tools/locks")),
+            &dest,
+        ) {
+            Ok(v) => v,
+            Err(e) => {
+                println!("## {}\n  UNEVALUATED: {e}", p.name);
+                unevaluated += 1;
+                fail = true;
+                continue;
+            }
+        };
         // ONE DB state across every tool this run: the first scan fetches, the rest reuse it.
         let audit = match run_audit(&lock, !first) {
             Ok(a) => a,
@@ -205,7 +219,11 @@ pub fn run(args: &[String]) -> i32 {
         let fresh = extract_instances(&audit);
         let (new, carried, gone) = classify(&baseline, &fresh);
 
-        println!("## {} (`{}`)", p.name, &p.sha[..12.min(p.sha.len())]);
+        println!(
+            "## {} (`{}`)  [lock: {lock_src}]",
+            p.name,
+            &p.sha[..12.min(p.sha.len())]
+        );
         println!(
             "  blessed at db {} -> now db {}   ({} new / {} carried / {} gone)",
             &base_db[..12.min(base_db.len())],

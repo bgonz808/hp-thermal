@@ -61,16 +61,25 @@ jobs:
           set -euo pipefail
           # Base = the PR base commit's TOOLS.lock. On workflow_dispatch there is no
           # base — evaluate head against itself (no candidates; proves the plumbing).
+          # #255 §5: also extract the BASE commit's frozen locks (tools/locks/) — each side
+          # of the paired scan evaluates the lock its digest was built from. A frozen lock
+          # added in THIS PR must not be retro-applied to the baseline digest; the head side
+          # reads the working tree's tools/locks/ (gate default), the base side reads these.
+          mkdir -p /tmp/base-locks
           if [ -n "${BASE_SHA:-}" ]; then
             git show "$BASE_SHA:tools/TOOLS.lock" > /tmp/base-tools.lock
+            git archive "$BASE_SHA" tools/locks 2>/dev/null \
+              | tar -x -C /tmp/base-locks --strip-components=2 2>/dev/null \
+              || true   # base has no tools/locks -> empty dir -> gate falls back to upstream
           else
             cp tools/TOOLS.lock /tmp/base-tools.lock
+            cp tools/locks/*.lock /tmp/base-locks/ 2>/dev/null || true
           fi
           # Capture the verdict, always produce the report; enforcement is the last step
           # so the comment posts even when the gate blocks.
           set +e
           cargo run --manifest-path xtask/Cargo.toml -- gate \
-            --base /tmp/base-tools.lock --report gate-report.md
+            --base /tmp/base-tools.lock --base-locks-dir /tmp/base-locks --report gate-report.md
           echo "code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Post / update the evidence comment
