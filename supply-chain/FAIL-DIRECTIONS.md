@@ -7,9 +7,8 @@ or fail *open* (insecure — proceeds as if fine). This file is the honest inven
 
 ## Anti-staleness contract (read before editing anything this file describes)
 
-This is a claims document about enforcement behavior, and claims documents rot — this
-repo's own SECURITY.md once said "not yet Authenticode-signed" months after the first
-signed release. Two rules keep this one honest:
+Claims documents about enforcement behavior rot unless updates are structurally forced.
+Two rules keep this one honest:
 
 1. **Every row carries an anchor**: the pinning unit test that breaks if the behavior
    changes, or the tracked issue for open items, or the enforcing file:step for behavior
