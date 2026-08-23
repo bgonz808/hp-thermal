@@ -28,6 +28,7 @@
 //! owns a proposal, never a release.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::process::Command;
 
 use serde_json::Value;
@@ -274,6 +275,12 @@ pub fn run(args: &[String]) -> i32 {
     let mut lockfile = String::from("Cargo.lock");
     let mut now_epoch: i64 = 0;
     let mut soak = SOAK_DAYS;
+    // Optional triage context: with --tool + --digest we can load the recorded baseline and
+    // annotate each finding NEW-since-bless vs carried(acked) — turning a flat list into a
+    // priority order. Omitted (ad-hoc local use) => enumeration only, no annotation.
+    let mut tool: Option<String> = None;
+    let mut digest: Option<String> = None;
+    let mut evidence = PathBuf::from("supply-chain/evidence");
     let mut it = args.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -290,6 +297,13 @@ pub fn run(args: &[String]) -> i32 {
             "--soak-days" => {
                 if let Some(v) = it.next() {
                     soak = v.parse().unwrap_or(SOAK_DAYS);
+                }
+            }
+            "--tool" => tool = it.next().cloned(),
+            "--digest" => digest = it.next().cloned(),
+            "--evidence" => {
+                if let Some(v) = it.next() {
+                    evidence = v.into();
                 }
             }
             other => {
@@ -346,12 +360,75 @@ pub fn run(args: &[String]) -> i32 {
         return 0;
     }
 
+    // Triage context (optional): the recorded baseline says what was true AT BLESS TIME, so
+    // anything absent from it APPEARED SINCE — the actionable delta. Without it every finding
+    // reads with equal weight (a 2023 DoS beside a fresh memory-corruption advisory).
+    // fail-secure: a requested-but-missing baseline annotates nothing and says so, rather than
+    // silently labelling genuinely-new findings as "carried".
+    let baseline = match (&tool, &digest) {
+        (Some(t), Some(d)) => match crate::monitor::load_baseline(&evidence, t, d) {
+            Some((set, db)) => Some((set, db)),
+            None => {
+                println!(
+                    "# NOTE: no recorded baseline at {}/{t}/{d} — findings cannot be marked \
+                     NEW-since-bless (showing enumeration only)",
+                    evidence.display()
+                );
+                None
+            }
+        },
+        _ => None,
+    };
+    let acks = tool
+        .as_ref()
+        .and_then(|t| crate::gate::load_acks(&evidence.join(t).join("acks.jsonl")).ok());
+
     println!("# Candidate exploration — {lockfile}");
     println!(
         "# soak >= {soak}d; candidates are crates.io versions (canonical semver), never git tags"
     );
+    if let Some((_, db)) = &baseline {
+        println!(
+            "# findings marked vs the recorded baseline (blessed at advisory-db {})",
+            &db[..12.min(db.len())]
+        );
+    }
     for ((pkg, ver), ids) in &affected {
-        println!("\n## {pkg} {ver}  [{}]", ids.join(", "));
+        // Per-advisory triage marks: NEW (appeared since bless, needs a decision) /
+        // acked (already signed off) / carried (known at bless, not separately acked).
+        let marked: Vec<String> = ids
+            .iter()
+            .map(|id| {
+                let inst = crate::gate::Instance {
+                    id: id.clone(),
+                    package: pkg.clone(),
+                    version: ver.clone(),
+                    kind: String::new(),
+                };
+                let is_new = baseline
+                    .as_ref()
+                    .map(|(set, _)| {
+                        !set.iter().any(|b| {
+                            b.id == inst.id
+                                && b.package == inst.package
+                                && b.version == inst.version
+                        })
+                    })
+                    .unwrap_or(false);
+                let is_acked = acks
+                    .as_ref()
+                    .map(|a| crate::gate::ack_covers_vuln(a, &inst))
+                    .unwrap_or(false);
+                match (baseline.is_some(), is_new, is_acked) {
+                    (true, true, false) => format!("{id} **NEW**"),
+                    (true, true, true) => format!("{id} NEW/acked"),
+                    (true, false, true) => format!("{id} acked"),
+                    (true, false, false) => format!("{id} carried"),
+                    _ => id.clone(),
+                }
+            })
+            .collect();
+        println!("\n## {pkg} {ver}  [{}]", marked.join(", "));
         let versions = match fetch_versions(pkg) {
             Ok(v) => v,
             Err(e) => {

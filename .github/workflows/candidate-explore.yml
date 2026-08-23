@@ -70,10 +70,12 @@ jobs:
             echo "Enumerated from crates.io metadata + the blessed auditor. **Nothing is promoted"
             echo "here** — each candidate is a proposal to freeze and run through \`xtask gate\`."
             echo "Per-line representatives are listed **minimal-step first**; versions younger than"
-            echo "the soak window are withheld and named."
+            echo "the soak window are withheld and named. Findings are marked **NEW** (appeared"
+            echo "since bless — needs a decision), \`acked\` (residual risk already signed off), or"
+            echo "\`carried\` (known at bless, not separately acked)."
             echo
           } >> report.md
-          while read -r name repo rev _target _sha; do
+          while read -r name repo rev _target sha; do
             [ -n "${name:-}" ] || continue
             if [ -n "${ONLY:-}" ] && [ "$name" != "$ONLY" ]; then continue; fi
             echo "## $name (\`${rev:0:12}\`)" >> report.md
@@ -84,7 +86,7 @@ jobs:
             echo '```' >> report.md
             # Findings-driven; a tool with no findings prints the no-op line.
             cargo run --quiet --manifest-path xtask/Cargo.toml -- \
-              explore --lockfile "$name.lock" >> report.md 2>&1 || true
+              explore --lockfile "$name.lock" --tool "$name" --digest "$sha" >> report.md 2>&1 || true
             echo '```' >> report.md
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
           wc -l report.md
