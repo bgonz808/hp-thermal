@@ -1,11 +1,11 @@
 //! `cargo xtask gate` — the 3-axis candidate-evaluation gate (#241).
 //!
 //! Evaluates TOOLS.lock candidates (base vs head) against the per-digest evidence
-//! store (`tools/evidence/`, #241 §7). Per-axis verdicts: ALLOW / RAISE(covered) /
+//! store (`supply-chain/evidence/`, #241 §7). Per-axis verdicts: ALLOW / RAISE(covered) /
 //! RAISE(uncovered) / UNEVALUATED / HARD-STOP. Combination is a lattice — no scores,
 //! no cross-axis trades (#241 §2): any HARD-STOP blocks; all-ALLOW is sunny-day;
 //! everything else needs each RAISE item covered by a committed ack in
-//! `tools/evidence/<tool>/acks.jsonl`. Committing the printed ack line IS the
+//! `supply-chain/evidence/<tool>/acks.jsonl`. Committing the printed ack line IS the
 //! sign-off; closing the PR is the reject. UNEVALUATED can never be acked away
 //! (fail-secure, #241 §3) — fill the missing evidence instead.
 //!
@@ -234,18 +234,18 @@ fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
     })
 }
 
-fn ack_covers_mal(acks: &Acks, digest12: &str, engine: &str) -> bool {
+fn ack_covers_mal(acks: &Acks, digest: &str, engine: &str) -> bool {
     acks.entries.iter().any(|a| {
         s(a, &["axis"]) == "mal"
-            && s(a, &["product", "digest12"]) == digest12
+            && s(a, &["product", "digest"]) == digest
             && s(a, &["finding", "engine"]) == engine
     })
 }
 
-fn ack_covers_caps(acks: &Acks, digest12: &str) -> bool {
+fn ack_covers_caps(acks: &Acks, digest: &str) -> bool {
     acks.entries
         .iter()
-        .any(|a| s(a, &["axis"]) == "caps" && s(a, &["product", "digest12"]) == digest12)
+        .any(|a| s(a, &["axis"]) == "caps" && s(a, &["product", "digest"]) == digest)
 }
 
 /// The exact line a maintainer commits to sign off — printed by the failing gate.
@@ -266,12 +266,12 @@ fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
     .to_string()
 }
 
-fn ack_template_mal(tool: &str, digest12: &str, engine: &str, result: &str) -> String {
+fn ack_template_mal(tool: &str, digest: &str, engine: &str, result: &str) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "mal",
         "finding": {"engine": engine, "result": result},
-        "product": {"name": tool, "digest12": digest12},
+        "product": {"name": tool, "digest": digest},
         "status": "not_affected",
         "status_notes": "",
         "author": "",
@@ -281,11 +281,11 @@ fn ack_template_mal(tool: &str, digest12: &str, engine: &str, result: &str) -> S
     .to_string()
 }
 
-fn ack_template_caps(tool: &str, digest12: &str) -> String {
+fn ack_template_caps(tool: &str, digest: &str) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "caps",
-        "product": {"name": tool, "digest12": digest12},
+        "product": {"name": tool, "digest": digest},
         "status": "affected",
         "status_notes": "",
         "author": "",
@@ -363,8 +363,8 @@ fn vuln_verdict(
 }
 
 fn mal_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) -> Verdict {
-    let d12 = &head.sha[..12.min(head.sha.len())];
-    let path = evidence_dir.join(tool).join(d12).join("mal.jsonl");
+    let digest = head.sha.as_str();
+    let path = evidence_dir.join(tool).join(digest).join("mal.jsonl");
     let text = match std::fs::read_to_string(&path) {
         Ok(t) => t,
         Err(_) => {
@@ -409,10 +409,10 @@ fn mal_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) ->
             {
                 let engine = s(f, &["engine"]);
                 let result = s(f, &["result"]);
-                if ack_covers_mal(acks, d12, engine) {
+                if ack_covers_mal(acks, digest, engine) {
                     covered.push(format!("{engine}={result} (acked)"));
                 } else {
-                    needed.push(ack_template_mal(tool, d12, engine, result));
+                    needed.push(ack_template_mal(tool, digest, engine, result));
                 }
             }
             if needed.is_empty() {
@@ -426,15 +426,15 @@ fn mal_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) ->
 }
 
 fn caps_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) -> Verdict {
-    let d12 = &head.sha[..12.min(head.sha.len())];
-    let dir = evidence_dir.join(tool).join(d12);
+    let digest = head.sha.as_str();
+    let dir = evidence_dir.join(tool).join(digest);
     if dir.join("caps.toml").exists() {
-        if ack_covers_caps(acks, d12) {
-            Verdict::RaiseCovered(vec![format!("caps inventory {d12} reviewed + acked")])
+        if ack_covers_caps(acks, digest) {
+            Verdict::RaiseCovered(vec![format!("caps inventory {digest} reviewed + acked")])
         } else {
             Verdict::RaiseUncovered {
                 covered: Vec::new(),
-                needed: vec![ack_template_caps(tool, d12)],
+                needed: vec![ack_template_caps(tool, digest)],
             }
         }
     } else if dir.join("caps.UNEVALUATED").exists() {
@@ -510,7 +510,7 @@ struct CandidateReport {
 pub fn run(args: &[String]) -> i32 {
     let mut base_path = None;
     let mut head_path = PathBuf::from("tools/TOOLS.lock");
-    let mut evidence_dir = PathBuf::from("tools/evidence");
+    let mut evidence_dir = PathBuf::from("supply-chain/evidence");
     let mut report_path: Option<PathBuf> = None;
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
@@ -686,7 +686,7 @@ pub fn run(args: &[String]) -> i32 {
                         md,
                         "  - **{} item(s) need sign-off.** To accept the residual risk, fill in \
                          `status_notes` (why), `author`, `timestamp`, `refs`, and commit each \
-                         line to `tools/evidence/{}/acks.jsonl`:",
+                         line to `supply-chain/evidence/{}/acks.jsonl`:",
                         needed.len(),
                         r.name
                     );
@@ -861,7 +861,10 @@ mod tests {
     #[test]
     fn mal_digest_mismatch_is_unevaluated() {
         let dir = std::env::temp_dir().join(format!("gate-mal-{}", std::process::id()));
-        let tool_dir = dir.join("t").join("aaaaaaaaaaaa");
+        // Dir is the FULL digest now (locator=authority, no truncation) — so the file IS
+        // found and the subject-mismatch guard, not a missing file, drives UNEVALUATED.
+        let full = "aaaaaaaaaaaa000000000000000000000000000000000000000000000000000a";
+        let tool_dir = dir.join("t").join(full);
         std::fs::create_dir_all(&tool_dir).unwrap();
         std::fs::write(
             tool_dir.join("mal.jsonl"),
@@ -873,7 +876,7 @@ mod tests {
             repo: "r".into(),
             rev: "v".into(),
             target: "x".into(),
-            sha: "aaaaaaaaaaaa000000000000000000000000000000000000000000000000000a".into(),
+            sha: full.into(),
         };
         let acks = Acks {
             entries: vec![],

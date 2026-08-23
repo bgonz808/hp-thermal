@@ -1,1 +1,0 @@
-{"schema":"hp-thermal/evidence-ack/v1","axis":"mal","finding":{"engine":"Microsoft","result":"Trojan:Win32/Wacatac.B!ml"},"product":{"name":"cargo-auditable","digest12":"438d75e564c1"},"status":"not_affected","status_notes":"single-engine cloud-ML FP profile: submitted=1, reputation=0, Zenbox harmless, SLSA-attested","author":"bgonz808","timestamp":"2026-08-21","refs":["#240"]}

@@ -77,7 +77,9 @@ fn main() {
             eprintln!(
                 "  audit-dll-planting [EXE] [DLL]  DEV: plant a forwarding proxy, test run-dir load (#106)"
             );
-            eprintln!("  gate --base <TOOLS.lock>  3-axis candidate gate vs tools/evidence (#241)");
+            eprintln!(
+                "  gate --base <TOOLS.lock>  3-axis candidate gate vs supply-chain/evidence (#241)"
+            );
             eprintln!(
                 "  vsa-spike [--recover]    DEV #61: test the service under a virtual account (elevated)"
             );

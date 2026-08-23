@@ -5,7 +5,7 @@ name: Candidate evaluation
 # display glue at most). Runs on every PR touching TOOLS.lock or the evidence store,
 # evaluates each candidate (base vs head) per #241, and posts the evidence table as a
 # PR comment. The job FAILS while any RAISE item lacks a committed ack in
-# tools/evidence/<tool>/acks.jsonl — the maintainer signs residual risk by committing
+# supply-chain/evidence/<tool>/acks.jsonl — the maintainer signs residual risk by committing
 # the exact ack line the report prints (attributed, in-history), after which the
 # re-run goes green; merging then completes the record. HARD-STOP and UNEVALUATED
 # cannot be acked (fail-secure, #241 §3-4).
@@ -23,7 +23,7 @@ on:
   pull_request:
     paths:
       - "tools/TOOLS.lock"
-      - "tools/evidence/**"
+      - "supply-chain/evidence/**"
   workflow_dispatch: {}
 
 permissions:
