@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-cyclonedx","sha256":"19b9401e47439afe0c3cab072accbecbc79bf901cc257f4e5619e393ca3978ef"},"panelDate":"2026-08-24","detections":{"malicious":0,"total":54},"flags":[],"sandbox":[]}
