@@ -1,0 +1,1226 @@
+# caps evidence — cackle source-vantage inventory, rustsec/rustsec @281452c3 (cargo-audit).
+# CLOSES the #50/#255 instrument gap for this tree, with the matcher taxonomy that made it
+# possible: CRATE-ANCESTOR matchers (bare 'core'/'std'/'alloc') are FORBIDDEN — 'core' alone
+# produced 237 bogus net reachers (itoa, regex, bitflags). METHOD-NAME matchers ('connect'),
+# which cackle 0.9.1 deterministically requires here, are ACCEPTED after verifying the
+# resulting inventory is sane: 8 net reachers, every one a genuine network crate.
+# Regeneration protocol: drop all prior allow_apis grants (stripping a poisoned matcher does
+# NOT retract grants it already produced), then re-run under the curated instrument.
+# 306 pkg sections, 24 proc-macros. Generated 2026-08-24, cargo-acl v0.9.1 (085684885c32),
+# linux-native, sandbox disabled (WSL).
+[common]
+version = 2
+
+[sandbox]
+kind = "Disabled"
+
+[api.net]
+include = [
+    "connect",
+    "mio::net","std::net",
+    "tokio::net"]
+
+[api.fs]
+include = [
+    "gix-features::fs",
+    "gix-index::fs",
+    "io-close::fs",
+    "rustix::fs","std::fs"]
+
+[api.process]
+include = ["std::process"]
+
+[api.env]
+include = [
+    "gix-path::env",
+    "gix::env",
+    "home::env","std::env",
+    "tempfile::env"]
+
+[pkg.thiserror-impl]
+allow_proc_macro = true
+
+[pkg.askama_macros]
+allow_proc_macro = true
+
+[pkg.tracing-attributes]
+allow_proc_macro = true
+
+[pkg.jni-sys-macros]
+allow_proc_macro = true
+
+[pkg.zerovec-derive]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.darling_macro]
+allow_proc_macro = true
+
+[pkg.jiff-static]
+allow_proc_macro = true
+
+[pkg.zerocopy-derive]
+allow_proc_macro = true
+
+[pkg.rustversion]
+allow_proc_macro = true
+build.allow_apis = [
+    "fs",
+    "process",
+]
+allow_apis = [
+    "env",
+]
+
+[pkg.maybe-async]
+allow_proc_macro = true
+
+[pkg.wasm-bindgen-macro]
+allow_proc_macro = true
+
+[pkg.jni-macros]
+allow_proc_macro = true
+
+[pkg.yoke-derive]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.derive_builder_macro]
+allow_proc_macro = true
+
+[pkg.serde_derive]
+allow_proc_macro = true
+
+[pkg.clap_derive]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.windows-implement]
+allow_proc_macro = true
+
+[pkg.windows-interface]
+allow_proc_macro = true
+
+[pkg.zerofrom-derive]
+allow_proc_macro = true
+
+[pkg.wit-bindgen-rust-macro]
+allow_proc_macro = true
+
+[pkg.time-macros]
+allow_proc_macro = true
+
+[pkg.rust-embed-impl]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.displaydoc]
+allow_proc_macro = true
+
+[pkg.abscissa_derive]
+allow_proc_macro = true
+
+[pkg.stable_deref_trait]
+allow_unsafe = true
+
+[pkg.unicode-ident]
+allow_unsafe = true
+
+[pkg.scopeguard]
+allow_unsafe = true
+
+[pkg.once_cell]
+allow_unsafe = true
+
+[pkg.smallvec]
+allow_unsafe = true
+
+[pkg.itoa]
+allow_unsafe = true
+
+[pkg.same-file]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.bitflags]
+allow_unsafe = true
+
+[pkg.foldhash]
+allow_unsafe = true
+
+[pkg.lock_api]
+allow_unsafe = true
+
+[pkg.allocator-api2]
+allow_unsafe = true
+
+[pkg.cpufeatures]
+allow_unsafe = true
+
+[pkg.quote]
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.parking_lot_core]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+]
+
+[pkg.crc32fast]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.crossbeam-utils]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+]
+
+[pkg.bytes]
+allow_unsafe = true
+allow_apis = [
+    "process",
+]
+
+[pkg.byteorder]
+allow_unsafe = true
+
+[pkg.proc-macro2]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.serde_core]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.memchr]
+allow_unsafe = true
+
+[pkg.unicode-normalization]
+allow_unsafe = true
+
+[pkg.thiserror]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.pin-project-lite]
+allow_unsafe = true
+
+[pkg.libc]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.hash32]
+allow_unsafe = true
+
+[pkg.shlex]
+allow_unsafe = true
+
+[pkg.version_check]
+from.build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.heapless]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.find-msvc-tools]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+]
+
+[pkg.linux-raw-sys]
+allow_unsafe = true
+
+[pkg.serde]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.percent-encoding]
+allow_unsafe = true
+
+[pkg.rustix]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.futures-core]
+allow_unsafe = true
+
+[pkg.hashbrown]
+allow_unsafe = true
+
+[pkg.writeable]
+allow_unsafe = true
+
+[pkg.generic-array]
+allow_unsafe = true
+
+[pkg.getrandom]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+]
+
+[pkg.zeroize]
+allow_unsafe = true
+
+[pkg.futures-sink]
+allow_unsafe = true
+
+[pkg.simd-adler32]
+allow_unsafe = true
+
+[pkg.icu_normalizer_data]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+]
+
+[pkg.icu_properties_data]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+]
+
+[pkg.nonempty]
+allow_unsafe = true
+
+[pkg.slab]
+allow_unsafe = true
+
+[pkg.block-buffer]
+allow_unsafe = true
+
+[pkg.utf8_iter]
+allow_unsafe = true
+
+[pkg.tracing-core]
+allow_unsafe = true
+
+[pkg.crossbeam-channel]
+allow_unsafe = true
+allow_apis = [
+    "process",
+]
+
+[pkg.form_urlencoded]
+allow_unsafe = true
+
+[pkg.aws-lc-rs]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+]
+
+[pkg.futures-task]
+allow_unsafe = true
+
+[pkg.rustls-pki-types]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.faster-hex]
+allow_unsafe = true
+
+[pkg.sha1]
+allow_unsafe = true
+
+[pkg.http]
+allow_unsafe = true
+
+[pkg.memmap2]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.try-lock]
+allow_unsafe = true
+
+[pkg.jobserver]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.httparse]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.sha1-checked]
+allow_unsafe = true
+
+[pkg.atomic-waker]
+allow_unsafe = true
+
+[pkg.subtle]
+allow_unsafe = true
+
+[pkg.mio]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+    "net",
+]
+
+[pkg.socket2]
+allow_unsafe = true
+allow_apis = [
+    "net",
+]
+
+[pkg.log]
+allow_unsafe = true
+
+[pkg.parking_lot]
+allow_unsafe = true
+
+[pkg.zlib-rs]
+allow_unsafe = true
+
+[pkg.indexmap]
+allow_unsafe = true
+
+[pkg.futures-channel]
+allow_unsafe = true
+
+[pkg.static_assertions]
+allow_unsafe = true
+
+[pkg.flate2]
+allow_unsafe = true
+
+[pkg.compression-core]
+allow_unsafe = true
+
+[pkg.kstring]
+allow_unsafe = true
+
+[pkg.sync_wrapper]
+allow_unsafe = true
+
+[pkg.aho-corasick]
+allow_unsafe = true
+
+[pkg.gix-sec]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.compression-codecs]
+allow_unsafe = true
+
+[pkg.openssl-probe]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.encoding_rs]
+allow_unsafe = true
+
+[pkg.winnow]
+allow_unsafe = true
+
+[pkg.semver]
+allow_unsafe = true
+
+[pkg.filetime]
+allow_unsafe = true
+
+[pkg.zmij]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.serde_json]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+]
+
+[pkg.http-body]
+allow_unsafe = true
+
+[pkg.futures-util]
+allow_unsafe = true
+
+[pkg.arrayvec]
+allow_unsafe = true
+
+[pkg.crossbeam-epoch]
+allow_unsafe = true
+
+[pkg.fixedbitset]
+allow_unsafe = true
+
+[pkg.http-body-util]
+allow_unsafe = true
+
+[pkg.autocfg]
+from.build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.cc]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.clru]
+allow_unsafe = true
+
+[pkg.io-close]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.either]
+allow_unsafe = true
+
+[pkg.crossbeam-deque]
+allow_unsafe = true
+
+[pkg.jiff]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.powerfmt]
+allow_unsafe = true
+
+[pkg.arc-swap]
+allow_unsafe = true
+
+[pkg.camino]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.twox-hash]
+allow_unsafe = true
+
+[pkg.rustc-stable-hash]
+allow_unsafe = true
+
+[pkg.anstyle-query]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.utf8parse]
+allow_unsafe = true
+
+[pkg.anstyle]
+allow_unsafe = true
+
+[pkg.anstyle-parse]
+allow_unsafe = true
+
+[pkg.rayon-core]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.object]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.lazy_static]
+allow_unsafe = true
+
+[pkg.deranged]
+allow_unsafe = true
+
+[pkg.owo-colors]
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.anstream]
+allow_unsafe = true
+
+[pkg.eyre]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.toml_parser]
+allow_unsafe = true
+
+[pkg.petgraph]
+allow_unsafe = true
+
+[pkg.clap_lex]
+allow_unsafe = true
+
+[pkg.tracing-log]
+allow_unsafe = true
+
+[pkg.sharded-slab]
+allow_unsafe = true
+
+[pkg.syn]
+allow_unsafe = true
+
+[pkg.thread_local]
+allow_unsafe = true
+
+[pkg.wait-timeout]
+allow_unsafe = true
+from.test.allow_apis = [
+    "process",
+]
+
+[pkg.canonical-path]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.gimli]
+allow_unsafe = true
+
+[pkg.siphasher]
+allow_unsafe = true
+
+[pkg.tokio]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.cmake]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.sha2]
+allow_unsafe = true
+
+[pkg.iana-time-zone]
+allow_unsafe = true
+
+[pkg.rayon]
+allow_unsafe = true
+
+[pkg.num-traits]
+allow_unsafe = true
+
+[pkg.typed-arena]
+allow_unsafe = true
+
+[pkg.jetscii]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.time]
+allow_unsafe = true
+
+[pkg.comrak]
+allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.aws-lc-sys]
+build.allow_unsafe = true
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.dunce]
+from.build.allow_apis = [
+    "fs",
+]
+
+[pkg.fs_extra]
+from.build.allow_apis = [
+    "fs",
+]
+
+[pkg.chrono]
+allow_unsafe = true
+
+[pkg.regex-automata]
+allow_unsafe = true
+
+[pkg.synstructure]
+allow_unsafe = true
+
+[pkg.walkdir]
+allow_apis = [
+    "fs",
+]
+
+[pkg.rust-embed-utils]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.tracing]
+allow_unsafe = true
+
+[pkg.backtrace]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.smol_str]
+allow_unsafe = true
+
+[pkg.async-compression]
+allow_unsafe = true
+
+[pkg.matchers]
+allow_unsafe = true
+
+[pkg.tokio-util]
+allow_unsafe = true
+
+[pkg.cvss]
+test.allow_apis = [
+    "fs",
+]
+
+[pkg.bstr]
+allow_unsafe = true
+
+[pkg.quitters]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.platforms-data-gen]
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.gix-path]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.yoke]
+allow_unsafe = true
+
+[pkg.tracing-subscriber]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.gix-actor]
+allow_unsafe = true
+
+[pkg.zerotrie]
+allow_unsafe = true
+
+[pkg.askama_parser]
+allow_unsafe = true
+
+[pkg.zerovec]
+allow_unsafe = true
+
+[pkg.gix-config-value]
+allow_unsafe = true
+
+[pkg.gix-features]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.potential_utf]
+allow_unsafe = true
+
+[pkg.tinystr]
+allow_unsafe = true
+
+[pkg.icu_collections]
+allow_unsafe = true
+
+[pkg.gix-hash]
+allow_unsafe = true
+
+[pkg.h2]
+allow_unsafe = true
+
+[pkg.gix-tempfile]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+    "process",
+]
+
+[pkg.icu_locale_core]
+allow_unsafe = true
+
+[pkg.gix-commitgraph]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.icu_provider]
+allow_unsafe = true
+
+[pkg.gix-revision]
+allow_unsafe = true
+
+[pkg.gix-filter]
+allow_unsafe = true
+allow_apis = [
+    "process",
+]
+
+[pkg.gix-ref]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.icu_normalizer]
+allow_unsafe = true
+
+[pkg.gix-pack]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.gix-index]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.idna]
+allow_unsafe = true
+
+[pkg.url]
+allow_unsafe = true
+
+[pkg.hyper]
+allow_unsafe = true
+allow_apis = [
+    "net",
+]
+
+[pkg.gix-odb]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.cargo-lock]
+allow_apis = [
+    "fs",
+]
+
+[pkg.rustls-platform-verifier]
+allow_unsafe = true
+
+[pkg.hyper-util]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "net",
+]
+
+[pkg.askama_derive]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.reqwest]
+allow_unsafe = true
+allow_apis = [
+    "net",
+]
+
+[pkg.glob]
+allow_apis = [
+    "fs",
+]
+
+[pkg.askama]
+allow_unsafe = true
+
+[pkg.tame-index]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.gix]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+    "net",
+]
+
+[pkg.fs-err]
+allow_apis = [
+    "fs",
+]
+
+[pkg.tempfile]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.gix-credentials]
+allow_apis = [
+    "process",
+]
+
+[pkg.home]
+allow_apis = [
+    "env",
+]
+
+[pkg.gix-transport]
+allow_apis = [
+    "env",
+    "net",
+    "process",
+]
+
+[pkg.gix-worktree]
+allow_apis = [
+    "fs",
+]
+
+[pkg.hyper-rustls]
+allow_apis = [
+    "net",
+]
+
+[pkg.gix-shallow]
+allow_apis = [
+    "fs",
+]
+
+[pkg.gix-lock]
+allow_apis = [
+    "fs",
+]
+
+[pkg.gix-worktree-state]
+allow_apis = [
+    "fs",
+]
+
+[pkg.gix-config]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.gix-prompt]
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.gix-glob]
+allow_apis = [
+    "fs",
+]
+
+[pkg.rustsec]
+allow_apis = [
+    "fs",
+]
+
+[pkg.gix-command]
+allow_apis = [
+    "process",
+]
+
+[pkg.gix-fs]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.rustls-native-certs]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.gix-discover]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.cargo-audit]
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.abscissa_core]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.termcolor]
+allow_apis = [
+    "env",
+]
+
+[pkg.ipnet]
+
+[pkg.platforms]
+
+[pkg.toml]
+
+[pkg.serde_spanned]
+
+[pkg.fnv]
+
+[pkg.untrusted]
+
+[pkg.gix-ignore]
+
+[pkg.gix-error]
+
+[pkg.tinyvec]
+
+[pkg.gix-date]
+
+[pkg.gix-packetline]
+
+[pkg.base64]
+
+[pkg.gix-revwalk]
+
+[pkg.gix-submodule]
+
+[pkg.uluru]
+
+[pkg.gix-hashtable]
+
+[pkg.gix-traverse]
+
+[pkg.prodash]
+
+[pkg.tower-http]
+
+[pkg.tower]
+
+[pkg.fastrand]
+
+[pkg.gix-url]
+
+[pkg.gix-quote]
+
+[pkg.toml_datetime]
+
+[pkg.gix-utils]
+
+[pkg.gix-attributes]
+
+[pkg.digest]
+
+[pkg.idna_adapter]
+
+[pkg.gix-chunk]
+
+[pkg.gix-protocol]
+
+[pkg.rustls-webpki]
+
+[pkg.gix-negotiate]
+
+[pkg.gix-validate]
+
+[pkg.equivalent]
+
+[pkg.rustls]
+
+[pkg.miniz_oxide]
+
+[pkg.gix-refspec]
+
+[pkg.want]
+
+[pkg.gix-object]
+
+[pkg.shell-words]
+
+[pkg.toml-span]
+
+[pkg.time-core]
+
+[pkg.wasmparser]
+
+[pkg.rustc-demangle]
+
+[pkg.rustsec-admin]
+allow_apis = [
+    "fs",
+    "process",
+]
+
+[pkg.gix-diff]
+
+[pkg.colorchoice]
+
+[pkg.quick-xml]
+
+[pkg.strsim]
+
+[pkg.caseless]
+
+[pkg.regex-syntax]
+
+[pkg.toml_writer]
+
+[pkg.atom_syndication]
+
+[pkg.color-eyre]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.finl_unicode]
+
+[pkg.clap_builder]
+allow_apis = [
+    "process",
+]
+
+[pkg.xml]
+
+[pkg.rustc-hash]
+
+[pkg.nu-ansi-term]
+
+[pkg.addr2line]
+
+[pkg.indenter]
+
+[pkg.phf]
+
+[pkg.toml_edit]
+
+[pkg.phf_shared]
+
+[pkg.auditable-serde]
+
+[pkg.auditable-extract]
+
+[pkg.regex]
+
+[pkg.binfarce]
+
+[pkg.auditable-info]
+
+[pkg.topological-sort]
+
