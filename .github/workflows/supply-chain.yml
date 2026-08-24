@@ -66,9 +66,23 @@ jobs:
         env:
           TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
         run: |
-          "$TOOLS_DIR/cargo-vet.exe" vet --locked || {
-            echo "::warning::cargo vet reported unvetted dependencies. This gate is REPORT-ONLY"
-            echo "::warning::until the baseline is committed (app/supply-chain/README.md). It does"
-            echo "::warning::NOT block yet. Run 'cargo vet' locally to review."
-            exit 1
-          }
+          set -uo pipefail
+          # cargo-vet expects $CARGO to be set. Cargo sets it automatically when a subcommand is
+          # invoked as `cargo vet`; we invoke the DIGEST-PINNED exe directly (#221, no PATH
+          # exposure), so nothing sets it and vet panics with "Cargo failed to set $CARGO" BEFORE
+          # evaluating a single crate. Symptom of that gap: this step reported "unvetted
+          # dependencies" on every run since adoption while never actually vetting anything.
+          CARGO="$(rustup which cargo)"
+          export CARGO
+          [ -x "$CARGO" ] || { echo "::error::cannot resolve cargo for CARGO env"; exit 1; }
+          "$TOOLS_DIR/cargo-vet.exe" vet --locked
+          rc=$?
+          if [ "$rc" -ne 0 ]; then
+            # Distinguish the two failure modes. Conflating them is what hid a non-functional
+            # gate behind a policy-debt message for its entire life.
+            echo "::warning::cargo vet exited $rc. If the output above lists unvetted crates,"
+            echo "::warning::is expected policy debt (REPORT-ONLY until the baseline lands, #199)."
+            echo "::warning::If it shows a PANIC or usage error, the gate did not run at all -"
+            echo "::warning::treat that as a broken control, not as findings."
+            exit "$rc"
+          fi
