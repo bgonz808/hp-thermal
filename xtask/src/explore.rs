@@ -36,6 +36,10 @@ use serde_json::Value;
 /// Default quarantine: a candidate younger than this has not soaked (#241).
 pub const SOAK_DAYS: i64 = 7;
 
+/// How often the monitor looks (weekly). Bounds the "newly soaked" window ONLY, so a fix that
+/// crosses the soak line is surfaced in at least one report and then stops shouting.
+pub const CADENCE_DAYS: i64 = 7;
+
 /// Compatibility tier relative to the version in use — the BLAST RADIUS axis, which is
 /// independent of the posture axis. Cargo semver: pre-1.0, the MINOR field is the
 /// breaking one (0.20.x -> 0.21.0 is breaking), which this encodes.
@@ -105,6 +109,26 @@ pub struct Candidate {
     pub published: String,
     pub age_days: i64,
     pub soaked: bool,
+}
+
+impl Candidate {
+    /// Has this candidate crossed the soak line *recently*? (#264)
+    ///
+    /// STATELESS by construction: a pure function of (age, policy), never of stored history.
+    /// That is what makes it safe under recompute-always. A policy change (`--soak-days`)
+    /// re-classifies everything on the next run instead of grandfathering stale decisions, and
+    /// there is no state file to drift from reality or be tampered with.
+    ///
+    /// Window is `[soak_days, soak_days + cadence_days)`: wide enough that a fix cannot slip
+    /// between two monitor ticks unnoticed, narrow enough that it stops shouting afterwards.
+    ///
+    /// This SURFACES a candidate; it never promotes one. A newly-soaked fix still travels
+    /// freeze -> 3-axis gate -> human sign-off (#241). Auto-admit stays gated on the sunny-day
+    /// predicate (nothing added on any axis), which a newly-adopted version cannot satisfy
+    /// unexamined.
+    pub fn newly_soaked(&self, soak_days: i64, cadence_days: i64) -> bool {
+        self.soaked && self.age_days < soak_days.saturating_add(cadence_days)
+    }
 }
 
 /// Days between an RFC3339 timestamp and `now_epoch`. Pure integer date math (no chrono):
@@ -274,7 +298,9 @@ pub fn findings(audit: &Value) -> Vec<(String, String, String)> {
 pub fn run(args: &[String]) -> i32 {
     let mut lockfile = String::from("Cargo.lock");
     let mut now_epoch: i64 = 0;
+    let mut now_overridden = false;
     let mut soak = SOAK_DAYS;
+    let mut cadence = CADENCE_DAYS;
     // Optional triage context: with --tool + --digest we can load the recorded baseline and
     // annotate each finding NEW-since-bless vs carried(acked) — turning a flat list into a
     // priority order. Omitted (ad-hoc local use) => enumeration only, no annotation.
@@ -292,11 +318,17 @@ pub fn run(args: &[String]) -> i32 {
             "--now-epoch" => {
                 if let Some(v) = it.next() {
                     now_epoch = v.parse().unwrap_or(0);
+                    now_overridden = now_epoch != 0;
                 }
             }
             "--soak-days" => {
                 if let Some(v) = it.next() {
                     soak = v.parse().unwrap_or(SOAK_DAYS);
+                }
+            }
+            "--cadence-days" => {
+                if let Some(v) = it.next() {
+                    cadence = v.parse().unwrap_or(CADENCE_DAYS);
                 }
             }
             "--tool" => tool = it.next().cloned(),
@@ -384,8 +416,18 @@ pub fn run(args: &[String]) -> i32 {
         .and_then(|t| crate::gate::load_acks(&evidence.join(t).join("acks.jsonl")).ok());
 
     println!("# Candidate exploration — {lockfile}");
+    if now_overridden {
+        // explore PROMOTES NOTHING (every candidate still travels freeze -> gate -> sign-off),
+        // so an overridden clock here can only mislead a reader -- never a machine. Disclose it
+        // loudly anyway: an undisclosed instrument makes a report incomparable to policy (#241 s5).
+        println!(
+            "# RESEARCH RUN -- clock overridden to epoch {now_epoch}. Ages/soak verdicts below are
+\n             # NOT safety claims and must not be quoted as evidence."
+        );
+    }
     println!(
-        "# soak >= {soak}d; candidates are crates.io versions (canonical semver), never git tags"
+        "# soak >= {soak}d; newly-soaked window [{soak}d, {}d); candidates are crates.io versions (canonical semver)",
+        soak + cadence
     );
     if let Some((_, db)) = &baseline {
         println!(
@@ -393,6 +435,7 @@ pub fn run(args: &[String]) -> i32 {
             &db[..12.min(db.len())]
         );
     }
+    let mut newly: Vec<String> = Vec::new();
     for ((pkg, ver), ids) in &affected {
         // Per-advisory triage marks: NEW (appeared since bless, needs a decision) /
         // acked (already signed off) / carried (known at bless, not separately acked).
@@ -453,14 +496,25 @@ pub fn run(args: &[String]) -> i32 {
             continue;
         }
         for c in reps {
+            let fresh = c.newly_soaked(soak, cadence);
             println!(
-                "  candidate {:<10} {:<26} published {} ({}d)  -> cargo update -p {pkg} --precise {}",
+                "  candidate {:<10} {:<26} published {} ({}d){}  -> cargo update -p {pkg} --precise {}",
                 c.version,
                 c.tier.label(),
                 c.published,
                 c.age_days,
+                if fresh { "  [NEWLY SOAKED]" } else { "" },
                 c.version
             );
+            if fresh {
+                newly.push(format!(
+                    "{pkg} {ver} -> {} ({}, crossed soak {}d ago; would clear {})",
+                    c.version,
+                    c.tier.label(),
+                    c.age_days - soak,
+                    ids.join(", ")
+                ));
+            }
         }
         let unsoaked: Vec<&Candidate> = cands.iter().filter(|c| !c.soaked).collect();
         if !unsoaked.is_empty() {
@@ -473,6 +527,23 @@ pub fn run(args: &[String]) -> i32 {
                     .collect::<Vec<_>>()
                     .join(", ")
             );
+        }
+    }
+    if newly.is_empty() {
+        println!(
+            "\n# NEWLY SOAKED (window [{soak}d, {}d)): none this cycle.",
+            soak + cadence
+        );
+    } else {
+        println!(
+            "\n# NEWLY SOAKED: {} candidate(s) crossed the soak line within the last {cadence}d.\n\
+             # These became ADOPTABLE since the previous cycle. Without this flag they read\n\
+             # identically to versions adoptable for months, so a fix that JUST became\n\
+             # available is indistinguishable from one deliberately being held.",
+            newly.len()
+        );
+        for n in &newly {
+            println!("  * {n}");
         }
     }
     println!(
@@ -645,5 +716,57 @@ mod tests {
         let f = findings(&a);
         assert_eq!(f.len(), 2);
         assert!(f.iter().any(|(p, _, id)| p == "b" && id == "yanked"));
+    }
+}
+
+#[cfg(test)]
+mod newly_soaked_tests {
+    use super::*;
+
+    fn cand(age: i64, soak: i64) -> Candidate {
+        Candidate {
+            version: "0.4.16".into(),
+            ver: Ver(0, 4, 16),
+            tier: Tier::SameLine,
+            published: "2026-08-17".into(),
+            age_days: age,
+            soaked: age >= soak,
+        }
+    }
+
+    #[test]
+    fn window_is_half_open_at_the_soak_boundary() {
+        // The h2 0.4.16 case: published 2026-08-17, evaluated 2026-08-24 => exactly 7d.
+        // At the boundary it MUST count as newly soaked, or a fix that becomes adoptable
+        // exactly on a monitor tick is never announced.
+        assert!(cand(7, 7).newly_soaked(7, 7), "age == soak must be newly soaked");
+        assert!(cand(13, 7).newly_soaked(7, 7), "last day of the window still counts");
+        assert!(
+            !cand(14, 7).newly_soaked(7, 7),
+            "soak+cadence is EXCLUSIVE: it has been adoptable a full cycle, stop shouting"
+        );
+    }
+
+    #[test]
+    fn unsoaked_is_never_newly_soaked() {
+        // Fail-secure: the flag is a refinement of `soaked`, never a way around it.
+        assert!(!cand(6, 7).newly_soaked(7, 7));
+        assert!(!cand(0, 7).newly_soaked(7, 7));
+    }
+
+    #[test]
+    fn stateless_under_policy_change() {
+        // recompute-always (#264): raising the soak bar re-classifies on the spot; a candidate
+        // that was adoptable yesterday is simply not soaked today. No grandfathering.
+        let c = cand(7, 7);
+        assert!(c.newly_soaked(7, 7));
+        let stricter = Candidate { soaked: 7 >= 30, ..c };
+        assert!(!stricter.newly_soaked(30, 7), "policy change must demote, not grandfather");
+    }
+
+    #[test]
+    fn saturating_cadence_cannot_overflow_into_a_pass() {
+        let c = cand(7, 7);
+        assert!(c.newly_soaked(7, i64::MAX), "saturating add must not wrap to a negative bound");
     }
 }
