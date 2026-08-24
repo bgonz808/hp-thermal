@@ -58,3 +58,41 @@ the PR.
   is the point; `[[trusted]]` / imports are explicit, recorded trust decisions, not silence.
 - It does not check licenses/sources (cargo-deny) or scan the shipped binary (cargo-audit bin) —
   those remain the release-path gates. This is the missing *vetting* layer, added alongside them.
+
+
+## Why the store files carry no comments
+
+`cargo-vet` **owns the format of its store** (`config.toml`, `audits.toml`,
+`imports.lock`). It normalises those files and treats anything it did not write as a
+consistency error:
+
+```
+ERROR   x Your cargo-vet store (supply-chain) has consistency errors
+Error:    x A file in the store is not correctly formatted
+```
+
+So the explanatory prose that used to live at the top of `config.toml` lives here
+instead. The store files stay exactly as the tool writes them, which also means a diff
+to them is always a real policy change rather than a formatting argument.
+
+### What each file is
+
+| file | meaning |
+|---|---|
+| `config.toml` | policy: which audit sets we import, plus `exemptions` (unreviewed crates we ship anyway) |
+| `audits.toml` | audits **we** performed — the only entries that represent our own review |
+| `imports.lock` | the pinned snapshot of imported third-party audits |
+
+### The three trust mechanisms, and what each actually asserts
+
+- **Audit** — a human read the code and certified it (`safe-to-run` for build-time-only,
+  `safe-to-deploy` for anything reaching the shipped binary). This is assurance.
+- **Import** — we delegate review to a named organisation (Mozilla, Google, Bytecode
+  Alliance) whose audits are published, versioned, and diffable. This is delegation, and
+  it is revocable: dropping the import re-exposes everything it covered.
+- **Exemption** — we have *not* reviewed this crate and are shipping it regardless. This
+  is recorded debt, not assurance, and should be described that way in any posture claim.
+
+`cargo vet certify <crate> <old> <new>` records a **delta** audit — review of just the
+diff between two versions. That is what makes the steady state affordable once a
+baseline exists: bumps cost a diff review, not a full re-read.
