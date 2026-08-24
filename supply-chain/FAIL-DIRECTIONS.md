@@ -58,6 +58,7 @@ Verdict vocabulary: **CLOSED/secure** (failure blocks or pages), **OPEN/insecure
 | Freeze directive lists must be COMPLETE (lock = f(rev, directives)) | re-freezing without an earlier directive silently drops that fix | OPEN (documented trap) | candidate-freeze.yml docs; tools/locks/README.md |
 | vt-monitor mal-ack lookup (#278) | oracle build/run failure, malformed or quality-rejected lattice entries | fail-secure: yields NO acked engines → every detection pages; problems surfaced as warnings | `mal_acks_tests` in xtask/src/gate.rs (quality-reject + missing-lattice cases) |
 | caps axis epistemics (#245) | a binary acts via direct syscalls or dynamic resolution the import table never names | OVERSTATES safety if read as exhaustive: caps prove CHANGE DETECTION over a statically visible surface, not containment. Absent caps evidence is UNEVALUATED and fails closed (#241 s3); PRESENT caps evidence is a lower bound, not a guarantee | module docs in xtask/src/caps.rs; #223 negative-control canaries |
+| checker integrity (#223) | a gating tool goes blind (sabotaged xdep, upstream regression, config rot) and reports CLEAN | fail-closed: the negative-control canary requires POSITIVE evidence (the planted advisory ID) in the tool's own output before any verdict from it is admissible; a bare non-zero exit is BROKEN, not detection | `xtask canary` + supply-chain/canaries/; unit tests in xtask/src/canary.rs |
 
 ## How to update this file
 
