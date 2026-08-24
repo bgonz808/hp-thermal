@@ -22,9 +22,9 @@
 #             time; #205 will have the producer verify it against the built exe's --version.
 #
 # Consumers fetch + verify via .github/actions/fetch-tools (release.yml, supply-chain.yml).
-cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  windows-x86_64  44078de77801ab9488b04c9e0679b75cf351fa84cfebffe4923f368c4d283efd  # v0.20.2
-cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  windows-x86_64  e5a1af6142384d9646205b54bff6c82f3d5833aac0ad1df6a5d73ad4a6fb67cd  # v0.7.5
-cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  windows-x86_64  a50910e953c7525fed850087884efbdecd6d1b41be318f14631da48e75127099  # v0.22.2
-cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  windows-x86_64  3cf88d57a84fe6138a5579e1733c3d0dda3261805312945c91a9bf93db3d69ad  # v0.5.9
-cargo-vet          mozilla/cargo-vet                  28f617ea97392d527799649db588a6dbb695da8d  windows-x86_64  c39b5ec8df1384e8dcc31405dc6f4b1db32f326d8517ff98f77a218b285ca05a  # v0.10.2 + tools/patches keystone (reqwest 0.12, indicatif 0.18; built from tools/locks frozen resolution)
+cargo-deny         EmbarkStudios/cargo-deny           bca0dde53651ee946720e4540b5ce2610bec8f06  windows-x86_64  a6fc922bea0cf85ebb170b45492a0408c3043e62022b5dcbe61b2bb5dcf21629  # v0.20.2
+cargo-auditable    rust-secure-code/cargo-auditable   9dc5ff28ff204b73eae91bd96cde4413fdcb70e0  windows-x86_64  782d0d24246ff8fe00e07648211b66afee5679cb4b7d06481b9092d3af330bfa  # v0.7.5
+cargo-audit        rustsec/rustsec                    281452c35cf0870969042374110f099a411bc185  windows-x86_64  76ae58ec69af476d512ff023243650eeaa93afb9ea37bfe911d8a5ecf732dca0  # v0.22.2 + tools/locks frozen resolution (5 advisories cleared)
+cargo-cyclonedx    CycloneDX/cyclonedx-rust-cargo     e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1  windows-x86_64  19b9401e47439afe0c3cab072accbecbc79bf901cc257f4e5619e393ca3978ef  # v0.5.9 + tools/locks frozen resolution (4 advisories cleared)
+cargo-vet          mozilla/cargo-vet                  28f617ea97392d527799649db588a6dbb695da8d  windows-x86_64  984ab50d368ad9ad793a4d11b767a3c692b2410b60c717cc99d01f8be403d25d  # v0.10.2 + tools/patches keystone (reqwest 0.12, indicatif 0.18; built from tools/locks frozen resolution)
 cargo-acl          cackle-rs/cackle                   e7109a3174378976ea881f1883439ba82524f061  linux-x86_64    085684885c3283172eb07e7b3c6716246ac936db536596eb6eadab57d8c0f428  # v0.9.1
