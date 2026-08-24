@@ -26,6 +26,42 @@ permissions:
   contents: read
 
 jobs:
+  # STANDING INSTRUMENT CHECK (#223). The two verdict paths (candidate-eval, build-tools)
+  # canary their auditor before trusting it, but both are conditional -- candidate-eval is
+  # path-filtered, build-tools is dispatch-only -- so neither gives CONTINUOUS assurance
+  # that the blessed auditor still detects. A checker goes blind quietly; the whole point is
+  # not to find out only at the moment a verdict matters.
+  #
+  # Cheap by construction: one tool invocation against one committed fixture, no network
+  # beyond fetching the pinned binary, contents:read, no secrets.
+  canary:
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain
+        run: rustup toolchain install nightly-2026-07-23
+
+      - name: Fetch + verify cargo-audit (digest-pinned, fail-closed)
+        id: tools
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-audit
+          verify-attestations: "true"
+
+      - name: Negative control - the auditor must still detect a known-bad
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
+
   vet:
     # windows-latest (#221): cargo-vet is consumed as a digest-pinned prebuilt exe from
     # TOOLS.lock, and the producer builds Windows binaries for every tool that supports it —
