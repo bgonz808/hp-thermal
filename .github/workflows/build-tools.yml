@@ -39,6 +39,16 @@ permissions:
 
 jobs:
   build-tools-windows:
+    # JUDGMENT GATE (#261). Referencing an environment makes the run PAUSE before this job
+    # starts, until a required reviewer approves in the repo's environment settings. The pause is
+    # pre-execution: no step runs and no OIDC token is minted until approval, so this is an
+    # authorization boundary rather than a prompt. It is also durable provenance -- the approval
+    # (who, when) is recorded against the run that produced these digests.
+    #
+    # The stanza is INERT until protection rules are configured (an unprotected environment
+    # simply runs), so adding it cannot break the producer; it only creates the place where the
+    # maintainer arms the gate.
+    environment: tools-publish
     runs-on: windows-2025   # MUST match the release runner OS family.
     permissions:
       contents: write        # create/update the `tools` release + upload assets
@@ -192,6 +202,16 @@ jobs:
           gh release upload "$TAG" out/*.exe --clobber
 
   build-tools-linux:
+    # JUDGMENT GATE (#261). Referencing an environment makes the run PAUSE before this job
+    # starts, until a required reviewer approves in the repo's environment settings. The pause is
+    # pre-execution: no step runs and no OIDC token is minted until approval, so this is an
+    # authorization boundary rather than a prompt. It is also durable provenance -- the approval
+    # (who, when) is recorded against the run that produced these digests.
+    #
+    # The stanza is INERT until protection rules are configured (an unprotected environment
+    # simply runs), so adding it cannot break the producer; it only creates the place where the
+    # maintainer arms the gate.
+    environment: tools-publish
     needs: build-tools-windows   # serialize: never race the windows job on release creation
     runs-on: ubuntu-24.04
     permissions:
