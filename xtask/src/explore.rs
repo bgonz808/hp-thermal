@@ -28,7 +28,7 @@
 //! owns a proposal, never a release.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value;
@@ -299,6 +299,7 @@ pub fn run(args: &[String]) -> i32 {
     let mut lockfile = String::from("Cargo.lock");
     let mut now_epoch: i64 = 0;
     let mut now_overridden = false;
+    let mut no_fetch = false;
     let mut soak = SOAK_DAYS;
     let mut cadence = CADENCE_DAYS;
     // Optional triage context: with --tool + --digest we can load the recorded baseline and
@@ -331,6 +332,9 @@ pub fn run(args: &[String]) -> i32 {
                     cadence = v.parse().unwrap_or(CADENCE_DAYS);
                 }
             }
+            // Opt-in only: skip the advisory-DB pull when a previous invocation in the same
+            // job already fetched it. Defaulting to fetch keeps a fresh runner correct.
+            "--no-fetch" => no_fetch = true,
             "--tool" => tool = it.next().cloned(),
             "--digest" => digest = it.next().cloned(),
             "--evidence" => {
@@ -351,32 +355,18 @@ pub fn run(args: &[String]) -> i32 {
             .unwrap_or(0);
     }
 
-    // Findings come from the blessed auditor (#221: absolute path when pinned).
-    let (prog, base): (String, Vec<String>) = match std::env::var("PINNED_TOOLS_DIR") {
-        Ok(d) => (
-            format!("{d}/cargo-audit{}", std::env::consts::EXE_SUFFIX),
-            vec!["audit".into()],
-        ),
-        Err(_) => ("cargo".into(), vec!["audit".into()]),
-    };
-    let out = match Command::new(&prog)
-        .args(&base)
-        .args(["--json", "--no-fetch", "--file", &lockfile])
-        .env_remove("CARGO")
-        .env_remove("RUSTC")
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .output()
-    {
-        Ok(o) => o,
-        Err(e) => {
-            eprintln!("explore: cannot run {prog}: {e}");
-            return 2;
-        }
-    };
-    let audit: Value = match serde_json::from_slice(&out.stdout) {
+    // Findings come from the blessed auditor (#221: absolute path when pinned) via the SAME
+    // helper the gate uses, so both consume the auditor identically and any diagnosis applies
+    // to both. Default is to FETCH the advisory DB: `--no-fetch` against a runner that has
+    // never fetched leaves cargo-audit with no database, which it reports on stderr while
+    // writing nothing to stdout -- previously surfaced only as "JSON unparseable: EOF", with
+    // the stderr discarded, so six broken reports looked like six empty ones (fail-open in the
+    // DISCOVERY layer: a green run publishing a report-shaped issue containing no findings).
+    // Callers that have already fetched in the same job may pass --no-fetch to skip the pull.
+    let audit: Value = match crate::gate::run_audit(Path::new(&lockfile), no_fetch) {
         Ok(v) => v,
         Err(e) => {
-            eprintln!("explore: cargo-audit JSON unparseable: {e}");
+            eprintln!("explore: {e}");
             return 2;
         }
     };
