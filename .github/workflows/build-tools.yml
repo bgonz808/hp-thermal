@@ -114,6 +114,17 @@ jobs:
               git -C "src-$name" remote add origin "https://github.com/$repo"
               git -C "src-$name" fetch -q --depth 1 origin "$rev"
               git -C "src-$name" checkout -q FETCH_HEAD
+              # Downstream patches (tools/patches/<name>/): applied BEFORE the lock overlay.
+              # --check first: if upstream's lines changed, the patch is SUPERSEDED or
+              # conflicting and the build fails loudly — never silently overrides a rev
+              # that fixed things itself (see tools/patches/README.md).
+              if [ -d "tools/patches/$name" ]; then
+                for pf in "tools/patches/$name"/*.patch; do
+                  git -C "src-$name" apply --check "$PWD/$pf"                     || { echo "::error::$pf no longer applies to $repo@$rev — superseded or conflicting; refresh or drop it"; exit 1; }
+                  git -C "src-$name" apply "$PWD/$pf"
+                  echo "applied $pf"
+                done
+              fi
               cp "tools/locks/$name.lock" "src-$name/Cargo.lock"
               # Locate the crate BY NAME inside a possibly-monorepo tree — never a
               # hardcoded per-tool path (rustsec/ and cyclonedx-rust-cargo are monorepos).
@@ -215,6 +226,17 @@ jobs:
               git -C "src-$name" remote add origin "https://github.com/$repo"
               git -C "src-$name" fetch -q --depth 1 origin "$rev"
               git -C "src-$name" checkout -q FETCH_HEAD
+              # Downstream patches (tools/patches/<name>/): applied BEFORE the lock overlay.
+              # --check first: if upstream's lines changed, the patch is SUPERSEDED or
+              # conflicting and the build fails loudly — never silently overrides a rev
+              # that fixed things itself (see tools/patches/README.md).
+              if [ -d "tools/patches/$name" ]; then
+                for pf in "tools/patches/$name"/*.patch; do
+                  git -C "src-$name" apply --check "$PWD/$pf"                     || { echo "::error::$pf no longer applies to $repo@$rev — superseded or conflicting; refresh or drop it"; exit 1; }
+                  git -C "src-$name" apply "$PWD/$pf"
+                  echo "applied $pf"
+                done
+              fi
               cp "tools/locks/$name.lock" "src-$name/Cargo.lock"
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }

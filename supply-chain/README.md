@@ -31,6 +31,13 @@ Naming and structure follow the ecosystem's content-addressed / supply-chain con
   800-131A / SLSA / in-toto) and borrow git/OCI's *unambiguous-resolution* discipline for
   locators — never git's SHA-1. See #244.
 
+## Related build-input deviations (live in `tools/`, not here)
+
+Committed deviations the producer consumes are build inputs and live beside `tools/TOOLS.lock`:
+`tools/locks/<tool>.lock` (frozen resolutions) and `tools/patches/<tool>/` (downstream
+manifest patches, Debian/nixpkgs model, fail-closed supersession via `git apply --check`).
+Their *justification* — measured advisory deltas, acks, sign-offs — lives in this tree.
+
 ## Fail-direction matrix
 
 [`FAIL-DIRECTIONS.md`](FAIL-DIRECTIONS.md) — what every enforcement mechanism does when it
