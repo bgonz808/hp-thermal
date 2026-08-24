@@ -31,19 +31,46 @@ use std::process::Command;
 use crate::explore::{age_days, parse_ver};
 use crate::gate::{Instance, extract_instances, run_audit};
 
-/// One `pkg=version` promotion directive.
+/// One `pkg=version` (or `pkg@current=version`) promotion directive.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Directive {
     pub package: String,
     pub version: String,
+    /// The CURRENT resident version to move, for multi-version crates (#255 §2). Cargo
+    /// coexists semver-incompatible versions of one crate (e.g. getrandom 0.2.7 AND
+    /// 0.3.3), making a bare `-p pkg` spec ambiguous; `pkg@current` selects exactly one
+    /// copy, leaving the others untouched.
+    pub at: Option<String>,
 }
 
-/// Parse `pkg=version`. Rejects empty halves and non-semver versions — a directive must name
-/// a concrete crates.io release, never a range or a tag.
+impl Directive {
+    /// The cargo package spec: `pkg@current` when disambiguated, else the bare name.
+    pub fn spec(&self) -> String {
+        match &self.at {
+            Some(cur) => format!("{}@{cur}", self.package),
+            None => self.package.clone(),
+        }
+    }
+}
+
+/// Parse `pkg=version` / `pkg@current=version`. Rejects empty halves and non-semver
+/// versions on BOTH sides of `@` — a directive names concrete crates.io releases,
+/// never ranges or tags.
 pub fn parse_directive(s: &str) -> Result<Directive, String> {
-    let (p, v) = s
+    let (left, v) = s
         .split_once('=')
-        .ok_or_else(|| format!("directive '{s}' must be <package>=<version>"))?;
+        .ok_or_else(|| format!("directive '{s}' must be <package>[@current]=<version>"))?;
+    let (p, at) = match left.split_once('@') {
+        Some((p, cur)) => {
+            if parse_ver(cur.trim()).is_none() {
+                return Err(format!(
+                    "directive '{s}': current version '{cur}' is not concrete MAJOR.MINOR.PATCH"
+                ));
+            }
+            (p, Some(cur.trim().to_string()))
+        }
+        None => (left, None),
+    };
     if p.trim().is_empty() || v.trim().is_empty() {
         return Err(format!("directive '{s}' has an empty package or version"));
     }
@@ -55,6 +82,7 @@ pub fn parse_directive(s: &str) -> Result<Directive, String> {
     Ok(Directive {
         package: p.trim().to_string(),
         version: v.trim().to_string(),
+        at,
     })
 }
 
@@ -224,7 +252,7 @@ pub fn run(args: &[String]) -> i32 {
     if tool.is_empty() || repo.is_empty() || rev.is_empty() || directives.is_empty() {
         eprintln!(
             "usage: cargo xtask freeze --tool <name> --repo <owner/repo> --rev <sha> \\\n\
-             \x20         --update <pkg>=<ver> [--update ...] [--soak-days N] [--out-dir DIR] [--dry-run]"
+             \x20         --update <pkg>[@cur]=<ver> [--update ...] [--soak-days N] [--out-dir DIR] [--dry-run]"
         );
         return 2;
     }
@@ -304,7 +332,7 @@ pub fn run(args: &[String]) -> i32 {
     for p in &parsed {
         let st = Command::new("cargo")
             .current_dir(&work)
-            .args(["update", "-p", &p.package, "--precise", &p.version])
+            .args(["update", "-p", &p.spec(), "--precise", &p.version])
             .env_remove("CARGO")
             .env_remove("RUSTC")
             .env_remove("RUSTUP_TOOLCHAIN")
@@ -436,7 +464,8 @@ mod tests {
             parse_directive("futures-util=0.3.34").unwrap(),
             Directive {
                 package: "futures-util".into(),
-                version: "0.3.34".into()
+                version: "0.3.34".into(),
+                at: None
             }
         );
         assert!(parse_directive("futures-util").is_err(), "missing '='");
@@ -453,6 +482,29 @@ mod tests {
         assert!(
             parse_directive("x=1.0.0-rc.1").is_err(),
             "pre-release is not promotable"
+        );
+    }
+
+    #[test]
+    fn directive_at_version_disambiguates_multi_version_crates() {
+        // #255 §2: getrandom coexists at 0.2.x and 0.3.x; pkg@current selects one copy.
+        let d = parse_directive("getrandom@0.2.7=0.2.17").unwrap();
+        assert_eq!(d.package, "getrandom");
+        assert_eq!(d.at.as_deref(), Some("0.2.7"));
+        assert_eq!(d.version, "0.2.17");
+        assert_eq!(d.spec(), "getrandom@0.2.7");
+        // bare form unchanged
+        let b = parse_directive("webpki=0.22.4").unwrap();
+        assert_eq!(b.at, None);
+        assert_eq!(b.spec(), "webpki");
+        // malformed @ forms refuse
+        assert!(
+            parse_directive("getrandom@=0.2.17").is_err(),
+            "empty current"
+        );
+        assert!(
+            parse_directive("getrandom@^0.2=0.2.17").is_err(),
+            "range current"
         );
     }
 
