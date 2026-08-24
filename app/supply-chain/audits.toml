@@ -1,9 +1,4 @@
-# Audits performed by the hp-thermal maintainers.
-# https://mozilla.github.io/cargo-vet/
-#
-# Entries are added by reviewing a crate's source and recording an audit, e.g.:
-#   cd app && cargo vet certify <crate> <version>          # a full audit
-#   cd app && cargo vet certify <crate> <old> <new>        # audit only the delta of a bump
-# Prefer `cargo vet diff <crate> <old> <new>` to review exactly what changed before certifying.
+
+# cargo-vet audits file
 
 [audits]
