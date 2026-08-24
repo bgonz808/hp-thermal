@@ -51,6 +51,18 @@ jobs:
           only: cargo-audit
           verify-attestations: "true"
 
+      # NEGATIVE CONTROL BEFORE THE VERDICT (#223). The gate's vuln axis is only as good as
+      # the auditor it calls, and a sabotaged or simply broken auditor fails by reporting
+      # CLEAN -- indistinguishable from a genuinely clean tree, and invisible to digest
+      # verification (the bytes are exactly the ones we blessed). So before any verdict is
+      # trusted, require the SAME binary to still detect a known-bad fixture. Fail-closed:
+      # if the instrument cannot demonstrate detection, no verdict from it is admissible.
+      - name: Canary - the auditor must still detect a known-bad (#223)
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
+        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
+
       - name: Run the gate
         id: gate
         shell: bash

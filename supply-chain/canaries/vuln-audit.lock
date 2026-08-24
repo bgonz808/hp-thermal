@@ -1,0 +1,38 @@
+# NEGATIVE CONTROL — deliberately vulnerable fixture (#223). NOT a dependency of anything.
+#
+# Pins yaml-rust 0.4.0, which carries RUSTSEC-2018-0006 (uncontrolled recursion leads to
+# abort in deserialization, CVSS:3.0/AV:N/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H, patched >= 0.4.1).
+#
+# Chosen for canary STABILITY, not realism:
+#   * a real vulnerability, not merely an `unmaintained` informational notice, so detection
+#     does not depend on warning-level configuration;
+#   * permanently unpatched at 0.4.0 -- the fix shipped in 0.4.1, so this tuple can never
+#     become clean and the canary can never rot into a false pass;
+#   * NO `os` restriction in the advisory. RUSTSEC-2020-0071 (time) was the first candidate
+#     and was rejected precisely because it is scoped to Unix-like targets, so a
+#     Windows-targeted scan could legitimately not flag it -- an OS-filtered miss would be
+#     indistinguishable from a blind checker, which defeats the entire purpose;
+#   * ancient and archived, so the advisory itself is not going to be revised.
+version = 3
+
+[[package]]
+name = "canary"
+version = "0.0.0"
+dependencies = [
+ "yaml-rust",
+]
+
+[[package]]
+name = "linked-hash-map"
+version = "0.5.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
+
+[[package]]
+name = "yaml-rust"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57ab38ee1a4a266ed033496cf9af1828d8d6e6c1cfa5f643a2809effcae4d628"
+dependencies = [
+ "linked-hash-map",
+]

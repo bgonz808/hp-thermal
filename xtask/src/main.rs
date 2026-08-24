@@ -20,6 +20,7 @@ mod gate;
 // #245: per-binary capability-manifest gate (binary vantage of the #241 caps axis).
 // Measures a binary's import surface against a committed manifest, fails closed on
 // divergence. One engine for every binary we produce (tools + releases). See caps.rs.
+mod canary;
 mod caps;
 
 // #241/#239: candidate ENUMERATION (discovery) for the promotion pipeline. Proposes
@@ -66,6 +67,7 @@ fn main() {
             args.get(1).map(String::as_str),
             args.get(2).map(String::as_str),
         ),
+        Some("canary") => canary::run(&args),
         Some("gate") => gate::run(&args),
         Some("mal-acks") => gate::mal_acks_run(&args),
         Some("explore") => explore::run(&args),
