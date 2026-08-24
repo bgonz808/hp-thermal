@@ -1,8 +1,23 @@
 //! `cargo xtask verify-caps` — per-binary capability-manifest gate (#245).
 //!
-//! The BINARY vantage of the #241 caps axis: measure what a shipped binary *can do*
-//! (its import surface) against a committed manifest of what it's *allowed* to do, and
-//! fail closed on any divergence. Complements cackle's SOURCE vantage (#50): a
+//! The BINARY vantage of the #241 caps axis: measure a shipped binary's IMPORT SURFACE
+//! against a committed manifest of what it's *allowed* to import, and fail closed on any
+//! divergence.
+//!
+//! WHAT THIS DOES AND DOES NOT PROVE (read before quoting a caps result as assurance):
+//! the import table is a LOWER BOUND on capability, never an exhaustive account of what
+//! the binary can do. Three ways code acts outside it:
+//!   * direct syscalls — a stub that issues a syscall by number imports nothing, so the
+//!     table shows no trace of it (a standard malware technique, not an exotic one);
+//!   * dynamic resolution — GetProcAddress/LoadLibrary reach code the table never names.
+//!     DYN_APIS + expected_dynamic bound *that dynamic resolution happens at all*, which
+//!     is weaker than bounding what it reaches;
+//!   * imported != called, so the surface also overstates in the other direction.
+//! So the honest claim is CHANGE DETECTION, not containment: an exact-match ratchet over
+//! a statically visible surface means a delta is always real and always reviewed. It does
+//! not mean the binary is limited to what the manifest lists. Real containment is an OS
+//! enforcing the policy at runtime (the pledge/seccomp/AppContainer shape below); we
+//! measure and gate, we do not confine. Complements cackle's SOURCE vantage (#50): a
 //! build-time injection invisible in source (malicious build.rs, linked C) surfaces
 //! here as an undeclared import. The universal shape — declared manifest + enforcer
 //! that fails closed on the undeclared — is pledge/unveil, seccomp, AppContainer, WASI.
