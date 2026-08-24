@@ -64,6 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           : > report.md
+          explore_failed=0
           {
             echo "Weekly candidate exploration for the pinned tools' dependency findings."
             echo
@@ -94,12 +95,26 @@ jobs:
               continue
             fi
             echo '```' >> report.md
-            # Findings-driven; a tool with no findings prints the no-op line.
-            cargo run --quiet --manifest-path xtask/Cargo.toml -- \
-              explore --lockfile "$name.lock" --tool "$name" --digest "$sha" >> report.md 2>&1 || true
+            # Findings-driven; a tool with no findings prints the no-op line and exits 0, so a
+            # NON-ZERO exit here is always a real failure and must never be swallowed. A bare
+            # `|| true` is what let six broken reports publish as if they were six empty ones:
+            # explore's error text landed in the report body as CONTENT and the job stayed green.
+            # Absence of findings is this workflow's expected output, which is exactly why absence
+            # of FUNCTION must be made loud instead of left for a reader to infer.
+            if cargo run --quiet --manifest-path xtask/Cargo.toml -- \
+              explore --lockfile "$name.lock" --tool "$name" --digest "$sha" >> report.md 2>&1
+            then :; else
+              rc=$?
+              echo "::error::explore failed for '$name' (exit $rc) - the report is INCOMPLETE"
+              echo "UNEVALUATED: explore exited $rc; this section is NOT a clean result" >> report.md
+              explore_failed=1
+            fi
             echo '```' >> report.md
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
           wc -l report.md
+          # Steps are separate shells: carry the flag so the publish step can fail the job AFTER
+          # the partial report is posted.
+          echo "EXPLORE_FAILED=${explore_failed:-0}" >> "$GITHUB_ENV"
 
       - name: Publish the candidate report (open or refresh one tracking issue)
         shell: bash
@@ -114,4 +129,11 @@ jobs:
             gh issue edit "$num" --title "$title" --body-file report.md
           else
             gh issue create --title "$title" --body-file report.md --label dependencies
+          fi
+          # Fail-closed AFTER publishing: the partial report still helps a reader, but a run in
+          # which any tool failed to evaluate must not report success -- a green discovery run
+          # is read as "nothing to report".
+          if [ "${EXPLORE_FAILED:-0}" != "0" ]; then
+            echo "::error::one or more tools failed to evaluate - see UNEVALUATED sections above"
+            exit 1
           fi
