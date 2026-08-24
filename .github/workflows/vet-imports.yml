@@ -1,0 +1,74 @@
+name: vet imports refresh
+
+# Updating `imports.lock` is a TRUST DECISION, not a chore: it pins what Mozilla / Google /
+# Bytecode Alliance / zcash currently assert about specific crate versions. Re-fetching it
+# adopts whatever those audit sets say today.
+#
+# So it gets the same shape as the tool-lock freeze flow (#255): CI computes the artifact,
+# publishes it for review, and NEVER writes to the repository. The maintainer reviews the
+# imports.lock diff and commits it, and that commit is the sign-off.
+#
+# Why a dedicated workflow rather than a flag on the gate: the gate runs with `--locked`
+# precisely so its inputs cannot change without a commit. A gate that refreshes its own trust
+# inputs has no fixed baseline to gate against.
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    runs-on: windows-2025
+    permissions:
+      contents: read      # cannot mutate the repo; the artifact is the only output
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain
+        run: rustup toolchain install nightly-2026-07-23
+
+      - name: Fetch + verify cargo-vet (digest-pinned, fail-closed)
+        id: tools
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-vet
+          verify-attestations: "true"
+
+      - name: Refresh imports (unlocked — this is the only place that fetches)
+        working-directory: app
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: |
+          set -uo pipefail
+          CARGO="$(rustup which cargo)"
+          export CARGO
+          before=$(sha256sum supply-chain/imports.lock | cut -d' ' -f1)
+          # `vet` without --locked fetches every configured import and rewrites imports.lock.
+          # A non-zero exit here is EXPECTED while crates remain unvetted; the artifact is the
+          # deliverable, so do not let that exit status hide it.
+          "$TOOLS_DIR/cargo-vet.exe" vet 2>&1 | tail -80
+          after=$(sha256sum supply-chain/imports.lock | cut -d' ' -f1)
+          echo "imports.lock sha256 before=$before"
+          echo "imports.lock sha256 after =$after"
+          if [ "$before" = "$after" ]; then
+            echo "::notice::imports.lock unchanged - nothing to commit"
+          else
+            echo "::notice::imports.lock CHANGED - review the artifact, then commit it"
+          fi
+          echo "bytes: $(wc -c < supply-chain/imports.lock)"
+
+      - name: Publish the refreshed store for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # actions/upload-artifact v4.6.2
+        with:
+          name: vet-store-refreshed
+          path: app/supply-chain/
+          if-no-files-found: error
+          retention-days: 30
