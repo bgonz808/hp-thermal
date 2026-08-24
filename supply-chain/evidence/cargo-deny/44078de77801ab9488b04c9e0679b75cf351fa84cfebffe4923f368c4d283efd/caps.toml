@@ -1,0 +1,569 @@
+# caps evidence — COPIED FORWARD from digest 716b16db6e9c: source-vantage inventory is a
+# function of (rev, lock), both UNCHANGED for this rebuild; only the non-reproducible
+# binary bytes differ. Binary-vantage caps independently gated by verify-caps at the producer.
+# caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
+# generated: 2026-08-21, cargo-acl v0.9.1 (085684885c32), linux-native analysis, sandbox disabled (local WSL)
+# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
+[common]
+version = 2
+
+[sandbox]
+kind = "Disabled"
+
+[api.net]
+include = ["std::net"]
+
+[api.fs]
+include = [
+    "rustix::fs","std::fs"]
+
+[api.process]
+include = ["std::process"]
+
+[api.env]
+include = [
+    "insta::env","std::env",
+    "tempfile::env"]
+
+[pkg.thiserror-impl]
+allow_proc_macro = true
+
+[pkg.yoke-derive]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.zerovec-derive]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.serde_derive]
+allow_proc_macro = true
+
+[pkg.zerofrom-derive]
+allow_proc_macro = true
+
+[pkg.wit-bindgen-rust-macro]
+allow_proc_macro = true
+
+[pkg.jiff-static]
+allow_proc_macro = true
+
+[pkg.displaydoc]
+allow_proc_macro = true
+
+[pkg.scroll_derive]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.strum_macros]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.stable_deref_trait]
+allow_unsafe = true
+
+[pkg.unicode-ident]
+allow_unsafe = true
+
+[pkg.writeable]
+allow_unsafe = true
+
+[pkg.shlex]
+allow_unsafe = true
+
+[pkg.smallvec]
+allow_unsafe = true
+
+[pkg.itoa]
+allow_unsafe = true
+
+[pkg.utf8_iter]
+allow_unsafe = true
+
+[pkg.find-msvc-tools]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+]
+
+[pkg.log]
+allow_unsafe = true
+
+[pkg.utf8parse]
+allow_unsafe = true
+
+[pkg.proc-macro2]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.icu_properties_data]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.crossbeam-utils]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.serde]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.quote]
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.icu_normalizer_data]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.crossbeam-epoch]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.memchr]
+allow_unsafe = true
+
+[pkg.serde_core]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.libc]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.zmij]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.version_check]
+from.build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.anstyle-parse]
+allow_unsafe = true
+
+[pkg.serde_json]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.camino]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.bytes]
+allow_unsafe = true
+
+[pkg.allocator-api2]
+allow_unsafe = true
+
+[pkg.zeroize]
+allow_unsafe = true
+
+[pkg.zstd-safe]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.percent-encoding]
+allow_unsafe = true
+
+[pkg.anstyle]
+allow_unsafe = true
+
+[pkg.anstyle-query]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.radium]
+build.allow_apis = [
+    "env",
+]
+
+[pkg.target-lexicon]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.hashbrown]
+allow_unsafe = true
+
+[pkg.foldhash]
+allow_unsafe = true
+
+[pkg.generic-array]
+allow_unsafe = true
+
+[pkg.parking_lot_core]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.cpufeatures]
+allow_unsafe = true
+
+[pkg.fixedbitset]
+allow_unsafe = true
+
+[pkg.rustls-pki-types]
+allow_unsafe = true
+
+[pkg.either]
+allow_unsafe = true
+
+[pkg.scopeguard]
+allow_unsafe = true
+
+[pkg.anstream]
+allow_unsafe = true
+
+[pkg.clap_lex]
+allow_unsafe = true
+
+[pkg.thiserror]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.block-buffer]
+allow_unsafe = true
+
+[pkg.crc32fast]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.getrandom]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.once_cell]
+allow_unsafe = true
+from.test.allow_apis = [
+    "env",
+]
+
+[pkg.wyz]
+allow_unsafe = true
+
+[pkg.crossbeam-queue]
+allow_unsafe = true
+
+[pkg.rustix]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.lock_api]
+allow_unsafe = true
+
+[pkg.sha2]
+allow_unsafe = true
+
+[pkg.anyhow]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.bstr]
+allow_unsafe = true
+
+[pkg.httparse]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.crossbeam-channel]
+allow_unsafe = true
+allow_apis = [
+    "process",
+]
+
+[pkg.plain]
+allow_unsafe = true
+
+[pkg.form_urlencoded]
+allow_unsafe = true
+
+[pkg.bitflags]
+allow_unsafe = true
+
+[pkg.unicode-normalization]
+allow_unsafe = true
+
+[pkg.jobserver]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.indexmap]
+allow_unsafe = true
+
+[pkg.twox-hash]
+allow_unsafe = true
+
+[pkg.linux-raw-sys]
+allow_unsafe = true
+
+[pkg.simd-adler32]
+allow_unsafe = true
+
+[pkg.crossbeam-deque]
+allow_unsafe = true
+
+[pkg.rustc-stable-hash]
+allow_unsafe = true
+
+[pkg.same-file]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.http]
+allow_unsafe = true
+
+[pkg.memmap2]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.parking_lot]
+allow_unsafe = true
+
+[pkg.subtle]
+allow_unsafe = true
+
+[pkg.utf8-zero]
+allow_unsafe = true
+
+[pkg.rayon-core]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.console]
+allow_unsafe = true
+from.test.allow_apis = [
+    "env",
+]
+
+[pkg.flate2]
+allow_unsafe = true
+
+[pkg.aho-corasick]
+allow_unsafe = true
+
+[pkg.bitvec]
+allow_unsafe = true
+
+[pkg.petgraph]
+allow_unsafe = true
+
+[pkg.cc]
+allow_unsafe = true
+from.build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.syn]
+allow_unsafe = true
+
+[pkg.semver]
+allow_unsafe = true
+
+[pkg.rayon]
+allow_unsafe = true
+
+[pkg.jiff]
+allow_unsafe = true
+
+[pkg.zstd-sys]
+build.allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.pkg-config]
+from.build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.ring]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.regex-automata]
+allow_unsafe = true
+
+[pkg.synstructure]
+allow_unsafe = true
+
+[pkg.zstd]
+allow_unsafe = true
+
+[pkg.scroll]
+allow_unsafe = true
+
+[pkg.smol_str]
+allow_unsafe = true
+
+[pkg.yoke]
+allow_unsafe = true
+
+[pkg.zerotrie]
+allow_unsafe = true
+
+[pkg.zerovec]
+allow_unsafe = true
+
+[pkg.tame-index]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.potential_utf]
+allow_unsafe = true
+
+[pkg.tinystr]
+allow_unsafe = true
+
+[pkg.icu_collections]
+allow_unsafe = true
+
+[pkg.icu_locale_core]
+allow_unsafe = true
+
+[pkg.goblin]
+allow_unsafe = true
+
+[pkg.icu_provider]
+allow_unsafe = true
+
+[pkg.icu_normalizer]
+allow_unsafe = true
+
+[pkg.idna]
+allow_unsafe = true
+
+[pkg.url]
+allow_unsafe = true
+
+[pkg.insta]
+allow_unsafe = true
+from.test.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.cargo-deny]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.clap_builder]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.termcolor]
+allow_apis = [
+    "env",
+]
+
+[pkg.krates]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.walkdir]
+allow_apis = [
+    "fs",
+]
+
+[pkg.fern]
+allow_apis = [
+    "fs",
+]
+
+[pkg.tempfile]
+from.test.allow_apis = [
+    "env",
+    "fs",
+]

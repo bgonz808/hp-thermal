@@ -1,0 +1,7 @@
+{"schema":"hp-thermal/evidence-vuln/v1","subject":{"name":"cargo-cyclonedx","sha256":"3cf88d57a84fe6138a5579e1733c3d0dda3261805312945c91a9bf93db3d69ad"},"scanner":{"uri":"github.com/rustsec/rustsec#cargo-audit","version":"0.22.2","digest":"cb65afefc83334d47aa7bdeebf92a92140ecb54b164448fc330fa598214bde56","db":{"uri":"github.com/rustsec/advisory-db","version":"bf5c0d245a92671908518d7e765914d437954ed6","lastUpdate":"2026-08-21T08:28:40+02:00"}},"scanFinishedOn":"2026-08-24","lockProvenance":"upstream lock at pinned rev (unchanged; binary built from it)","rawPayload":{"sha256":"c27c698e0b2f7177e65d5432f8c634eaea756528ca25da714653bb51bba2af6c","store":"tools release","asset":"audit-raw-c27c698e0b2f.json"}}
+{"id":"RUSTSEC-2024-0320","aliases":[],"package":"yaml-rust","version":"0.4.5","kind":"unmaintained"}
+{"id":"RUSTSEC-2025-0119","aliases":[],"package":"number_prefix","version":"0.4.0","kind":"unmaintained"}
+{"id":"RUSTSEC-2026-0009","aliases":["CVE-2026-25727","GHSA-r6v5-fh4h-64xc"],"package":"time","version":"0.3.36","kind":"vulnerability"}
+{"id":"RUSTSEC-2026-0097","aliases":["GHSA-cq8v-f236-94qc"],"package":"rand","version":"0.8.5","kind":"unsound"}
+{"id":"RUSTSEC-2026-0190","aliases":[],"package":"anyhow","version":"1.0.80","kind":"unsound"}
+{"id":"yanked","aliases":[],"package":"xml-rs","version":"0.8.19","kind":"yanked"}
