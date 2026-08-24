@@ -1,0 +1,18 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index 795e455..e1d9038 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -31,11 +31,11 @@ filetime = "0.2.16"
+ flate2 = { version = "1.0.3", default-features = false, features = ["zlib"] }
+ futures-util = { version = "0.3.21", default-features = false, features = ["std"] }
+ home = "0.5.3"
+-indicatif = "0.17.0"
++indicatif = "0.18"
+ lazy_static = "1.4.0"
+ libc = "0.2"
+ nom = "7.1.1"
+-reqwest = { version = "0.11.10", default-features = false, features = ["rustls-tls"] }
++reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+ serde = "1.0.136"
+ serde_json = "1.0.82"
+ similar = "2.7.0"

@@ -1,0 +1,89 @@
+name: Candidate build (compile + test evidence)
+
+# The missing sibling of candidate-freeze (#241): resolution proves SATISFIABILITY,
+# this proves the candidate COMPILES and its tests pass — on an ephemeral runner,
+# because building executes dependency build scripts and proc-macros, which is
+# exactly the code we do not run uncaged on a workstation.
+#
+# Same containment as freeze: NO secrets, contents:read only — this job cannot
+# bless, publish, or mutate anything. It reproduces the producer's build recipe
+# (pinned rev + tools/patches + tools/locks overlay + --locked) WITHOUT the
+# producer's privileges, and uploads a report. Evidence, never artifact.
+#
+# repo + rev come from the COMMITTED pin — never from dispatch input.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: "Tool name as pinned in tools/TOOLS.lock."
+        type: string
+        default: cargo-vet
+      run_tests:
+        description: "Also run the tool's test suite."
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2025   # match the producer's target family
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain (producer parity)
+        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+
+      - name: Build the candidate exactly as the producer would
+        shell: bash
+        env:
+          TOOL: ${{ inputs.tool }}
+          RUN_TESTS: ${{ inputs.run_tests }}
+          CARGO_TARGET_DIR: ${{ runner.temp }}/cand-build
+        run: |
+          set -euo pipefail
+          line=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' \
+                  | awk -v t="$TOOL" '$1==t {print; exit}')
+          [ -n "$line" ] || { echo "::error::'$TOOL' is not pinned in tools/TOOLS.lock"; exit 1; }
+          repo=$(echo "$line" | awk '{print $2}'); rev=$(echo "$line" | awk '{print $3}')
+          echo "building $TOOL from $repo@$rev (producer recipe)" | tee report.txt
+          rm -rf src && git init -q src
+          git -C src remote add origin "https://github.com/$repo"
+          git -C src fetch -q --depth 1 origin "$rev"
+          git -C src checkout -q FETCH_HEAD
+          if [ -d "tools/patches/$TOOL" ]; then
+            for pf in "tools/patches/$TOOL"/*.patch; do
+              git -C src apply --check "$PWD/$pf" \
+                || { echo "::error::$pf does not apply — superseded or conflicting"; exit 1; }
+              git -C src apply "$PWD/$pf"
+              echo "applied $pf" | tee -a report.txt
+            done
+          fi
+          [ -f "tools/locks/$TOOL.lock" ] && cp "tools/locks/$TOOL.lock" src/Cargo.lock \
+            && echo "overlaid tools/locks/$TOOL.lock" | tee -a report.txt
+          manifest=$(cd src && cargo metadata --no-deps --locked --format-version 1 \
+                      | jq -r --arg n "$TOOL" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
+          [ -n "$manifest" ] || { echo "::error::crate '$TOOL' not found"; exit 1; }
+          echo "== cargo build --locked ==" | tee -a report.txt
+          ( cd "$(dirname "$manifest")" && cargo build --locked 2>&1 ) | tail -30 | tee -a report.txt
+          if [ "$RUN_TESTS" = "true" ]; then
+            echo "== cargo test --locked ==" | tee -a report.txt
+            ( cd "$(dirname "$manifest")" && cargo test --locked 2>&1 ) | tail -40 | tee -a report.txt
+          fi
+          echo "BUILD EVIDENCE: OK" | tee -a report.txt
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4.6.2
+        with:
+          name: candidate-build-${{ inputs.tool }}
+          path: report.txt
+          if-no-files-found: warn
+          retention-days: 30
