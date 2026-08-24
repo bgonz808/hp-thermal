@@ -59,28 +59,6 @@ jobs:
       # --locked: vet the graph exactly as committed, no re-resolution. Report-only until baseline.
       # NO PATH exposure (#221): the verified binary is invoked by absolute path, env-bound —
       # nothing shadowable, no ambient authority for later steps.
-      # TEMPORARY BOOTSTRAP (removed before merge): `--locked` means 'do not fetch imports',
-      # so imports.lock can never be populated by the gate itself. Run once unlocked to fetch
-      # the Mozilla/Google/Bytecode-Alliance audit sets, and publish the resulting store as an
-      # artifact for the maintainer to review and commit. CI never writes to the repo.
-      - name: BOOTSTRAP - fetch imports (temporary)
-        working-directory: app
-        continue-on-error: true
-        shell: bash
-        env:
-          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
-        run: |
-          set -uo pipefail
-          CARGO="$(rustup which cargo)"
-          export CARGO
-          "$TOOLS_DIR/cargo-vet.exe" vet 2>&1 | tail -60
-          echo "=== store after fetch ==="
-          wc -c supply-chain/imports.lock
-      - name: BOOTSTRAP - upload store (temporary)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
-        with:
-          name: vet-store-bootstrap
-          path: app/supply-chain/
       - name: cargo vet
         working-directory: app
         continue-on-error: true   # REMOVE (in a reviewed PR) once the baseline is committed, to enforce
