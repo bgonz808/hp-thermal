@@ -56,10 +56,15 @@ jobs:
           CARGO="$(rustup which cargo)"
           export CARGO
           before=$(sha256sum supply-chain/imports.lock | cut -d' ' -f1)
-          # `vet` without --locked fetches every configured import and rewrites imports.lock.
-          # A non-zero exit here is EXPECTED while crates remain unvetted; the artifact is the
-          # deliverable, so do not let that exit status hide it.
-          "$TOOLS_DIR/cargo-vet.exe" vet 2>&1 | tail -80
+          # `vet` alone does NOT write imports.lock: it reports, and on failure never reaches
+          # the write. `regenerate imports` is the command whose JOB is to fetch every configured
+          # source and rewrite the lock, so it works even while crates remain unvetted -- which
+          # is exactly the chicken-and-egg this flow has to break.
+          "$TOOLS_DIR/cargo-vet.exe" regenerate imports 2>&1 | tail -40
+          regen_rc=${PIPESTATUS[0]}
+          echo "regenerate imports exit=$regen_rc"
+          # Then report the resulting posture (informational here; the GATE is what judges).
+          "$TOOLS_DIR/cargo-vet.exe" vet --locked 2>&1 | tail -60
           vet_rc=${PIPESTATUS[0]}
           echo "cargo-vet exit=$vet_rc (non-zero is expected while crates remain unvetted)"
           after=$(sha256sum supply-chain/imports.lock | cut -d' ' -f1)
