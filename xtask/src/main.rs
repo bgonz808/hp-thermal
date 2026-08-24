@@ -67,6 +67,7 @@ fn main() {
             args.get(2).map(String::as_str),
         ),
         Some("gate") => gate::run(&args),
+        Some("mal-acks") => gate::mal_acks_run(&args),
         Some("explore") => explore::run(&args),
         Some("monitor-vuln") => monitor::run(&args),
         Some("freeze") => freeze::run(&args),
@@ -110,6 +111,9 @@ fn main() {
             );
             eprintln!(
                 "  gate --base <TOOLS.lock>  3-axis candidate gate vs supply-chain/evidence (#241)"
+            );
+            eprintln!(
+                "  mal-acks --tool <t> --digest <sha256>  acked engines from the evidence lattice (#278)"
             );
             eprintln!("  verify-caps <EXE> [--manifest <p>]  per-binary caps manifest gate (#245)");
             eprintln!(

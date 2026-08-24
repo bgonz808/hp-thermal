@@ -248,6 +248,77 @@ fn ack_covers_caps(acks: &Acks, digest: &str) -> bool {
         .any(|a| s(a, &["axis"]) == "caps" && s(a, &["product", "digest"]) == digest)
 }
 
+/// Engines with a quality-passing mal ack for `digest` — the ONE mal-ack semantics,
+/// shared by the gate (ack_covers_mal) and the weekly vt-monitor (#278). Sorted, deduped.
+pub(crate) fn mal_acked_engines(acks: &Acks, digest: &str) -> Vec<String> {
+    let mut out: Vec<String> = acks
+        .entries
+        .iter()
+        .filter(|a| s(a, &["axis"]) == "mal" && s(a, &["product", "digest"]) == digest)
+        .map(|a| s(a, &["finding", "engine"]).to_string())
+        .filter(|e| !e.is_empty())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// `xtask mal-acks --tool <name> --digest <sha256> [--evidence-dir <dir>]`
+///
+/// Prints the acked engine names (one per line) for the given product digest, read from
+/// the SAME evidence lattice the gate consults (supply-chain/evidence/<tool>/acks.jsonl).
+/// #278: retires the parallel flat-file lattice the monitor used to read.
+///
+/// Fail direction (fail-SECURE for a monitor): any problem — unreadable lattice, malformed
+/// JSONL, quality-rejected entries — yields FEWER acked engines, never more, so detections
+/// page rather than silently pass. Problems are surfaced on stderr; exit is 0 unless the
+/// arguments themselves are invalid.
+pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
+    let mut tool: Option<&str> = None;
+    let mut digest: Option<&str> = None;
+    let mut dir = "supply-chain/evidence".to_string();
+    let mut it = args.iter().skip(1); // skip the subcommand token
+    while let Some(a) = it.next() {
+        match a.as_str() {
+            "--tool" => tool = it.next().map(String::as_str),
+            "--digest" => digest = it.next().map(String::as_str),
+            "--evidence-dir" => {
+                if let Some(d) = it.next() {
+                    dir = d.clone();
+                }
+            }
+            other => {
+                eprintln!("mal-acks: unknown argument '{other}'");
+                return 2;
+            }
+        }
+    }
+    let (Some(tool), Some(digest)) = (tool, digest) else {
+        eprintln!("usage: xtask mal-acks --tool <name> --digest <sha256> [--evidence-dir <dir>]");
+        return 2;
+    };
+    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit()) {
+        eprintln!("mal-acks: --digest must be a full 64-hex sha256 (got {} chars)", digest.len());
+        return 2;
+    }
+    let path = Path::new(&dir).join(tool).join("acks.jsonl");
+    match load_acks(&path) {
+        Ok(acks) => {
+            for r in &acks.rejected {
+                eprintln!("warning: quality-rejected ack ignored (does not silence): {r}");
+            }
+            for e in mal_acked_engines(&acks, digest) {
+                println!("{e}");
+            }
+            0
+        }
+        Err(e) => {
+            eprintln!("warning: ack lattice unreadable ({e}) — treating as NO acks (fail-secure)");
+            0
+        }
+    }
+}
+
 /// The exact line a maintainer commits to sign off — printed by the failing gate.
 /// status_notes is deliberately empty: the quality bar refuses it until a human
 /// writes the reason (no rubber-stamp path).
@@ -971,5 +1042,65 @@ mod tests {
         let v = mal_verdict("t", &dir, &h, &acks);
         assert!(matches!(v, Verdict::Unevaluated(_)), "got {v:?}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod mal_acks_tests {
+    use super::*;
+
+    fn ack(digest: &str, engine: &str, notes: &str) -> String {
+        format!(
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"mal","finding":{{"engine":"{engine}","result":"Malicious"}},"product":{{"name":"t","digest":"{digest}"}},"status":"affected","status_notes":"{notes}","author":"a","timestamp":"2026-08-24"}}"#
+        )
+    }
+
+    #[test]
+    fn selects_only_matching_digest_and_axis() {
+        let d1 = "a".repeat(64);
+        let d2 = "b".repeat(64);
+        let dir = std::env::temp_dir().join("malacks-t1");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("acks.jsonl");
+        std::fs::write(
+            &p,
+            format!(
+                "{}
+{}
+{}
+",
+                ack(&d1, "APEX", "reason one"),
+                ack(&d2, "Zenbox", "other digest"),
+                // vuln-axis entry with same digest field shape must NOT match
+                r#"{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{"name":"X"},"product":{"name":"t","package":"p","version":"1"},"status":"affected","status_notes":"n","author":"a","timestamp":"t"}"#
+            ),
+        )
+        .unwrap();
+        let acks = load_acks(&p).unwrap();
+        assert_eq!(mal_acked_engines(&acks, &d1), vec!["APEX".to_string()]);
+        assert_eq!(mal_acked_engines(&acks, &d2), vec!["Zenbox".to_string()]);
+        assert!(mal_acked_engines(&acks, &"c".repeat(64)).is_empty());
+    }
+
+    #[test]
+    fn quality_rejected_ack_does_not_silence() {
+        let d = "d".repeat(64);
+        let dir = std::env::temp_dir().join("malacks-t2");
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("acks.jsonl");
+        std::fs::write(&p, format!("{}
+", ack(&d, "APEX", "TODO"))).unwrap();
+        let acks = load_acks(&p).unwrap();
+        assert_eq!(acks.rejected.len(), 1, "placeholder notes must be quality-rejected");
+        assert!(
+            mal_acked_engines(&acks, &d).is_empty(),
+            "a quality-rejected ack must NOT silence the engine"
+        );
+    }
+
+    #[test]
+    fn missing_lattice_means_no_acks() {
+        let acks = load_acks(Path::new("does/not/exist/acks.jsonl")).unwrap();
+        assert!(mal_acked_engines(&acks, &"e".repeat(64)).is_empty());
     }
 }
