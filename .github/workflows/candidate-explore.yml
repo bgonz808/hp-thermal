@@ -79,8 +79,18 @@ jobs:
             [ -n "${name:-}" ] || continue
             if [ -n "${ONLY:-}" ] && [ "$name" != "$ONLY" ]; then continue; fi
             echo "## $name (\`${rev:0:12}\`)" >> report.md
-            if ! curl -sSfL "https://raw.githubusercontent.com/$repo/$rev/Cargo.lock" -o "$name.lock"; then
-              echo "  UNEVALUATED: no root Cargo.lock at $repo@$rev" >> report.md
+            # Explore the lock the BINARY IS BUILT FROM (#259 doctrine, applied to discovery):
+            # when tools/locks/<name>.lock exists the producer builds --locked against it, so the
+            # upstream lock at $rev describes a resolution we do NOT ship. Reading upstream here
+            # re-proposes bumps already made AND -- the fail-open half -- cannot see advisories
+            # against the versions we froze FORWARD to.
+            if [ -f "tools/locks/$name.lock" ]; then
+              cp "tools/locks/$name.lock" "$name.lock"
+              echo "_lock: frozen \`tools/locks/$name.lock\` (the resolution this tool is built from)_" >> report.md
+            elif curl -sSfL "https://raw.githubusercontent.com/$repo/$rev/Cargo.lock" -o "$name.lock"; then
+              echo "_lock: upstream at \`${rev:0:12}\` (no frozen lock for this tool)_" >> report.md
+            else
+              echo "  UNEVALUATED: no root Cargo.lock at $repo@$rev and no frozen lock" >> report.md
               continue
             fi
             echo '```' >> report.md
