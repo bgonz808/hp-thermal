@@ -73,7 +73,15 @@ jobs:
               || true   # base has no tools/locks -> empty dir -> gate falls back to upstream
           else
             cp tools/TOOLS.lock /tmp/base-tools.lock
-            cp tools/locks/*.lock /tmp/base-locks/ 2>/dev/null || true
+            # A silent failure here leaves /tmp/base-locks EMPTY, and the gate would then compare the
+            # head's FROZEN locks against the base's UPSTREAM resolution -- a wrong baseline that can
+            # hide a regression. A missing glob (base had no frozen locks) is the ONLY acceptable
+            # reason for zero files, so distinguish it from a real copy failure.
+            if compgen -G 'tools/locks/*.lock' > /dev/null; then
+              cp tools/locks/*.lock /tmp/base-locks/ \n                || { echo "::error::failed to stage base frozen locks - refusing to gate on a wrong baseline"; exit 1; }
+            else
+              echo "base commit has no tools/locks/*.lock - base side will use upstream locks"
+            fi
           fi
           # Capture the verdict, always produce the report; enforcement is the last step
           # so the comment posts even when the gate blocks.
