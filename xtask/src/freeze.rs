@@ -220,6 +220,8 @@ pub fn run(args: &[String]) -> i32 {
     let mut now_epoch: i64 = 0;
     let mut allow_added = false;
     let mut dry_run = false;
+    let mut soak_overridden = false;
+    let mut now_overridden = false;
     let mut it = args.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -236,8 +238,17 @@ pub fn run(args: &[String]) -> i32 {
                     out_dir = v.into();
                 }
             }
-            "--soak-days" => soak = it.next().and_then(|v| v.parse().ok()).unwrap_or(soak),
-            "--now-epoch" => now_epoch = it.next().and_then(|v| v.parse().ok()).unwrap_or(0),
+            // TIME/POLICY OVERRIDES ARE RESEARCH-ONLY (see the guard below `--dry-run`):
+            // they can only ever produce a report, never a written lock. Tracked so the guard
+            // can tell "maintainer passed a value" from "default".
+            "--soak-days" => {
+                soak = it.next().and_then(|v| v.parse().ok()).unwrap_or(soak);
+                soak_overridden = true;
+            }
+            "--now-epoch" => {
+                now_epoch = it.next().and_then(|v| v.parse().ok()).unwrap_or(0);
+                now_overridden = now_epoch != 0;
+            }
             // Escape hatch for a deliberate, reviewed trade — never the default.
             "--allow-added-advisories" => allow_added = true,
             // Evaluate + report the full delta, write NOTHING. The safe way to try a batch:
@@ -249,12 +260,34 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
     }
+    // FAIL-CLOSED (#264): a soak verdict computed against overridden time or a loosened
+    // threshold is a RESEARCH result, not a safety result. Such a run may print a report but
+    // must never produce a lock, because a lock carries no record of the clock that judged it
+    // -- downstream (gate, producer, bless) would read a forged-soak lock as indistinguishable
+    // from an honest one. Refusing to WRITE is the property that makes the override safe: it
+    // cannot manufacture a belief in safety that was never checked.
+    if (now_overridden || soak_overridden) && !dry_run {
+        eprintln!(
+            "freeze: --now-epoch / --soak-days are research-only overrides and require --dry-run.
+                    A lock records no evidence of the clock or threshold used, so a written lock
+                    must always be judged by real time against the committed policy (#264)."
+        );
+        return 2;
+    }
     if tool.is_empty() || repo.is_empty() || rev.is_empty() || directives.is_empty() {
         eprintln!(
             "usage: cargo xtask freeze --tool <name> --repo <owner/repo> --rev <sha> \\\n\
              \x20         --update <pkg>[@cur]=<ver> [--update ...] [--soak-days N] [--out-dir DIR] [--dry-run]"
         );
         return 2;
+    }
+    if now_overridden || soak_overridden {
+        println!(
+            "# RESEARCH RUN -- overridden instruments: now-epoch={} soak-days={}. Dry-run only;
+             # no lock can be written from this run, and its soak verdicts are NOT safety claims.",
+            if now_overridden { now_epoch.to_string() } else { "real".into() },
+            soak
+        );
     }
     if now_epoch == 0 {
         now_epoch = std::time::SystemTime::now()
