@@ -854,6 +854,11 @@ jobs:
           sha: ${{ github.sha }}
 
   publish:
+    # JUDGMENT GATE (#261) -- deliberately a DISTINCT environment from `sign`. Signing attests
+    # "these bytes are ours"; publishing attests "these bytes go to users". Separating them keeps
+    # the two approvals independently revocable and independently recorded, so provenance can
+    # answer which decision was made, not merely that someone approved something.
+    environment: release-publish
     needs: [verify, binskim-release, attest-sarif]
     runs-on: windows-2025
     permissions:
