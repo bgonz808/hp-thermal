@@ -46,7 +46,13 @@ struct Canary {
 
 const CANARIES: &[Canary] = &[Canary {
     tool: "cargo-audit",
-    args: &["audit", "--no-fetch", "--file", "{fixture}"],
+    // NO `--no-fetch`: the canary needs a REAL advisory database. On a cold runner
+    // there is none, and cargo-audit then fails to load it -- exiting non-zero while
+    // having evaluated nothing. That is precisely the state this canary exists to
+    // catch, and it is what the first CI run found (the same cold-DB defect that
+    // silently emptied the exploration reports, #287). Fetching costs a network round
+    // trip and buys the difference between a real detection and a plausible-looking one.
+    args: &["audit", "--file", "{fixture}"],
     fixture: "supply-chain/canaries/vuln-audit.lock",
     // The advisory ID, not a phrase like "vulnerability found": wording is cosmetic and
     // changes between releases, whereas the ID is the finding's identity -- the same
