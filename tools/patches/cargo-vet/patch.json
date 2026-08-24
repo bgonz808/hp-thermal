@@ -1,0 +1,30 @@
+{
+  "schema": "hp-thermal/tool-patch/v1",
+  "tool": "cargo-vet",
+  "applies_to_rev": "28f617ea97392d527799649db588a6dbb695da8d",
+  "reason": "discharge manifest technical lag: reqwest 0.11 (hyper 0.14 stack) pinned h2 ^0.3 / rustls ^0.20 / ring 0.16, and indicatif 0.17 carried unmaintained number_prefix; the two bumps take the tree from 20 advisory instances to 0 (measured at advisory-db bf5c0d24)",
+  "intents": [
+    {
+      "crate": "reqwest",
+      "min": "0.12"
+    },
+    {
+      "crate": "indicatif",
+      "min": "0.18"
+    },
+    {
+      "crate": "windows-sys",
+      "feature": "Win32_System_IO",
+      "note": "upstream manifest under-declares this feature; LockFileEx is gated on it in windows-sys 0.59 and compiled upstream only via feature-unification from a co-consumer our bumps moved (see hp-thermal#255)"
+    }
+  ],
+  "shed_when": "upstream's manifest satisfies the intents natively \u2014 git apply --check will conflict the moment those lines change upstream; delete this directory in the same PR that adopts the newer rev",
+  "refs": [
+    "#255",
+    "#264",
+    "mozilla/cargo-vet#645",
+    "hp-thermal#255 item 7"
+  ],
+  "author": "bgonz808",
+  "timestamp": "2026-08-23"
+}
