@@ -47,6 +47,11 @@ jobs:
         env:
           TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
         run: |
+          # GitHub runs `shell: bash` as `bash -e -o pipefail`, so a non-zero exit ANYWHERE
+          # aborts the step. cargo-vet exits non-zero whenever crates remain unvetted, which is
+          # the normal state here -- and this workflow's deliverable is the refreshed lock, not
+          # the verdict. Disable -e and handle the exit code explicitly.
+          set +e
           set -uo pipefail
           CARGO="$(rustup which cargo)"
           export CARGO
@@ -55,6 +60,8 @@ jobs:
           # A non-zero exit here is EXPECTED while crates remain unvetted; the artifact is the
           # deliverable, so do not let that exit status hide it.
           "$TOOLS_DIR/cargo-vet.exe" vet 2>&1 | tail -80
+          vet_rc=${PIPESTATUS[0]}
+          echo "cargo-vet exit=$vet_rc (non-zero is expected while crates remain unvetted)"
           after=$(sha256sum supply-chain/imports.lock | cut -d' ' -f1)
           echo "imports.lock sha256 before=$before"
           echo "imports.lock sha256 after =$after"
@@ -66,6 +73,9 @@ jobs:
           echo "bytes: $(wc -c < supply-chain/imports.lock)"
 
       - name: Publish the refreshed store for review
+        # The refreshed lock is the DELIVERABLE; vet's verdict is informational in this flow.
+        # Publish regardless of what the verdict was, or the run produces nothing to review.
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # actions/upload-artifact v4.6.2
         with:
           name: vet-store-refreshed
