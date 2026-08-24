@@ -31,6 +31,14 @@ Naming and structure follow the ecosystem's content-addressed / supply-chain con
   800-131A / SLSA / in-toto) and borrow git/OCI's *unambiguous-resolution* discipline for
   locators — never git's SHA-1. See #244.
 
+## Fail-direction matrix
+
+[`FAIL-DIRECTIONS.md`](FAIL-DIRECTIONS.md) — what every enforcement mechanism does when it
+fails or lacks data, and whether that direction is secure. Every row is anchored to a
+pinning unit test or a tracked issue (unanchored rows are not accepted), and any PR that
+changes a mechanism's failure behavior updates its row in the same diff. The OPEN rows are
+the enforcement layer's own burn-down list.
+
 ## The gate engines (`cargo xtask …`, first-party Rust — no external tool, no interpreter)
 
 - **`gate --base <TOOLS.lock>`** (#241) — 3-axis candidate evaluation (vuln/caps/mal)
