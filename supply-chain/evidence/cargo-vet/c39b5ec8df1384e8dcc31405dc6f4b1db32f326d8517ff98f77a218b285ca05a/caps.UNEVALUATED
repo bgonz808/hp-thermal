@@ -1,0 +1,14 @@
+UNEVALUATED (fail-secure, #50 / #255 item-instrument rule): the cackle source-vantage
+inventory for the keystone-patched tree could not be produced with a trustworthy
+instrument — `--auto-accept-fixes` mutated the [api.*] definitions (re-adding the broad
+bare `core` matcher plus mio::net/tokio::net), which the byte-identity assert rejects.
+A poisoned instrument yields an untrustworthy inventory, so no caps.toml is recorded here.
+
+This does NOT gate the bless: the BINARY-vantage caps axis (verify-caps at the producer,
+the fail-closed gate) PASSED against the maintainer-signed manifest
+supply-chain/policy/caps/cargo-vet.json (#270) — 17 imports, exact-match, no denied
+functions, no undeclared dynamic resolution. Source-vantage is supplementary (#50) and
+recorded as no-data here rather than as a clean result.
+
+Follow-up (#50): curate a pinned, non-auto-accept cackle instrument (qualified paths only,
+no bare `core`) and regenerate the source inventory.
