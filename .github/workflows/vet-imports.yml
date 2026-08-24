@@ -60,7 +60,11 @@ jobs:
           # the write. `regenerate imports` is the command whose JOB is to fetch every configured
           # source and rewrite the lock, so it works even while crates remain unvetted -- which
           # is exactly the chicken-and-egg this flow has to break.
-          "$TOOLS_DIR/cargo-vet.exe" regenerate imports 2>&1 | tail -40
+          # NOTE the argv shape: this binary is a CARGO SUBCOMMAND, so `vet` must be argv[1]
+          # even when invoked directly. `cargo-vet.exe regenerate imports` fails with
+          # "unrecognized subcommand 'regenerate'"; `cargo-vet.exe vet regenerate imports`
+          # is the same command Cargo would run as `cargo vet regenerate imports`.
+          "$TOOLS_DIR/cargo-vet.exe" vet regenerate imports 2>&1 | tail -40
           regen_rc=${PIPESTATUS[0]}
           echo "regenerate imports exit=$regen_rc"
           # Then report the resulting posture (informational here; the GATE is what judges).
