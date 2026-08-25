@@ -37,7 +37,9 @@ jobs:
       # cargo-auditable / SBOM needed here.
       - name: Build a representative release binary
         working-directory: app
-        run: cargo +${{ steps.pin.outputs.channel }} build --release --target x86_64-pc-windows-msvc
+        env:
+          CHANNEL: ${{ steps.pin.outputs.channel }}
+        run: cargo "+$CHANNEL" build --release --target x86_64-pc-windows-msvc
 
       # EPHEMERAL RUNNER ONLY: exclude the harness's temp workspace from Defender so real-time
       # protection can't quarantine the throwaway exe copy or the forwarding proxy mid-test. This

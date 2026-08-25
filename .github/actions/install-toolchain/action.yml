@@ -23,6 +23,13 @@ runs:
     - name: Verify + install the pinned toolchain
       id: pin
       shell: bash
+      # Inputs reach the shell through the ENVIRONMENT, never through ${{ }} expansion into
+      # the script body. Expanding a template directly into `run:` splices caller-controlled
+      # text into the command before bash ever parses it, so a crafted input becomes shell
+      # code rather than a value -- template injection. Caught here by zizmor, in this very
+      # file, which is a fair argument for keeping that scanner blocking.
+      env:
+        COMPONENTS: ${{ inputs.components }}
       run: |
         set -euo pipefail
         lock=tools/TOOLCHAIN.lock
@@ -61,7 +68,8 @@ runs:
         rm -f channel-manifest.toml
 
         args=""
-        for c in ${{ inputs.components }}; do args="$args -c $c"; done
+        # Quoted expansion of an env var: the value is data, never syntax.
+        for c in ${COMPONENTS:-}; do args="$args -c $c"; done
         # shellcheck disable=SC2086
         rustup toolchain install "$channel" $args
         echo "installed $channel (manifest digest verified)"
