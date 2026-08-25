@@ -61,7 +61,9 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain
-        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+        uses: ./.github/actions/install-toolchain
+        with:
+          components: "rust-src"
 
       # cyclonedx-rust-cargo's deep test-snapshot paths exceed Windows MAX_PATH during the
       # `cargo install --git` checkout. Ephemeral runner, destroyed after the job.
@@ -262,7 +264,9 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain
-        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+        uses: ./.github/actions/install-toolchain
+        with:
+          components: "rust-src"
 
       - name: Build linux tools (content-addressed)
         shell: bash

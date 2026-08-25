@@ -1,0 +1,30 @@
+# TOOLCHAIN.lock — the Rust toolchain, pinned by CONTENT rather than by name (#267).
+#
+# WHY THIS EXISTS. `rustup toolchain install nightly-YYYY-MM-DD` names a channel; rustup then
+# fetches that channel's manifest and verifies each COMPONENT against the sha256 the manifest
+# states. What it does not do by default is verify the MANIFEST itself against anything we
+# committed — so the manifest is trusted because it arrived, which is precisely the property
+# #221 rejects for every other input.
+#
+# Committing the manifest digest here turns the pin into a content commitment: reviewed into
+# this repo, and checked before install. Note what the check is worth: the .sha256 sidecar
+# published beside the manifest proves nothing on its own (same server, same trust domain).
+# The value is that THIS digest was reviewed in a pull request.
+#
+# SECOND PURPOSE, equally load-bearing: this file is the single source of the channel name.
+# Before it existed the channel was hardcoded in 11 workflow steps plus app/rust-toolchain.toml
+# — twelve places that could drift, where a partial bump would silently build with a toolchain
+# other than the one declared.
+#
+# Fields:  channel  manifest-url  sha256
+#   channel      — the rustup channel; MUST match app/rust-toolchain.toml.
+#   manifest-url — canonical dist path for that channel's manifest.
+#   sha256       — digest of the manifest, reviewed at commit time. A mismatch fails closed:
+#                  either upstream re-published (which we want to know about) or the fetch
+#                  was tampered with (which we very much want to know about).
+#
+# Bumping: change all three fields in one reviewed PR together with app/rust-toolchain.toml.
+# See #301 for the full candidate-evaluation flow a bump should traverse.
+channel       nightly-2026-07-23
+manifest-url  https://static.rust-lang.org/dist/2026-07-23/channel-rust-nightly.toml
+sha256        a66a873f03170e9ddd3cc1fb8dc2395edda872b43ba239e4fa0a3f47971e728a

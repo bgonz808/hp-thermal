@@ -45,7 +45,7 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain
-        run: rustup toolchain install nightly-2026-07-23
+        uses: ./.github/actions/install-toolchain
 
       - name: Fetch + verify cargo-audit (digest-pinned, fail-closed)
         id: tools
@@ -76,7 +76,7 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain
-        run: rustup toolchain install nightly-2026-07-23
+        uses: ./.github/actions/install-toolchain
 
       # #221 (maintainer-declared standard): NOTHING runs in CI unless digest-pinned via
       # TOOLS.lock. A crates.io version pin is a NAME the registry resolves (bytes + checksum

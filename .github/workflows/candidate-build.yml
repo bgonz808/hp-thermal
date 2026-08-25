@@ -39,7 +39,9 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain (producer parity)
-        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+        uses: ./.github/actions/install-toolchain
+        with:
+          components: "rust-src"
 
       - name: Build the candidate exactly as the producer would
         shell: bash

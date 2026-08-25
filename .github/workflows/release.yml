@@ -120,7 +120,9 @@ jobs:
           fetch-depth: 0   # full history so build.rs `git rev-list --count HEAD` is accurate
 
       - name: Install pinned toolchain + components
-        run: rustup toolchain install nightly-2026-07-23 -c rust-src -c clippy -c rustfmt
+        uses: ./.github/actions/install-toolchain
+        with:
+          components: "rust-src clippy rustfmt"
 
       # Enforce dependency locking: fails if Cargo.lock is stale / would change. Nothing
       # gets built or published against an unpinned dependency graph.
