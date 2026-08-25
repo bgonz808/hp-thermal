@@ -179,7 +179,10 @@ jobs:
             case " $BUILD_STD_TOOLS " in
               *" $name "*)
                 # build-std requires an explicit --target; it cannot use the host default.
-                std_args=(-Z build-std=std,panic_abort --target x86_64-pc-windows-msvc)
+                # The comma belongs to the cargo flag value, not to the array. Quoting says
+                # so explicitly -- unquoted, shellcheck reads it as a mis-typed element
+                # separator (SC2054), and so would a human skimming it.
+                std_args=(-Z "build-std=std,panic_abort" --target x86_64-pc-windows-msvc)
                 tool_rustflags="$tool_rustflags -Z stack-protector=strong -Z deny-partial-mitigations=stack-protector,control-flow-guard"
                 echo "build-std ENABLED for $name (whole-binary canaries + coverage assertion)"
                 ;;
