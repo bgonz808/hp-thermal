@@ -170,11 +170,16 @@ jobs:
             # cost a full cycle to bisect. Add a name here once it has been shown to work.
             BUILD_STD_TOOLS="cargo-auditable"
             tool_rustflags="$RUSTFLAGS"
-            std_args=""
+            # An ARRAY, not a string. A string would have to be left unquoted at the call
+            # site to split into separate arguments, and an unquoted expansion also globs --
+            # so a stray matching file in the working directory could rewrite the build
+            # command. The array carries the word boundaries itself, so the expansion stays
+            # quoted. (Same fix as the toolchain action; shellcheck SC2086 caught it here.)
+            std_args=()
             case " $BUILD_STD_TOOLS " in
               *" $name "*)
                 # build-std requires an explicit --target; it cannot use the host default.
-                std_args="-Z build-std=std,panic_abort --target x86_64-pc-windows-msvc"
+                std_args=(-Z build-std=std,panic_abort --target x86_64-pc-windows-msvc)
                 tool_rustflags="$tool_rustflags -Z stack-protector=strong -Z deny-partial-mitigations=stack-protector,control-flow-guard"
                 echo "build-std ENABLED for $name (whole-binary canaries + coverage assertion)"
                 ;;
@@ -208,9 +213,9 @@ jobs:
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1 \
                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot $std_args
+              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}"
             else
-              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot $std_args
+              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}"
             fi
             d=$(sha256sum "./toolroot/bin/$name.exe" | cut -d' ' -f1)
             # #225: digest computed FIRST, the asset name derives from it; consumers re-derive
