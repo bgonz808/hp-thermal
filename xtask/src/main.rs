@@ -16,6 +16,7 @@ mod vsa;
 // evidence store). Policy-as-code: the verdict algebra lives here, unit-tested,
 // not in workflow bash. See gate.rs.
 mod gate;
+mod hardening;
 
 // #245: per-binary capability-manifest gate (binary vantage of the #241 caps axis).
 // Measures a binary's import surface against a committed manifest, fails closed on
@@ -70,6 +71,7 @@ fn main() {
             args.get(2).map(String::as_str),
         ),
         Some("canary") => canary::run(&args),
+        Some("verify-hardening-flags") => hardening::run(&args),
         Some("toolchain-advisories") => toolchain::run(&args),
         Some("gate") => gate::run(&args),
         Some("mal-acks") => gate::mal_acks_run(&args),
