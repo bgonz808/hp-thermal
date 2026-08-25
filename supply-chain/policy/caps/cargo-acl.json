@@ -1,0 +1,27 @@
+{
+  "allow_import_prefixes": [],
+  "allow_imports": [
+    "ld-linux-x86-64.so.2",
+    "libc.so.6",
+    "libgcc_s.so.1"
+  ],
+  "binary": "cargo-acl",
+  "deny_functions": [
+    "ptrace",
+    "process_vm_writev",
+    "process_vm_readv",
+    "memfd_create",
+    "kcmp"
+  ],
+  "expected_dynamic": [
+    "dlsym"
+  ],
+  "format": "elf",
+  "hardening": [
+    "BIND_NOW",
+    "NX_STACK",
+    "PIE",
+    "RELRO"
+  ],
+  "schema": "hp-thermal/caps-manifest/v1"
+}
