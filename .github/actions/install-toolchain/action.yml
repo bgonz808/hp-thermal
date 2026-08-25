@@ -38,10 +38,13 @@ runs:
         channel=$(awk '$1=="channel"{print $2; exit}' "$lock")
         url=$(awk '$1=="manifest-url"{print $2; exit}' "$lock")
         want=$(awk '$1=="sha256"{print $2; exit}' "$lock")
-        for v in channel url want; do
-          eval "val=\${$v:-}"
-          [ -n "$val" ] || { echo "::error::$lock has no '$v' field"; exit 1; }
-        done
+        # Explicit checks rather than `eval "val=\${$v:-}"`. The loop variable came from a
+        # literal list, so there was no injection vector -- but eval in a script that gates
+        # what compiler gets installed is a hazard waiting for the next edit to arm it, and
+        # three straight-line checks are clearer than the indirection they replaced.
+        [ -n "$channel" ] || { echo "::error::$lock has no 'channel' field"; exit 1; }
+        [ -n "$url" ]     || { echo "::error::$lock has no 'manifest-url' field"; exit 1; }
+        [ -n "$want" ]    || { echo "::error::$lock has no 'sha256' field"; exit 1; }
         echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
         # DRIFT CHECK. app/rust-toolchain.toml is what cargo obeys locally; this lock is what
@@ -67,9 +70,28 @@ runs:
         fi
         rm -f channel-manifest.toml
 
-        args=""
-        # Quoted expansion of an env var: the value is data, never syntax.
-        for c in ${COMPONENTS:-}; do args="$args -c $c"; done
-        # shellcheck disable=SC2086
-        rustup toolchain install "$channel" $args
+        # Routing the input through the environment stopped it becoming shell SYNTAX, which
+        # was the injection. It did not stop it becoming unintended ARGUMENTS: an unquoted
+        # expansion still word-splits and globs, so a component of `--force` or `*` would have
+        # been handed to rustup as a flag or a filename list. Neither is code execution, but
+        # neither is what the caller asked for.
+        #
+        # So: split explicitly, validate each token against a component-name charset, and
+        # build an ARRAY so nothing is ever re-split on the command line. A token that is not
+        # a plain component name is refused rather than sanitised -- we cannot know what a
+        # caller meant by `--force`, only that it is not a component.
+        read -ra _comps <<< "${COMPONENTS:-}"
+        args=()
+        for c in ${_comps[@]+"${_comps[@]}"}; do
+          [ -n "$c" ] || continue
+          case "$c" in
+            [A-Za-z0-9]*) : ;;
+            *) echo "::error::refusing component name '$c': must start alphanumeric"; exit 1 ;;
+          esac
+          case "$c" in
+            *[!A-Za-z0-9._-]*) echo "::error::refusing component name '$c': illegal character"; exit 1 ;;
+          esac
+          args+=(-c "$c")
+        done
+        rustup toolchain install "$channel" ${args[@]+"${args[@]}"}
         echo "installed $channel (manifest digest verified)"
