@@ -37,6 +37,7 @@
   "format": "pe",
   "hardening": [
     "ASLR_DYNAMICBASE",
+    "CET_COMPAT",
     "CONTROL_FLOW_GUARD",
     "DEP_NX",
     "HIGH_ENTROPY_VA"
