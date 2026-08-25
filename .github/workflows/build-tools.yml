@@ -149,6 +149,36 @@ jobs:
             # Build only this job's target.
             [ "$target" = "windows-x86_64" ] || continue
             echo "::group::building $name @ $rev"
+            # BUILD-STD OPT-IN (#316), per tool rather than fleet-wide.
+            #
+            # Rebuilding std lets two more mitigations actually cover the whole binary:
+            #   -Z stack-protector=strong        canaries reach std, not just our crates
+            #   -Z deny-partial-mitigations      asserts that coverage instead of assuming it
+            # Both are meaningless without build-std: canaries would stop at the std boundary,
+            # and the assertion fails against prebuilt std BY DESIGN, which is the check working.
+            #
+            # Why these tools deserve it: every one is a PARSER fed input we do not control --
+            # cargo-audit reads lockfiles and a network-fetched advisory-db, cargo-vet reads
+            # audits.toml from four third-party orgs, cyclonedx reads arbitrary crate manifests.
+            # A memory-safety bug reachable from attacker-influenceable input is exactly what
+            # canaries defend, and per #223 a subverted checker's worst failure is returning
+            # "clean" rather than crashing.
+            #
+            # PER-TOOL, not fleet-wide, deliberately: `cargo install --git` plus -Z build-std is
+            # a less-travelled combination, and a failure would be specific to one tool's
+            # dependency tree. Flipping all five at once would report only "the run failed" and
+            # cost a full cycle to bisect. Add a name here once it has been shown to work.
+            BUILD_STD_TOOLS="cargo-auditable"
+            tool_rustflags="$RUSTFLAGS"
+            std_args=""
+            case " $BUILD_STD_TOOLS " in
+              *" $name "*)
+                # build-std requires an explicit --target; it cannot use the host default.
+                std_args="-Z build-std=std,panic_abort --target x86_64-pc-windows-msvc"
+                tool_rustflags="$tool_rustflags -Z stack-protector=strong -Z deny-partial-mitigations=stack-protector,control-flow-guard"
+                echo "build-std ENABLED for $name (whole-binary canaries + coverage assertion)"
+                ;;
+            esac
             if [ -f "tools/locks/$name.lock" ]; then
               # FROZEN-LOCK build (#241): upstream's own Cargo.lock pins versions we have
               # deliberately moved off (e.g. yanked/soundness-fixed deps upstream still
@@ -178,9 +208,9 @@ jobs:
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1 \
                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot
+              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot $std_args
             else
-              cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
+              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot $std_args
             fi
             d=$(sha256sum "./toolroot/bin/$name.exe" | cut -d' ' -f1)
             # #225: digest computed FIRST, the asset name derives from it; consumers re-derive
