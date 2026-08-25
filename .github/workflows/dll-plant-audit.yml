@@ -39,7 +39,11 @@ jobs:
         working-directory: app
         env:
           CHANNEL: ${{ steps.pin.outputs.channel }}
-        run: cargo "+$CHANNEL" build --release --target x86_64-pc-windows-msvc
+        # NOTE the shell: this workflow runs on windows, so steps default to pwsh, where
+        # $CHANNEL is an (undefined) PowerShell variable rather than an environment
+        # reference. Env vars are $env:NAME here. Reading it the bash way produced
+        # `cargo "+" build` and "invalid toolchain name ''".
+        run: cargo "+$env:CHANNEL" build --release --target x86_64-pc-windows-msvc
 
       # EPHEMERAL RUNNER ONLY: exclude the harness's temp workspace from Defender so real-time
       # protection can't quarantine the throwaway exe copy or the forwarding proxy mid-test. This
