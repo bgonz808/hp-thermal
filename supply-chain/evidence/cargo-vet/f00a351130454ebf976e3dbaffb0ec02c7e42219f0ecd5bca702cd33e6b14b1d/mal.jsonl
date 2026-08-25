@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-vet","sha256":"f00a351130454ebf976e3dbaffb0ec02c7e42219f0ecd5bca702cd33e6b14b1d"},"panelDate":"2026-08-25","detections":{"malicious":1,"total":70},"flags":[{"engine":"Microsoft","result":"Trojan:Win32/Wacatac.C!ml"}],"sandbox":[]}

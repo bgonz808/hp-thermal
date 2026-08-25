@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-deny","sha256":"b64f99a91a04a7ff8c04138c82666f8889cfece86400aee4caabff1ba26f8701"},"panelDate":"2026-08-25","detections":{"malicious":0,"total":70},"flags":[],"sandbox":[]}
