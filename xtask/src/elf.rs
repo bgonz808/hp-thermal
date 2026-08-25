@@ -391,3 +391,242 @@ mod tests {
         assert!(program_headers(&b).is_none(), "an absurd phnum must be refused");
     }
 }
+
+// ---- synthetic fixtures: known-answer NEGATIVE controls for the parser (#245 / #223) ----
+//
+// Cross-validating against readelf proves the parser agrees with binutils on ONE real binary
+// -- and that binary happens to have every mitigation set. It therefore exercises only the
+// positive path: a parser hard-coded to return {PIE, NX_STACK, RELRO, BIND_NOW} would pass it
+// perfectly. What must ALSO be proven is that each property goes ABSENT when the corresponding
+// structure is absent or negated, and real builds do not readily produce such images.
+//
+// These fixtures are assembled byte-by-byte, each differing from a known-good image in exactly
+// one respect. Anything the parser gets wrong here is a wrong answer stated with confidence,
+// which is the failure mode that matters for a measurement feeding a gate.
+#[cfg(test)]
+mod fixtures {
+    use super::*;
+
+    const PH_OFF: u64 = 0x40;
+    const DYN_OFF: u64 = 0x400;
+    const PROP_OFF: u64 = 0x600;
+    const IMG: usize = 0x800;
+    const ET_EXEC: u16 = 2;
+
+    /// Build a minimal ELF64-LE image. PT_LOAD is an identity map (vaddr == offset) so address
+    /// translation is still exercised without obscuring which field a test is about.
+    fn synth(
+        e_type: u16,
+        extra_phdrs: &[(u32, u32)],
+        dynamic: &[(i64, u64)],
+        gnu_prop_bits: Option<u32>,
+    ) -> Vec<u8> {
+        let mut b = vec![0u8; IMG];
+        b[..4].copy_from_slice(&[0x7f, b'E', b'L', b'F']);
+        b[4] = 2; // ELFCLASS64
+        b[5] = 1; // ELFDATA2LSB
+        b[0x10..0x12].copy_from_slice(&e_type.to_le_bytes());
+        b[0x20..0x28].copy_from_slice(&PH_OFF.to_le_bytes());
+        b[0x36..0x38].copy_from_slice(&56u16.to_le_bytes());
+
+        let mut phdrs: Vec<(u32, u32, u64, u64, u64, u64)> =
+            vec![(PT_LOAD, 4, 0, 0, IMG as u64, IMG as u64)];
+        if !dynamic.is_empty() {
+            phdrs.push((
+                PT_DYNAMIC,
+                4,
+                DYN_OFF,
+                DYN_OFF,
+                (dynamic.len() * 16 + 16) as u64,
+                0,
+            ));
+        }
+        if gnu_prop_bits.is_some() {
+            phdrs.push((PT_GNU_PROPERTY, 4, PROP_OFF, PROP_OFF, 0x40, 0x40));
+        }
+        for (ty, fl) in extra_phdrs {
+            phdrs.push((*ty, *fl, 0, 0, 0, 0));
+        }
+        b[0x38..0x3A].copy_from_slice(&(phdrs.len() as u16).to_le_bytes());
+
+        for (i, (ty, fl, off, va, fsz, msz)) in phdrs.iter().enumerate() {
+            let o = PH_OFF as usize + i * 56;
+            b[o..o + 4].copy_from_slice(&ty.to_le_bytes());
+            b[o + 4..o + 8].copy_from_slice(&fl.to_le_bytes());
+            b[o + 8..o + 16].copy_from_slice(&off.to_le_bytes());
+            b[o + 16..o + 24].copy_from_slice(&va.to_le_bytes());
+            b[o + 32..o + 40].copy_from_slice(&fsz.to_le_bytes());
+            b[o + 40..o + 48].copy_from_slice(&msz.to_le_bytes());
+        }
+
+        let mut o = DYN_OFF as usize;
+        for (tag, val) in dynamic {
+            b[o..o + 8].copy_from_slice(&tag.to_le_bytes());
+            b[o + 8..o + 16].copy_from_slice(&val.to_le_bytes());
+            o += 16;
+        }
+        b[o..o + 16].copy_from_slice(&[0u8; 16]); // DT_NULL
+
+        if let Some(bits) = gnu_prop_bits {
+            let o = PROP_OFF as usize;
+            b[o..o + 4].copy_from_slice(&4u32.to_le_bytes()); // n_namesz for "GNU\0"
+            b[o + 4..o + 8].copy_from_slice(&16u32.to_le_bytes()); // n_descsz
+            b[o + 8..o + 12].copy_from_slice(&NT_GNU_PROPERTY_TYPE_0.to_le_bytes());
+            b[o + 12..o + 16].copy_from_slice(b"GNU\0");
+            b[o + 16..o + 20].copy_from_slice(&GNU_PROPERTY_X86_FEATURE_1_AND.to_le_bytes());
+            b[o + 20..o + 24].copy_from_slice(&4u32.to_le_bytes()); // pr_datasz
+            b[o + 24..o + 28].copy_from_slice(&bits.to_le_bytes());
+        }
+        b
+    }
+
+    /// A fully-hardened executable: the positive control the negatives are varied from.
+    fn good() -> Vec<u8> {
+        synth(
+            ET_DYN,
+            &[(PT_GNU_STACK, 6), (PT_GNU_RELRO, 4), (PT_INTERP, 4)],
+            &[(DT_FLAGS, DF_BIND_NOW), (DT_FLAGS_1, DF_1_PIE | DF_1_NOW)],
+            None,
+        )
+    }
+
+    #[test]
+    fn positive_control_reports_every_expected_mitigation() {
+        let h = elf_hardening(&good()).expect("synthetic image must be walkable");
+        for m in ["PIE", "NX_STACK", "RELRO", "BIND_NOW"] {
+            assert!(h.contains(m), "expected {m} in {h:?}");
+        }
+    }
+
+    #[test]
+    fn executable_stack_is_not_reported_as_nx() {
+        let b = synth(
+            ET_DYN,
+            &[(PT_GNU_STACK, 6 | PF_X), (PT_GNU_RELRO, 4), (PT_INTERP, 4)],
+            &[(DT_FLAGS_1, DF_1_PIE)],
+            None,
+        );
+        let h = elf_hardening(&b).unwrap();
+        assert!(
+            !h.contains("NX_STACK"),
+            "an executable stack must not read as NX: {h:?}"
+        );
+    }
+
+    #[test]
+    fn missing_gnu_stack_header_is_not_treated_as_protection() {
+        // No PT_GNU_STACK at all. The kernel then falls back to an architecture default that
+        // has historically been executable, so absence is the UNSAFE reading, not a neutral
+        // one. A parser that "helpfully" inferred NX here would invent a mitigation.
+        let b = synth(
+            ET_DYN,
+            &[(PT_GNU_RELRO, 4), (PT_INTERP, 4)],
+            &[(DT_FLAGS_1, DF_1_PIE)],
+            None,
+        );
+        let h = elf_hardening(&b).unwrap();
+        assert!(
+            !h.contains("NX_STACK"),
+            "absent header must not imply NX: {h:?}"
+        );
+    }
+
+    #[test]
+    fn shared_library_is_not_reported_as_pie() {
+        // The trap that ET_DYN alone falls into: a .so is also ET_DYN. Without DF_1_PIE or a
+        // program interpreter this is a library, not a position-independent EXECUTABLE.
+        let b = synth(
+            ET_DYN,
+            &[(PT_GNU_STACK, 6), (PT_GNU_RELRO, 4)],
+            &[(DT_FLAGS, DF_BIND_NOW)],
+            None,
+        );
+        let h = elf_hardening(&b).unwrap();
+        assert!(!h.contains("PIE"), "a shared library must not read as PIE: {h:?}");
+        // The unrelated mitigations must still be reported, so this is a precise miss rather
+        // than the parser failing wholesale.
+        assert!(h.contains("NX_STACK") && h.contains("RELRO"), "{h:?}");
+    }
+
+    #[test]
+    fn non_pie_executable_is_not_reported_as_pie() {
+        let b = synth(ET_EXEC, &[(PT_GNU_STACK, 6), (PT_INTERP, 4)], &[], None);
+        let h = elf_hardening(&b).unwrap();
+        assert!(!h.contains("PIE"), "ET_EXEC must never read as PIE: {h:?}");
+    }
+
+    #[test]
+    fn lazy_binding_is_not_reported_as_bind_now() {
+        let b = synth(
+            ET_DYN,
+            &[(PT_GNU_STACK, 6), (PT_INTERP, 4)],
+            &[(DT_FLAGS_1, DF_1_PIE)],
+            None,
+        );
+        let h = elf_hardening(&b).unwrap();
+        assert!(
+            !h.contains("BIND_NOW"),
+            "lazy binding must not read as BIND_NOW: {h:?}"
+        );
+    }
+
+    #[test]
+    fn each_bind_now_encoding_is_recognised() {
+        // Toolchains emit any of three encodings; missing one would silently under-report on
+        // binaries that are in fact hardened.
+        for dynamic in [
+            vec![(DT_BIND_NOW, 0u64), (DT_FLAGS_1, DF_1_PIE)],
+            vec![(DT_FLAGS, DF_BIND_NOW), (DT_FLAGS_1, DF_1_PIE)],
+            vec![(DT_FLAGS_1, DF_1_PIE | DF_1_NOW)],
+        ] {
+            let b = synth(ET_DYN, &[(PT_GNU_STACK, 6), (PT_INTERP, 4)], &dynamic, None);
+            let h = elf_hardening(&b).unwrap();
+            assert!(h.contains("BIND_NOW"), "encoding {dynamic:?} not recognised: {h:?}");
+        }
+    }
+
+    #[test]
+    fn missing_relro_is_reported_absent() {
+        let b = synth(
+            ET_DYN,
+            &[(PT_GNU_STACK, 6), (PT_INTERP, 4)],
+            &[(DT_FLAGS_1, DF_1_PIE)],
+            None,
+        );
+        assert!(!elf_hardening(&b).unwrap().contains("RELRO"));
+    }
+
+    #[test]
+    fn cet_properties_are_decoded_when_present() {
+        // cargo-acl has no CET, so this decoder is unreachable from our real binaries --
+        // exactly why a fixture is needed to know it works at all rather than merely never
+        // firing.
+        let b = synth(
+            ET_DYN,
+            &[(PT_GNU_STACK, 6), (PT_INTERP, 4)],
+            &[(DT_FLAGS_1, DF_1_PIE)],
+            Some(GNU_PROPERTY_X86_FEATURE_1_IBT | GNU_PROPERTY_X86_FEATURE_1_SHSTK),
+        );
+        let h = elf_hardening(&b).unwrap();
+        assert!(h.contains("CET_IBT") && h.contains("CET_SHSTK"), "{h:?}");
+
+        // IBT alone must not imply shadow stack: they are separately negotiable features.
+        let b = synth(
+            ET_DYN,
+            &[(PT_GNU_STACK, 6), (PT_INTERP, 4)],
+            &[(DT_FLAGS_1, DF_1_PIE)],
+            Some(GNU_PROPERTY_X86_FEATURE_1_IBT),
+        );
+        let h = elf_hardening(&b).unwrap();
+        assert!(h.contains("CET_IBT") && !h.contains("CET_SHSTK"), "{h:?}");
+    }
+
+    #[test]
+    fn absent_property_note_yields_no_cet_claim() {
+        let h = elf_hardening(&good()).unwrap();
+        assert!(
+            !h.contains("CET_IBT") && !h.contains("CET_SHSTK"),
+            "{h:?}"
+        );
+    }
+}
