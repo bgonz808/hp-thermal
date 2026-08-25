@@ -97,6 +97,27 @@ jobs:
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/tool-build
           AUDIT_DIR: ${{ steps.audit-tool.outputs.tools-dir }}
+          # HARDENING FOR THE TOOLS THEMSELVES (#300). Until now the producer set no RUSTFLAGS,
+          # so tools were built with default rustc settings while hp-thermal.exe got the flags in
+          # app/.cargo/config.toml -- measured result: every PE tool lacked Control Flow Guard,
+          # including cargo-auditable, which is the byte-producing tool that builds the release.
+          #
+          # control-flow-guard=checks: indirect-call protection (PE DllCharacteristics 0x4000).
+          # /DEPENDENTLOADFLAG:0x800: resolve statically-imported DLLs from System32 ONLY, from
+          #   the first load. This matters MORE for tools than for the app: tools execute in CI
+          #   from writable working directories, which is precisely the DLL-planting scenario.
+          #
+          # DELIBERATELY NOT +crt-static, though the app uses it. A statically linked CRT stops
+          # inheriting Microsoft's CRT security fixes -- the binary carries the vulnerable code
+          # until WE rebuild. The app accepts that trade for self-containment; tools run on
+          # ephemeral runners whose CRT is patched by the image, so dynamic linking gets those
+          # fixes for free. The DLL-planting concern that would otherwise argue for static is
+          # already answered by DEPENDENTLOADFLAG above.
+          #
+          # stack-protector is absent because it only covers the whole binary with -Z build-std,
+          # which rebuilds std per tool. Tracked separately rather than bundled: a cheap certain
+          # win should not wait on an expensive uncertain one.
+          RUSTFLAGS: "-C control-flow-guard=checks -C link-arg=/DEPENDENTLOADFLAG:0x800"
         run: |
           set -euo pipefail
           mkdir -p out toolroot
