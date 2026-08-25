@@ -59,7 +59,9 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain + rust-src
-        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+        uses: ./.github/actions/install-toolchain
+        with:
+          components: "rust-src"
 
       # Build the SAME hardened binary users get: app/.cargo/config.toml applies the mitigation
       # rustflags (CFG, stack-protector, crt-static, DEPENDENTLOADFLAG) + build-std, and the

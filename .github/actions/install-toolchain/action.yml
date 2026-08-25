@@ -1,0 +1,75 @@
+name: Install the pinned Rust toolchain (digest-verified)
+description: >
+  Reads tools/TOOLCHAIN.lock, verifies the channel manifest against the committed sha256,
+  then installs. Fails closed on any mismatch.
+
+inputs:
+  components:
+    description: Extra rustup components, space-separated (e.g. "rust-src clippy rustfmt").
+    required: false
+    default: ""
+
+outputs:
+  channel:
+    description: The channel that was installed, read from the lock.
+    value: ${{ steps.pin.outputs.channel }}
+
+runs:
+  using: composite
+  steps:
+    # Deliberately BASH, not xtask. The toolchain install necessarily precedes having a
+    # working cargo, so the verifier cannot itself be a cargo project without a bootstrap
+    # cycle. Same reason fetch-tools is bash.
+    - name: Verify + install the pinned toolchain
+      id: pin
+      shell: bash
+      # Inputs reach the shell through the ENVIRONMENT, never through ${{ }} expansion into
+      # the script body. Expanding a template directly into `run:` splices caller-controlled
+      # text into the command before bash ever parses it, so a crafted input becomes shell
+      # code rather than a value -- template injection. Caught here by zizmor, in this very
+      # file, which is a fair argument for keeping that scanner blocking.
+      env:
+        COMPONENTS: ${{ inputs.components }}
+      run: |
+        set -euo pipefail
+        lock=tools/TOOLCHAIN.lock
+        [ -f "$lock" ] || { echo "::error::$lock is missing (fail-closed: the pin IS the policy)"; exit 1; }
+
+        channel=$(awk '$1=="channel"{print $2; exit}' "$lock")
+        url=$(awk '$1=="manifest-url"{print $2; exit}' "$lock")
+        want=$(awk '$1=="sha256"{print $2; exit}' "$lock")
+        for v in channel url want; do
+          eval "val=\${$v:-}"
+          [ -n "$val" ] || { echo "::error::$lock has no '$v' field"; exit 1; }
+        done
+        echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
+        # DRIFT CHECK. app/rust-toolchain.toml is what cargo obeys locally; this lock is what
+        # CI installs. If they disagree, CI is not building what the repo declares -- a silent
+        # discrepancy that would make every downstream posture claim describe the wrong
+        # toolchain.
+        app=$(awk -F'"' '/^channel/{print $2; exit}' app/rust-toolchain.toml)
+        if [ "$app" != "$channel" ]; then
+          echo "::error::toolchain drift: TOOLCHAIN.lock says '$channel', app/rust-toolchain.toml says '$app'"
+          exit 1
+        fi
+
+        # CONTENT CHECK. rustup verifies each component against this manifest; nothing verifies
+        # the manifest against something WE reviewed. That is what this does.
+        curl -sSfL --max-time 120 "$url" -o channel-manifest.toml
+        got=$(sha256sum channel-manifest.toml | cut -d' ' -f1)
+        echo "manifest expected=$want"
+        echo "manifest got     =$got"
+        if [ "$got" != "$want" ]; then
+          echo "::error::channel manifest digest MISMATCH for $channel."
+          echo "::error::Either upstream re-published the manifest (verify and update the lock in a reviewed PR) or the fetch was tampered with. Refusing to install."
+          exit 1
+        fi
+        rm -f channel-manifest.toml
+
+        args=""
+        # Quoted expansion of an env var: the value is data, never syntax.
+        for c in ${COMPONENTS:-}; do args="$args -c $c"; done
+        # shellcheck disable=SC2086
+        rustup toolchain install "$channel" $args
+        echo "installed $channel (manifest digest verified)"

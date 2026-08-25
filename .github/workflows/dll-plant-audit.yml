@@ -27,14 +27,23 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain (+ rust-src for build-std)
-        run: rustup toolchain install nightly-2026-07-23 -c rust-src
+        id: pin
+        uses: ./.github/actions/install-toolchain
+        with:
+          components: "rust-src"
 
       # A plain build is representative for this audit: same import surface (incl. rstrtmgr/powrprof
       # delay-loaded) and the same /DEPENDENTLOADFLAG load-config as a release artifact. No
       # cargo-auditable / SBOM needed here.
       - name: Build a representative release binary
         working-directory: app
-        run: cargo +nightly-2026-07-23 build --release --target x86_64-pc-windows-msvc
+        env:
+          CHANNEL: ${{ steps.pin.outputs.channel }}
+        # NOTE the shell: this workflow runs on windows, so steps default to pwsh, where
+        # $CHANNEL is an (undefined) PowerShell variable rather than an environment
+        # reference. Env vars are $env:NAME here. Reading it the bash way produced
+        # `cargo "+" build` and "invalid toolchain name ''".
+        run: cargo "+$env:CHANNEL" build --release --target x86_64-pc-windows-msvc
 
       # EPHEMERAL RUNNER ONLY: exclude the harness's temp workspace from Defender so real-time
       # protection can't quarantine the throwaway exe copy or the forwarding proxy mid-test. This

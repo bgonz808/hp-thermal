@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain
-        run: rustup toolchain install nightly-2026-07-23
+        uses: ./.github/actions/install-toolchain
 
       - name: Fetch + verify cargo-vet (digest-pinned, fail-closed)
         id: tools
