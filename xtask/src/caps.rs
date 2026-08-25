@@ -40,7 +40,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
-use crate::{pe_delay_imported_dlls, pe_imported_dlls, pe_imported_functions};
+use crate::{
+    pe_delay_imported_dlls, pe_dll_characteristics, pe_imported_dlls, pe_imported_functions,
+};
 
 /// Injection/exfil primitives a normal local tool never imports. A compromised build
 /// adding one is caught even though the host DLL (kernel32/ntdll) is already allowed —
@@ -75,9 +77,52 @@ const DYN_APIS: &[&str] = &[
     "ldrgetprocedureaddress",
 ];
 
+/// CODEGEN HARDENING BITS carried in the PE optional header's `DllCharacteristics`.
+///
+/// These are emitted by the TOOLCHAIN and linker, not by our source, which makes them the
+/// one security property a dependency bump cannot touch and a toolchain bump silently can
+/// (#267). Treating them as part of the capability manifest turns "is the floor met?" into
+/// "has the posture CHANGED?" -- a floor cannot notice a mitigation that was gained and then
+/// lost again, because the floor never moved.
+///
+/// Stack canaries are deliberately absent: `-Z stack-protector` emits inline code with no
+/// PE-header bit, so it is enforced through build config and BinSkim instead. Recording only
+/// what is actually measurable here keeps the manifest honest.
+pub(crate) const HARDENING_BITS: &[(&str, u16)] = &[
+    ("ASLR_DYNAMICBASE", 0x0040),
+    ("HIGH_ENTROPY_VA", 0x0020),
+    ("DEP_NX", 0x0100),
+    ("CONTROL_FLOW_GUARD", 0x4000),
+];
+
+/// Mitigations that must be present on EVERY binary we produce, whatever a manifest says --
+/// the hardening analogue of BASELINE_DENY. A manifest can record additional posture; it can
+/// never sign away one of these.
+/// MEASURED, not aspirational. Every binary we currently produce sets these three, so the
+/// floor is enforceable today without weakening anything.
+///
+/// CONTROL_FLOW_GUARD is deliberately NOT here yet, and that is a recorded deficiency rather
+/// than an opinion: measured 2026-08-24, hp-thermal.exe sets CFG (our build config asks for
+/// it) while all five build tools do NOT, because they are produced by `cargo install` under
+/// default rustc settings. Putting CFG in the floor today would fail every tool immediately;
+/// leaving it undeclared would hide the gap. It is therefore captured per-binary in each
+/// manifest below, so the ratchet still fires on any change, and closing the gap for the
+/// tools is tracked separately -- it forces a full re-bless, since it changes every digest.
+const HARDENING_FLOOR: &[&str] = &["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA"];
+
+/// Decode `DllCharacteristics` into the set of mitigation names that are SET.
+pub(crate) fn hardening_from_bits(dllc: u16) -> BTreeSet<String> {
+    HARDENING_BITS
+        .iter()
+        .filter(|(_, bit)| dllc & bit != 0)
+        .map(|(name, _)| (*name).to_string())
+        .collect()
+}
+
 struct Measured {
     dlls: BTreeSet<String>,
     functions: BTreeSet<String>,
+    hardening: BTreeSet<String>,
 }
 
 /// Walk a PE's full import surface (static DLLs + delay-load DLLs + named functions),
@@ -90,7 +135,12 @@ fn measure_pe(bytes: &[u8]) -> Option<Measured> {
         .into_iter()
         .map(|f| f.to_ascii_lowercase())
         .collect();
-    Some(Measured { dlls, functions })
+    let hardening = hardening_from_bits(pe_dll_characteristics(bytes)?);
+    Some(Measured {
+        dlls,
+        functions,
+        hardening,
+    })
 }
 
 // ---- manifest (JSON, navigated as Value; serde derive stays off) ----
@@ -134,6 +184,7 @@ fn propose(binary: &str, m: &Measured) -> String {
         "allow_import_prefixes": prefixes.into_iter().collect::<Vec<_>>(),
         "deny_functions": BASELINE_DENY,
         "expected_dynamic": expected_dynamic,
+        "hardening": m.hardening.iter().collect::<Vec<_>>(),
     }))
     .unwrap_or_default()
 }
@@ -180,6 +231,46 @@ fn check(m: &Measured, manifest: &Value) -> Violations {
     for f in &m.functions {
         if DYN_APIS.contains(&f.as_str()) && !expected_dyn.contains(f) {
             v.push(format!("undeclared dynamic-resolution API: {f}"));
+        }
+    }
+
+    // CODEGEN HARDENING (#267). These bits come from the toolchain and linker, so this is
+    // where a toolchain bump that silently changes mitigation defaults becomes visible.
+    //
+    // A manifest with no `hardening` key is UNEVALUATED, not exempt: silently skipping the
+    // check for older manifests would make the weakest posture the easiest one to keep.
+    let declared_hardening = manifest.get("hardening").and_then(Value::as_array);
+    match declared_hardening {
+        None => v.push(
+            "manifest declares no `hardening` set (re-run without --manifest to propose one);              absent posture is UNEVALUATED, never exempt"
+                .to_string(),
+        ),
+        Some(_) => {
+            let declared: BTreeSet<String> = arr(manifest, "hardening").into_iter().collect();
+            // Floor first: a mitigation in HARDENING_FLOOR must be present on the BINARY no
+            // matter what the manifest says, so no sign-off can trade it away.
+            for f in HARDENING_FLOOR {
+                if !m.hardening.contains(*f) {
+                    v.push(format!(
+                        "MISSING BASELINE MITIGATION: {f} is not set on this binary (floor cannot be waived by a manifest)"
+                    ));
+                }
+            }
+            // Then exact match, both directions -- the same ratchet as imports. A LOST
+            // mitigation is a regression; a GAINED one is still a change that must be
+            // reviewed and recorded, or the manifest stops describing the artifact.
+            for d in &declared {
+                if !m.hardening.contains(d) {
+                    v.push(format!("hardening REGRESSED: manifest declares {d}, binary lacks it"));
+                }
+            }
+            for got in &m.hardening {
+                if !declared.contains(got) {
+                    v.push(format!(
+                        "hardening CHANGED: binary has {got}, manifest does not declare it (review + commit the new posture)"
+                    ));
+                }
+            }
         }
     }
     Violations(v)
@@ -282,6 +373,7 @@ mod tests {
         Measured {
             dlls: dlls.iter().map(|s| s.to_string()).collect(),
             functions: funcs.iter().map(|s| s.to_string()).collect(),
+            hardening: HARDENING_FLOOR.iter().map(|s| s.to_string()).collect(),
         }
     }
     fn manifest(json: &str) -> Value {
@@ -296,7 +388,7 @@ mod tests {
         );
         let man = manifest(
             r#"{"allow_imports":["kernel32.dll"],"allow_import_prefixes":["api-ms-win-"],
-                "expected_dynamic":["getprocaddress"]}"#,
+                "expected_dynamic":["getprocaddress"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#,
         );
         assert!(check(&meas, &man).0.is_empty());
     }
@@ -304,7 +396,7 @@ mod tests {
     #[test]
     fn off_allowlist_import_fails() {
         let meas = m(&["kernel32.dll", "winhttp.dll"], &[]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"]}"#);
+        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
         let v = check(&meas, &man).0;
         assert!(
             v.iter()
@@ -316,7 +408,7 @@ mod tests {
     fn stale_allow_entry_fails_ratchet() {
         // allowlist permits a DLL the binary no longer imports -> surface shrank, ratchet.
         let meas = m(&["kernel32.dll"], &[]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll","ole32.dll"]}"#);
+        let man = manifest(r#"{"allow_imports":["kernel32.dll","ole32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
         let v = check(&meas, &man).0;
         assert!(
             v.iter()
@@ -328,7 +420,7 @@ mod tests {
     fn denied_function_fails_even_on_allowed_dll() {
         // kernel32 is allowlisted, but importing a denied primitive from it is caught.
         let meas = m(&["kernel32.dll"], &["writeprocessmemory"]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"]}"#);
+        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
         let v = check(&meas, &man).0;
         assert!(
             v.iter()
@@ -340,7 +432,7 @@ mod tests {
     fn deny_cannot_be_weakened_below_baseline() {
         // manifest omits the denylist entirely — BASELINE_DENY still enforced.
         let meas = m(&["kernel32.dll"], &["createremotethread"]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"deny_functions":[]}"#);
+        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"deny_functions":[],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
         let v = check(&meas, &man).0;
         assert!(v.iter().any(|x| x.contains("createremotethread")));
     }
@@ -348,7 +440,7 @@ mod tests {
     #[test]
     fn undeclared_dynamic_resolution_fails() {
         let meas = m(&["kernel32.dll"], &["loadlibraryw"]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"expected_dynamic":[]}"#);
+        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"expected_dynamic":[],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
         let v = check(&meas, &man).0;
         assert!(
             v.iter()
@@ -371,5 +463,77 @@ mod tests {
         // baseline deny present; observed dynamic API captured
         assert!(super::arr(&v, "deny_functions").contains(&"createremotethread".to_string()));
         assert!(super::arr(&v, "expected_dynamic").contains(&"getprocaddress".to_string()));
+    }
+
+    // ---- codegen hardening ratchet (#267) ----
+
+    fn m_hard(hard: &[&str]) -> Measured {
+        Measured {
+            dlls: ["kernel32.dll".to_string()].into_iter().collect(),
+            functions: BTreeSet::new(),
+            hardening: hard.iter().map(|s| s.to_string()).collect(),
+        }
+    }
+
+    fn man_hard(hard: &str) -> Value {
+        manifest(&format!(
+            r#"{{"allow_imports":["kernel32.dll"],"allow_import_prefixes":[],"expected_dynamic":[],"hardening":{hard}}}"#
+        ))
+    }
+
+    #[test]
+    fn matching_hardening_passes() {
+        let meas = m_hard(&["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA"]);
+        let man = man_hard(r#"["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]"#);
+        assert!(check(&meas, &man).0.is_empty());
+    }
+
+    #[test]
+    fn lost_mitigation_is_a_regression() {
+        // The toolchain-bump scenario this exists for: CFG silently stops being emitted.
+        let meas = m_hard(&["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA"]);
+        let man = man_hard(r#"["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA","CONTROL_FLOW_GUARD"]"#);
+        let v = check(&meas, &man).0;
+        assert!(v.iter().any(|x| x.contains("REGRESSED") && x.contains("CONTROL_FLOW_GUARD")), "{v:?}");
+    }
+
+    #[test]
+    fn floor_cannot_be_signed_away_by_a_manifest() {
+        // A manifest that simply omits a floor mitigation must NOT make a binary lacking it
+        // acceptable. This is the difference between a policy and a preference.
+        let meas = m_hard(&["ASLR_DYNAMICBASE", "DEP_NX"]);
+        let man = man_hard(r#"["ASLR_DYNAMICBASE","DEP_NX"]"#);
+        let v = check(&meas, &man).0;
+        assert!(
+            v.iter().any(|x| x.contains("MISSING BASELINE MITIGATION") && x.contains("HIGH_ENTROPY_VA")),
+            "floor must be un-waivable, got {v:?}"
+        );
+    }
+
+    #[test]
+    fn gained_mitigation_still_requires_review() {
+        // Strictly an improvement, but the manifest must stay an accurate description of
+        // the artifact -- otherwise a later loss of the same bit would go unnoticed.
+        let meas = m_hard(&["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA", "CONTROL_FLOW_GUARD"]);
+        let man = man_hard(r#"["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]"#);
+        let v = check(&meas, &man).0;
+        assert!(v.iter().any(|x| x.contains("CHANGED") && x.contains("CONTROL_FLOW_GUARD")), "{v:?}");
+    }
+
+    #[test]
+    fn manifest_without_hardening_is_unevaluated_not_exempt() {
+        let meas = m_hard(&["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA"]);
+        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"allow_import_prefixes":[],"expected_dynamic":[]}"#);
+        let v = check(&meas, &man).0;
+        assert!(v.iter().any(|x| x.contains("UNEVALUATED")), "{v:?}");
+    }
+
+    #[test]
+    fn bit_decoding_matches_the_pe_spec() {
+        // 0x4140 = CFG(0x4000) | DEP(0x0100) | ASLR(0x0040); HIGH_ENTROPY(0x0020) clear.
+        let h = hardening_from_bits(0x4140);
+        assert!(h.contains("CONTROL_FLOW_GUARD") && h.contains("DEP_NX") && h.contains("ASLR_DYNAMICBASE"));
+        assert!(!h.contains("HIGH_ENTROPY_VA"));
+        assert!(hardening_from_bits(0).is_empty());
     }
 }

@@ -729,7 +729,7 @@ pub(crate) fn pe_delay_imported_dlls(b: &[u8]) -> Option<Vec<String>> {
 
 /// `DllCharacteristics` sits at optional-header offset 0x46 (70) for both PE32
 /// and PE32+, so we don't need to branch on the magic beyond validating it.
-fn pe_dll_characteristics(b: &[u8]) -> Option<u16> {
+pub(crate) fn pe_dll_characteristics(b: &[u8]) -> Option<u16> {
     let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
     if b.get(pe..pe + 4)? != b"PE\0\0" {
         return None;

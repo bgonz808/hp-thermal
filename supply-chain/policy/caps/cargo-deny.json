@@ -30,5 +30,10 @@
     "getprocaddress"
   ],
   "format": "pe",
+  "hardening": [
+    "ASLR_DYNAMICBASE",
+    "DEP_NX",
+    "HIGH_ENTROPY_VA"
+  ],
   "schema": "hp-thermal/caps-manifest/v1"
 }
