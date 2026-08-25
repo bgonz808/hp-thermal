@@ -48,7 +48,7 @@ use crate::{
 /// adding one is caught even though the host DLL (kernel32/ntdll) is already allowed —
 /// the DLL is allowlisted, but the *function* changes what the binary can do. Seeds a
 /// proposed manifest's deny_functions; a manifest may extend it, never shrink below it.
-const BASELINE_DENY: &[&str] = &[
+const BASELINE_DENY_PE: &[&str] = &[
     "createremotethread",
     "createremotethreadex",
     "writeprocessmemory",
@@ -67,7 +67,7 @@ const BASELINE_DENY: &[&str] = &[
 /// Dynamic-resolution APIs. Legitimate here (the tray loads nvml on demand), so they are
 /// declared in `expected_dynamic` and any UNEXPECTED one fails — the source denylist (B4)
 /// vets *what* gets loaded; this bounds *that* dynamic resolution happens at all.
-const DYN_APIS: &[&str] = &[
+const DYN_APIS_PE: &[&str] = &[
     "loadlibraryw",
     "loadlibrarya",
     "loadlibraryexw",
@@ -76,6 +76,40 @@ const DYN_APIS: &[&str] = &[
     "ldrloaddll",
     "ldrgetprocedureaddress",
 ];
+
+/// ELF analogue of BASELINE_DENY_PE. These are the Linux cross-process manipulation and
+/// fileless-execution primitives; a build tool that audits lockfiles has no legitimate need
+/// for any of them, so their appearance is evidence of tampering rather than of a feature.
+///
+/// Deliberately NOT listed: `execve`/`fork`. Several of our tools legitimately spawn cargo or
+/// git, so denying process creation outright would produce a rule that must immediately be
+/// waived -- and a rule that is always waived teaches people to waive rules.
+const BASELINE_DENY_ELF: &[&str] = &[
+    "ptrace",
+    "process_vm_writev",
+    "process_vm_readv",
+    "memfd_create",
+    "kcmp",
+];
+
+/// ELF analogue of DYN_APIS_PE: symbols through which code can be resolved at runtime, which
+/// is exactly what an import-table measurement cannot see past. Declaring them is what keeps
+/// the caps result an honest lower bound rather than a claim of completeness.
+const DYN_APIS_ELF: &[&str] = &["dlopen", "dlsym", "dlmopen", "dlvsym"];
+
+fn baseline_deny(format: &str) -> &'static [&'static str] {
+    match format {
+        "elf" => BASELINE_DENY_ELF,
+        _ => BASELINE_DENY_PE,
+    }
+}
+
+fn dyn_apis(format: &str) -> &'static [&'static str] {
+    match format {
+        "elf" => DYN_APIS_ELF,
+        _ => DYN_APIS_PE,
+    }
+}
 
 /// CODEGEN HARDENING BITS carried in the PE optional header's `DllCharacteristics`.
 ///
@@ -108,7 +142,20 @@ pub(crate) const HARDENING_BITS: &[(&str, u16)] = &[
 /// leaving it undeclared would hide the gap. It is therefore captured per-binary in each
 /// manifest below, so the ratchet still fires on any change, and closing the gap for the
 /// tools is tracked separately -- it forces a full re-bless, since it changes every digest.
-const HARDENING_FLOOR: &[&str] = &["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA"];
+const HARDENING_FLOOR_PE: &[&str] = &["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA"];
+
+/// ELF floor. Higher than the PE floor on purpose, and for a factual reason rather than a
+/// preference: rustc enables PIE, non-executable memory, and RELRO + immediate binding BY
+/// DEFAULT on Linux, so every one of these is already met by a plain `cargo install`.
+/// Requiring less would be leaving free protection unclaimed.
+const HARDENING_FLOOR_ELF: &[&str] = &["PIE", "NX_STACK", "RELRO", "BIND_NOW"];
+
+fn hardening_floor(format: &str) -> &'static [&'static str] {
+    match format {
+        "elf" => HARDENING_FLOOR_ELF,
+        _ => HARDENING_FLOOR_PE,
+    }
+}
 
 /// Decode `DllCharacteristics` into the set of mitigation names that are SET.
 pub(crate) fn hardening_from_bits(dllc: u16) -> BTreeSet<String> {
@@ -120,9 +167,11 @@ pub(crate) fn hardening_from_bits(dllc: u16) -> BTreeSet<String> {
 }
 
 struct Measured {
+    /// PE: imported DLLs. ELF: DT_NEEDED shared objects. Same role in both.
     dlls: BTreeSet<String>,
     functions: BTreeSet<String>,
     hardening: BTreeSet<String>,
+    format: &'static str,
 }
 
 /// Walk a PE's full import surface (static DLLs + delay-load DLLs + named functions),
@@ -140,7 +189,36 @@ fn measure_pe(bytes: &[u8]) -> Option<Measured> {
         dlls,
         functions,
         hardening,
+        format: "pe",
     })
+}
+
+/// Walk an ELF64 image's dynamic surface: needed shared objects, undefined (imported)
+/// symbols, and the structurally-evidenced hardening set.
+fn measure_elf(bytes: &[u8]) -> Option<Measured> {
+    let dlls: BTreeSet<String> = crate::elf::elf_needed(bytes)?.into_iter().collect();
+    let functions: BTreeSet<String> = crate::elf::elf_imported_functions(bytes)
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    let hardening = crate::elf::elf_hardening(bytes)?;
+    Some(Measured {
+        dlls,
+        functions,
+        hardening,
+        format: "elf",
+    })
+}
+
+/// Dispatch on the image's own magic, never on a file extension or a caller-supplied hint:
+/// the artifact decides what it is. An unrecognised or malformed image yields None, which the
+/// caller turns into a fail-closed refusal rather than an empty (and therefore clean) result.
+fn measure(bytes: &[u8]) -> Option<Measured> {
+    if crate::elf::is_elf(bytes) {
+        measure_elf(bytes)
+    } else {
+        measure_pe(bytes)
+    }
 }
 
 // ---- manifest (JSON, navigated as Value; serde derive stays off) ----
@@ -171,7 +249,7 @@ fn propose(binary: &str, m: &Measured) -> String {
             allow.push(d.clone());
         }
     }
-    let expected_dynamic: Vec<&str> = DYN_APIS
+    let expected_dynamic: Vec<&str> = dyn_apis(m.format)
         .iter()
         .copied()
         .filter(|f| m.functions.contains(*f))
@@ -179,10 +257,10 @@ fn propose(binary: &str, m: &Measured) -> String {
     serde_json::to_string_pretty(&serde_json::json!({
         "schema": "hp-thermal/caps-manifest/v1",
         "binary": binary,
-        "format": "pe",
+        "format": m.format,
         "allow_imports": allow,
         "allow_import_prefixes": prefixes.into_iter().collect::<Vec<_>>(),
-        "deny_functions": BASELINE_DENY,
+        "deny_functions": baseline_deny(m.format),
         "expected_dynamic": expected_dynamic,
         "hardening": m.hardening.iter().collect::<Vec<_>>(),
     }))
@@ -200,7 +278,7 @@ fn check(m: &Measured, manifest: &Value) -> Violations {
     let allow: BTreeSet<String> = arr(manifest, "allow_imports").into_iter().collect();
     let prefixes = arr(manifest, "allow_import_prefixes");
     let mut deny: BTreeSet<String> = arr(manifest, "deny_functions").into_iter().collect();
-    deny.extend(BASELINE_DENY.iter().map(|s| s.to_string()));
+    deny.extend(baseline_deny(m.format).iter().map(|s| s.to_string()));
     let expected_dyn: BTreeSet<String> = arr(manifest, "expected_dynamic").into_iter().collect();
 
     let allowed = |d: &str| allow.contains(d) || prefixes.iter().any(|p| d.starts_with(p));
@@ -229,7 +307,7 @@ fn check(m: &Measured, manifest: &Value) -> Violations {
     }
     // unexpected dynamic resolution
     for f in &m.functions {
-        if DYN_APIS.contains(&f.as_str()) && !expected_dyn.contains(f) {
+        if dyn_apis(m.format).contains(&f.as_str()) && !expected_dyn.contains(f) {
             v.push(format!("undeclared dynamic-resolution API: {f}"));
         }
     }
@@ -249,7 +327,7 @@ fn check(m: &Measured, manifest: &Value) -> Violations {
             let declared: BTreeSet<String> = arr(manifest, "hardening").into_iter().collect();
             // Floor first: a mitigation in HARDENING_FLOOR must be present on the BINARY no
             // matter what the manifest says, so no sign-off can trade it away.
-            for f in HARDENING_FLOOR {
+            for f in hardening_floor(m.format) {
                 if !m.hardening.contains(*f) {
                     v.push(format!(
                         "MISSING BASELINE MITIGATION: {f} is not set on this binary (floor cannot be waived by a manifest)"
@@ -304,8 +382,11 @@ pub fn run(binary: Option<&str>, manifest: Option<&str>) -> i32 {
         }
     };
     // Fail-closed: unparseable binary is never "clean".
-    let Some(m) = measure_pe(&bytes) else {
-        eprintln!("verify-caps: {binary} is not a walkable PE (fail-closed)");
+    let Some(m) = measure(&bytes) else {
+        eprintln!(
+            "verify-caps: {binary} is not a walkable PE or ELF64 image (fail-closed).
+             ELF32 is deliberately declined rather than parsed with 64-bit offsets: a walker              that mis-parses would report a confident, wrong capability set."
+        );
         return 1;
     };
 
@@ -373,7 +454,8 @@ mod tests {
         Measured {
             dlls: dlls.iter().map(|s| s.to_string()).collect(),
             functions: funcs.iter().map(|s| s.to_string()).collect(),
-            hardening: HARDENING_FLOOR.iter().map(|s| s.to_string()).collect(),
+            hardening: HARDENING_FLOOR_PE.iter().map(|s| s.to_string()).collect(),
+            format: "pe",
         }
     }
     fn manifest(json: &str) -> Value {
@@ -472,6 +554,7 @@ mod tests {
             dlls: ["kernel32.dll".to_string()].into_iter().collect(),
             functions: BTreeSet::new(),
             hardening: hard.iter().map(|s| s.to_string()).collect(),
+            format: "pe",
         }
     }
 

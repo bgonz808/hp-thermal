@@ -279,6 +279,27 @@ jobs:
             echo "::endgroup::"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
 
+      # Same engine, ELF vantage (#245). Until the ELF walker existed this job produced the
+      # one binary in the fleet with NO capability manifest and NO hardening record, while the
+      # windows job's per-binary output made the gate look fleet-wide. Absence of a manifest is
+      # a FAILURE here exactly as it is for PE: a newly-added linux tool must land its reviewed
+      # manifest before it can be produced.
+      - name: Caps-manifest gate (each produced linux tool binary)
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          found=0
+          for exe in out/*-linux-x86_64; do
+            found=1
+            base="$(basename "$exe")"
+            # names carry a -<sha12>-linux-x86_64 suffix; recover the tool name
+            name="$(echo "$base" | sed -E "s/-[0-9a-f]{12}-linux-x86_64$//")"
+            cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "supply-chain/policy/caps/$name.json"
+          done
+          # A gate that silently matched nothing would be indistinguishable from a passing one.
+          [ "$found" = 1 ] || { echo "::error::no linux tool binaries matched - refusing to report a pass"; exit 1; }
+
       - name: Attest build provenance (linux tools)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # actions/attest-build-provenance v4.2.2
         with:

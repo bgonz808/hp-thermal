@@ -21,6 +21,7 @@ mod gate;
 // Measures a binary's import surface against a committed manifest, fails closed on
 // divergence. One engine for every binary we produce (tools + releases). See caps.rs.
 mod canary;
+mod elf;
 mod toolchain;
 mod caps;
 
