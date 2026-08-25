@@ -192,12 +192,19 @@ jobs:
       - name: Caps-manifest gate (each produced tool binary)
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          # Collect ALL violations before failing. Exiting on the first binary hid the posture of
+          # the other four on the CFG rollout: one run reported one tool, when the reviewer needed
+          # the whole fleet to decide. Same principle as never truncating scanner output (#235) --
+          # partial evidence corrupts the decision it is supposed to inform.
+          failed=0
           for exe in out/*.exe; do
             name="$(basename "$exe" .exe)"; name="${name%-*}"   # strip -<sha12>
-            cargo run --manifest-path xtask/Cargo.toml -- \
-              verify-caps "$exe" --manifest "supply-chain/policy/caps/$name.json"
+            if ! cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "supply-chain/policy/caps/$name.json"; then
+              failed=1
+            fi
           done
+          [ "$failed" = 0 ] || { echo "::error::one or more caps manifests need review (all violations listed above)"; exit 1; }
 
       # #205: SLSA provenance, one attestation per subject file, signed via GitHub OIDC ->
       # Sigstore. Verify later with: gh attestation verify <asset> --repo <this repo>
