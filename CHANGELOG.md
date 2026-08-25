@@ -4,6 +4,28 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+## [0.3.2-rc.3] - 2026-08-25
+
+Toolchain candidate. The ONLY change from rc.2 is the Rust toolchain:
+`nightly-2026-07-23` (rustc 1.99.0-nightly) -> `nightly-2026-08-25` (rustc
+1.100.0-nightly). Binary source is unchanged, so any difference in size, import
+surface, hardening posture or BinSkim disposition between rc.2 and rc.3 is
+attributable to the compiler and nothing else. See #308.
+
+### Changed
+- **Toolchain moved to `nightly-2026-08-25`.** Both declarations move together --
+  `app/rust-toolchain.toml` and `tools/TOOLCHAIN.lock`, whose manifest digest is
+  verified before install; the installer refuses to proceed if the two disagree.
+  (#267, #309)
+
+### Notes
+- Pre-checked before cutting: no advisory published for `rust-lang/rust` applies to
+  1.100.0-nightly. The newest, CVE-2025-11233, is scoped `>= 1.87.0, < 1.89.0`.
+  (#298)
+- This crosses a minor-version boundary (1.99 -> 1.100), which is where behaviour
+  changes are likeliest. That is the reason for cutting it as a candidate and
+  diffing it against rc.2 rather than bumping the pin directly.
+
 ## [0.3.2-rc.2] - 2026-08-25
 
 Release-candidate cut to exercise two things before a real release depends on them:
