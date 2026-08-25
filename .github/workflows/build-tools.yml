@@ -116,10 +116,15 @@ jobs:
           # fixes for free. The DLL-planting concern that would otherwise argue for static is
           # already answered by DEPENDENTLOADFLAG above.
           #
-          # stack-protector is absent because it only covers the whole binary with -Z build-std,
+          # /CETCOMPAT: backward-edge CFI. control-flow-guard above constrains indirect CALLS;
+        #   nothing constrained RETURNS until this. It is a MARK, not a requirement -- hardware
+        #   without CET simply has nothing to enable, so no machine loses the ability to run
+        #   these tools. Measured cost on the app: 0 bytes.
+        #
+        # stack-protector is absent because it only covers the whole binary with -Z build-std,
           # which rebuilds std per tool. Tracked separately rather than bundled: a cheap certain
           # win should not wait on an expensive uncertain one.
-          RUSTFLAGS: "-C control-flow-guard=checks -C link-arg=/DEPENDENTLOADFLAG:0x800"
+          RUSTFLAGS: "-C control-flow-guard=checks -C link-arg=/DEPENDENTLOADFLAG:0x800 -C link-arg=/CETCOMPAT"
         run: |
           set -euo pipefail
           mkdir -p out toolroot

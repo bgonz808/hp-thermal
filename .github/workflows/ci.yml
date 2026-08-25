@@ -32,6 +32,13 @@ jobs:
           components: "rust-src clippy rustfmt"
 
       # Toolchain-native only — no cargo-install of third-party tools here.
+      # Hardening flags live in TWO non-merging sources (app/.cargo/config.toml for the app,
+      # RUSTFLAGS in build-tools.yml for the tools). Adding a flag to one leaves the other
+      # silently unhardened, and nothing else would notice. This asserts the common set is in
+      # both -- it deliberately says nothing about the flags that differ on purpose.
+      - name: Hardening flags present in every windows build path
+        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- verify-hardening-flags
+
       - name: Checks (fmt / clippy / test, both feature configs)
         run: cargo run --manifest-path xtask/Cargo.toml -- ci --fast
 

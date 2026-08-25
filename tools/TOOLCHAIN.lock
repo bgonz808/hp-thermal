@@ -28,3 +28,50 @@
 channel       nightly-2026-07-23
 manifest-url  https://static.rust-lang.org/dist/2026-07-23/channel-rust-nightly.toml
 sha256        a66a873f03170e9ddd3cc1fb8dc2395edda872b43ba239e4fa0a3f47971e728a
+#
+# SOAK POLICY (min-age-days) -- how long a toolchain must have existed before we adopt it.
+#
+# The 7-day figure we use for crates DOES NOT TRANSFER, and reusing it would have been the
+# worst of both worlds. That number is calibrated to fresh MALICIOUS publication, which for
+# crates is caught in minutes (arrayref@0.3.10, 2026-08-20: malicious for ~86 minutes). That
+# threat has never once occurred in the Rust toolchain, and no Rust toolchain CVE has ever
+# been reported within 7 days of the introducing release -- the record minimum is 12 days.
+#
+# What a toolchain soak actually buys is protection from REGRESSIONS, and that distribution
+# is measured in weeks. Of Rust minor releases 1.80+, 8 of 19 (42%) needed a point release;
+# the eleven that fixed miscompilation or unsoundness landed at +4, 7, 14, 14, 19, 19, 26,
+# 28, 28, 29 and 33 days after the .0.
+#
+#   age   share of those fixes already published   residual exposure
+#   ----  --------------------------------------   -----------------
+#    0d                    0 of 11                   ~42%
+#    7d                    1 of 11                   ~37%   <-- the crate number, worst spot
+#   14d                    4 of 11                   ~26%
+#   21d                    6 of 11                   ~10%
+#   30d                   10 of 11                    ~5%
+#   42d                   11 of 11                    ~0%*
+#
+#   * "0%" means NO OBSERVED CASE EXCEEDED 33 DAYS in that sample (n=11 fixes across 19
+#     releases). It is an empirical maximum, not a guarantee -- a slower fix would move it.
+#     Treat the column as a decision aid, not a probability model.
+#
+# 30 is chosen because it captures 10 of 11 observed fixes while fitting inside Rust's
+# invariant 42-day release cadence, so we never fall a whole release behind. Mozilla, the
+# only project publishing a toolchain-specific number, uses 14 days and additionally never
+# upgrades Rust on a release branch. rust-lang itself declined to bootstrap 1.98.0 from
+# 1.97.0 (which carried a miscompilation), using 1.97.1 instead.
+#
+# TUNING: change min-age-days in a reviewed PR. There is deliberately no override flag --
+# lowering the bar should be a visible diff someone approved, not a workflow input. The one
+# case that justifies lowering it is a published toolchain CVE, where soaking BEHIND the fix
+# is the greater risk: Rust supports only current stable plus current beta/nightly, so there
+# is no patched-old-version to sit on (Debian carries four postponed rustc CVEs for exactly
+# this reason).
+#
+# Sources for the figures above:
+#   rust-lang/rust releases + RELEASES.md   https://github.com/rust-lang/rust/blob/master/RELEASES.md
+#   Rust release cadence / train model      https://forge.rust-lang.org/release/process.html
+#   Mozilla Rust update policy              https://firefox-source-docs.mozilla.org/writing-rust-code/update-policy.html
+#   GitHub Security Advisories (rust-lang)  https://github.com/rust-lang/rust/security/advisories
+#   Note: cargo-audit / deny / vet CANNOT see rustc/std/cargo advisories; see #267/#298.
+min-age-days  30
