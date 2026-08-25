@@ -4,6 +4,49 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+## [0.3.2-rc.2] - 2026-08-25
+
+Release-candidate cut to exercise two things before a real release depends on them:
+the newly hardened build-tool fleet, and the toolchain A/B in #308.
+
+**No binary source changed since 0.3.2-rc.1** — `app/src` and `app/Cargo.toml` are
+byte-identical apart from this version bump. Everything below is supply-chain and
+CI machinery, which is exactly what makes this a usable control: in the #308
+comparison against rc.3, the Rust toolchain is the only variable.
+
+### Security (supply chain)
+- **Build tools are now hardened.** All five Windows tools are built with
+  `-C control-flow-guard=checks` and `-C link-arg=/DEPENDENTLOADFLAG:0x800`
+  (System32-only DLL resolution, which matters most for tools since they execute in
+  CI from writable directories). Previously the producer set no flags at all, so
+  every tool lacked Control Flow Guard — including `cargo-auditable`, the one tool
+  that produces the shipped binary. (#300, #304, #306)
+- **Codegen hardening is ratcheted, not merely floored.** Each binary's mitigation
+  set is recorded in its capability manifest and enforced exactly: a lost mitigation
+  is a regression, a gained one still requires review, and a manifest that declares
+  none is unevaluated rather than exempt. A floor cannot notice a mitigation that was
+  gained and then lost again. (#299)
+- **Every produced binary is capability-gated.** The ELF64 walker closes the last
+  gap: `cargo-acl` (linux) previously had no capability manifest and no hardening
+  record while the producer's output read as fleet-wide coverage. (#245, #302, #303)
+- **The toolchain is pinned by content and declared once.** `tools/TOOLCHAIN.lock`
+  commits the channel manifest digest, verified before install — rustup verifies
+  components against that manifest but never the manifest itself. It also replaces
+  eleven hardcoded channel references, where a partial bump could have silently built
+  with a toolchain other than the one declared. (#267, #309)
+- **Toolchain vulnerabilities are now watched.** `cargo-audit` reads lockfiles, and
+  std/rustc/cargo appear in none, so that axis was blind rather than clean. The
+  watcher reads GitHub Security Advisories for `rust-lang/rust`; the RustSec `rust/`
+  tree was evaluated and rejected as a source, its newest entry being from 2022-01-16
+  and missing CVE-2024-24576 entirely. (#267, #298)
+- **Gating tools must prove they still detect.** Negative-control canaries run a
+  known-bad fixture through each checker; a checker that reports it clean has failed.
+  Detection requires the advisory ID in the tool's own output, because a crashed
+  checker is as blind as a sabotaged one and exits the same way. (#223, #297)
+- **Advisory posture: 34 instances reduced to 6** across the tool fleet, of which
+  four are provably absent from the built binaries and two have no upstream fix in
+  any version. (#255, #273)
+
 ## [0.3.1] - 2026-08-19
 
 A hardware-report command for contributing verified coverage, service hardening
