@@ -744,6 +744,53 @@ pub(crate) fn pe_dll_characteristics(b: &[u8]) -> Option<u16> {
     Some(u16::from_le_bytes(b.get(off..off + 2)?.try_into().ok()?))
 }
 
+/// EXTENDED DLL characteristics, which is where `/CETCOMPAT` actually lands.
+///
+/// Unlike ASLR/DEP/CFG, the CET shadow-stack opt-in is NOT a bit in the optional header's
+/// `DllCharacteristics`. It travels in a debug-directory entry of type 20
+/// (`IMAGE_DEBUG_TYPE_EX_DLLCHARACTERISTICS`) whose payload is a single DWORD, with
+/// `IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT = 0x1`.
+///
+/// Reading it structurally rather than trusting the linker invocation is the whole point:
+/// a mitigation we merely *asked* for is not a mitigation we *have*.
+pub(crate) fn pe_ex_dll_characteristics(b: &[u8]) -> Option<u32> {
+    let pe = u32::from_le_bytes(b.get(0x3C..0x40)?.try_into().ok()?) as usize;
+    if b.get(pe..pe + 4)? != b"PE\0\0" {
+        return None;
+    }
+    let opt = pe + 24;
+    let magic = u16::from_le_bytes(b.get(opt..opt + 2)?.try_into().ok()?);
+    // The data-directory array starts after the optional header's fixed part, which differs
+    // between PE32 and PE32+ (the extra 16 bytes of 64-bit fields).
+    let dd = match magic {
+        0x10B => opt + 96,
+        0x20B => opt + 112,
+        _ => return None,
+    };
+    // Directory index 6 is Debug: [RVA, size].
+    let dbg_rva = u32::from_le_bytes(b.get(dd + 48..dd + 52)?.try_into().ok()?) as usize;
+    let dbg_size = u32::from_le_bytes(b.get(dd + 52..dd + 56)?.try_into().ok()?) as usize;
+    if dbg_rva == 0 || dbg_size == 0 {
+        return None;
+    }
+    let base = pe_rva_to_off(b, dbg_rva)?;
+    // Each IMAGE_DEBUG_DIRECTORY is 28 bytes; walk them looking for type 20.
+    let mut off = base;
+    let end = base.checked_add(dbg_size)?;
+    while off + 28 <= end {
+        let ty = u32::from_le_bytes(b.get(off + 12..off + 16)?.try_into().ok()?);
+        let size = u32::from_le_bytes(b.get(off + 16..off + 20)?.try_into().ok()?) as usize;
+        let ptr = u32::from_le_bytes(b.get(off + 24..off + 28)?.try_into().ok()?) as usize;
+        if ty == 20 && size >= 4 {
+            return Some(u32::from_le_bytes(b.get(ptr..ptr + 4)?.try_into().ok()?));
+        }
+        off += 28;
+    }
+    // No such entry: the image simply did not opt in. Absence is a real answer here, not a
+    // parse failure -- distinguished from None-on-malformed by having reached this point.
+    Some(0)
+}
+
 /// Consolidated artifact gate: exploit-mitigation flags + capability allowlist + the
 /// exe<->pdb CodeView GUID/age bind. The pipeline-gate half of the assurance case — it
 /// proves properties of the SHIPPED bytes (what the toolchain produced), complementing the

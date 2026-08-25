@@ -38,6 +38,35 @@ rustflags = [
     # ("same tag -> same bytes"). https://learn.microsoft.com/cpp/build/reference/brepro
     "-C",
     "link-arg=/Brepro",
+    # BACKWARD-EDGE control flow. control-flow-guard above protects indirect CALLS
+    # (forward edge); nothing protected RETURNS until this. /CETCOMPAT marks the image
+    # compatible with the CPU's hardware shadow stack, which keeps a protected copy of
+    # return addresses and faults if the two diverge -- the direct answer to ROP, which
+    # CFG does not address.
+    #
+    # It is a MARK, not a requirement (MSVC docs: "tells the linker to mark the binary as
+    # CET Shadow Stack-compatible"). Windows enables shadow stacks only where CPU and OS
+    # support them AND the image opts in; on hardware without CET there is simply nothing
+    # to enable. So this does not narrow the set of machines that can run the binary --
+    # every x86_64 CPU still runs it, the ones with CET just run it with more protection.
+    # x64-only per the same docs, which is our only target.
+    #
+    # Measured cost: 0 bytes.
+    "-C",
+    "link-arg=/CETCOMPAT",
+    # MITIGATION COVERAGE, ENFORCED RATHER THAN ASSUMED (RFC 3855). The comment above
+    # claims build-std applies our mitigations to std as well. This turns that claim into
+    # a machine-checked invariant: the build FAILS if any crate in the graph -- including
+    # std and its dependencies -- is compiled without stack-protector or control-flow-guard.
+    #
+    # Without build-std it produces hard errors against the prebuilt std, which is the
+    # correct outcome: partially-applied mitigations are the dangerous case, because the
+    # binary carries the flag and the reassurance while leaving gaps.
+    #
+    # Upstream intends to make this the default (rust-lang/rust#157941). Adopting it now
+    # means we pass by construction rather than by luck.
+    "-Z",
+    "deny-partial-mitigations=stack-protector,control-flow-guard",
 ]
 
 [unstable]

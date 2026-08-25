@@ -41,7 +41,8 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use crate::{
-    pe_delay_imported_dlls, pe_dll_characteristics, pe_imported_dlls, pe_imported_functions,
+    pe_delay_imported_dlls, pe_dll_characteristics, pe_ex_dll_characteristics, pe_imported_dlls,
+    pe_imported_functions,
 };
 
 /// Injection/exfil primitives a normal local tool never imports. A compromised build
@@ -166,6 +167,17 @@ pub(crate) fn hardening_from_bits(dllc: u16) -> BTreeSet<String> {
         .collect()
 }
 
+/// `IMAGE_DLLCHARACTERISTICS_EX_CET_COMPAT`, the hardware shadow-stack opt-in.
+const EX_CET_COMPAT: u32 = 0x1;
+
+/// CET is the BACKWARD-edge counterpart to CONTROL_FLOW_GUARD: CFG constrains indirect
+/// calls, the shadow stack constrains returns. Recorded as its own name because the two are
+/// independently settable and defend different halves of control flow -- collapsing them
+/// would let one silently vanish while the manifest still looked complete.
+fn cet_from_ex_bits(ex: u32) -> Option<&'static str> {
+    (ex & EX_CET_COMPAT != 0).then_some("CET_COMPAT")
+}
+
 struct Measured {
     /// PE: imported DLLs. ELF: DT_NEEDED shared objects. Same role in both.
     dlls: BTreeSet<String>,
@@ -184,7 +196,11 @@ fn measure_pe(bytes: &[u8]) -> Option<Measured> {
         .into_iter()
         .map(|f| f.to_ascii_lowercase())
         .collect();
-    let hardening = hardening_from_bits(pe_dll_characteristics(bytes)?);
+    let mut hardening = hardening_from_bits(pe_dll_characteristics(bytes)?);
+    // Absence of the extended-characteristics entry means "did not opt in", which is a real
+    // measurement; only a malformed image yields None, and that must not read as clean.
+    let ex = pe_ex_dll_characteristics(bytes)?;
+    hardening.extend(cet_from_ex_bits(ex).map(str::to_string));
     Some(Measured {
         dlls,
         functions,
@@ -609,6 +625,18 @@ mod tests {
         let man = manifest(r#"{"allow_imports":["kernel32.dll"],"allow_import_prefixes":[],"expected_dynamic":[]}"#);
         let v = check(&meas, &man).0;
         assert!(v.iter().any(|x| x.contains("UNEVALUATED")), "{v:?}");
+    }
+
+    #[test]
+    fn cet_bit_decoding_is_exact() {
+        // Positive direction. Nothing we have built yet carries /CETCOMPAT, so without this
+        // the decoder would be unreachable from any real binary -- indistinguishable from
+        // one that never fires (the #303 lesson, applied to PE).
+        assert_eq!(cet_from_ex_bits(0x1), Some("CET_COMPAT"));
+        assert_eq!(cet_from_ex_bits(0x3), Some("CET_COMPAT"), "other ex bits must not mask it");
+        // Negative: absence of the entry (0) and unrelated bits must NOT claim CET.
+        assert_eq!(cet_from_ex_bits(0x0), None);
+        assert_eq!(cet_from_ex_bits(0x2), None, "an unrelated ex bit must not read as CET");
     }
 
     #[test]
