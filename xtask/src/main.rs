@@ -21,6 +21,7 @@ mod gate;
 // Measures a binary's import surface against a committed manifest, fails closed on
 // divergence. One engine for every binary we produce (tools + releases). See caps.rs.
 mod canary;
+mod toolchain;
 mod caps;
 
 // #241/#239: candidate ENUMERATION (discovery) for the promotion pipeline. Proposes
@@ -68,6 +69,7 @@ fn main() {
             args.get(2).map(String::as_str),
         ),
         Some("canary") => canary::run(&args),
+        Some("toolchain-advisories") => toolchain::run(&args),
         Some("gate") => gate::run(&args),
         Some("mal-acks") => gate::mal_acks_run(&args),
         Some("explore") => explore::run(&args),
