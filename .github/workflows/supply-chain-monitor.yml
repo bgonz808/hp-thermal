@@ -47,6 +47,8 @@ permissions:
 jobs:
   vt-monitor:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read   # the VT secret is referenced here and NOWHERE else; still only reads the repo
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
@@ -132,8 +134,67 @@ jobs:
           done
           exit "$fail"
 
+  # TOOLCHAIN VULN AXIS (#267). cargo-audit reads a Cargo.lock, and std/rustc/cargo/rustdoc
+  # appear in none -- so until this job existed the vuln axis was BLIND to the toolchain, not
+  # clean. That is not hypothetical: CVE-2024-24576 (BatBadBut) is CVSS 10.0 critical.
+  #
+  # SOURCE OF RECORD is GitHub Security Advisories on rust-lang/rust. The RustSec advisory-db
+  # we already fetch does ship a rust/ tree and is NOT usable as the primary source: measured
+  # 2026-08-24 its newest entry is dated 2022-01-16 while the database itself was current, and
+  # it is missing CVE-2024-24576, CVE-2024-43402 and CVE-2025-11233 entirely. A source stale in
+  # exactly the region of interest produces the most dangerous output available: a confident
+  # "no advisories".
+  #
+  # LEAST PRIVILEGE: contents:read, the default GITHUB_TOKEN, no secrets. The advisory endpoint
+  # is public read-only data; nothing here can write anywhere.
+  #
+  # AVAILABILITY IS PART OF THE CONTRACT: the fetch is checked for HTTP success AND for a
+  # non-empty array, and xtask independently refuses an empty set. rust-lang/rust has published
+  # advisories, so zero can only mean the fetch failed, was rate-limited, or the API shape
+  # changed -- each of which must read as "cannot say", never "clean".
+  toolchain-advisories:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the PINNED toolchain (the one under evaluation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          chan=$(grep -m1 '^channel' app/rust-toolchain.toml | cut -d'"' -f2)
+          [ -n "$chan" ] || { echo "::error::no channel in app/rust-toolchain.toml"; exit 1; }
+          echo "evaluating channel: $chan"
+          rustup toolchain install "$chan" --profile minimal
+
+      - name: Fetch advisories (fail-closed on transport OR emptiness)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api 'repos/rust-lang/rust/security-advisories?per_page=100' > rust-advisories.json
+          n=$(jq 'length' rust-advisories.json)
+          echo "fetched $n advisories"
+          # Availability check, not a formality: an empty or malformed response must never
+          # reach the evaluator as if it were a clean bill of health.
+          if ! jq -e 'type == "array" and length > 0' rust-advisories.json > /dev/null; then
+            echo "::error::advisory fetch returned no usable array - treating as FAILURE, not all-clear"
+            exit 1
+          fi
+
+      - name: Evaluate the pinned toolchain against them
+        shell: bash
+        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- toolchain-advisories --advisories rust-advisories.json
+
   pin-staleness:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read   # reads committed pins and a public README; writes nothing
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
