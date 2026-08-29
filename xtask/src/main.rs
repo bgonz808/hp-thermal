@@ -26,6 +26,7 @@ mod elf;
 mod toolchain;
 mod caps;
 mod provenance;
+mod allowances;
 
 // #241/#239: candidate ENUMERATION (discovery) for the promotion pipeline. Proposes
 // per-line representatives with soak + tier facts; promotes nothing. See explore.rs.
@@ -75,6 +76,7 @@ fn main() {
         Some("verify-hardening-flags") => hardening::run(&args),
         Some("toolchain-advisories") => toolchain::run(&args),
         Some("verify-toolchain-provenance") => provenance::run(&args),
+        Some("verify-allowances") => allowances::run(&args),
         Some("gate") => gate::run(&args),
         Some("mal-acks") => gate::mal_acks_run(&args),
         Some("explore") => explore::run(&args),
