@@ -129,6 +129,7 @@ jobs:
           set -euo pipefail
           mkdir -p out toolroot
           : > out/DIGEST-BLOCK.txt
+          build_failures=""
           while read -r name repo rev target _sha; do
             [ -n "${name:-}" ] || continue
             # CVE posture for EVERY tool (target-independent: it audits the rev's lockfile).
@@ -169,6 +170,7 @@ jobs:
             # dependency tree. Flipping all five at once would report only "the run failed" and
             # cost a full cycle to bisect. Add a name here once it has been shown to work.
             BUILD_STD_TOOLS="cargo-auditable"
+            built=1
             tool_rustflags="$RUSTFLAGS"
             # An ARRAY, not a string. A string would have to be left unquoted at the call
             # site to split into separate arguments, and an unquoted expansion also globs --
@@ -216,9 +218,23 @@ jobs:
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1 \
                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}"
+              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" || built=0
             else
-              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}"
+              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" || built=0
+            fi
+            # REPORT EVERY FAILING TOOL, not the first. The loop used to exit here, so a
+            # ~10-minute run answered "does cargo-audit build?" when the question was "which
+            # tools build?" -- and the answer to the second decides whether the fleet can share
+            # the app's toolchain at all. Same correction already made to the caps gate (#305);
+            # this is the build loop's version of it.
+            #
+            # Nothing is published either way: the run still exits non-zero at the end, before
+            # the attest and upload steps. Continuing buys information, not leniency.
+            if [ "$built" -eq 0 ]; then
+              build_failures="$build_failures $name"
+              echo "::error::$name failed to build on $(rustc -V). Continuing so this run reports every incompatible tool."
+              echo "::endgroup::"
+              continue
             fi
             d=$(sha256sum "./toolroot/bin/$name.exe" | cut -d' ' -f1)
             # #225: digest computed FIRST, the asset name derives from it; consumers re-derive
@@ -227,6 +243,13 @@ jobs:
             printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d" >> out/DIGEST-BLOCK.txt
             echo "::endgroup::"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
+
+          # Fail-closed on the collected set. The loop runs in this shell (process
+          # substitution, not a pipe), so the accumulator survives the iterations.
+          if [ -n "$build_failures" ]; then
+            echo "::error::tools that failed to build:$build_failures"
+            exit 1
+          fi
 
       # #245: caps-manifest gate BEFORE attest/upload — a tool binary whose import surface
       # diverges from its committed manifest (supply-chain/policy/caps/<name>.json) never
