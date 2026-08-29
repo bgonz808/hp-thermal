@@ -30,12 +30,29 @@ runs:
       # file, which is a fair argument for keeping that scanner blocking.
       env:
         COMPONENTS: ${{ inputs.components }}
-      run: |
+      # Rationale for the suppression below is at the GITHUB_ENV write near the end of
+      # this script. The directive has to be TRAILING on `run:`: zizmor anchors a
+      # whole-script finding to the block header and matches ignore comments on that
+      # exact line, so neither the offending line nor a comment above it works.
+      run: | # zizmor: ignore[github-env]
         set -euo pipefail
         lock=tools/TOOLCHAIN.lock
         [ -f "$lock" ] || { echo "::error::$lock is missing (fail-closed: the pin IS the policy)"; exit 1; }
 
         channel=$(awk '$1=="channel"{print $2; exit}' "$lock")
+
+        # CHARSET-VALIDATE the channel before it is used anywhere. awk's $2 is a single
+        # whitespace-delimited field, so a newline -- the injection vector for GITHUB_ENV,
+        # where a second line becomes a second variable -- is already impossible. This makes
+        # that guarantee explicit rather than incidental, so it survives someone changing the
+        # parse. Same idiom as the component validation below: refuse, do not sanitise.
+        case "$channel" in
+          "") : ;;  # emptiness is reported by the dedicated check below, with a better message
+          *[!A-Za-z0-9._-]*)
+            echo "::error::refusing channel '$channel': illegal character. Channels are of the form nightly-YYYY-MM-DD, beta, or X.Y.Z."
+            exit 1
+            ;;
+        esac
         url=$(awk '$1=="manifest-url"{print $2; exit}' "$lock")
         want=$(awk '$1=="sha256"{print $2; exit}' "$lock")
         # Explicit checks rather than `eval "val=\${$v:-}"`. The loop variable came from a
@@ -123,3 +140,54 @@ runs:
         done
         rustup toolchain install "$channel" ${args[@]+"${args[@]}"}
         echo "installed $channel (manifest digest verified)"
+
+        # ACTIVATE IT. `rustup toolchain install` INSTALLS; it does not SELECT. Everything
+        # above -- the digest verification, the soak gate, the drift check -- described a
+        # toolchain that then compiled nothing, because rustup resolves the toolchain from the
+        # CWD and falls through to the runner image default when no rust-toolchain.toml is
+        # found. Jobs that run cargo from app/ picked up the pin by accident of CWD; the tools
+        # job runs from the repo root and got whatever stable the image happened to ship. The
+        # `-Z` flag in the build-std work is the only reason it ever became audible.
+        #
+        # RUSTUP_TOOLCHAIN rather than `rustup default` or a per-call `+channel`:
+        #   * it sits ABOVE rust-toolchain.toml in rustup's override order, so a toolchain file
+        #     shipped by an UPSTREAM tool source -- which we check out and run cargo inside --
+        #     cannot redirect our compiler. That was a second, remote-controlled input.
+        #   * it applies to every later step without being named at each call site, so a new
+        #     cargo invocation cannot silently opt out by being forgotten.
+        export RUSTUP_TOOLCHAIN="$channel"
+
+        # PROVE it, in this step, rather than trusting the export. This assertion is the
+        # negative control for the defect above: it fails loudly on any future change that
+        # leaves the pin installed-but-inactive, which is precisely the state that produced
+        # green checks over an unpinned compiler.
+        active=$(rustup show active-toolchain 2>/dev/null | head -1)
+        case "$active" in
+          "$channel"*) echo "active toolchain: $active" ;;
+          *)
+            echo "::error::pinned toolchain is installed but NOT active. Expected '$channel', rustup reports '${active:-<none>}'. Refusing to build with an unpinned compiler."
+            exit 1
+            ;;
+        esac
+
+        # Hand it to every subsequent step in the job. GITHUB_ENV does not affect the current
+        # step, which is why the export above is separate rather than redundant.
+        #
+        # zizmor flags any GITHUB_ENV write (github-env, Low confidence) because a value an
+        # attacker controls can set variables that change how later steps execute. That is a
+        # real class of bug; it does not reach this write, and the reasons are mechanical
+        # rather than asserted:
+        #
+        #   * the value is awk's $2 from one line -- it cannot contain a newline, and a
+        #     newline is what turns one variable into two. It is also charset-validated at
+        #     the point of parse, above.
+        #   * it reaches this line only after matching app/rust-toolchain.toml, parsing as a
+        #     date, clearing the soak floor, matching the manifest sha256, and being installed
+        #     successfully by rustup. A value that survives that funnel is a real toolchain.
+        #
+        # The suppression itself is on the `run:` header above, which is where zizmor
+        # anchors a finding spanning the whole script; it points back here. Kept in the
+        # file rather than a .github/zizmor.yml -- this repo still has no suppression
+        # config, and a comment must be read next to the thing it excuses, where a
+        # central ignore list quietly accumulates.
+        echo "RUSTUP_TOOLCHAIN=$channel" >> "$GITHUB_ENV"
