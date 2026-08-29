@@ -30,10 +30,11 @@ runs:
       # file, which is a fair argument for keeping that scanner blocking.
       env:
         COMPONENTS: ${{ inputs.components }}
-      # zizmor: ignore[github-env] -- rationale at the GITHUB_ENV write near the end of
-      # this script. The directive must sit here because zizmor anchors a whole-script
-      # finding to the block header, not to the offending line.
-      run: |
+      # Rationale for the suppression below is at the GITHUB_ENV write near the end of
+      # this script. The directive has to be TRAILING on `run:`: zizmor anchors a
+      # whole-script finding to the block header and matches ignore comments on that
+      # exact line, so neither the offending line nor a comment above it works.
+      run: | # zizmor: ignore[github-env]
         set -euo pipefail
         lock=tools/TOOLCHAIN.lock
         [ -f "$lock" ] || { echo "::error::$lock is missing (fail-closed: the pin IS the policy)"; exit 1; }
