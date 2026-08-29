@@ -129,6 +129,7 @@ jobs:
           set -euo pipefail
           mkdir -p out toolroot
           : > out/DIGEST-BLOCK.txt
+          build_failures=""
           while read -r name repo rev target _sha; do
             [ -n "${name:-}" ] || continue
             # CVE posture for EVERY tool (target-independent: it audits the rev's lockfile).
@@ -169,7 +170,32 @@ jobs:
             # dependency tree. Flipping all five at once would report only "the run failed" and
             # cost a full cycle to bisect. Add a name here once it has been shown to work.
             BUILD_STD_TOOLS="cargo-auditable"
+            built=1
             tool_rustflags="$RUSTFLAGS"
+
+            # UPSTREAM LINT ALLOWANCES, per tool and per lint — never fleet-wide, and never a
+            # bare `-A warnings`. Each entry names one lint on one tool and says why.
+            #
+            # cargo-audit: abscissa_core's status_* macros end their arms with a trailing
+            # semicolon, and cargo-audit calls them in expression position (a match arm).
+            # SEMICOLON_IN_EXPRESSIONS_FROM_MACROS (rust#79813) is deny-by-default on this
+            # nightly, so the build fails on 21 sites in upstream's code, not ours.
+            #
+            # This is an upstream code-shape lint with no bearing on what cargo-audit DOES, so
+            # allowing it does not weaken a security property — unlike capping lints wholesale,
+            # which would also silence anything real. The durable fix is 12 deleted semicolons
+            # in iqlusioninc/abscissa (6 macros, 2 arms each); removing them makes the macros
+            # expand to expressions, which is valid in BOTH positions, so no caller breaks.
+            # abscissa_core 0.9.0 is the latest published version, so there is no bump to take,
+            # and tools/patches/ cannot reach it — it patches the tool's git checkout, and
+            # abscissa_core comes from crates.io. Tracked in #325; drop this line when a fixed
+            # abscissa_core is released and picked up in tools/locks/cargo-audit.lock.
+            case " cargo-audit " in
+              *" $name "*)
+                tool_rustflags="$tool_rustflags -A semicolon_in_expressions_from_macros"
+                echo "lint allowance for $name: semicolon_in_expressions_from_macros (upstream abscissa_core; #325)"
+                ;;
+            esac
             # An ARRAY, not a string. A string would have to be left unquoted at the call
             # site to split into separate arguments, and an unquoted expansion also globs --
             # so a stray matching file in the working directory could rewrite the build
@@ -216,9 +242,23 @@ jobs:
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1 \
                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}"
+              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" || built=0
             else
-              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}"
+              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" || built=0
+            fi
+            # REPORT EVERY FAILING TOOL, not the first. The loop used to exit here, so a
+            # ~10-minute run answered "does cargo-audit build?" when the question was "which
+            # tools build?" -- and the answer to the second decides whether the fleet can share
+            # the app's toolchain at all. Same correction already made to the caps gate (#305);
+            # this is the build loop's version of it.
+            #
+            # Nothing is published either way: the run still exits non-zero at the end, before
+            # the attest and upload steps. Continuing buys information, not leniency.
+            if [ "$built" -eq 0 ]; then
+              build_failures="$build_failures $name"
+              echo "::error::$name failed to build on $(rustc -V). Continuing so this run reports every incompatible tool."
+              echo "::endgroup::"
+              continue
             fi
             d=$(sha256sum "./toolroot/bin/$name.exe" | cut -d' ' -f1)
             # #225: digest computed FIRST, the asset name derives from it; consumers re-derive
@@ -227,6 +267,13 @@ jobs:
             printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d" >> out/DIGEST-BLOCK.txt
             echo "::endgroup::"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
+
+          # Fail-closed on the collected set. The loop runs in this shell (process
+          # substitution, not a pipe), so the accumulator survives the iterations.
+          if [ -n "$build_failures" ]; then
+            echo "::error::tools that failed to build:$build_failures"
+            exit 1
+          fi
 
       # #245: caps-manifest gate BEFORE attest/upload — a tool binary whose import surface
       # diverges from its committed manifest (supply-chain/policy/caps/<name>.json) never
