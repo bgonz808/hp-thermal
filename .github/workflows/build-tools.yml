@@ -281,6 +281,15 @@ jobs:
       # skip), so a newly-added tool must land its reviewed manifest first. This is the
       # binary vantage of the #241 caps axis, the same engine release-attest runs on the
       # app exe — every binary we produce is caps-gated at birth.
+      # A workaround that outlives its reason reads as policy, and nothing in CI disagrees.
+      # This runs AFTER the build so cargo has extracted the dependency sources, and BEFORE
+      # attest/upload so an obsolete allowance cannot ride into a published artifact.
+      - name: Allowance expiry - every workaround must still be justified upstream (#325)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo run --manifest-path xtask/Cargo.toml -- verify-allowances
+
       - name: Caps-manifest gate (each produced tool binary)
         shell: bash
         run: |
