@@ -30,6 +30,9 @@ runs:
       # file, which is a fair argument for keeping that scanner blocking.
       env:
         COMPONENTS: ${{ inputs.components }}
+      # zizmor: ignore[github-env] -- rationale at the GITHUB_ENV write near the end of
+      # this script. The directive must sit here because zizmor anchors a whole-script
+      # finding to the block header, not to the offending line.
       run: |
         set -euo pipefail
         lock=tools/TOOLCHAIN.lock
@@ -181,6 +184,9 @@ runs:
         #     date, clearing the soak floor, matching the manifest sha256, and being installed
         #     successfully by rustup. A value that survives that funnel is a real toolchain.
         #
-        # Suppressed here, at the line, rather than in a config file: a suppression should be
-        # read together with the thing it excuses.
-        echo "RUSTUP_TOOLCHAIN=$channel" >> "$GITHUB_ENV"  # zizmor: ignore[github-env]
+        # The suppression itself is on the `run:` header above, which is where zizmor
+        # anchors a finding spanning the whole script; it points back here. Kept in the
+        # file rather than a .github/zizmor.yml -- this repo still has no suppression
+        # config, and a comment must be read next to the thing it excuses, where a
+        # central ignore list quietly accumulates.
+        echo "RUSTUP_TOOLCHAIN=$channel" >> "$GITHUB_ENV"
