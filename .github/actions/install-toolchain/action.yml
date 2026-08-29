@@ -36,6 +36,19 @@ runs:
         [ -f "$lock" ] || { echo "::error::$lock is missing (fail-closed: the pin IS the policy)"; exit 1; }
 
         channel=$(awk '$1=="channel"{print $2; exit}' "$lock")
+
+        # CHARSET-VALIDATE the channel before it is used anywhere. awk's $2 is a single
+        # whitespace-delimited field, so a newline -- the injection vector for GITHUB_ENV,
+        # where a second line becomes a second variable -- is already impossible. This makes
+        # that guarantee explicit rather than incidental, so it survives someone changing the
+        # parse. Same idiom as the component validation below: refuse, do not sanitise.
+        case "$channel" in
+          "") : ;;  # emptiness is reported by the dedicated check below, with a better message
+          *[!A-Za-z0-9._-]*)
+            echo "::error::refusing channel '$channel': illegal character. Channels are of the form nightly-YYYY-MM-DD, beta, or X.Y.Z."
+            exit 1
+            ;;
+        esac
         url=$(awk '$1=="manifest-url"{print $2; exit}' "$lock")
         want=$(awk '$1=="sha256"{print $2; exit}' "$lock")
         # Explicit checks rather than `eval "val=\${$v:-}"`. The loop variable came from a
@@ -155,4 +168,19 @@ runs:
 
         # Hand it to every subsequent step in the job. GITHUB_ENV does not affect the current
         # step, which is why the export above is separate rather than redundant.
-        echo "RUSTUP_TOOLCHAIN=$channel" >> "$GITHUB_ENV"
+        #
+        # zizmor flags any GITHUB_ENV write (github-env, Low confidence) because a value an
+        # attacker controls can set variables that change how later steps execute. That is a
+        # real class of bug; it does not reach this write, and the reasons are mechanical
+        # rather than asserted:
+        #
+        #   * the value is awk's $2 from one line -- it cannot contain a newline, and a
+        #     newline is what turns one variable into two. It is also charset-validated at
+        #     the point of parse, above.
+        #   * it reaches this line only after matching app/rust-toolchain.toml, parsing as a
+        #     date, clearing the soak floor, matching the manifest sha256, and being installed
+        #     successfully by rustup. A value that survives that funnel is a real toolchain.
+        #
+        # Suppressed here, at the line, rather than in a config file: a suppression should be
+        # read together with the thing it excuses.
+        echo "RUSTUP_TOOLCHAIN=$channel" >> "$GITHUB_ENV"  # zizmor: ignore[github-env]
