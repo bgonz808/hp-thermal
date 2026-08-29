@@ -123,3 +123,36 @@ runs:
         done
         rustup toolchain install "$channel" ${args[@]+"${args[@]}"}
         echo "installed $channel (manifest digest verified)"
+
+        # ACTIVATE IT. `rustup toolchain install` INSTALLS; it does not SELECT. Everything
+        # above -- the digest verification, the soak gate, the drift check -- described a
+        # toolchain that then compiled nothing, because rustup resolves the toolchain from the
+        # CWD and falls through to the runner image default when no rust-toolchain.toml is
+        # found. Jobs that run cargo from app/ picked up the pin by accident of CWD; the tools
+        # job runs from the repo root and got whatever stable the image happened to ship. The
+        # `-Z` flag in the build-std work is the only reason it ever became audible.
+        #
+        # RUSTUP_TOOLCHAIN rather than `rustup default` or a per-call `+channel`:
+        #   * it sits ABOVE rust-toolchain.toml in rustup's override order, so a toolchain file
+        #     shipped by an UPSTREAM tool source -- which we check out and run cargo inside --
+        #     cannot redirect our compiler. That was a second, remote-controlled input.
+        #   * it applies to every later step without being named at each call site, so a new
+        #     cargo invocation cannot silently opt out by being forgotten.
+        export RUSTUP_TOOLCHAIN="$channel"
+
+        # PROVE it, in this step, rather than trusting the export. This assertion is the
+        # negative control for the defect above: it fails loudly on any future change that
+        # leaves the pin installed-but-inactive, which is precisely the state that produced
+        # green checks over an unpinned compiler.
+        active=$(rustup show active-toolchain 2>/dev/null | head -1)
+        case "$active" in
+          "$channel"*) echo "active toolchain: $active" ;;
+          *)
+            echo "::error::pinned toolchain is installed but NOT active. Expected '$channel', rustup reports '${active:-<none>}'. Refusing to build with an unpinned compiler."
+            exit 1
+            ;;
+        esac
+
+        # Hand it to every subsequent step in the job. GITHUB_ENV does not affect the current
+        # step, which is why the export above is separate rather than redundant.
+        echo "RUSTUP_TOOLCHAIN=$channel" >> "$GITHUB_ENV"
