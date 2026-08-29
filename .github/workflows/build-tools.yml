@@ -172,6 +172,30 @@ jobs:
             BUILD_STD_TOOLS="cargo-auditable"
             built=1
             tool_rustflags="$RUSTFLAGS"
+
+            # UPSTREAM LINT ALLOWANCES, per tool and per lint — never fleet-wide, and never a
+            # bare `-A warnings`. Each entry names one lint on one tool and says why.
+            #
+            # cargo-audit: abscissa_core's status_* macros end their arms with a trailing
+            # semicolon, and cargo-audit calls them in expression position (a match arm).
+            # SEMICOLON_IN_EXPRESSIONS_FROM_MACROS (rust#79813) is deny-by-default on this
+            # nightly, so the build fails on 21 sites in upstream's code, not ours.
+            #
+            # This is an upstream code-shape lint with no bearing on what cargo-audit DOES, so
+            # allowing it does not weaken a security property — unlike capping lints wholesale,
+            # which would also silence anything real. The durable fix is 12 deleted semicolons
+            # in iqlusioninc/abscissa (6 macros, 2 arms each); removing them makes the macros
+            # expand to expressions, which is valid in BOTH positions, so no caller breaks.
+            # abscissa_core 0.9.0 is the latest published version, so there is no bump to take,
+            # and tools/patches/ cannot reach it — it patches the tool's git checkout, and
+            # abscissa_core comes from crates.io. Tracked in #325; drop this line when a fixed
+            # abscissa_core is released and picked up in tools/locks/cargo-audit.lock.
+            case " cargo-audit " in
+              *" $name "*)
+                tool_rustflags="$tool_rustflags -A semicolon_in_expressions_from_macros"
+                echo "lint allowance for $name: semicolon_in_expressions_from_macros (upstream abscissa_core; #325)"
+                ;;
+            esac
             # An ARRAY, not a string. A string would have to be left unquoted at the call
             # site to split into separate arguments, and an unquoted expansion also globs --
             # so a stray matching file in the working directory could rewrite the build
