@@ -67,7 +67,7 @@ jobs:
           fail=0
           uploaded=()
           matched=0
-          while read -r name repo rev target sha; do
+          while read -r name _repo _rev target sha; do
             if [ -n "$ONLY" ] && [ "$ONLY" != "$name" ]; then continue; fi
             matched=$((matched+1))
             case "$sha" in
