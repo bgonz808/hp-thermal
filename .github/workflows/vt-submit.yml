@@ -1,0 +1,155 @@
+name: vt-submit (lookup-first upsert, dispatch-only)
+
+# WHY THIS EXISTS (#45). Getting a binary a VirusTotal panel requires SUBMITTING it, and #45
+# settled where that may happen: "use an ISOLATED post-publish job that holds the VT key,
+# never the build job." This is that job. The build and release runners stay secret-free;
+# only this dispatch-only workflow holds VT_API_KEY, alongside the lookup-only monitor.
+#
+# LOOKUP-FIRST, always: a hash already in the corpus is reported, not re-uploaded
+# (maintainer rule -- never spend an upload the corpus makes unnecessary; goes for any VT
+# flow). Upload happens only on a 404.
+#
+# STRUCTURALLY LIMITED BLAST RADIUS. Submitting to VT is an irreversible publish -- corpus
+# entries are redistributed onward (MWDB, VirusShare, Triage). So this workflow is built to
+# be INCAPABLE of submitting arbitrary bytes. It can only submit a file that clears all
+# three, fail-closed:
+#   1. named by digest in the committed TOOLS.lock of the dispatched ref;
+#   2. fetched from this repo's public `tools` release (already-public bytes -- a VT
+#      submission of a public release asset publishes nothing new);
+#   3. sha256-verified against the committed digest after download, before upload.
+# A compromised or mis-dispatched run therefore cannot leak anything that was not already
+# public, and cannot submit bytes the repo has not blessed by digest.
+#
+# WHAT IT DOES NOT DO: no evidence is written (recompute-not-store), nothing is committed,
+# no gate consults this run. The panel it creates is read later by the monitor's lookups and
+# recorded as mal.jsonl by a human at bless time. The AV panel is usually ready in minutes;
+# sandbox/behaviour results lag by design and are not waited for.
+#
+# Trigger is workflow_dispatch ONLY: the key never runs on schedule here, never on PRs, and
+# is never exposed to fork-triggered contexts.
+
+on:
+  workflow_dispatch:
+    inputs:
+      only:
+        description: "Submit a single tool by name (default: every TOOLS.lock entry)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Lookup-first upsert of the blessed tool fleet
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+          ONLY: ${{ inputs.only }}
+          REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${VT_API_KEY:-}" ]; then
+            echo "::error::VT_API_KEY secret is not configured. This flow cannot run."
+            exit 1
+          fi
+
+          fail=0
+          uploaded=()
+          matched=0
+          while read -r name repo rev target sha; do
+            if [ -n "$ONLY" ] && [ "$ONLY" != "$name" ]; then continue; fi
+            matched=$((matched+1))
+            case "$sha" in
+              *[!0-9a-f]*|"")
+                echo "::error::$name: TOOLS.lock digest is not lowercase hex"; fail=1; continue ;;
+            esac
+            if [ "${#sha}" -ne 64 ]; then
+              echo "::error::$name: TOOLS.lock digest is not 64 hex chars"; fail=1; continue
+            fi
+
+            sleep 16   # free-tier pacing, counts lookups and uploads alike
+            code=$(curl -sS -o resp.json -w "%{http_code}" -H "x-apikey: $VT_API_KEY" \
+              "https://www.virustotal.com/api/v3/files/$sha")
+            if [ "$code" = "200" ]; then
+              # Already in the corpus: report, never re-upload.
+              if ! stats=$(jq -er '.data.attributes.last_analysis_stats
+                                   | "malicious=\(.malicious) suspicious=\(.suspicious) undetected=\(.undetected)"' resp.json); then
+                echo "::error::$name: in corpus but stats parse FAILED (fail-closed, not all-clear)"
+                fail=1; continue
+              fi
+              echo "$name: already in corpus -- $stats  https://www.virustotal.com/gui/file/$sha"
+              continue
+            fi
+            if [ "$code" != "404" ]; then
+              echo "::error::$name: VT lookup HTTP $code (neither present nor absent -- refusing to guess)"
+              fail=1; continue
+            fi
+
+            # 404: not in the corpus. Fetch the ALREADY-PUBLIC release asset, re-deriving its
+            # name from the committed digest (#225 -- the name is never trusted), verify the
+            # bytes, and only then submit.
+            case "$target" in
+              windows*) asset="$name-${sha:0:12}.exe" ;;
+              *)        asset="$name-${sha:0:12}-$target" ;;
+            esac
+            rm -f "$asset"
+            if ! gh release download tools --repo "$REPO" --pattern "$asset" -O "$asset" --clobber; then
+              echo "::error::$name: asset '$asset' not found on the tools release -- nothing public to submit"
+              fail=1; continue
+            fi
+            have=$(sha256sum "$asset" | cut -d' ' -f1)
+            if [ "$have" != "$sha" ]; then
+              echo "::error::$name: downloaded bytes do not match the committed digest (have $have) -- REFUSING to submit"
+              fail=1; continue
+            fi
+
+            sleep 16
+            up=$(curl -sS -o upload.json -w "%{http_code}" -H "x-apikey: $VT_API_KEY" \
+              -F "file=@$asset" "https://www.virustotal.com/api/v3/files")
+            if [ "$up" != "200" ]; then
+              echo "::error::$name: upload HTTP $up: $(head -c 200 upload.json)"
+              fail=1; continue
+            fi
+            an=$(jq -er '.data.id' upload.json) || { echo "::error::$name: upload accepted but no analysis id"; fail=1; continue; }
+            echo "$name: SUBMITTED (analysis $an)  https://www.virustotal.com/gui/file/$sha"
+            uploaded+=("$name:$sha")
+          done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
+
+          if [ "$matched" -eq 0 ]; then
+            # Fail-secure: a selector matching nothing must not read as "all submitted".
+            echo "::error::no TOOLS.lock entry matched only='$ONLY'"
+            exit 1
+          fi
+
+          # One follow-up pass for fresh submissions: the AV panel usually lands in minutes.
+          # Best-effort -- a panel still running is expected latency, not an error; the
+          # monitor's next lookup will read it either way.
+          if [ "${#uploaded[@]}" -gt 0 ]; then
+            echo "waiting 120s for first panels on ${#uploaded[@]} fresh submission(s)..."
+            sleep 120
+            for entry in "${uploaded[@]}"; do
+              nm="${entry%%:*}"; h="${entry#*:}"
+              sleep 16
+              code=$(curl -sS -o resp.json -w "%{http_code}" -H "x-apikey: $VT_API_KEY" \
+                "https://www.virustotal.com/api/v3/files/$h")
+              if [ "$code" = "200" ] && stats=$(jq -er '.data.attributes.last_analysis_stats
+                     | "malicious=\(.malicious) suspicious=\(.suspicious) undetected=\(.undetected)"' resp.json); then
+                echo "$nm: first panel -- $stats"
+              else
+                echo "$nm: panel not ready yet (HTTP $code) -- the weekly/dispatch monitor lookup will pick it up"
+              fi
+            done
+          fi
+
+          exit "$fail"

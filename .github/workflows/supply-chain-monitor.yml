@@ -21,8 +21,8 @@ name: supply-chain monitor (static-pin posture)
 #             tamper or policy drift). Also a #226 follow-up.
 #
 # Jobs (all read-only, least-privilege, notice-by-failure):
-#   vt-monitor      — VirusTotal hash LOOKUPS (never uploads; upload+gate flow is a #205
-#                     design with its own least-privilege stage) for every blessed TOOLS.lock
+#   vt-monitor      — VirusTotal hash LOOKUPS only (submission lives in vt-submit.yml, the
+#                     #45 isolated dispatch-only stage) for every blessed TOOLS.lock
 #                     digest + the latest release exe. New detections on old bytes fail the
 #                     job -> scheduled-failure notification.
 #   vuln-monitor    — same bytes, newer advisory DB: has anything appeared since bless?
@@ -89,9 +89,9 @@ jobs:
             code=$(curl -sS -o resp.json -w "%{http_code}" -H "x-apikey: $VT_API_KEY" \
               "https://www.virustotal.com/api/v3/files/$h")
             if [ "$code" = "404" ]; then
-              # Not in the corpus: uploads are deliberately NOT automated (see #205 upload+gate
-              # design). Known-in-corpus: the six 2026-08-21 blessed tools + v0.3.1 exe.
-              echo "::warning::$key ($h): not in VT corpus - no monitoring possible until uploaded"
+              # Not in the corpus. This monitor never submits; the #45 stage for that is
+              # vt-submit.yml (dispatch-only, lookup-first, digest-verified public bytes only).
+              echo "::warning::$key ($h): not in VT corpus - dispatch vt-submit.yml to submit it (lookup-first)"
               continue
             fi
             [ "$code" = "200" ] || { echo "::warning::$key: VT lookup HTTP $code"; continue; }
