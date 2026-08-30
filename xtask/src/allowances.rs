@@ -42,6 +42,10 @@ struct Allowance {
     tool: &'static str,
     /// The lint being downgraded, exactly as rustc names it.
     lint: &'static str,
+    /// rustc's permanent pointer for the diagnostic -- for future-incompat lints, the
+    /// tracking-issue reference printed on every instance ("issue #79813"). Survives both
+    /// message rewording and the lint-name spelling difference.
+    marker: &'static str,
     /// Macro names the reviewed diagnostics originate from. A diagnostic from any OTHER
     /// macro is a new, unreviewed emission -- refused, not absorbed.
     expected_macros: &'static [&'static str],
@@ -52,6 +56,7 @@ struct Allowance {
 const ALLOWANCES: &[Allowance] = &[Allowance {
     tool: "cargo-audit",
     lint: "semicolon_in_expressions_from_macros",
+    marker: "issue #79813",
     // The defect is in abscissa_core's status_* macros (cargo-audit calls them in
     // expression position); these six names are what the reviewed diagnostics cite as the
     // origin. Names come from the diagnostics, not from grepping upstream's tree.
@@ -82,8 +87,23 @@ pub enum Verdict {
 
 /// What one tool's build output says about one allowance. Pure, so polarity is testable
 /// without a build: inverting it would turn an expiry check into a rubber stamp.
-pub fn classify(diag: &str, lint: &str, expected_macros: &[&str]) -> Verdict {
-    let count = diag.matches(lint).count();
+pub fn classify(diag: &str, lint: &str, marker: &str, expected_macros: &[&str]) -> Verdict {
+    // rustc prints lint names HYPHENATED in diagnostics ("-W semicolon-in-expressions-
+    // from-macros") while RUSTFLAGS and the lint's declared name use underscores. The
+    // first live run keyed on the underscore spelling, found zero matches in 21 real
+    // diagnostics, and declared the allowance Obsolete against an unfixed upstream --
+    // failing closed, but wrongly. Count under both spellings, plus the diagnostic's
+    // permanent marker (the tracking-issue reference rustc prints on every
+    // future-incompat instance), and take the MAX: one diagnostic can carry several of
+    // these, so summing would multiply-count it.
+    let count = [
+        diag.matches(lint).count(),
+        diag.matches(&lint.replace('_', "-")).count(),
+        if marker.is_empty() { 0 } else { diag.matches(marker).count() },
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(0);
     if count == 0 {
         return Verdict::Obsolete;
     }
@@ -140,7 +160,7 @@ pub fn run(args: &[String]) -> i32 {
     for a in ALLOWANCES {
         let path = Path::new(&diag_dir).join(format!("diag-{}.log", a.tool));
         let verdict = match std::fs::read_to_string(&path) {
-            Ok(diag) => classify(&diag, a.lint, a.expected_macros),
+            Ok(diag) => classify(&diag, a.lint, a.marker, a.expected_macros),
             Err(e) => Verdict::Unverifiable(format!("{}: {e}", path.display())),
         };
         match verdict {
@@ -186,22 +206,53 @@ mod tests {
     use super::*;
 
     const LINT: &str = "semicolon_in_expressions_from_macros";
+    const MARKER: &str = "issue #79813";
     const EXPECTED: &[&str] = &["status_warn", "status_err"];
 
-    /// A faithful miniature of the real diagnostic shape (from producer run 33235815691).
+    /// The diagnostic VERBATIM from producer run 33325673586 -- not an approximation.
+    /// The first fixture was hand-written with the underscore lint spelling, so the tests
+    /// validated the author's guess instead of the emission; the false Obsolete it hid is
+    /// exactly the coupling defect this module exists to avoid. If rustc's shape changes,
+    /// update this from a real log, never from memory.
     fn real_shape() -> String {
-        "warning: trailing semicolon in macro used in expression position\n\
-           --> cargo-audit\\src\\presenter.rs:267:29\n\
-           = note: requested on the command line with `-W semicolon_in_expressions_from_macros`\n\
-           = note: this error originates in the macro `$crate::status_warn` which comes from \
-         the expansion of the macro `status_warn`\n"
-            .to_string()
+        [
+            "warning: trailing semicolon in macro used in expression position",
+            "   --> cargo-audit\\src\\auditor.rs:368:31",
+            "    = warning: this was previously accepted by the compiler but is being phased out; it will become a hard error in a future release!",
+            "    = note: for more information, see issue #79813 <https://github.com/rust-lang/rust/issues/79813>",
+            "    = note: requested on the command line with `-W semicolon-in-expressions-from-macros`",
+            "    = note: this warning originates in the macro `status_err` (in Nightly builds, run with -Z macro-backtrace for more info)",
+        ]
+        .join("\n")
     }
 
     #[test]
-    fn lint_firing_from_reviewed_macros_keeps_the_allowance() {
+    fn the_real_hyphenated_diagnostic_keeps_the_allowance() {
+        // The regression that reached CI: rustc hyphenates, the matcher expected
+        // underscores, 21 live diagnostics counted as zero.
         assert_eq!(
-            classify(&real_shape(), LINT, EXPECTED),
+            classify(&real_shape(), LINT, MARKER, EXPECTED),
+            Verdict::StillNeeded { count: 1 }
+        );
+    }
+
+    #[test]
+    fn the_underscore_spelling_also_counts() {
+        // Defensive in the other direction: if rustc ever prints the declared name.
+        let diag = "note: `#[warn(semicolon_in_expressions_from_macros)]` on by default\n\
+                    note: this warning originates in the macro `status_warn`";
+        assert_eq!(
+            classify(diag, LINT, "", EXPECTED),
+            Verdict::StillNeeded { count: 1 }
+        );
+    }
+
+    #[test]
+    fn one_diagnostic_with_all_three_identifiers_counts_once() {
+        // max, not sum: the same diagnostic carrying name+marker must not read as three.
+        let diag = format!("{}\nsemicolon_in_expressions_from_macros", real_shape());
+        assert_eq!(
+            classify(&diag, LINT, MARKER, EXPECTED),
             Verdict::StillNeeded { count: 1 }
         );
     }
@@ -209,28 +260,32 @@ mod tests {
     #[test]
     fn lint_not_firing_means_the_allowance_must_go() {
         // The whole point: the workaround dies with the diagnostic instead of outliving it.
-        // This is what the source-grep design could NOT promise -- upstream fixing the lint
-        // without deleting the grepped string would have kept the allowance alive forever.
         assert_eq!(
-            classify("   Compiling cargo-audit v0.22.2\n    Finished release\n", LINT, EXPECTED),
+            classify("   Compiling cargo-audit v0.22.2\n    Finished release\n", LINT, MARKER, EXPECTED),
             Verdict::Obsolete
         );
     }
 
     #[test]
     fn an_unreviewed_macro_is_refused_not_absorbed() {
-        let diag = real_shape().replace("status_warn", "sneaky_new_macro");
-        match classify(&diag, LINT, EXPECTED) {
+        let diag = real_shape().replace("status_err", "sneaky_new_macro");
+        match classify(&diag, LINT, MARKER, EXPECTED) {
             Verdict::NewEmissionSource(m) => assert_eq!(m, vec!["sneaky_new_macro".to_string()]),
             other => panic!("a new emission source must not be silently covered, got {other:?}"),
         }
     }
 
     #[test]
-    fn origin_extraction_strips_the_crate_qualifier_and_dedups() {
-        let macros = origin_macros(&real_shape());
-        // `$crate::status_warn` and `status_warn` are one origin, not two.
-        assert_eq!(macros.into_iter().collect::<Vec<_>>(), vec!["status_warn"]);
+    fn origin_extraction_matches_both_of_rustcs_phrasings() {
+        assert_eq!(
+            origin_macros(&real_shape()).into_iter().collect::<Vec<_>>(),
+            vec!["status_err"]
+        );
+        // The $crate-qualified double-mention form is one origin, not two.
+        let q = origin_macros(
+            "originates in the macro `$crate::status_err` which comes from the expansion of the macro `status_err`",
+        );
+        assert_eq!(q.into_iter().collect::<Vec<_>>(), vec!["status_err"]);
     }
 
     #[test]
@@ -240,11 +295,12 @@ mod tests {
     }
 
     #[test]
-    fn every_allowance_names_an_issue_reviewed_macros_and_a_reason() {
+    fn every_allowance_names_an_issue_marker_reviewed_macros_and_a_reason() {
         // An allowance with no recorded justification is indistinguishable from an accident.
         for a in ALLOWANCES {
             assert!(a.issue.starts_with('#'), "{} has no issue", a.tool);
             assert!(!a.why.is_empty(), "{} has no rationale", a.tool);
+            assert!(!a.marker.is_empty(), "{} has no stable diagnostic marker", a.tool);
             assert!(!a.expected_macros.is_empty(), "{} reviews no emission source", a.tool);
         }
     }
