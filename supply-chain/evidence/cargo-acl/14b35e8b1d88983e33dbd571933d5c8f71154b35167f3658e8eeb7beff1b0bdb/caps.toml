@@ -1,0 +1,381 @@
+# caps evidence — COPIED FORWARD from 085684885c32: source-vantage inventory is a
+# function of (rev, lock), both UNCHANGED for this rebuild. What DID change is the
+# COMPILER (floating stable -> pinned nightly-2026-07-23, #321) and, for
+# cargo-auditable, build-std — codegen, a binary-vantage property. verify-caps at the
+# producer confirmed every import surface byte-for-byte unchanged (run 33275419235).
+[common]
+version = 2
+
+[sandbox]
+kind = "Disabled"
+
+[api.net]
+include = [
+    "mio::net","std::net"]
+
+[api.fs]
+include = [
+    "cargo-acl::fs",
+    "rustix::fs","std::fs"]
+
+[api.process]
+include = ["std::process"]
+
+[api.env]
+include = ["std::env",
+    "tempfile::env"]
+
+[pkg.thiserror-impl]
+allow_proc_macro = true
+
+[pkg.pest_derive]
+allow_proc_macro = true
+
+[pkg.phf_macros]
+allow_proc_macro = true
+
+[pkg.darling_macro]
+allow_proc_macro = true
+
+[pkg.instability]
+allow_proc_macro = true
+
+[pkg.strum_macros]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.rustversion]
+allow_proc_macro = true
+build.allow_apis = [
+    "fs",
+    "process",
+]
+allow_apis = [
+    "env",
+]
+
+[pkg.derive_more-impl]
+allow_proc_macro = true
+
+[pkg.num-derive]
+allow_proc_macro = true
+
+[pkg.wezterm-dynamic-derive]
+allow_proc_macro = true
+
+[pkg.serde_derive]
+allow_proc_macro = true
+
+[pkg.document-features]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.clap_derive]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.wit-bindgen-rust-macro]
+allow_proc_macro = true
+
+[pkg.wasm-bindgen-macro]
+allow_proc_macro = true
+
+[pkg.indoc]
+allow_proc_macro = true
+
+[pkg.unicode-ident]
+allow_unsafe = true
+
+[pkg.foldhash]
+allow_unsafe = true
+
+[pkg.itoa]
+allow_unsafe = true
+
+[pkg.static_assertions]
+allow_unsafe = true
+
+[pkg.ryu]
+allow_unsafe = true
+
+[pkg.either]
+allow_unsafe = true
+
+[pkg.bitflags]
+allow_unsafe = true
+
+[pkg.allocator-api2]
+allow_unsafe = true
+
+[pkg.scopeguard]
+allow_unsafe = true
+
+[pkg.log]
+allow_unsafe = true
+
+[pkg.powerfmt]
+allow_unsafe = true
+
+[pkg.smallvec]
+allow_unsafe = true
+
+[pkg.lock_api]
+allow_unsafe = true
+
+[pkg.linux-raw-sys]
+allow_unsafe = true
+
+[pkg.serde_core]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.libc]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.proc-macro2]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.thiserror]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.quote]
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.utf8parse]
+allow_unsafe = true
+
+[pkg.parking_lot_core]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.rustix]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.anstyle-query]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.simd-adler32]
+allow_unsafe = true
+
+[pkg.anstyle-parse]
+allow_unsafe = true
+
+[pkg.crc32fast]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.anstyle]
+allow_unsafe = true
+
+[pkg.zmij]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.hashbrown]
+allow_unsafe = true
+
+[pkg.serde_json]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.memchr]
+allow_unsafe = true
+
+[pkg.serde]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.camino]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.twox-hash]
+allow_unsafe = true
+
+[pkg.deranged]
+allow_unsafe = true
+
+[pkg.getrandom]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.itertools]
+allow_unsafe = true
+
+[pkg.castaway]
+allow_unsafe = true
+
+[pkg.clap_lex]
+allow_unsafe = true
+
+[pkg.anstream]
+allow_unsafe = true
+
+[pkg.winnow]
+allow_unsafe = true
+
+[pkg.anyhow]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.once_cell]
+allow_unsafe = true
+
+[pkg.object]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.flate2]
+allow_unsafe = true
+
+[pkg.lru]
+allow_unsafe = true
+
+[pkg.indexmap]
+allow_unsafe = true
+
+[pkg.colored]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.compact_str]
+allow_unsafe = true
+
+[pkg.ruzstd]
+allow_unsafe = true
+
+[pkg.is-terminal]
+allow_unsafe = true
+
+[pkg.errno]
+allow_unsafe = true
+
+[pkg.mio]
+allow_unsafe = true
+
+[pkg.signal-hook-registry]
+allow_unsafe = true
+
+[pkg.toml_parser]
+allow_unsafe = true
+
+[pkg.time]
+allow_unsafe = true
+
+[pkg.gimli]
+allow_unsafe = true
+
+[pkg.parking_lot]
+allow_unsafe = true
+
+[pkg.signal-hook]
+allow_unsafe = true
+
+[pkg.semver]
+allow_unsafe = true
+
+[pkg.syn]
+allow_unsafe = true
+
+[pkg.crossterm]
+allow_unsafe = true
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.tui-input]
+allow_unsafe = true
+
+[pkg.cargo-acl]
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.tempfile]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.cargo_metadata]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.clap_builder]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.signal-hook-mio]
+allow_apis = [
+    "net",
+]

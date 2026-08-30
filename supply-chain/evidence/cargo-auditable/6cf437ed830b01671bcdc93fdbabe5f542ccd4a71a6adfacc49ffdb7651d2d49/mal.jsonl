@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-auditable","sha256":"6cf437ed830b01671bcdc93fdbabe5f542ccd4a71a6adfacc49ffdb7651d2d49"},"panelDate":"2026-08-30","detections":{"malicious":0,"total":71},"flags":[],"sandbox":[]}
