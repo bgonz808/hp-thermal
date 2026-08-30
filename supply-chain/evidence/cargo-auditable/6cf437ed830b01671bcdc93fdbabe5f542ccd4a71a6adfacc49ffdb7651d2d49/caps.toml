@@ -1,0 +1,258 @@
+# caps evidence — COPIED FORWARD from 33f99f3712e2: source-vantage inventory is a
+# function of (rev, lock), both UNCHANGED for this rebuild. What DID change is the
+# COMPILER (floating stable -> pinned nightly-2026-07-23, #321) and, for
+# cargo-auditable, build-std — codegen, a binary-vantage property. verify-caps at the
+# producer confirmed every import surface byte-for-byte unchanged (run 33275419235).
+[common]
+version = 2
+
+[sandbox]
+kind = "Disabled"
+
+[api.net]
+include = ["std::net"]
+
+[api.fs]
+include = [
+    "rustix::fs","std::fs"]
+
+[api.process]
+include = ["std::process"]
+
+[api.env]
+include = ["std::env"]
+
+[pkg.thiserror-impl]
+allow_proc_macro = true
+
+[pkg.strum_macros]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.rustversion]
+allow_proc_macro = true
+build.allow_apis = [
+    "fs",
+    "process",
+]
+allow_apis = [
+    "env",
+]
+
+[pkg.cyclonedx-bom-macros]
+allow_proc_macro = true
+
+[pkg.time-macros]
+allow_proc_macro = true
+
+[pkg.serde_derive]
+allow_proc_macro = true
+
+[pkg.wasm-bindgen-macro]
+allow_proc_macro = true
+
+[pkg.unicode-ident]
+allow_unsafe = true
+
+[pkg.itoa]
+allow_unsafe = true
+
+[pkg.ryu]
+allow_unsafe = true
+
+[pkg.powerfmt]
+allow_unsafe = true
+
+[pkg.bitflags]
+allow_unsafe = true
+
+[pkg.hashbrown]
+allow_unsafe = true
+
+[pkg.serde_json]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.quote]
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.proc-macro2]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.serde]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.serde_core]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.memchr]
+allow_unsafe = true
+
+[pkg.getrandom]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.camino]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.libc]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.thiserror]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.percent-encoding]
+allow_unsafe = true
+
+[pkg.smallvec]
+allow_unsafe = true
+
+[pkg.autocfg]
+from.build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.foldhash]
+allow_unsafe = true
+
+[pkg.once_cell]
+allow_unsafe = true
+
+[pkg.fluent-uri]
+allow_unsafe = true
+
+[pkg.crc32fast]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.byteorder]
+allow_unsafe = true
+
+[pkg.rustix]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.linux-raw-sys]
+allow_unsafe = true
+
+[pkg.deranged]
+allow_unsafe = true
+
+[pkg.object]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.num-traits]
+allow_unsafe = true
+
+[pkg.indexmap]
+allow_unsafe = true
+
+[pkg.ordered-float]
+allow_unsafe = true
+
+[pkg.winnow]
+allow_unsafe = true
+
+[pkg.uuid]
+allow_unsafe = true
+
+[pkg.aho-corasick]
+allow_unsafe = true
+
+[pkg.time]
+allow_unsafe = true
+
+[pkg.semver]
+allow_unsafe = true
+
+[pkg.syn]
+allow_unsafe = true
+
+[pkg.regex-automata]
+allow_unsafe = true
+
+[pkg.env_home]
+from.test.allow_apis = [
+    "env",
+]
+
+[pkg.which]
+from.test.allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.cargo-auditable]
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.auditable-info]
+allow_apis = [
+    "fs",
+]
+
+[pkg.cargo_metadata]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.toml_edit]
+allow_unsafe = true
+
+[pkg.auditable2cdx]
+allow_apis = [
+    "env",
+]

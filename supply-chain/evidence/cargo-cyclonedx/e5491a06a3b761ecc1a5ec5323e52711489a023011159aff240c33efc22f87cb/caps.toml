@@ -1,0 +1,612 @@
+# caps evidence — COPIED FORWARD from d8cd946487f8: source-vantage inventory is a
+# function of (rev, lock), both UNCHANGED for this rebuild. What DID change is the
+# COMPILER (floating stable -> pinned nightly-2026-07-23, #321) and, for
+# cargo-auditable, build-std — codegen, a binary-vantage property. verify-caps at the
+# producer confirmed every import surface byte-for-byte unchanged (run 33275419235).
+[common]
+version = 2
+
+[sandbox]
+kind = "Disabled"
+
+[api.net]
+include = ["connect","mio::net","std::net","tokio::net"]
+
+[api.fs]
+include = ["rustix::fs","std::fs","tokio::fs"]
+
+[api.process]
+include = ["std::process","tokio::process"]
+
+[api.env]
+include = ["home::env",
+    "insta::env","std::env","tempfile::env"]
+
+[pkg.tracing-attributes]
+allow_proc_macro = true
+
+[pkg.thiserror-impl]
+allow_proc_macro = true
+
+[pkg.wasm-bindgen-macro]
+allow_proc_macro = true
+
+[pkg.zerocopy-derive]
+allow_proc_macro = true
+
+[pkg.zerofrom-derive]
+allow_proc_macro = true
+
+[pkg.zerovec-derive]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.icu_provider_macros]
+allow_proc_macro = true
+
+[pkg.ref-cast-impl]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.time-macros]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.strum_macros]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.cyclonedx-bom-macros]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.yoke-derive]
+allow_proc_macro = true
+allow_unsafe = true
+
+[pkg.phf_macros]
+allow_proc_macro = true
+
+[pkg.clap_derive]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.displaydoc]
+allow_proc_macro = true
+
+[pkg.serde_derive]
+allow_proc_macro = true
+
+[pkg.stable_deref_trait]
+allow_unsafe = true
+
+[pkg.lazy_static]
+allow_unsafe = true
+from.test.allow_apis = [
+    "env",
+]
+
+[pkg.unicode-ident]
+allow_unsafe = true
+
+[pkg.icu_locid_transform_data]
+allow_unsafe = true
+
+[pkg.itoa]
+allow_unsafe = true
+
+[pkg.once_cell]
+allow_unsafe = true
+
+[pkg.ryu]
+allow_unsafe = true
+
+[pkg.smallvec]
+allow_unsafe = true
+
+[pkg.utf16_iter]
+allow_unsafe = true
+
+[pkg.percent-encoding]
+allow_unsafe = true
+
+[pkg.icu_properties_data]
+allow_unsafe = true
+
+[pkg.writeable]
+allow_unsafe = true
+
+[pkg.siphasher]
+allow_unsafe = true
+
+[pkg.icu_normalizer_data]
+allow_unsafe = true
+
+[pkg.utf8_iter]
+allow_unsafe = true
+
+[pkg.rand_core]
+allow_unsafe = true
+
+[pkg.serde_json]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.serde]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.serde_core]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.proc-macro2]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.thiserror]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.form_urlencoded]
+allow_unsafe = true
+
+[pkg.thread_local]
+allow_unsafe = true
+
+[pkg.anstyle]
+allow_unsafe = true
+
+[pkg.log]
+allow_unsafe = true
+
+[pkg.memchr]
+allow_unsafe = true
+
+[pkg.libc]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.autocfg]
+from.build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.powerfmt]
+allow_unsafe = true
+
+[pkg.hashbrown]
+allow_unsafe = true
+
+[pkg.version_check]
+from.build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.anyhow]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.ref-cast]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.rand]
+allow_unsafe = true
+
+[pkg.pin-project-lite]
+allow_unsafe = true
+
+[pkg.tracing-core]
+allow_unsafe = true
+
+[pkg.same-file]
+allow_unsafe = true
+from.test.allow_apis = [
+    "fs",
+]
+
+[pkg.semver]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.num-traits]
+allow_unsafe = true
+
+[pkg.deranged]
+allow_unsafe = true
+
+[pkg.camino]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.object]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.bitflags]
+allow_unsafe = true
+
+[pkg.indexmap]
+allow_unsafe = true
+
+[pkg.sharded-slab]
+allow_unsafe = true
+
+[pkg.scopeguard]
+allow_unsafe = true
+
+[pkg.rustix]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.owo-colors]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.linux-raw-sys]
+allow_unsafe = true
+
+[pkg.parking_lot_core]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.bit-vec]
+allow_unsafe = true
+
+[pkg.ahash]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.minimal-lexical]
+allow_unsafe = true
+
+[pkg.lock_api]
+allow_unsafe = true
+
+[pkg.eyre]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.ordered-float]
+allow_unsafe = true
+
+[pkg.bit-set]
+allow_unsafe = true
+
+[pkg.utf8parse]
+allow_unsafe = true
+
+[pkg.color-spantrace]
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.anstyle-parse]
+allow_unsafe = true
+
+[pkg.zerocopy]
+allow_unsafe = true
+
+[pkg.num-complex]
+allow_unsafe = true
+
+[pkg.bytecount]
+allow_unsafe = true
+
+[pkg.anstyle-query]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.getrandom]
+allow_unsafe = true
+
+[pkg.clap_lex]
+allow_unsafe = true
+
+[pkg.anstream]
+allow_unsafe = true
+
+[pkg.uuid]
+allow_unsafe = true
+
+[pkg.gimli]
+allow_unsafe = true
+
+[pkg.aho-corasick]
+allow_unsafe = true
+
+[pkg.console]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.linked-hash-map]
+allow_unsafe = true
+
+[pkg.either]
+allow_unsafe = true
+
+[pkg.portable-atomic]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.parking_lot]
+allow_unsafe = true
+
+[pkg.num-bigint]
+allow_unsafe = true
+
+[pkg.nom]
+allow_unsafe = true
+
+[pkg.tracing-subscriber]
+allow_unsafe = true
+
+[pkg.crossbeam-utils]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.winnow]
+allow_unsafe = true
+
+[pkg.doc-comment]
+build.allow_apis = [
+    "process",
+]
+
+[pkg.yansi]
+allow_unsafe = true
+
+[pkg.syn]
+allow_unsafe = true
+
+[pkg.itertools]
+allow_unsafe = true
+
+[pkg.assert_cmd]
+build.allow_apis = [
+    "env",
+    "fs",
+]
+from.test.allow_apis = [
+    "process",
+]
+
+[pkg.wait-timeout]
+allow_unsafe = true
+
+[pkg.colored]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.crossbeam-channel]
+allow_unsafe = true
+allow_apis = [
+    "process",
+]
+
+[pkg.addr2line]
+allow_unsafe = true
+
+[pkg.fraction]
+allow_unsafe = true
+
+[pkg.is-terminal]
+allow_unsafe = true
+
+[pkg.time]
+allow_unsafe = true
+
+[pkg.regex-automata]
+allow_unsafe = true
+
+[pkg.backtrace]
+allow_unsafe = true
+
+[pkg.synstructure]
+allow_unsafe = true
+
+[pkg.bstr]
+allow_unsafe = true
+
+[pkg.tracing]
+allow_unsafe = true
+
+[pkg.toml_edit]
+allow_unsafe = true
+
+[pkg.predicates]
+allow_unsafe = true
+from.test.allow_apis = [
+    "fs",
+]
+
+[pkg.tracing-error]
+allow_unsafe = true
+
+[pkg.spanned]
+allow_unsafe = true
+allow_apis = [
+    "fs",
+]
+
+[pkg.insta]
+allow_unsafe = true
+from.test.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.yoke]
+allow_unsafe = true
+
+[pkg.zerovec]
+allow_unsafe = true
+
+[pkg.cargo_metadata]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.ui_test]
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.rustc_version]
+allow_apis = [
+    "process",
+]
+
+[pkg.tinystr]
+allow_unsafe = true
+
+[pkg.icu_collections]
+allow_unsafe = true
+
+[pkg.icu_locid]
+allow_unsafe = true
+
+[pkg.icu_provider]
+allow_unsafe = true
+
+[pkg.icu_locid_transform]
+allow_unsafe = true
+
+[pkg.icu_properties]
+allow_unsafe = true
+
+[pkg.icu_normalizer]
+allow_unsafe = true
+
+[pkg.idna]
+allow_unsafe = true
+
+[pkg.walkdir]
+from.test.allow_apis = [
+    "fs",
+]
+
+[pkg.cyclonedx-bom]
+test.allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.termcolor]
+allow_apis = [
+    "env",
+]
+
+[pkg.clap_builder]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.cargo-cyclonedx]
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+test.allow_apis = [
+    "process",
+]
+
+[pkg.cargo-lock]
+allow_apis = [
+    "fs",
+]
+
+[pkg.env_logger]
+allow_apis = [
+    "env",
+]
+
+[pkg.tempfile]
+from.test.allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.assert_fs]
+from.test.allow_apis = [
+    "fs",
+]
