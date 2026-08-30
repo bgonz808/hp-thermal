@@ -111,6 +111,17 @@ jobs:
             fi
             mapfile -t engines < <(tr -d '\r' < engines.txt)   # CRLF scrub: comparisons stay byte-exact
             echo "$key: ${#engines[@]} detection(s)  https://www.virustotal.com/gui/file/$h"
+            # WHAT each engine called it, not only WHO flagged it. The ack policy turns on
+            # that distinction -- a heuristic/ML verdict (names carrying .!ml, Heur, ML/,
+            # Generic) is a different risk claim from a signature match on a known family, and
+            # the maintainer has been explicit that ML-class findings are not blanket-ignored.
+            # Engine names alone made every detection look identical, so a reviewer had to open
+            # the VT GUI to learn anything. Read-only: this does not feed ack matching, which
+            # still runs off engines.txt above.
+            jq -r '.data.attributes.last_analysis_results
+                   | to_entries[]
+                   | select(.value.category == "malicious" or .value.category == "suspicious")
+                   | "      \(.key) [\(.value.category)] \(.value.result // "-")"' resp.json || true
             # ONE lattice, two consumers (#278): acks come from the SAME evidence store the
             # gate reads (supply-chain/evidence/<product>/acks.jsonl), matched by the gate's
             # own code (xtask mal-acks) — per-(digest, engine), quality bar enforced (empty/
