@@ -192,8 +192,12 @@ jobs:
             # abscissa_core is released and picked up in tools/locks/cargo-audit.lock.
             case " cargo-audit " in
               *" $name "*)
-                tool_rustflags="$tool_rustflags -A semicolon_in_expressions_from_macros"
-                echo "lint allowance for $name: semicolon_in_expressions_from_macros (upstream abscissa_core; #325)"
+                # -W, not -A: WARN keeps the build green while EMITTING the diagnostics,
+                # and verify-allowances then re-justifies the allowance from what this very
+                # build emitted -- zero diagnostics fails the run until the -W is shed
+                # (#325). Allow would suppress the evidence the ratchet reads.
+                tool_rustflags="$tool_rustflags -W semicolon_in_expressions_from_macros"
+                echo "lint allowance for $name: -W semicolon_in_expressions_from_macros (upstream abscissa_core; #325; ratcheted on this build's diagnostics)"
                 ;;
             esac
             # An ARRAY, not a string. A string would have to be left unquoted at the call
@@ -242,9 +246,12 @@ jobs:
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1 \
                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" || built=0
+              # 2>&1 | tee: the diagnostics land in diag-<name>.log for verify-allowances
+              # to read AFTER the loop. pipefail is set, so cargo's failure still reaches
+              # `|| built=0` through the pipe.
+              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
             else
-              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" || built=0
+              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
             fi
             # REPORT EVERY FAILING TOOL, not the first. The loop used to exit here, so a
             # ~10-minute run answered "does cargo-audit build?" when the question was "which
@@ -282,13 +289,16 @@ jobs:
       # binary vantage of the #241 caps axis, the same engine release-attest runs on the
       # app exe — every binary we produce is caps-gated at birth.
       # A workaround that outlives its reason reads as policy, and nothing in CI disagrees.
-      # This runs AFTER the build so cargo has extracted the dependency sources, and BEFORE
-      # attest/upload so an obsolete allowance cannot ride into a published artifact.
-      - name: Allowance expiry - every workaround must still be justified upstream (#325)
+      # Ratchets on the DIAGNOSTICS THIS BUILD EMITTED (diag-<tool>.log, teed above), not on
+      # upstream's code shape -- the allowance exists because the compiler emits a
+      # diagnostic, so the diagnostic is the precondition (maintainer review, #325). Runs
+      # AFTER the build and BEFORE attest/upload, so an obsolete allowance cannot ride into
+      # a published artifact.
+      - name: Allowance expiry - every -W must be re-justified by this build's diagnostics (#325)
         shell: bash
         run: |
           set -euo pipefail
-          cargo run --manifest-path xtask/Cargo.toml -- verify-allowances
+          cargo run --manifest-path xtask/Cargo.toml -- verify-allowances --diag-dir .
 
       - name: Caps-manifest gate (each produced tool binary)
         shell: bash
