@@ -61,7 +61,7 @@ features = [
 # Already pulled in transitively by `windows`; declared directly only so the
 # `#[implement]` macro's generated `::windows_core::` paths resolve.
 [dependencies.windows-core]
-version = "0.62"
+version = "0.100"
 
 # No build-dependencies: build.rs uses only std + the pinned System32/SDK tools it invokes
 # by absolute path. (Dropped embed-resource — resources are now compiled by the pinned
