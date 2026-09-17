@@ -1,0 +1,5 @@
+{"schema":"hp-thermal/evidence-vuln/v1","subject":{"name":"cargo-audit","sha256":"80eb16891508b5f20fbcfa4b7ece7854c9f60459bb7c191089664a9dd30eb39a"},"scanner":{"uri":"github.com/rustsec/rustsec#cargo-audit","version":"0.22.2","digest":"80eb16891508b5f20fbcfa4b7ece7854c9f60459bb7c191089664a9dd30eb39a","db":{"uri":"github.com/rustsec/advisory-db","version":"e2e640471715167f73e22eaf761f2e547adafeec","lastUpdate":"2026-09-14T18:06:06+02:00"}},"scanFinishedOn":"2026-09-16","lockProvenance":"frozen tools/locks/cargo-audit.lock (built-from, #259)","rawPayload":{"sha256":"72901df3d43bd0fee34e0c215902868356db40873029e126cb1a658bd33c479e","store":"tools release","asset":"audit-raw-72901df3d43b.json"}}
+{"id":"RUSTSEC-2026-0194","aliases":[],"package":"quick-xml","version":"0.39.4","kind":"vulnerability"}
+{"id":"RUSTSEC-2026-0195","aliases":[],"package":"quick-xml","version":"0.39.4","kind":"vulnerability"}
+{"id":"RUSTSEC-2026-0214","aliases":[],"package":"gumdrop","version":"0.8.1","kind":"unmaintained"}
+{"id":"RUSTSEC-2026-0285","aliases":["GHSA-2mjx-qc3c-rqvc"],"package":"rustls","version":"0.23.40","kind":"vulnerability"}
