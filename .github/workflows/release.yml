@@ -359,7 +359,7 @@ jobs:
 
       - name: Azure login (OIDC, federated — no secret)
         if: ${{ vars.SIGNING_ENABLED == 'true' }}
-        uses: azure/login@f5d393ae46f8fde4be8b75f32e3fc50e654ad0ca  # Azure/login v3.0.1
+        uses: azure/login@7ddb5af1ef8758cf1353cf3b42f940aee27ba21c  # Azure/login v3.0.2
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -733,7 +733,7 @@ jobs:
       sarif_sha256: ${{ steps.sarif_digest.outputs.sha256 }}
     steps:
       - name: Harden runner (egress audited)
-        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2.21.0
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
         with:
           egress-policy: audit
       # Sparse: ONLY the composite action, so this stays close to verify's no-full-checkout intent.
@@ -860,7 +860,7 @@ jobs:
           [ "$got" = "$EXPECTED" ] || { echo "::error::release SARIF digest mismatch — not uploading a corrupted report"; exit 1; }
       - name: Upload release SARIF to code-scanning (informational, non-blocking)
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # github/codeql-action v4.37.7
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # github/codeql-action v4.37.9
         with:
           sarif_file: sarif/binskim-release.sarif
           category: binskim-release
