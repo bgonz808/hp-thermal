@@ -860,7 +860,7 @@ jobs:
           [ "$got" = "$EXPECTED" ] || { echo "::error::release SARIF digest mismatch — not uploading a corrupted report"; exit 1; }
       - name: Upload release SARIF to code-scanning (informational, non-blocking)
         continue-on-error: true
-        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # github/codeql-action v4.37.9
+        uses: github/codeql-action/upload-sarif@b96794f015dfd88f77b49b1c93e0fa7110f94c63 # github/codeql-action v4.38.0
         with:
           sarif_file: sarif/binskim-release.sarif
           category: binskim-release
