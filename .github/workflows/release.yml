@@ -249,7 +249,7 @@ jobs:
         run: xtask/target/release/xtask.exe verify-timestamp dist/hp-thermal.exe
 
       - name: Upload unsigned artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # actions/upload-artifact v7.0.2
         with:
           name: dist-unsigned
           path: dist/
@@ -269,7 +269,7 @@ jobs:
 
       # The verifier travels separately so `verify` needs neither the repo nor a toolchain.
       - name: Upload xtask verifier
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # actions/upload-artifact v7.0.2
         with:
           name: xtask-verifier
           path: xtask/target/release/xtask.exe
@@ -528,7 +528,7 @@ jobs:
           "pdb_sha256=$pdb" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
 
       - name: Upload signed artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # actions/upload-artifact v7.0.2
         with:
           name: dist
           path: dist/
@@ -763,7 +763,7 @@ jobs:
           "release SARIF sha256: $h"
       - name: Upload SARIF (inert artifact)
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # actions/upload-artifact v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact v7.0.2
         with:
           name: binskim-release-sarif
           path: ${{ runner.temp }}/binskim-release.sarif
