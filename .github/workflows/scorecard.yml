@@ -1,0 +1,65 @@
+name: OpenSSF Scorecard
+
+# BASELINE MEASUREMENT against an external yardstick (#279/#281). Scorecard runs
+# automated checks — Pinned-Dependencies, Token-Permissions, Dangerous-Workflow,
+# Branch-Protection, Signed-Releases, and others — several of which correspond
+# directly to controls we already built (#221 digest pinning, least-privilege jobs).
+# Its value here is finding gaps we cannot see from inside; a red check is a
+# finding, not a failure of the run.
+#
+# DELIBERATE CHOICES:
+#   * publish_results: false — we do NOT push results to the public
+#     securityscorecards.dev dataset. Measurement is for us; publishing is a
+#     separate, reversible decision the maintainer can make later.
+#   * The action is DIGEST-PINNED (#221). Note the trust asymmetry, stated plainly:
+#     this is an upstream-authored action, so we pin THEIR bytes by SHA — we do not
+#     build it, and it carries no attestation of ours. Same class as the BinSkim
+#     nupkg pin, not the same class as our own producer-built tools.
+#   * Scheduled + dispatch only, never on PR: the action wants `id-token: write`
+#     for its optional publishing path, and PR-triggered jobs with token scope are
+#     exactly the shape we avoid. Here id-token is omitted entirely since we do not
+#     publish.
+#   * SARIF is uploaded to OUR code-scanning tab only (security-events: write),
+#     which keeps findings in the same place as CodeQL/BinSkim.
+
+on:
+  schedule:
+    - cron: "23 7 * * 1"   # weekly, Monday 07:23 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write   # upload SARIF to this repo's code-scanning tab
+      actions: read            # Scorecard reads workflow definitions
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Scorecard
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # ossf/scorecard-action v2.4.4
+        with:
+          results_file: scorecard-results.sarif
+          results_format: sarif
+          publish_results: false
+
+      - name: Upload SARIF to code scanning
+        uses: github/codeql-action/upload-sarif@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd # github/codeql-action/upload-sarif
+        with:
+          sarif_file: scorecard-results.sarif
+
+      - name: Keep the raw result as an artifact (baseline record)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4.6.2
+        with:
+          name: scorecard-baseline
+          path: scorecard-results.sarif
+          if-no-files-found: warn
+          retention-days: 90
