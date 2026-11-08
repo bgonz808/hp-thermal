@@ -68,9 +68,18 @@ impl Tier {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Ver(pub u64, pub u64, pub u64);
 
-/// Parse `MAJOR.MINOR.PATCH`, ignoring any pre-release/build suffix. Returns None for
-/// anything non-conforming — a pre-release candidate is not proposable.
+/// Parse `MAJOR.MINOR.PATCH`. Build metadata (`+…`) is stripped first — semver gives it no
+/// precedence weight, and crates such as `zstd-sys 2.1.2+zstd.1.5.7` carry it on every
+/// release. A pre-release (`-…` in the version proper) returns None: not proposable.
+///
+/// Order matters: the `+` split must come BEFORE the `-` check, because build metadata may
+/// itself contain hyphens (`1.2.3+build-5` is a stable release). The earlier version of this
+/// function checked `-` on the whole string and split `.` through the metadata, so
+/// `2.1.2+zstd.1.5.7` parsed to None and was silently skipped — and when the CURRENT version
+/// carried metadata, the whole crate reported "no newer release exists", a claim of absence
+/// manufactured by a parse failure (the explorer's zstd-sys report, 2026-11-02).
 pub fn parse_ver(s: &str) -> Option<Ver> {
+    let s = s.split('+').next().unwrap_or("");
     if s.contains('-') {
         return None; // pre-release: never a promotion candidate
     }
@@ -154,14 +163,20 @@ pub fn age_days(published: &str, now_epoch: i64) -> Option<i64> {
 /// NEWER than current, annotated with tier + soak. Deliberately returns ALL of them —
 /// the caller (and the human) sees the parallel lines, including backports to older
 /// lines that a "highest version wins" rule would hide.
+/// Returns `Err` when the CURRENT version cannot be parsed. That is deliberately not an empty
+/// list: an empty list means "upstream has nothing newer", a factual claim the caller prints;
+/// an unparseable current means we could not look, which must never be reported as absence
+/// (the same rule as `range_contains` in toolchain.rs and the canaries' BROKEN verdict).
 pub fn candidates_from_versions(
     versions: &Value,
     current: &str,
     now_epoch: i64,
     soak_days: i64,
-) -> Vec<Candidate> {
+) -> Result<Vec<Candidate>, String> {
     let Some(cur) = parse_ver(current) else {
-        return Vec::new();
+        return Err(format!(
+            "current version {current:?} is not parseable semver -- cannot enumerate candidates"
+        ));
     };
     let mut out = Vec::new();
     for v in versions
@@ -194,7 +209,7 @@ pub fn candidates_from_versions(
         });
     }
     out.sort_by_key(|c| c.ver);
-    out
+    Ok(out)
 }
 
 /// The recommended pick WITHIN one tier: newest version that has soaked. "Recent,
@@ -469,7 +484,15 @@ pub fn run(args: &[String]) -> i32 {
                 continue;
             }
         };
-        let cands = candidates_from_versions(&versions, ver, now_epoch, soak);
+        // Three states, never two: Err is "could not look" and is printed as UNEVALUATED so it
+        // can never read as the factual "nothing newer" below.
+        let cands = match candidates_from_versions(&versions, ver, now_epoch, soak) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("  UNEVALUATED: {e}");
+                continue;
+            }
+        };
         if cands.is_empty() {
             println!("  no newer non-yanked release exists — upstream has no fix to adopt");
             continue;
@@ -576,6 +599,48 @@ mod tests {
         assert!(parse_ver("1.0.0-rc.2").is_none());
         assert!(parse_ver("0.8.15-cvss-cries-wolf").is_none());
         assert_eq!(parse_ver("0.8.15"), Some(Ver(0, 8, 15)));
+        // Pre-release stays rejected even when build metadata follows it.
+        assert!(parse_ver("1.0.0-alpha+001").is_none());
+    }
+
+    #[test]
+    fn build_metadata_is_ignored_for_identity() {
+        // The live defect (explorer report 2026-11-02): zstd-sys ships every release with
+        // `+zstd.<libver>` metadata. Splitting on '.' through the metadata made the third
+        // field "2+zstd" and the parse returned None.
+        assert_eq!(parse_ver("2.1.2+zstd.1.5.7"), Some(Ver(2, 1, 2)));
+        assert_eq!(parse_ver("2.0.16+zstd.1.5.7"), Some(Ver(2, 0, 16)));
+        // A hyphen INSIDE the metadata is not a pre-release marker.
+        assert_eq!(parse_ver("1.2.3+build-5"), Some(Ver(1, 2, 3)));
+        // Shape rule still holds after stripping.
+        assert!(parse_ver("1.2.3.4+meta").is_none());
+    }
+
+    #[test]
+    fn build_metadata_candidate_is_enumerated_with_its_full_string() {
+        // Current AND candidate carry metadata. The candidate must be found, and its
+        // `version` must keep the full string: `cargo update --precise` needs the exact
+        // published version, metadata included.
+        let v = serde_json::json!({"versions": [
+            {"num": "2.1.2+zstd.1.5.7", "created_at": "2026-10-16T00:00:00Z", "yanked": false},
+            {"num": "2.0.16+zstd.1.5.7", "created_at": "2026-06-01T00:00:00Z", "yanked": false},
+        ]});
+        let c = candidates_from_versions(&v, "2.0.16+zstd.1.5.7", NOW, 7).unwrap();
+        assert_eq!(c.len(), 1, "the newer release must not be silently skipped");
+        assert_eq!(c[0].version, "2.1.2+zstd.1.5.7");
+        assert_eq!(c[0].ver, Ver(2, 1, 2));
+        assert_eq!(c[0].tier, Tier::SameLine);
+    }
+
+    #[test]
+    fn unparseable_current_is_an_error_not_an_empty_list() {
+        // An empty list is the factual claim "nothing newer exists". Being unable to parse
+        // the current version is NOT that claim, and must not be rendered as it.
+        let v = serde_json::json!({"versions": [
+            {"num": "2.1.2", "created_at": "2026-10-16T00:00:00Z", "yanked": false},
+        ]});
+        assert!(candidates_from_versions(&v, "garbage", NOW, 7).is_err());
+        assert!(candidates_from_versions(&v, "1.0.0-rc.1", NOW, 7).is_err());
     }
 
     #[test]
@@ -584,7 +649,7 @@ mod tests {
             ("0.3.30", "2026-01-01T00:00:00Z", true),
             ("0.3.34", "2026-01-02T00:00:00Z", false),
         ]);
-        let c = candidates_from_versions(&v, "0.3.21", NOW, 7);
+        let c = candidates_from_versions(&v, "0.3.21", NOW, 7).unwrap();
         assert_eq!(c.len(), 1);
         assert_eq!(c[0].version, "0.3.34");
     }
@@ -597,7 +662,7 @@ mod tests {
             ("0.20.9", "2026-08-20T00:00:00Z", false), // 2d old backport
             ("0.21.0", "2026-01-01T00:00:00Z", false), // long soaked
         ]);
-        let c = candidates_from_versions(&v, "0.20.6", NOW, 7);
+        let c = candidates_from_versions(&v, "0.20.6", NOW, 7).unwrap();
         let same = c.iter().find(|x| x.version == "0.20.9").unwrap();
         let minor = c.iter().find(|x| x.version == "0.21.0").unwrap();
         assert!(!same.soaked, "fresh backport must not count as soaked");
@@ -619,7 +684,7 @@ mod tests {
             ("0.21.4", "2026-02-01T00:00:00Z", false),
             ("1.1.0", "2026-03-01T00:00:00Z", false),
         ]);
-        let c = candidates_from_versions(&v, "0.20.6", NOW, 7);
+        let c = candidates_from_versions(&v, "0.20.6", NOW, 7).unwrap();
         let reps = representatives(&c);
         assert_eq!(reps.len(), 3, "one representative per LINE");
         assert_eq!(reps[0].version, "0.20.9");
@@ -638,7 +703,7 @@ mod tests {
             ("0.22.2", "2026-03-01T00:00:00Z", false),
             ("0.22.5", "2026-04-01T00:00:00Z", false), // newest in 0.22 line
         ]);
-        let c = candidates_from_versions(&v, "0.21.0", NOW, 7);
+        let c = candidates_from_versions(&v, "0.21.0", NOW, 7).unwrap();
         let reps = representatives(&c);
         let picked: Vec<&str> = reps.iter().map(|r| r.version.as_str()).collect();
         assert_eq!(picked, vec!["0.21.7", "0.22.5"]);
@@ -652,7 +717,7 @@ mod tests {
             ("0.21.5", "2026-06-01T00:00:00Z", false),
             ("0.21.9", "2026-08-21T00:00:00Z", false), // 1d old — withheld
         ]);
-        let c = candidates_from_versions(&v, "0.21.0", NOW, 7);
+        let c = candidates_from_versions(&v, "0.21.0", NOW, 7).unwrap();
         let reps = representatives(&c);
         assert_eq!(reps.len(), 1);
         assert_eq!(reps[0].version, "0.21.5");
@@ -665,7 +730,7 @@ mod tests {
             ("0.20.9", "2026-06-01T00:00:00Z", false),
             ("0.20.10", "2026-08-21T00:00:00Z", false), // too fresh
         ]);
-        let c = candidates_from_versions(&v, "0.20.6", NOW, 7);
+        let c = candidates_from_versions(&v, "0.20.6", NOW, 7).unwrap();
         assert_eq!(pick_in_tier(&c, Tier::SameLine).unwrap().version, "0.20.9");
     }
 
@@ -679,7 +744,7 @@ mod tests {
             ("0.21.6", "2026-03-01T00:00:00Z", false), // next line up, soaked
             ("0.23.1", "2026-04-01T00:00:00Z", false), // newest line, soaked
         ]);
-        let c = candidates_from_versions(&v, "0.20.6", NOW, 7);
+        let c = candidates_from_versions(&v, "0.20.6", NOW, 7).unwrap();
         let ladder = escalation_ladder(&c);
         let order: Vec<&str> = ladder.iter().map(|r| r.version.as_str()).collect();
         assert_eq!(
