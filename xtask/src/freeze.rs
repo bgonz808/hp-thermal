@@ -67,6 +67,18 @@ impl Directive {
     }
 }
 
+/// Enumerate `*.patch` files under an ABSOLUTE patches dir, sorted (producer order). Every
+/// returned path is absolute so it survives a `git apply` whose cwd is the staged checkout.
+pub fn patch_files(abs_dir: &std::path::Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(abs_dir)?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "patch"))
+        .collect();
+    files.sort();
+    Ok(files)
+}
+
 /// Parse `pkg=version` / `pkg@current=version`. Rejects empty halves and non-semver
 /// versions on BOTH sides of `@` — a directive names concrete crates.io releases,
 /// never ranges or tags.
@@ -428,19 +440,24 @@ pub fn run(args: &[String]) -> i32 {
     // `git apply --check` before `git apply`, and a patch that fails to apply stops the run --
     // the same fail-closed supersession rule build-tools.yml enforces.
     if let Some(pdir) = &patches {
-        let mut files: Vec<PathBuf> = match std::fs::read_dir(pdir) {
-            Ok(rd) => rd
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.extension().is_some_and(|x| x == "patch"))
-                .collect(),
+        // `git apply` runs with cwd = the staged checkout: patch paths must be absolute.
+        // `absolute`, not `canonicalize` (git rejects its `\?\` form).
+        let pdir = match std::path::absolute(pdir) {
+            Ok(a) => a,
+            Err(e) => {
+                eprintln!("freeze: --patches {} cannot be absolutized: {e}", pdir.display());
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+        };
+        let files: Vec<PathBuf> = match patch_files(&pdir) {
+            Ok(f) => f,
             Err(e) => {
                 eprintln!("freeze: --patches {} unreadable: {e}", pdir.display());
                 let _ = std::fs::remove_dir_all(&work);
                 return 1;
             }
         };
-        files.sort();
         for pf in &files {
             let Some(pfs) = pf.to_str() else {
                 eprintln!("freeze: patch path is not UTF-8: {}", pf.display());
@@ -868,4 +885,36 @@ mod tests {
         assert!(genuine.is_empty());
         assert_eq!(unfixed, vec![inst("A", "p", "3.0")]);
     }
+    #[test]
+    fn patch_files_are_absolute_sorted_and_only_patches() {
+        // The staged checkout is `git apply`'s cwd, so a relative patch path would be looked
+        // up under the clone. Every enumerated path must therefore be absolute.
+        let dir = std::env::temp_dir().join(format!("xtask-patchfiles-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for n in ["0002-b.patch", "0001-a.patch", "README.md"] {
+            std::fs::write(dir.join(n), "x").unwrap();
+        }
+        let rel = pathdiff_relative(&dir);
+        let abs = std::path::absolute(&rel).unwrap();
+        let files = patch_files(&abs).unwrap();
+        let names: Vec<String> = files
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["0001-a.patch", "0002-b.patch"]);
+        assert!(files.iter().all(|p| p.is_absolute()), "{files:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A relative spelling of `abs` from the cwd when one exists (same drive on Windows);
+    /// otherwise `abs` itself. Enough to exercise the absolutize path in CI and locally.
+    fn pathdiff_relative(abs: &std::path::Path) -> PathBuf {
+        let cwd = std::env::current_dir().unwrap();
+        match abs.strip_prefix(&cwd) {
+            Ok(r) => r.to_path_buf(),
+            Err(_) => abs.to_path_buf(),
+        }
+    }
+
 }
