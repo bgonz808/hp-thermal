@@ -515,9 +515,9 @@ fn caps_verdict(
     head: &ToolLine,
     acks: &Acks,
     floors: &crate::floors::Floors,
-    head_lock: Option<&Path>,
-    base_lock: Option<&Path>,
+    locks: (Option<&Path>, Option<&Path>),
 ) -> Verdict {
+    let (head_lock, base_lock) = locks;
     let digest = head.sha.as_str();
     let dir = evidence_dir.join(tool).join(digest);
     if dir.join("caps.toml").exists() {
@@ -848,8 +848,7 @@ pub fn run(args: &[String]) -> i32 {
                 h,
                 &acks,
                 floors,
-                head_lock_path.as_deref(),
-                base_lock_path.as_deref(),
+                (head_lock_path.as_deref(), base_lock_path.as_deref()),
             ),
         ));
         axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
