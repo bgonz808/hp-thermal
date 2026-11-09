@@ -60,7 +60,7 @@ jobs:
       contents: read
     steps:
       - name: Harden runner (egress blocked)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1  # v2.21.1
+        uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43  # v2.22.3
         with:
           # BLOCK: allowlist reconciled against a real audit run (2026-07-24) — every
           # endpoint the job actually contacts is listed, so nothing else can egress.
@@ -99,7 +99,7 @@ jobs:
         uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca  # v1.7.12
 
       - name: osv-scanner (RustSec-complete Rust deps)
-        uses: google/osv-scanner-action/osv-scanner-action@6e4298ebc4db23e847df9b2e2de2939d6f066c67  # v2.5.1
+        uses: google/osv-scanner-action/osv-scanner-action@a345acffa64b0eaede81a3d9aae6141214d9c8fc  # v2.6.0
         with:
           scan-args: |-
             --recursive
