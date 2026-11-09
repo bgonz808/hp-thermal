@@ -32,7 +32,9 @@ permissions:
 
 jobs:
   measure:
-    runs-on: ubuntu-24.04
+    # ubuntu-22.04: the image cackle's own CI tests on ("bubblewrap is broken on Ubuntu 24.04",
+    # upstream ci.yml). #50 decided the Bubblewrap sandbox stays ON in CI; this lane honours it.
+    runs-on: ubuntu-22.04
     permissions:
       contents: read
     steps:
@@ -45,6 +47,18 @@ jobs:
         uses: ./.github/actions/install-toolchain
         with:
           components: "rust-src"
+
+      # bubblewrap confines every build script, proc macro and rustc cackle runs: no network,
+      # filesystem per the config. From the runner image's apt mirror: a MEASUREMENT-step input,
+      # never part of any shipped artifact — the one non-digest-pinned input of this job.
+      - name: Install bubblewrap (cackle sandbox)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          bwrap --version
+          bwrap --unshare-all --dev-bind / / true && echo "bwrap --unshare-all: OK"
 
       - name: Fetch the BLESSED cargo-acl (digest + attestation verified)
         id: tools
@@ -104,8 +118,12 @@ jobs:
           fi
           src="supply-chain/evidence/$TOOL/$seed/caps.toml"
           [ -f "$src" ] || { echo "::error::no seed inventory at $src — pass seed_digest"; exit 1; }
-          cp "$src" src/cackle.toml
           cp "$src" seed.toml
+          # Measure under the Bubblewrap sandbox whatever the seed recorded (#50: sandbox ON in
+          # CI). The written inventory records what was MEASURED, so the first Bubblewrap record
+          # after a Disabled seed differs in its [sandbox] block and takes a human signature once.
+          sed -e '/^\[sandbox\]/,/^\[/ s/^kind = "Disabled"/kind = "Bubblewrap"/' "$src" > src/cackle.toml
+          grep -A1 '^\[sandbox\]' src/cackle.toml | paste -sd' ' -
           echo "seed_digest='$seed'" >> stage.env
           echo "seed: $src ($(grep -c '^\[pkg\.' seed.toml) pkg sections)"
 
@@ -119,8 +137,8 @@ jobs:
           set -uo pipefail
           # shellcheck source=/dev/null
           . ./stage.env 2>/dev/null || true
-          # The seed's [sandbox] block governs; our inventories record kind = "Disabled", so
-          # bubblewrap is not required here. The RUNNER is the sandbox.
+          # [sandbox] kind = "Bubblewrap" (set above): bwrap confines each build script / proc
+          # macro / rustc; the runner is the outer boundary.
           set +e
           "$TOOLS_DIR/cargo-acl" acl -n --ui none --auto-accept-fixes --path src > cackle.log 2>&1
           code=$?
@@ -151,6 +169,7 @@ jobs:
             if [ -f "tools/build-args/$TOOL" ]; then
               echo "# build-args (shipped binary): $(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL" | paste -sd' ' -); cackle has no default-features control, so this inventory is measured on DEFAULT features: a SUPERSET of the shipped binary's tree"
             fi
+            echo "# sandbox: $(grep -A1 '^\[sandbox\]' src/cackle.toml | grep kind | tr -d ' ') during measurement ($(bwrap --version 2>/dev/null | head -1))"
             echo "# seed: ${seed_digest:-?}; cackle exit ${cackle_exit:-?}; pkg sections seed $(grep -c '^\[pkg\.' seed.toml 2>/dev/null || echo ?) -> measured $(grep -c '^\[pkg\.' src/cackle.toml 2>/dev/null || echo ?)"
             echo "# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)"
             grep -vE '^\s*#' src/cackle.toml 2>/dev/null || true
