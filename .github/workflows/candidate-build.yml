@@ -23,6 +23,10 @@ on:
         description: "Also run the tool's test suite."
         type: boolean
         default: true
+      cargo_args:
+        description: "Extra cargo arguments for build/test. Empty = the tool's tools/build-args file (producer parity)."
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -101,6 +105,7 @@ jobs:
         env:
           TOOL: ${{ inputs.tool }}
           RUN_TESTS: ${{ inputs.run_tests }}
+          CARGO_ARGS: ${{ inputs.cargo_args }}
           CARGO_TARGET_DIR: ${{ runner.temp }}/cand-build
         run: |
           set -euo pipefail
@@ -126,11 +131,24 @@ jobs:
           manifest=$(cd src && cargo metadata --no-deps --locked --format-version 1 \
                       | jq -r --arg n "$TOOL" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
           [ -n "$manifest" ] || { echo "::error::crate '$TOOL' not found"; exit 1; }
-          echo "== cargo build --locked ==" | tee -a report.txt
-          ( cd "$(dirname "$manifest")" && cargo build --locked 2>&1 ) | tail -30 | tee -a report.txt
+          # Build flavor: explicit input, else the tool's tools/build-args file (what the producer uses).
+          extra=()
+          if [ -n "$CARGO_ARGS" ]; then
+            # shellcheck disable=SC2206
+            extra=($CARGO_ARGS)
+          elif [ -f "tools/build-args/$TOOL" ]; then
+            mapfile -t extra < <(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL")
+          fi
+          echo "== dependency footprint (cargo tree, normal+build edges) ==" | tee -a report.txt
+          ( cd "$(dirname "$manifest")" && cargo tree --locked -e normal,build --prefix none 2>/dev/null | awk '{print $1}' | sort -u > "$RUNNER_TEMP/full.txt" && echo "  default features: $(wc -l < "$RUNNER_TEMP/full.txt") packages" ) | tee -a report.txt
+          if [ "${#extra[@]}" -gt 0 ]; then
+            ( cd "$(dirname "$manifest")" && cargo tree --locked -e normal,build --prefix none "${extra[@]}" 2>/dev/null | awk '{print $1}' | sort -u > "$RUNNER_TEMP/min.txt" && echo "  with [${extra[*]}]: $(wc -l < "$RUNNER_TEMP/min.txt") packages" && echo "  dropped: $(comm -23 "$RUNNER_TEMP/full.txt" "$RUNNER_TEMP/min.txt" | paste -sd' ' -)" ) | tee -a report.txt
+          fi
+          echo "== cargo build --locked ${extra[*]} ==" | tee -a report.txt
+          ( cd "$(dirname "$manifest")" && cargo build --locked "${extra[@]}" 2>&1 ) | tail -30 | tee -a report.txt
           if [ "$RUN_TESTS" = "true" ]; then
-            echo "== cargo test --locked ==" | tee -a report.txt
-            ( cd "$(dirname "$manifest")" && cargo test --locked 2>&1 ) | tail -40 | tee -a report.txt
+            echo "== cargo test --locked ${extra[*]} ==" | tee -a report.txt
+            ( cd "$(dirname "$manifest")" && cargo test --locked "${extra[@]}" 2>&1 ) | tail -40 | tee -a report.txt
           fi
           echo "BUILD EVIDENCE: OK" | tee -a report.txt
 
