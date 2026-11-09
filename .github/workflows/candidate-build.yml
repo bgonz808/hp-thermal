@@ -67,9 +67,28 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain (producer parity)
+        id: toolchain
         uses: ./.github/actions/install-toolchain
         with:
           components: "rust-src"
+
+      # #368: cackle's fixtures sandbox with Bubblewrap and strip the cargo env, so the test
+      # suite needs `bwrap` on the runner and the pinned channel as rustup's DEFAULT (the
+      # exported RUSTUP_TOOLCHAIN does not survive the harness's env scrub). bubblewrap comes
+      # from the runner image's apt mirror: a TEST-step input only, never part of the built
+      # artifact — the one non-digest-pinned input of this step, named here on purpose.
+      - name: Test prerequisites (Linux lane)
+        if: runner.os == 'Linux' && inputs.run_tests
+        shell: bash
+        env:
+          CHANNEL: ${{ steps.toolchain.outputs.channel }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          bwrap --version
+          rustup default "$CHANNEL"
+          rustc --version
 
       - name: Build the candidate exactly as the producer would
         shell: bash
