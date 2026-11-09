@@ -148,6 +148,9 @@ jobs:
             echo "# generated: $(date -u +%F), cargo-acl ${acl_ver:-?} (${acl_sha:0:12}, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run ${GITHUB_RUN_ID})"
             echo "# subject: $TOOL @ ${repo:-?}@${rev:-?}; ${lock_src:-?} sha256 ${lock_sha256:-?}"
             if [ -s patches.sha256 ]; then sed 's/^/# patch: /' patches.sha256; fi
+            if [ -f "tools/build-args/$TOOL" ]; then
+              echo "# build-args (shipped binary): $(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL" | paste -sd' ' -); cackle has no default-features control, so this inventory is measured on DEFAULT features: a SUPERSET of the shipped binary's tree"
+            fi
             echo "# seed: ${seed_digest:-?}; cackle exit ${cackle_exit:-?}; pkg sections seed $(grep -c '^\[pkg\.' seed.toml 2>/dev/null || echo ?) -> measured $(grep -c '^\[pkg\.' src/cackle.toml 2>/dev/null || echo ?)"
             echo "# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)"
             grep -vE '^\s*#' src/cackle.toml 2>/dev/null || true
