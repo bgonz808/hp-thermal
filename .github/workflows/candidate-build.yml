@@ -60,7 +60,7 @@ jobs:
             # Operation not permitted` (run 42550668921). Testing on the image upstream tests on
             # beats relaxing the runner's namespace restrictions. The producer still builds the
             # shipped artifact on 24.04; this lane produces evidence, not artifacts.
-            linux-x86_64)   runner=ubuntu-22.04 ;;
+            linux-x86_64)   runner=ubuntu-26.04 ;;
             *) echo "::error::'$TOOL': unknown or missing target '$target' in tools/TOOLS.lock"; exit 1 ;;
           esac
           echo "runner=$runner" >> "$GITHUB_OUTPUT"
