@@ -347,14 +347,21 @@ mod tests {
         }
     }
 
-    fn reset() {
+    // READ/WRITE are process-global; the harness runs tests in parallel. Every test that
+    // touches them holds this lock for its whole body, or a neighbour's cached probe
+    // leaks into its assertions (seen on main: build_skew_reads_but_skips_write).
+    static PROBE_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    fn reset() -> std::sync::MutexGuard<'static, ()> {
+        let guard = PROBE_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         READ.store(UNTESTED, Ordering::Release);
         WRITE.store(UNTESTED, Ordering::Release);
+        guard
     }
 
     #[test]
     fn read_only_hardware_proves_read_but_not_write() {
-        reset();
+        let _probe = reset();
         let ec = MockEc {
             mode: Cell::new(1),
             up: true,
@@ -371,7 +378,7 @@ mod tests {
 
     #[test]
     fn full_control_proves_write_and_restores_original() {
-        reset();
+        let _probe = reset();
         let ec = MockEc {
             mode: Cell::new(2),
             up: true,
@@ -393,7 +400,7 @@ mod tests {
     // partner (Balanced) and restores. Exercises the `else`/quiet branch of same_band_partner.
     #[test]
     fn full_control_quiet_band_restores_original() {
-        reset();
+        let _probe = reset();
         let ec = MockEc {
             mode: Cell::new(3), // PowerSaver (quiet); partner is Balanced, also quiet
             up: true,
@@ -413,7 +420,7 @@ mod tests {
 
     #[test]
     fn no_service_fails_every_tier() {
-        reset();
+        let _probe = reset();
         let ec = MockEc {
             mode: Cell::new(0),
             up: false,
@@ -430,7 +437,7 @@ mod tests {
     // #183: a different-build service → reads fine, but the write-test is SKIPPED (mode untouched).
     #[test]
     fn build_skew_reads_but_skips_write() {
-        reset();
+        let _probe = reset();
         let ec = MockEc {
             mode: Cell::new(3),
             up: true,

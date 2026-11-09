@@ -1,0 +1,22 @@
+{
+  "schema": "hp-thermal/floors/v1",
+  "_doc": "Absolute floors: a PROPOSED (or re-scanned BLESSED) state crossing one of these is HARD-STOP in the gate and FAIL in the monitor. Never ackable. Floors are about the state itself, not the delta; the delta certificate lives in freeze. Missing or malformed policy = UNEVALUATED for every axis (fail-closed).",
+  "vuln": {
+    "_doc": "kind=vulnerability only; informational advisories (unsound/unmaintained/notice/yanked) never floor. Shape, not score: CVSS scores are not computed here (4.0 scoring is a lookup table, 3.x a formula). A critical SHAPE is network-reachable, no privileges, no user interaction, High impact on one of the listed axes. A (availability) is deliberately excluded by default: a remote DoS in a CI tool is a RAISE to ack, not a floor.",
+    "hard_stop_vector_shape": {
+      "attack_vector": "N",
+      "privileges_required": "N",
+      "user_interaction": "N",
+      "high_impact_any_of": ["C", "I"]
+    }
+  },
+  "mal": {
+    "_doc": "Per-engine acks exist for heuristic/ML false positives; a panel with this many malicious verdicts, or any sandbox behavioural verdict of malicious, is not a false-positive profile.",
+    "hard_stop_malicious_engines": 3,
+    "hard_stop_on_sandbox_malicious": true
+  },
+  "caps": {
+    "_doc": "Applies only to a MEASURED head inventory with a prior blessed inventory to compare against (a COPIED FORWARD record is not a measurement; a new tool has no prior). Test-scope grants are ignored (they do not ship). A package newly granted one of these classes in runtime or build scope is HARD-STOP.",
+    "hard_stop_new_grants": ["process", "net"]
+  }
+}
