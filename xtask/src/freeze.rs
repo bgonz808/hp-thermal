@@ -119,8 +119,7 @@ pub fn parse_directive(s: &str) -> Result<Directive, String> {
 /// `[[package]]` / `name = "..."` lines directly -- xtask carries one dependency by design,
 /// and this is the only field the invariant needs.
 pub fn lock_package_names(path: &Path) -> Result<BTreeSet<String>, String> {
-    let text = std::fs::read_to_string(path)
-        .map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     Ok(lock_package_names_from_str(&text))
 }
 
@@ -214,6 +213,18 @@ pub fn removed_instances(before: &BTreeSet<Instance>, after: &BTreeSet<Instance>
     before
         .iter()
         .filter(|i| !after_keys.contains(&key(i)))
+        .cloned()
+        .collect()
+}
+
+/// Instances present, unchanged, on both sides (same id, package, version): the residue a
+/// certified change leaves for the maintainer. Listed by name so the output IS the queue.
+pub fn carried_instances(before: &BTreeSet<Instance>, after: &BTreeSet<Instance>) -> Vec<Instance> {
+    let key = |i: &Instance| (i.id.clone(), i.package.clone(), i.version.clone());
+    let bk: BTreeSet<_> = before.iter().map(key).collect();
+    after
+        .iter()
+        .filter(|i| bk.contains(&key(i)))
         .cloned()
         .collect()
 }
@@ -372,7 +383,11 @@ pub fn run(args: &[String]) -> i32 {
         println!(
             "# RESEARCH RUN -- overridden instruments: now-epoch={} soak-days={}. Dry-run only;
              # no lock can be written from this run, and its soak verdicts are NOT safety claims.",
-            if now_overridden { now_epoch.to_string() } else { "real".into() },
+            if now_overridden {
+                now_epoch.to_string()
+            } else {
+                "real".into()
+            },
             soak
         );
     }
@@ -445,7 +460,10 @@ pub fn run(args: &[String]) -> i32 {
         let pdir = match std::path::absolute(pdir) {
             Ok(a) => a,
             Err(e) => {
-                eprintln!("freeze: --patches {} cannot be absolutized: {e}", pdir.display());
+                eprintln!(
+                    "freeze: --patches {} cannot be absolutized: {e}",
+                    pdir.display()
+                );
                 let _ = std::fs::remove_dir_all(&work);
                 return 1;
             }
@@ -487,11 +505,17 @@ pub fn run(args: &[String]) -> i32 {
         match std::fs::read(b) {
             Ok(bytes) => {
                 if let Err(e) = std::fs::write(&lock, bytes) {
-                    eprintln!("freeze: cannot stage --base {} into the checkout: {e}", b.display());
+                    eprintln!(
+                        "freeze: cannot stage --base {} into the checkout: {e}",
+                        b.display()
+                    );
                     let _ = std::fs::remove_dir_all(&work);
                     return 1;
                 }
-                println!("# base: {} (directives apply atop this resolution)", b.display());
+                println!(
+                    "# base: {} (directives apply atop this resolution)",
+                    b.display()
+                );
             }
             Err(e) => {
                 eprintln!("freeze: --base {} unreadable: {e}", b.display());
@@ -641,6 +665,13 @@ pub fn run(args: &[String]) -> i32 {
         println!(
             "  ~ {} {}: still present at {} — this bump did NOT fix it",
             i.id, i.package, i.version
+        );
+    }
+    // #357: the instances that remain ARE the human queue; name them, do not just count them.
+    for i in carried_instances(&before, &after) {
+        println!(
+            "  = {} {} {} ({})  (carried, unchanged)",
+            i.id, i.package, i.version, i.kind
         );
     }
     for i in &genuine {
@@ -830,9 +861,8 @@ mod tests {
         let before = lock_package_names_from_str(
             "[[package]]\nname = \"rustls\"\nversion = \"0.23.40\"\n\n[[package]]\nname = \"ppv-lite86\"\nversion = \"0.2.21\"\n",
         );
-        let after = lock_package_names_from_str(
-            "[[package]]\nname = \"rustls\"\nversion = \"0.23.46\"\n",
-        );
+        let after =
+            lock_package_names_from_str("[[package]]\nname = \"rustls\"\nversion = \"0.23.46\"\n");
         assert!(added_package_names(&before, &after).is_empty());
     }
 
@@ -840,13 +870,15 @@ mod tests {
     fn a_new_package_name_is_refused_whatever_the_advisory_delta_says() {
         // The smuggle shape: the named target moves, and an unrelated crate rides in with it.
         // The advisory delta could be perfectly clean; the shape invariant still refuses.
-        let before = lock_package_names_from_str(
-            "[[package]]\nname = \"rustls\"\nversion = \"0.23.40\"\n",
-        );
+        let before =
+            lock_package_names_from_str("[[package]]\nname = \"rustls\"\nversion = \"0.23.40\"\n");
         let after = lock_package_names_from_str(
             "[[package]]\nname = \"rustls\"\nversion = \"0.23.46\"\n\n[[package]]\nname = \"rustls-helper\"\nversion = \"0.1.0\"\n",
         );
-        assert_eq!(added_package_names(&before, &after), vec!["rustls-helper".to_string()]);
+        assert_eq!(
+            added_package_names(&before, &after),
+            vec!["rustls-helper".to_string()]
+        );
     }
 
     #[test]
@@ -916,4 +948,24 @@ mod tests {
         }
     }
 
+    #[test]
+    fn carried_instances_are_named_not_counted() {
+        let before: BTreeSet<Instance> = [
+            inst("A", "p", "1"),
+            inst("B", "q", "2"),
+            inst("C", "r", "3"),
+        ]
+        .into();
+        let after: BTreeSet<Instance> = [
+            inst("B", "q", "2"),
+            inst("C", "r", "4"),
+            inst("D", "s", "1"),
+        ]
+        .into();
+        // B unchanged -> carried; C moved version -> unfixed (not carried); D -> genuine; A -> fixed
+        assert_eq!(
+            carried_instances(&before, &after),
+            vec![inst("B", "q", "2")]
+        );
+    }
 }
