@@ -319,6 +319,8 @@ jobs:
 
       # #205: SLSA provenance, one attestation per subject file, signed via GitHub OIDC ->
       # Sigstore. Verify later with: gh attestation verify <asset> --repo <this repo>
+      #   --signer-workflow <this repo>/.github/workflows/build-tools.yml   (fetch-tools pins
+      #   the signer to THIS workflow; --repo alone would accept any workflow in the repo)
       - name: Attest build provenance (windows tools)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # actions/attest-build-provenance v4.2.2
         with:
