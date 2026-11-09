@@ -137,8 +137,7 @@ jobs:
           ( cd "$(dirname "$manifest")" && echo "  default features: $(cargo tree --locked -e normal,build --prefix none 2>/dev/null | awk '{print $1}' | sort -u | wc -l) packages" ) | tee -a report.txt
           if [ -n "$CARGO_ARGS" ]; then
             ( cd "$(dirname "$manifest")" && echo "  with [$CARGO_ARGS]: $(cargo tree --locked -e normal,build --prefix none "${extra[@]}" 2>/dev/null | awk '{print $1}' | sort -u | wc -l) packages" ) | tee -a report.txt
-            ( cd "$(dirname "$manifest")" && echo "  dropped: $(comm -23 <(cargo tree --locked -e normal,build --prefix none 2>/dev/null | awk '{print $1}' | sort -u) <(cargo tree --locked -e normal,build --prefix none "${extra[@]}" 2>/dev/null | awk '{print $1}' | sort -u) | tr '
-' ' ')" ) | tee -a report.txt
+            ( cd "$(dirname "$manifest")" && cargo tree --locked -e normal,build --prefix none 2>/dev/null | awk '{print $1}' | sort -u > /tmp/full.txt && cargo tree --locked -e normal,build --prefix none "${extra[@]}" 2>/dev/null | awk '{print $1}' | sort -u > /tmp/min.txt && echo "  dropped: $(comm -23 /tmp/full.txt /tmp/min.txt | paste -sd' ' -)" ) | tee -a report.txt
           fi
           echo "== cargo build --locked ${CARGO_ARGS} ==" | tee -a report.txt
           ( cd "$(dirname "$manifest")" && cargo build --locked "${extra[@]}" 2>&1 ) | tail -30 | tee -a report.txt
