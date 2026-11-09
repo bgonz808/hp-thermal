@@ -28,8 +28,36 @@ permissions:
   contents: read
 
 jobs:
+  # The runner family follows the tool's `target` in TOOLS.lock (cackle is Linux-only).
+  resolve:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      runner: ${{ steps.pick.outputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pick the runner from the pinned target
+        id: pick
+        shell: bash
+        env:
+          TOOL: ${{ inputs.tool }}
+        run: |
+          set -euo pipefail
+          target=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//'                     | awk -v t="$TOOL" '$1==t {print $4; exit}')
+          case "$target" in
+            windows-x86_64) runner=windows-2025 ;;
+            linux-x86_64)   runner=ubuntu-24.04 ;;
+            *) echo "::error::'$TOOL': unknown or missing target '$target' in tools/TOOLS.lock"; exit 1 ;;
+          esac
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+
   build:
-    runs-on: windows-2025   # match the producer's target family
+    needs: resolve
+    runs-on: ${{ needs.resolve.outputs.runner }}
     permissions:
       contents: read
     steps:
