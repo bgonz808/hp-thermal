@@ -32,9 +32,9 @@ permissions:
 
 jobs:
   measure:
-    # ubuntu-22.04: the image cackle's own CI tests on ("bubblewrap is broken on Ubuntu 24.04",
-    # upstream ci.yml). #50 decided the Bubblewrap sandbox stays ON in CI; this lane honours it.
-    runs-on: ubuntu-22.04
+    # ubuntu-26.04: bwrap works here (0.11.1; measured run 42657820932), unlike 24.04, and 22.04's
+    # image is deprecated (actions/runner-images#14254). Same image as the producer's Linux lane.
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
     steps:

@@ -370,11 +370,12 @@ jobs:
     # maintainer arms the gate.
     environment: tools-publish
     needs: build-tools-windows   # serialize: never race the windows job on release creation
-    # ubuntu-22.04 on purpose: a binary linked on 24.04 needs glibc 2.39 and will not run on the
-    # 22.04 measurement lane (measured: "GLIBC_2.39 not found", caps-measure run 42653040587).
-    # Built against 22.04's glibc 2.35 it runs on every image we use. 22.04 is the image cackle's
-    # own CI uses because bubblewrap is broken on 24.04; revisit when 24.04 fixes that.
-    runs-on: ubuntu-22.04
+    # ubuntu-26.04: cargo-acl's only consumer is caps-measure.yml, which runs cackle's Bubblewrap
+    # sandbox. bwrap is broken on 24.04 (upstream cackle CI) and 22.04's runner image is already in
+    # deprecation (actions/runner-images#14254: brownouts Mar-Apr 2027, removed 2027-04-17). On
+    # 26.04 bwrap 0.11.1 works and cackle's full suite passes (candidate-build run 42657820932).
+    # Build and measure on the same image so the glibc floor always matches the lane.
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
       id-token: write
