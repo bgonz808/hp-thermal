@@ -298,7 +298,10 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
         return 2;
     };
     if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit()) {
-        eprintln!("mal-acks: --digest must be a full 64-hex sha256 (got {} chars)", digest.len());
+        eprintln!(
+            "mal-acks: --digest must be a full 64-hex sha256 (got {} chars)",
+            digest.len()
+        );
         return 2;
     }
     let path = Path::new(&dir).join(tool).join("acks.jsonl");
@@ -433,7 +436,13 @@ fn vuln_verdict(
     Verdict::RaiseCovered(covered)
 }
 
-fn mal_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) -> Verdict {
+fn mal_verdict(
+    tool: &str,
+    evidence_dir: &Path,
+    head: &ToolLine,
+    acks: &Acks,
+    floors: &crate::floors::Floors,
+) -> Verdict {
     let digest = head.sha.as_str();
     let path = evidence_dir.join(tool).join(digest).join("mal.jsonl");
     let text = match std::fs::read_to_string(&path) {
@@ -462,6 +471,9 @@ fn mal_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) ->
             "mal evidence subject {rec_sha} != candidate digest {} — stale or misplaced record",
             head.sha
         ));
+    }
+    if let Some(why) = floors.mal_stop(&v) {
+        return Verdict::HardStop(why);
     }
     let malicious = v
         .get("detections")
@@ -496,10 +508,24 @@ fn mal_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) ->
     }
 }
 
-fn caps_verdict(tool: &str, evidence_dir: &Path, head: &ToolLine, acks: &Acks) -> Verdict {
+fn caps_verdict(
+    tool: &str,
+    evidence_dir: &Path,
+    base: Option<&ToolLine>,
+    head: &ToolLine,
+    acks: &Acks,
+    floors: &crate::floors::Floors,
+) -> Verdict {
     let digest = head.sha.as_str();
     let dir = evidence_dir.join(tool).join(digest);
     if dir.join("caps.toml").exists() {
+        let head_caps = std::fs::read_to_string(dir.join("caps.toml")).unwrap_or_default();
+        let base_caps = base.and_then(|b| {
+            std::fs::read_to_string(evidence_dir.join(tool).join(&b.sha).join("caps.toml")).ok()
+        });
+        if let Some(why) = floors.caps_stop(&head_caps, base_caps.as_deref()) {
+            return Verdict::HardStop(why);
+        }
         if ack_covers_caps(acks, digest) {
             Verdict::RaiseCovered(vec![format!("caps inventory {digest} reviewed + acked")])
         } else {
@@ -618,6 +644,7 @@ pub fn run(args: &[String]) -> i32 {
     // retro-applied to a baseline digest that was built from upstream's resolution.
     let mut locks_dir = PathBuf::from("tools/locks");
     let mut base_locks_dir: Option<PathBuf> = None;
+    let mut floors_path = PathBuf::from(crate::floors::DEFAULT_PATH);
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -639,6 +666,11 @@ pub fn run(args: &[String]) -> i32 {
                 }
             }
             "--base-locks-dir" => base_locks_dir = it.next().map(PathBuf::from),
+            "--floors" => {
+                if let Some(v) = it.next() {
+                    floors_path = PathBuf::from(v);
+                }
+            }
             other => {
                 eprintln!("gate: unknown arg {other}");
                 return 2;
@@ -648,7 +680,7 @@ pub fn run(args: &[String]) -> i32 {
     let Some(base_path) = base_path else {
         eprintln!(
             "usage: cargo xtask gate --base <base TOOLS.lock> [--head <head TOOLS.lock>] \
-             [--evidence <dir>] [--report <md>] [--locks-dir <d>] [--base-locks-dir <d>]"
+             [--evidence <dir>] [--report <md>] [--locks-dir <d>] [--base-locks-dir <d>]              [--floors <json>]"
         );
         return 2;
     };
@@ -671,7 +703,24 @@ pub fn run(args: &[String]) -> i32 {
     let mut db_stamp = String::new();
     let mut first_scan = true;
 
-    for (b, h) in &cands {
+    // Absolute floors (#241 §4). A missing/malformed policy is UNEVALUATED for every
+    // candidate: "no floors file" must never read as "no floors".
+    let floors = match crate::floors::load(&floors_path) {
+        Ok(f) => Some(f),
+        Err(e) => {
+            for (_, h) in &cands {
+                reports.push(CandidateReport {
+                    name: h.name.clone(),
+                    summary: String::new(),
+                    axes: vec![("floors", Verdict::Unevaluated(e.clone()))],
+                });
+            }
+            None
+        }
+    };
+
+    for (b, h) in floors.as_ref().map(|_| cands.as_slice()).unwrap_or(&[]) {
+        let floors = floors.as_ref().expect("checked above");
         let acks = match load_acks(&evidence_dir.join(&h.name).join("acks.jsonl")) {
             Ok(a) => a,
             Err(e) => {
@@ -722,6 +771,7 @@ pub fn run(args: &[String]) -> i32 {
                 );
             }
             let head_inst = extract_instances(&head_json);
+            let stops = floors.vuln_stops(&head_inst, &crate::floors::extract_cvss(&head_json));
             let (added, fixed, carried, base_src) = match b {
                 Some(b) => {
                     let base_dest = tmp.join(format!("gate-{}-base.lock", h.name));
@@ -752,14 +802,21 @@ pub fn run(args: &[String]) -> i32 {
                 fixed.len(),
                 carried.len()
             );
+            if !stops.is_empty() {
+                return Ok(Verdict::HardStop(stops.join("
+  - ")));
+            }
             Ok(vuln_verdict(&h.name, &added, &carried, fixed.len(), &acks))
         })()
         .unwrap_or_else(Verdict::Unevaluated);
         axes.push(("vuln", vuln));
 
         // --- caps + mal: consume the recorded evidence store ---
-        axes.push(("caps", caps_verdict(&h.name, &evidence_dir, h, &acks)));
-        axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks)));
+        axes.push((
+            "caps",
+            caps_verdict(&h.name, &evidence_dir, b.as_ref(), h, &acks, floors),
+        ));
+        axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
 
         if !acks.rejected.is_empty() {
             axes.push((
@@ -1039,7 +1096,9 @@ mod tests {
             entries: vec![],
             rejected: vec![],
         };
-        let v = mal_verdict("t", &dir, &h, &acks);
+        let floors =
+            crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
+        let v = mal_verdict("t", &dir, &h, &acks, &floors);
         assert!(matches!(v, Verdict::Unevaluated(_)), "got {v:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1088,10 +1147,21 @@ mod mal_acks_tests {
         let dir = std::env::temp_dir().join("malacks-t2");
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("acks.jsonl");
-        std::fs::write(&p, format!("{}
-", ack(&d, "APEX", "TODO"))).unwrap();
+        std::fs::write(
+            &p,
+            format!(
+                "{}
+",
+                ack(&d, "APEX", "TODO")
+            ),
+        )
+        .unwrap();
         let acks = load_acks(&p).unwrap();
-        assert_eq!(acks.rejected.len(), 1, "placeholder notes must be quality-rejected");
+        assert_eq!(
+            acks.rejected.len(),
+            1,
+            "placeholder notes must be quality-rejected"
+        );
         assert!(
             mal_acked_engines(&acks, &d).is_empty(),
             "a quality-rejected ack must NOT silence the engine"
