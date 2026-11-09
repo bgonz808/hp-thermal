@@ -110,6 +110,16 @@ jobs:
               continue
             fi
             mapfile -t engines < <(tr -d '\r' < engines.txt)   # CRLF scrub: comparisons stay byte-exact
+            # Absolute floor (supply-chain/policy/floors.json): this many malicious verdicts is not a
+            # false-positive profile. HARD-STOP regardless of acks; a parse failure is a FAIL, not 0.
+            floor=$(jq -er '.mal.hard_stop_malicious_engines' supply-chain/policy/floors.json) \
+              || { echo "::error::floors policy unreadable (fail-closed)"; fail=1; continue; }
+            mal_n=$(jq -er '.data.attributes.last_analysis_stats.malicious' resp.json) \
+              || { echo "::error::$key: malicious count parse FAILED (fail-closed, not all-clear)"; fail=1; continue; }
+            if [ "$mal_n" -ge "$floor" ]; then
+              echo "::error::$key: HARD-STOP — $mal_n engines report malicious (floor $floor); not ackable"
+              fail=1
+            fi
             echo "$key: ${#engines[@]} detection(s)  https://www.virustotal.com/gui/file/$h"
             # WHAT each engine called it, not only WHO flagged it. The ack policy turns on
             # that distinction -- a heuristic/ML verdict (names carrying .!ml, Heur, ML/,

@@ -69,6 +69,26 @@ cargo xtask release-attest           # production-artifact checks: cargo-deny, a
 cargo xtask verify-hardening <exe>   # check the PE exploit-mitigation flags (CFG/ASLR/DEP)
 ```
 
+## Versioning
+
+Semver, `0.x` while pre-1.0 (see CHANGELOG.md). The rules that are not obvious from semver alone:
+
+- **Dependency-only change, no observable behaviour change: PATCH.** A security fix in a
+  dependency is the canonical patch release; ship it, do not accumulate it.
+- **Dependency change with an observable behaviour change** (root-store contents, platform or
+  MSRV support, a protocol default): still PATCH in `0.x`, and the CHANGELOG entry names the
+  behaviour, not just the crate.
+- **MINOR is for the app's own features.** Never for dependencies alone.
+- **Release candidates** (`-rc.N`) are the soak window before a tag.
+- **Build metadata** (`+…`) records the build (commit), never the version. Tooling ignores it
+  for version identity (`xtask explore`).
+- A release with byte-identical source and a changed lock is a real release: the embedded
+  dependency list (cargo-auditable) and the attestation change, so the version must move.
+
+The same rules bind any automation that is ever allowed to cut a release: a strictly-better
+rebuild (dependencies fixed, none added, nothing else changed) is a PATCH bump and nothing
+higher, and it carries the certificate that proved it.
+
 ## Submitting changes
 
 `main` is protected: no direct pushes. Work on a branch, open a PR, and let the required

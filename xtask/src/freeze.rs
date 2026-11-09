@@ -6,6 +6,20 @@
 //! precisely: **non-`--locked` is a discovery property, never a build-output property.** We
 //! never bless a floating build — we bless the frozen resolution that discovery proposed.
 //!
+//! `--base tools/locks/<tool>.lock` applies the directives atop an EXISTING frozen
+//! resolution instead of upstream's lock. A curated lock's history is not replayable as
+//! precise-updates (cargo-audit's rand 0.9->0.10 crossing came through the explorer's
+//! escalation ladder), so incremental fixes need the curated tree as their starting point;
+//! "before" is then the posture we actually ship. The lockfile SHAPE invariant runs in both
+//! modes: directives may move versions and prune, never introduce a package name.
+//!
+//! `--patches tools/patches/<tool>` stages the tool's patches onto the checkout before the
+//! lock, in the producer's order, `git apply --check`ed first (fail-closed supersession).
+//! `--require-improvement` refuses a run that fixes zero instances: with "no regression"
+//! already enforced, that is the other half of the strictly-better certificate the autonomous
+//! path needs. Every directive is attempted and every refusal reported before failing; on any
+//! refusal nothing is written and no delta is computed -- a partial set is not the reviewed set.
+//!
 //! Output is `tools/locks/<tool>.lock`: a resolved Cargo.lock that the producer builds with
 //! INSTEAD of upstream's. Deliberately a convention-based path rather than a 6th TOOLS.lock
 //! column — `gate::parse_tools_lock` requires exactly 5 fields, so a 6-column line would be
@@ -53,6 +67,18 @@ impl Directive {
     }
 }
 
+/// Enumerate `*.patch` files under an ABSOLUTE patches dir, sorted (producer order). Every
+/// returned path is absolute so it survives a `git apply` whose cwd is the staged checkout.
+pub fn patch_files(abs_dir: &std::path::Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut files: Vec<PathBuf> = std::fs::read_dir(abs_dir)?
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "patch"))
+        .collect();
+    files.sort();
+    Ok(files)
+}
+
 /// Parse `pkg=version` / `pkg@current=version`. Rejects empty halves and non-semver
 /// versions on BOTH sides of `@` — a directive names concrete crates.io releases,
 /// never ranges or tags.
@@ -88,6 +114,46 @@ pub fn parse_directive(s: &str) -> Result<Directive, String> {
 
 /// Verify a directive's target is safe to adopt: exists, not yanked, and past soak.
 /// Returns the version's age in days.
+/// The set of package NAMES in a Cargo.lock. Names, not (name, version): the shape invariant
+/// asks "did anything new enter the tree", and a version move is not entry. Parses the
+/// `[[package]]` / `name = "..."` lines directly -- xtask carries one dependency by design,
+/// and this is the only field the invariant needs.
+pub fn lock_package_names(path: &Path) -> Result<BTreeSet<String>, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(lock_package_names_from_str(&text))
+}
+
+/// Pure form of `lock_package_names`, so the invariant is testable without a filesystem.
+pub fn lock_package_names_from_str(text: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let mut in_pkg = false;
+    for line in text.lines() {
+        let l = line.trim();
+        if l == "[[package]]" {
+            in_pkg = true;
+            continue;
+        }
+        if l.starts_with('[') {
+            in_pkg = false;
+            continue;
+        }
+        if in_pkg {
+            if let Some(rest) = l.strip_prefix("name = \"") {
+                if let Some(end) = rest.find('"') {
+                    out.insert(rest[..end].to_string());
+                }
+            }
+        }
+    }
+    out
+}
+
+/// Names present after the directives that were not present before. Non-empty means the
+/// change was not a drop-in, whatever the advisory delta says.
+pub fn added_package_names(before: &BTreeSet<String>, after: &BTreeSet<String>) -> Vec<String> {
+    after.difference(before).cloned().collect()
+}
+
 pub fn check_target(d: &Directive, now_epoch: i64, soak_days: i64) -> Result<i64, String> {
     let url = format!(
         "https://crates.io/api/v1/crates/{}/{}",
@@ -147,6 +213,18 @@ pub fn removed_instances(before: &BTreeSet<Instance>, after: &BTreeSet<Instance>
     before
         .iter()
         .filter(|i| !after_keys.contains(&key(i)))
+        .cloned()
+        .collect()
+}
+
+/// Instances present, unchanged, on both sides (same id, package, version): the residue a
+/// certified change leaves for the maintainer. Listed by name so the output IS the queue.
+pub fn carried_instances(before: &BTreeSet<Instance>, after: &BTreeSet<Instance>) -> Vec<Instance> {
+    let key = |i: &Instance| (i.id.clone(), i.package.clone(), i.version.clone());
+    let bk: BTreeSet<_> = before.iter().map(key).collect();
+    after
+        .iter()
+        .filter(|i| bk.contains(&key(i)))
         .cloned()
         .collect()
 }
@@ -220,6 +298,23 @@ pub fn run(args: &[String]) -> i32 {
     let mut now_epoch: i64 = 0;
     let mut allow_added = false;
     let mut dry_run = false;
+    // --base <lock>: apply directives atop an EXISTING frozen resolution instead of upstream's
+    // lock. Needed because a curated lock's history is not replayable as precise-updates (the
+    // cargo-audit rand 0.9->0.10 crossing used the explorer's escalation ladder); without this,
+    // incremental fixes had to be applied by hand-verified staged checkout, outside freeze's
+    // soak/yank/advisory-delta ladder. The "before" posture becomes the base lock's posture.
+    let mut base: Option<PathBuf> = None;
+    // --patches <dir>: stage tools/patches/<tool>/*.patch onto the checkout BEFORE the lock,
+    // in the producer's exact order. A curated lock built against patched manifests (cargo-vet's
+    // keystone) cannot be resolved against unpatched ones; without staging, --base would
+    // re-resolve the tree instead of applying directives atop it. Each patch is `git apply
+    // --check`ed first: a patch that no longer applies is a hard stop, same as the producer.
+    let mut patches: Option<PathBuf> = None;
+    // --require-improvement: refuse unless at least one instance is FIXED. freeze alone only
+    // refuses regressions (genuinely added); the autonomous "strictly better" certificate needs
+    // the other half -- a change that fixes nothing is not better, however clean its delta
+    // (measured: ruzstd 0.8.3 is newer than 0.8.2 and clears nothing, 0 fixed / 2 -> 2).
+    let mut require_improvement = false;
     let mut soak_overridden = false;
     let mut now_overridden = false;
     let mut it = args.iter().skip(1);
@@ -254,6 +349,9 @@ pub fn run(args: &[String]) -> i32 {
             // Evaluate + report the full delta, write NOTHING. The safe way to try a batch:
             // see which directives are reachable and what they'd buy before committing a lock.
             "--dry-run" => dry_run = true,
+            "--base" => base = it.next().map(PathBuf::from),
+            "--patches" => patches = it.next().map(PathBuf::from),
+            "--require-improvement" => require_improvement = true,
             other => {
                 eprintln!("freeze: unknown arg {other}");
                 return 2;
@@ -285,7 +383,11 @@ pub fn run(args: &[String]) -> i32 {
         println!(
             "# RESEARCH RUN -- overridden instruments: now-epoch={} soak-days={}. Dry-run only;
              # no lock can be written from this run, and its soak verdicts are NOT safety claims.",
-            if now_overridden { now_epoch.to_string() } else { "real".into() },
+            if now_overridden {
+                now_epoch.to_string()
+            } else {
+                "real".into()
+            },
             soak
         );
     }
@@ -349,7 +451,93 @@ pub fn run(args: &[String]) -> i32 {
         return 1;
     }
 
-    // 3. Advisory posture BEFORE (upstream's lock), at this DB state.
+    // 2a. --patches: stage the tool's patches onto the clean checkout first, producer order.
+    // `git apply --check` before `git apply`, and a patch that fails to apply stops the run --
+    // the same fail-closed supersession rule build-tools.yml enforces.
+    if let Some(pdir) = &patches {
+        // `git apply` runs with cwd = the staged checkout: patch paths must be absolute.
+        // `absolute`, not `canonicalize` (git rejects its `\?\` form).
+        let pdir = match std::path::absolute(pdir) {
+            Ok(a) => a,
+            Err(e) => {
+                eprintln!(
+                    "freeze: --patches {} cannot be absolutized: {e}",
+                    pdir.display()
+                );
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+        };
+        let files: Vec<PathBuf> = match patch_files(&pdir) {
+            Ok(f) => f,
+            Err(e) => {
+                eprintln!("freeze: --patches {} unreadable: {e}", pdir.display());
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+        };
+        for pf in &files {
+            let Some(pfs) = pf.to_str() else {
+                eprintln!("freeze: patch path is not UTF-8: {}", pf.display());
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            };
+            if git(&["apply", "--check", pfs], Some(&work)).is_err()
+                || git(&["apply", pfs], Some(&work)).is_err()
+            {
+                eprintln!(
+                    "freeze: patch {} no longer applies to {repo}@{rev} -- superseded or \
+                     conflicting; refresh or drop it (fail-closed)",
+                    pf.display()
+                );
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+            println!("# patch applied: {}", pf.display());
+        }
+    }
+
+    // 2b. --base: the existing frozen resolution REPLACES upstream's lock as the starting
+    // point, so directives apply atop the curation and "before" is the posture we actually
+    // ship. Unreadable base = stop; never silently fall back to upstream's lock, which would
+    // make the delta describe a tree we do not build.
+    if let Some(b) = &base {
+        match std::fs::read(b) {
+            Ok(bytes) => {
+                if let Err(e) = std::fs::write(&lock, bytes) {
+                    eprintln!(
+                        "freeze: cannot stage --base {} into the checkout: {e}",
+                        b.display()
+                    );
+                    let _ = std::fs::remove_dir_all(&work);
+                    return 1;
+                }
+                println!(
+                    "# base: {} (directives apply atop this resolution)",
+                    b.display()
+                );
+            }
+            Err(e) => {
+                eprintln!("freeze: --base {} unreadable: {e}", b.display());
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+        }
+    }
+    // Snapshot the package NAME set before any directive runs. A drop-in may move versions
+    // and may prune transitive packages, but it must never INTRODUCE a package name: a new
+    // name entering through a "fix" is exactly the shape of a smuggled or squatted crate,
+    // and no advisory delta would notice it. Checked after the directives, below.
+    let names_before = match lock_package_names(&lock) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("freeze: cannot read package names from the starting lock: {e}");
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+    };
+
+    // 3. Advisory posture BEFORE (the starting lock), at this DB state.
     let before = match run_audit(&lock, false) {
         Ok(a) => extract_instances(&a),
         Err(e) => {
@@ -362,6 +550,11 @@ pub fn run(args: &[String]) -> i32 {
     // 4. Apply the directives. `cargo update --precise` moves ONLY the named packages
     //    (plus whatever their own requirements force), keeping the rest of upstream's
     //    vetted resolution intact — minimal deviation, recorded in full by the lock diff.
+    // Apply EVERY directive and report EVERY refusal before failing. Stopping at the first one
+    // turned a ten-directive batch into ten cycles of discovery (the same defect fixed in the
+    // caps gate, #305, and the producer loop, #324). Nothing is written on any refusal: a
+    // partial set is not the set that was reviewed, so no delta is computed for it either.
+    let mut refused: Vec<String> = Vec::new();
     for p in &parsed {
         let st = Command::new("cargo")
             .current_dir(&work)
@@ -379,14 +572,52 @@ pub fn run(args: &[String]) -> i32 {
                      `xtask explore`)",
                     p.package, p.version
                 );
-                let _ = std::fs::remove_dir_all(&work);
-                return 1;
+                refused.push(format!("{}={}", p.package, p.version));
             }
         }
+    }
+    if !refused.is_empty() {
+        eprintln!(
+            "freeze: {} directive(s) unreachable: {refused:?} -- no lock written, no delta \
+             computed (a partial set is not the reviewed set)",
+            refused.len()
+        );
+        let _ = std::fs::remove_dir_all(&work);
+        return 1;
     }
 
     // 5. Advisory posture AFTER — same DB state (--no-fetch), so the diff isolates the
     //    resolution change from advisory-DB drift (#241 §5).
+    // LOCKFILE SHAPE INVARIANT. Precise-updates of named packages may change versions and may
+    // prune transitive packages that the new versions no longer need; they may never ADD a
+    // package name. `cargo update -p <name>` already refuses a name absent from the graph
+    // (measured: "package ID specification `rustlss` did not match any packages"), so this is
+    // the belt to that brace -- it catches a new transitive dependency riding in on a version
+    // bump, which is the shape a smuggled crate would take and which no advisory delta sees.
+    // Hard refusal, dry-run included: a certificate is not issued for a tree that grew.
+    let names_after = match lock_package_names(&lock) {
+        Ok(n) => n,
+        Err(e) => {
+            eprintln!("freeze: cannot read package names from the updated lock: {e}");
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+    };
+    let added_names = added_package_names(&names_before, &names_after);
+    if !added_names.is_empty() {
+        eprintln!(
+            "  REFUSED: the directives INTRODUCED package name(s) {added_names:?} -- a drop-in \
+             may move versions and prune, never add. Review the new dependency by hand before \
+             any bless (lockfile shape invariant)."
+        );
+        let _ = std::fs::remove_dir_all(&work);
+        return 1;
+    }
+    let pruned: Vec<&String> = names_before.difference(&names_after).collect();
+    if !pruned.is_empty() {
+        println!("  pruned (no longer needed by the new versions): {pruned:?}");
+    }
+
     let after = match run_audit(&lock, true) {
         Ok(a) => extract_instances(&a),
         Err(e) => {
@@ -409,6 +640,17 @@ pub fn run(args: &[String]) -> i32 {
         before.len(),
         after.len()
     );
+    // "Strictly better" needs BOTH halves: no regression (genuinely added == 0, enforced
+    // below) AND an actual improvement. A change that fixes nothing is not better however
+    // clean its delta; under --require-improvement it is refused, and no lock is written.
+    let fixed_count = removed.len() - unfixed.len();
+    if require_improvement && fixed_count == 0 {
+        eprintln!(
+            "  REFUSED: --require-improvement set and the directives fix 0 instance(s) as measured \n             by RustSec -- newer is not better on this axis; nothing to certify, no lock written. \n             A fix outside RustSec's view (vendored C library, root store, behaviour) needs its \n             own evidence through the maintainer queue, not this flag."
+        );
+        let _ = std::fs::remove_dir_all(&work);
+        return 1;
+    }
     let unfixed_keys: BTreeSet<(String, String)> = unfixed
         .iter()
         .map(|i| (i.id.clone(), i.package.clone()))
@@ -423,6 +665,13 @@ pub fn run(args: &[String]) -> i32 {
         println!(
             "  ~ {} {}: still present at {} — this bump did NOT fix it",
             i.id, i.package, i.version
+        );
+    }
+    // #357: the instances that remain ARE the human queue; name them, do not just count them.
+    for i in carried_instances(&before, &after) {
+        println!(
+            "  = {} {} {} ({})  (carried, unchanged)",
+            i.id, i.package, i.version, i.kind
         );
     }
     for i in &genuine {
@@ -606,6 +855,42 @@ mod tests {
     }
 
     #[test]
+    fn version_moves_and_prunes_are_not_added_names() {
+        // A drop-in: rustls bumps, ppv-lite86 is pruned. The name set may shrink or hold; the
+        // invariant is about ENTRY only.
+        let before = lock_package_names_from_str(
+            "[[package]]\nname = \"rustls\"\nversion = \"0.23.40\"\n\n[[package]]\nname = \"ppv-lite86\"\nversion = \"0.2.21\"\n",
+        );
+        let after =
+            lock_package_names_from_str("[[package]]\nname = \"rustls\"\nversion = \"0.23.46\"\n");
+        assert!(added_package_names(&before, &after).is_empty());
+    }
+
+    #[test]
+    fn a_new_package_name_is_refused_whatever_the_advisory_delta_says() {
+        // The smuggle shape: the named target moves, and an unrelated crate rides in with it.
+        // The advisory delta could be perfectly clean; the shape invariant still refuses.
+        let before =
+            lock_package_names_from_str("[[package]]\nname = \"rustls\"\nversion = \"0.23.40\"\n");
+        let after = lock_package_names_from_str(
+            "[[package]]\nname = \"rustls\"\nversion = \"0.23.46\"\n\n[[package]]\nname = \"rustls-helper\"\nversion = \"0.1.0\"\n",
+        );
+        assert_eq!(
+            added_package_names(&before, &after),
+            vec!["rustls-helper".to_string()]
+        );
+    }
+
+    #[test]
+    fn lock_name_parsing_ignores_metadata_tables() {
+        // `[metadata]` and `[[patch.unused]]` tables carry `name =` lines that are not packages.
+        let names = lock_package_names_from_str(
+            "[[package]]\nname = \"real\"\nversion = \"1.0.0\"\n\n[[patch.unused]]\nname = \"ghost\"\nversion = \"0.0.1\"\n",
+        );
+        assert_eq!(names.into_iter().collect::<Vec<_>>(), vec!["real"]);
+    }
+
+    #[test]
     fn newly_yanked_package_cannot_hide_behind_existing_yanked_findings() {
         // `yanked` warnings use the kind as the id, so the key must be (id, PACKAGE):
         // a pre-existing yanked finding on one package must not launder a NEW yanked
@@ -630,5 +915,57 @@ mod tests {
         let (genuine, unfixed) = split_regressions(&before, &after);
         assert!(genuine.is_empty());
         assert_eq!(unfixed, vec![inst("A", "p", "3.0")]);
+    }
+    #[test]
+    fn patch_files_are_absolute_sorted_and_only_patches() {
+        // The staged checkout is `git apply`'s cwd, so a relative patch path would be looked
+        // up under the clone. Every enumerated path must therefore be absolute.
+        let dir = std::env::temp_dir().join(format!("xtask-patchfiles-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for n in ["0002-b.patch", "0001-a.patch", "README.md"] {
+            std::fs::write(dir.join(n), "x").unwrap();
+        }
+        let rel = pathdiff_relative(&dir);
+        let abs = std::path::absolute(&rel).unwrap();
+        let files = patch_files(&abs).unwrap();
+        let names: Vec<String> = files
+            .iter()
+            .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["0001-a.patch", "0002-b.patch"]);
+        assert!(files.iter().all(|p| p.is_absolute()), "{files:?}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A relative spelling of `abs` from the cwd when one exists (same drive on Windows);
+    /// otherwise `abs` itself. Enough to exercise the absolutize path in CI and locally.
+    fn pathdiff_relative(abs: &std::path::Path) -> PathBuf {
+        let cwd = std::env::current_dir().unwrap();
+        match abs.strip_prefix(&cwd) {
+            Ok(r) => r.to_path_buf(),
+            Err(_) => abs.to_path_buf(),
+        }
+    }
+
+    #[test]
+    fn carried_instances_are_named_not_counted() {
+        let before: BTreeSet<Instance> = [
+            inst("A", "p", "1"),
+            inst("B", "q", "2"),
+            inst("C", "r", "3"),
+        ]
+        .into();
+        let after: BTreeSet<Instance> = [
+            inst("B", "q", "2"),
+            inst("C", "r", "4"),
+            inst("D", "s", "1"),
+        ]
+        .into();
+        // B unchanged -> carried; C moved version -> unfixed (not carried); D -> genuine; A -> fixed
+        assert_eq!(
+            carried_instances(&before, &after),
+            vec![inst("B", "q", "2")]
+        );
     }
 }
