@@ -217,6 +217,13 @@ jobs:
                 echo "build-std ENABLED for $name (whole-binary canaries + coverage assertion)"
                 ;;
             esac
+            # Per-tool build flavor (tools/build-args/<name>): comment/blank lines ignored. A
+            # missing file is the empty list; a malformed argument fails `cargo install` loudly.
+            tool_args=()
+            if [ -f "tools/build-args/$name" ]; then
+              mapfile -t tool_args < <(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$name")
+              echo "build-args: ${tool_args[*]}"
+            fi
             if [ -f "tools/locks/$name.lock" ]; then
               # FROZEN-LOCK build (#241): upstream's own Cargo.lock pins versions we have
               # deliberately moved off (e.g. yanked/soundness-fixed deps upstream still
@@ -249,9 +256,9 @@ jobs:
               # 2>&1 | tee: the diagnostics land in diag-<name>.log for verify-allowances
               # to read AFTER the loop. pipefail is set, so cargo's failure still reaches
               # `|| built=0` through the pipe.
-              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
+              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
             else
-              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
+              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
             fi
             # REPORT EVERY FAILING TOOL, not the first. The loop used to exit here, so a
             # ~10-minute run answered "does cargo-audit build?" when the question was "which
@@ -390,6 +397,13 @@ jobs:
           while read -r name repo rev target _sha; do
             [ "$target" = "linux-x86_64" ] || continue
             echo "::group::building $name @ $rev"
+            # Per-tool build flavor (tools/build-args/<name>): comment/blank lines ignored. A
+            # missing file is the empty list; a malformed argument fails `cargo install` loudly.
+            tool_args=()
+            if [ -f "tools/build-args/$name" ]; then
+              mapfile -t tool_args < <(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$name")
+              echo "build-args: ${tool_args[*]}"
+            fi
             if [ -f "tools/locks/$name.lock" ]; then
               # FROZEN-LOCK build (#241) — see the windows job for the full rationale.
               echo "using frozen lock tools/locks/$name.lock"
@@ -412,9 +426,9 @@ jobs:
               cp "tools/locks/$name.lock" "src-$name/Cargo.lock"
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot
+              cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${tool_args[@]}"
             else
-              cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot
+              cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${tool_args[@]}"
             fi
             d=$(sha256sum "./toolroot/bin/$name" | cut -d' ' -f1)
             cp "./toolroot/bin/$name" "out/$name-${d:0:12}-linux-x86_64"
