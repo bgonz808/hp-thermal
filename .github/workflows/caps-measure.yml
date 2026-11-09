@@ -1,0 +1,168 @@
+name: Caps measure (cackle inventory evidence)
+
+# The source-vantage caps axis, measured where it belongs: an ephemeral Linux runner, the
+# pinned toolchain, the BLESSED cargo-acl (digest + attestation verified), the candidate's
+# exact tree (pinned rev + tools/patches + tools/locks overlay). cackle compiles the tree,
+# which runs dependency build scripts and proc-macros — precisely the code that must never
+# run uncaged on a workstation. Replaces the local-WSL step every bless used until #368.
+#
+# Output is EVIDENCE, never a bless: `caps.toml` with a provenance header that satisfies the
+# completeness conditions of #367 (instrument digest, lock + patch hashes, exit code, section
+# counts), plus the diff against the seed inventory. The maintainer commits it under
+# supply-chain/evidence/<tool>/<digest>/ and the gate evaluates it.
+#
+# No secrets, contents:read only. repo + rev come from the COMMITTED pin, never from input.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tool:
+        description: "Tool name as pinned in tools/TOOLS.lock (the tree to measure)."
+        type: string
+        default: cargo-vet
+      seed_digest:
+        description: >-
+          Prior blessed digest whose caps.toml seeds the run (the [api.*] definitions ARE the
+          instrument). Empty = the digest currently pinned in tools/TOOLS.lock for `tool`.
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  measure:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain (producer parity)
+        uses: ./.github/actions/install-toolchain
+        with:
+          components: "rust-src"
+
+      - name: Fetch the BLESSED cargo-acl (digest + attestation verified)
+        id: tools
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: linux-x86_64
+          only: cargo-acl
+          verify-attestations: "true"
+
+      - name: Stage the candidate tree exactly as the producer would
+        shell: bash
+        env:
+          TOOL: ${{ inputs.tool }}
+        run: |
+          set -euo pipefail
+          line=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' \
+                  | awk -v t="$TOOL" '$1==t {print; exit}')
+          [ -n "$line" ] || { echo "::error::'$TOOL' is not pinned in tools/TOOLS.lock"; exit 1; }
+          repo=$(echo "$line" | awk '{print $2}'); rev=$(echo "$line" | awk '{print $3}')
+          rm -rf src && git init -q src
+          git -C src remote add origin "https://github.com/$repo"
+          git -C src fetch -q --depth 1 origin "$rev"
+          git -C src checkout -q FETCH_HEAD
+          : > patches.sha256
+          if [ -d "tools/patches/$TOOL" ]; then
+            for pf in "tools/patches/$TOOL"/*.patch; do
+              git -C src apply --check "$PWD/$pf" \
+                || { echo "::error::$pf does not apply — superseded or conflicting"; exit 1; }
+              git -C src apply "$PWD/$pf"
+              sha256sum "$pf" >> patches.sha256
+            done
+          fi
+          lock_src="upstream Cargo.lock at $rev"
+          if [ -f "tools/locks/$TOOL.lock" ]; then
+            cp "tools/locks/$TOOL.lock" src/Cargo.lock
+            lock_src="frozen tools/locks/$TOOL.lock"
+          fi
+          [ -f src/Cargo.lock ] || { echo "::error::no Cargo.lock to measure against"; exit 1; }
+          {
+            echo "repo='$repo'"; echo "rev='$rev'"; echo "lock_src='$lock_src'"
+            echo "lock_sha256='$(sha256sum src/Cargo.lock | cut -d' ' -f1)'"
+          } >> stage.env
+          cat stage.env
+
+      - name: Seed from the prior blessed inventory
+        shell: bash
+        env:
+          TOOL: ${{ inputs.tool }}
+          SEED: ${{ inputs.seed_digest }}
+        run: |
+          set -euo pipefail
+          seed="$SEED"
+          if [ -z "$seed" ]; then
+            seed=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' \
+                    | awk -v t="$TOOL" '$1==t {print $5; exit}')
+          fi
+          src="supply-chain/evidence/$TOOL/$seed/caps.toml"
+          [ -f "$src" ] || { echo "::error::no seed inventory at $src — pass seed_digest"; exit 1; }
+          cp "$src" src/cackle.toml
+          cp "$src" seed.toml
+          echo "seed_digest='$seed'" >> stage.env
+          echo "seed: $src ($(grep -c '^\[pkg\.' seed.toml) pkg sections)"
+
+      - name: Measure (cackle, non-interactive, sandbox per seed)
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+          TOOL: ${{ inputs.tool }}
+          CARGO_TARGET_DIR: ${{ runner.temp }}/caps-build
+        run: |
+          set -uo pipefail
+          # shellcheck source=/dev/null
+          . ./stage.env 2>/dev/null || true
+          # The seed's [sandbox] block governs; our inventories record kind = "Disabled", so
+          # bubblewrap is not required here. The RUNNER is the sandbox.
+          set +e
+          "$TOOLS_DIR/cargo-acl" acl -n --ui none --auto-accept-fixes --path src > cackle.log 2>&1
+          code=$?
+          set -e
+          tail -20 cackle.log
+          echo "cackle_exit='$code'" >> stage.env
+          [ "$code" -eq 0 ] || { echo "::error::cackle exited $code — inventory is PARTIAL, not evidence"; exit 1; }
+          [ "$(grep -c '^\[pkg\.' src/cackle.toml)" -gt 0 ] || { echo "::error::empty inventory — not evidence"; exit 1; }
+
+      - name: Write evidence + diff
+        if: always()
+        shell: bash
+        env:
+          TOOL: ${{ inputs.tool }}
+        run: |
+          set -euo pipefail
+          mkdir -p out
+          # shellcheck source=/dev/null
+          . ./stage.env 2>/dev/null || true
+          acl_line=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' | awk '$1=="cargo-acl"{print; exit}')
+          acl_sha=$(echo "$acl_line" | awk '{print $5}')
+          acl_ver=$(grep -E '^cargo-acl ' tools/TOOLS.lock | grep -oE '#\s*v[0-9.]+' | tr -d '# ' || true)
+          {
+            echo "# caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)"
+            echo "# generated: $(date -u +%F), cargo-acl ${acl_ver:-?} (${acl_sha:0:12}, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run ${GITHUB_RUN_ID})"
+            echo "# subject: $TOOL @ ${repo:-?}@${rev:-?}; ${lock_src:-?} sha256 ${lock_sha256:-?}"
+            if [ -s patches.sha256 ]; then sed 's/^/# patch: /' patches.sha256; fi
+            echo "# seed: ${seed_digest:-?}; cackle exit ${cackle_exit:-?}; pkg sections seed $(grep -c '^\[pkg\.' seed.toml 2>/dev/null || echo ?) -> measured $(grep -c '^\[pkg\.' src/cackle.toml 2>/dev/null || echo ?)"
+            echo "# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)"
+            grep -vE '^\s*#' src/cackle.toml 2>/dev/null || true
+          } > "out/caps.toml"
+          diff -U1 seed.toml src/cackle.toml 2>/dev/null | grep -vE '^(---|\+\+\+)' > out/caps.diff || true
+          cp cackle.log out/ 2>/dev/null || true
+          cp stage.env out/ 2>/dev/null || true
+          echo "diff lines: $(grep -cE '^[-+]' out/caps.diff || true)"
+          head -40 out/caps.diff || true
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact v7.0.2
+        with:
+          name: caps-measure-${{ inputs.tool }}
+          path: out/
+          if-no-files-found: error
+          retention-days: 30

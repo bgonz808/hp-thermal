@@ -28,8 +28,42 @@ permissions:
   contents: read
 
 jobs:
+  # The runner family follows the tool's `target` in TOOLS.lock (cackle is Linux-only).
+  resolve:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      runner: ${{ steps.pick.outputs.runner }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pick the runner from the pinned target
+        id: pick
+        shell: bash
+        env:
+          TOOL: ${{ inputs.tool }}
+        run: |
+          set -euo pipefail
+          target=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//'                     | awk -v t="$TOOL" '$1==t {print $4; exit}')
+          case "$target" in
+            windows-x86_64) runner=windows-2025 ;;
+            # ubuntu-22.04, not 24.04: cackle's own CI pins 22.04 with the comment "bubblewrap is
+            # broken on Ubuntu 24.04" (cackle-rs/cackle .github/workflows/ci.yml @ the pinned rev),
+            # and our 24.04 run measured exactly that: `bwrap: loopback: Failed RTM_NEWADDR:
+            # Operation not permitted` (run 42550668921). Testing on the image upstream tests on
+            # beats relaxing the runner's namespace restrictions. The producer still builds the
+            # shipped artifact on 24.04; this lane produces evidence, not artifacts.
+            linux-x86_64)   runner=ubuntu-22.04 ;;
+            *) echo "::error::'$TOOL': unknown or missing target '$target' in tools/TOOLS.lock"; exit 1 ;;
+          esac
+          echo "runner=$runner" >> "$GITHUB_OUTPUT"
+
   build:
-    runs-on: windows-2025   # match the producer's target family
+    needs: resolve
+    runs-on: ${{ needs.resolve.outputs.runner }}
     permissions:
       contents: read
     steps:
@@ -39,9 +73,28 @@ jobs:
           persist-credentials: false
 
       - name: Install pinned toolchain (producer parity)
+        id: toolchain
         uses: ./.github/actions/install-toolchain
         with:
           components: "rust-src"
+
+      # #368: cackle's fixtures sandbox with Bubblewrap and strip the cargo env, so the test
+      # suite needs `bwrap` on the runner and the pinned channel as rustup's DEFAULT (the
+      # exported RUSTUP_TOOLCHAIN does not survive the harness's env scrub). bubblewrap comes
+      # from the runner image's apt mirror: a TEST-step input only, never part of the built
+      # artifact — the one non-digest-pinned input of this step, named here on purpose.
+      - name: Test prerequisites (Linux lane)
+        if: runner.os == 'Linux' && inputs.run_tests
+        shell: bash
+        env:
+          CHANNEL: ${{ steps.toolchain.outputs.channel }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq bubblewrap
+          bwrap --version
+          rustup default "$CHANNEL"
+          rustc --version
 
       - name: Build the candidate exactly as the producer would
         shell: bash
@@ -83,7 +136,7 @@ jobs:
 
       - name: Upload report
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # actions/upload-artifact v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact v7.0.2
         with:
           name: candidate-build-${{ inputs.tool }}
           path: report.txt
