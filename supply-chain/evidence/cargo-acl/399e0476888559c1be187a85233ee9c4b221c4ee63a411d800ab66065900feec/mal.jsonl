@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-acl","sha256":"399e0476888559c1be187a85233ee9c4b221c4ee63a411d800ab66065900feec"},"panelDate":"2026-11-09","detections":{"malicious":0,"total":64},"flags":[],"sandbox":[],"timesSubmitted":1,"source":"vt-submit run 42663118541 + monitor run 42663123338 (lookup; submission run 42661764685)"}
