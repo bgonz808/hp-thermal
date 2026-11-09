@@ -1,0 +1,7 @@
+{"schema":"hp-thermal/evidence-vuln/v1","subject":{"name":"cargo-cyclonedx","sha256":"966f820308f7c0b353187b9988a5b5055bd874182e733dccda9a6b1b8975c489"},"scanner":{"uri":"github.com/rustsec/rustsec#cargo-audit","version":"0.22.2","digest":"80eb16891508b5f20fbcfa4b7ece7854c9f60459bb7c191089664a9dd30eb39a","db":{"uri":"github.com/rustsec/advisory-db","version":"7a40350e1b8ba5b656d909f88222a8059a83d88d","lastUpdate":"2026-11-08T16:03:42-07:00"}},"scanFinishedOn":"2026-11-08","lockProvenance":"upstream lock at pinned rev (no frozen lock; binary built from it)","rawPayload":{"sha256":"ee7664bbc40fc8af0f23dd8667a65222048dc0830181d619b18bee3af55fa5a6","store":"tools release","asset":"audit-raw-ee7664bbc40f.json"}}
+{"id":"RUSTSEC-2026-0009","aliases":["CVE-2026-25727","GHSA-r6v5-fh4h-64xc"],"package":"time","version":"0.3.36","kind":"vulnerability"}
+{"id":"RUSTSEC-2025-0119","aliases":[],"package":"number_prefix","version":"0.4.0","kind":"unmaintained"}
+{"id":"RUSTSEC-2024-0320","aliases":[],"package":"yaml-rust","version":"0.4.5","kind":"unmaintained"}
+{"id":"RUSTSEC-2026-0190","aliases":[],"package":"anyhow","version":"1.0.80","kind":"unsound"}
+{"id":"RUSTSEC-2026-0097","aliases":["GHSA-cq8v-f236-94qc"],"package":"rand","version":"0.8.5","kind":"unsound"}
+{"id":"yanked:xml-rs@0.8.19","aliases":[],"package":"xml-rs","version":"0.8.19","kind":"yanked"}
