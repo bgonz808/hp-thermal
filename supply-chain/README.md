@@ -50,6 +50,10 @@ the enforcement layer's own burn-down list.
 
 - **`gate --base <TOOLS.lock>`** (#241) — 3-axis candidate evaluation (vuln/caps/mal)
   vs. `evidence/`, with recorded-ack sign-off. Consumes this tree.
+- **absolute floors** (`policy/floors.json`) — the state a signature cannot admit: a vulnerability
+  with a critical-shape CVSS vector, a panel with too many malicious verdicts or a malicious sandbox
+  verdict, a measured inventory newly granting `process`/`net`. HARD-STOP in `gate`, FAIL in the
+  monitors, never ackable; a missing policy is UNEVALUATED, not "no floors".
 - **`verify-caps <binary> [--manifest <p>]`** (#245) — the binary vantage of the caps
   axis: measures a binary's import surface against `policy/caps/<binary>.json`, fails
   closed on off-allowlist imports, stale allow entries (ratchet), denied functions, or
