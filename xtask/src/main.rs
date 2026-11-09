@@ -40,6 +40,8 @@ mod monitor;
 // lock). The promotion pipeline's trust boundary — discovery may float, builds never do.
 mod freeze;
 mod floors;
+mod caps_subset;
+mod sha256;
 
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).

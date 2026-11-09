@@ -515,7 +515,9 @@ fn caps_verdict(
     head: &ToolLine,
     acks: &Acks,
     floors: &crate::floors::Floors,
+    locks: (Option<&Path>, Option<&Path>),
 ) -> Verdict {
+    let (head_lock, base_lock) = locks;
     let digest = head.sha.as_str();
     let dir = evidence_dir.join(tool).join(digest);
     if dir.join("caps.toml").exists() {
@@ -525,6 +527,23 @@ fn caps_verdict(
         });
         if let Some(why) = floors.caps_stop(&head_caps, base_caps.as_deref()) {
             return Verdict::HardStop(why);
+        }
+        // #367: a complete, measured strict subset of the prior inventory is ALLOW. Every
+        // precondition failure falls through to the RAISE/ack path below, never to ALLOW.
+        if let (Some(base_caps), Some(hl), Some(bl)) = (&base_caps, head_lock, base_lock)
+            && let (Ok(ht), Ok(bt)) = (std::fs::read_to_string(hl), std::fs::read_to_string(bl))
+        {
+            let head_sha = crate::sha256::sha256_hex(ht.as_bytes());
+            match crate::caps_subset::subset_allow(
+                &head_caps,
+                base_caps,
+                &head_sha,
+                &crate::freeze::lock_package_names_from_str(&ht),
+                &crate::freeze::lock_package_names_from_str(&bt),
+            ) {
+                Ok(desc) => return Verdict::Allow(desc),
+                Err(why) => eprintln!("gate: caps subset rule not applicable for {tool}: {why}"),
+            }
         }
         if ack_covers_caps(acks, digest) {
             Verdict::RaiseCovered(vec![format!("caps inventory {digest} reviewed + acked")])
@@ -758,9 +777,19 @@ pub fn run(args: &[String]) -> i32 {
         //     digest is built from (#255 §5) ---
         let tmp = std::env::temp_dir();
         let head_dest = tmp.join(format!("gate-{}-head.lock", h.name));
+        let head_res = resolve_lock(&h.name, &h.repo, &h.rev, Some(&locks_dir), &head_dest);
+        let base_res = b.as_ref().map(|b| {
+            let base_dest = tmp.join(format!("gate-{}-base.lock", h.name));
+            resolve_lock(
+                &b.name,
+                &b.repo,
+                &b.rev,
+                base_locks_dir.as_deref(),
+                &base_dest,
+            )
+        });
         let vuln = (|| -> Result<Verdict, String> {
-            let (head_lock, head_src) =
-                resolve_lock(&h.name, &h.repo, &h.rev, Some(&locks_dir), &head_dest)?;
+            let (head_lock, head_src) = head_res.clone()?;
             let head_json = run_audit(&head_lock, !first_scan)?;
             first_scan = false;
             if db_stamp.is_empty() {
@@ -772,16 +801,9 @@ pub fn run(args: &[String]) -> i32 {
             }
             let head_inst = extract_instances(&head_json);
             let stops = floors.vuln_stops(&head_inst, &crate::floors::extract_cvss(&head_json));
-            let (added, fixed, carried, base_src) = match b {
-                Some(b) => {
-                    let base_dest = tmp.join(format!("gate-{}-base.lock", h.name));
-                    let (base_lock, base_src) = resolve_lock(
-                        &b.name,
-                        &b.repo,
-                        &b.rev,
-                        base_locks_dir.as_deref(),
-                        &base_dest,
-                    )?;
+            let (added, fixed, carried, base_src) = match &base_res {
+                Some(r) => {
+                    let (base_lock, base_src) = r.clone()?;
                     let base_json = run_audit(&base_lock, true)?; // SAME DB: --no-fetch
                     let base_inst = extract_instances(&base_json);
                     let (a, f, c) = diff_instances(&base_inst, &head_inst);
@@ -812,9 +834,22 @@ pub fn run(args: &[String]) -> i32 {
         axes.push(("vuln", vuln));
 
         // --- caps + mal: consume the recorded evidence store ---
+        let head_lock_path = head_res.as_ref().ok().map(|(p, _)| p.clone());
+        let base_lock_path = base_res
+            .as_ref()
+            .and_then(|r| r.as_ref().ok())
+            .map(|(p, _)| p.clone());
         axes.push((
             "caps",
-            caps_verdict(&h.name, &evidence_dir, b.as_ref(), h, &acks, floors),
+            caps_verdict(
+                &h.name,
+                &evidence_dir,
+                b.as_ref(),
+                h,
+                &acks,
+                floors,
+                (head_lock_path.as_deref(), base_lock_path.as_deref()),
+            ),
         ));
         axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
 

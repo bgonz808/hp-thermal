@@ -50,6 +50,9 @@ the enforcement layer's own burn-down list.
 
 - **`gate --base <TOOLS.lock>`** (#241) — 3-axis candidate evaluation (vuln/caps/mal)
   vs. `evidence/`, with recorded-ack sign-off. Consumes this tree.
+- **caps strict-subset ALLOW** (#367) — a measured inventory (caps-measure.yml header: exit code,
+  lock sha256) that is a complete strict subset of the prior blessed inventory passes without a
+  fresh signature. Empty, partial, copied-forward, or any addition falls back to RAISE.
 - **absolute floors** (`policy/floors.json`) — the state a signature cannot admit: a vulnerability
   with a critical-shape CVSS vector, a panel with too many malicious verdicts or a malicious sandbox
   verdict, a measured inventory newly granting `process`/`net`. HARD-STOP in `gate`, FAIL in the

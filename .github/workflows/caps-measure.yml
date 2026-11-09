@@ -85,8 +85,8 @@ jobs:
           fi
           [ -f src/Cargo.lock ] || { echo "::error::no Cargo.lock to measure against"; exit 1; }
           {
-            echo "repo=$repo"; echo "rev=$rev"; echo "lock_src=$lock_src"
-            echo "lock_sha256=$(sha256sum src/Cargo.lock | cut -d' ' -f1)"
+            echo "repo='$repo'"; echo "rev='$rev'"; echo "lock_src='$lock_src'"
+            echo "lock_sha256='$(sha256sum src/Cargo.lock | cut -d' ' -f1)'"
           } >> stage.env
           cat stage.env
 
@@ -106,7 +106,7 @@ jobs:
           [ -f "$src" ] || { echo "::error::no seed inventory at $src — pass seed_digest"; exit 1; }
           cp "$src" src/cackle.toml
           cp "$src" seed.toml
-          echo "seed_digest=$seed" >> stage.env
+          echo "seed_digest='$seed'" >> stage.env
           echo "seed: $src ($(grep -c '^\[pkg\.' seed.toml) pkg sections)"
 
       - name: Measure (cackle, non-interactive, sandbox per seed)
@@ -126,7 +126,7 @@ jobs:
           code=$?
           set -e
           tail -20 cackle.log
-          echo "cackle_exit=$code" >> stage.env
+          echo "cackle_exit='$code'" >> stage.env
           [ "$code" -eq 0 ] || { echo "::error::cackle exited $code — inventory is PARTIAL, not evidence"; exit 1; }
           [ "$(grep -c '^\[pkg\.' src/cackle.toml)" -gt 0 ] || { echo "::error::empty inventory — not evidence"; exit 1; }
 
