@@ -1,0 +1,5 @@
+# Extra cargo arguments for this tool, one per line; read by build-tools.yml (both lanes) and
+# candidate-build.yml, noted by caps-measure.yml. cackle gates its TUI behind the `ui` feature;
+# with tools/patches/cargo-acl/0002 making tui-input optional too, this drops 51 of 122 built
+# packages (ratatui, crossterm, tui-input, lru, time, mio, ...). Measured: run 42584926082.
+--no-default-features
