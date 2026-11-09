@@ -34,6 +34,17 @@ reviewed into this repo.
 - **`.github/workflows/tool-updates.yml`** — the hook (weekly). Flags when an upstream is newer
   than a pin.
 
+## Build flavors (`tools/build-args/<name>`)
+
+Extra cargo arguments for one tool, one per line, comments allowed. Read by the producer on
+both lanes and by `candidate-build.yml` (its `cargo_args` input overrides, for measurement);
+noted in `caps-measure.yml` headers. A flavor selects among the tool's OWN cargo features; it
+is never a code change. Current: `cargo-acl` builds `--no-default-features` (its TUI is the
+`ui` feature; with `tools/patches/cargo-acl/0002` making `tui-input` optional, 51 of 122 built
+packages drop). Two caveats, recorded where they bite: the lock still lists optional crates, so
+lock-vantage `cargo audit` keeps reporting them; and cackle cannot disable default features,
+so its caps inventory is a superset of the shipped binary's tree.
+
 ## Why the tools are stable (and when they are not)
 
 Each tool is pinned by immutable **git rev** (content-addressed) plus **`--locked`** (its entire
