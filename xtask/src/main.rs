@@ -39,6 +39,7 @@ mod monitor;
 // #241: turn an explored candidate into a REPRODUCIBLE build input (frozen resolved
 // lock). The promotion pipeline's trust boundary — discovery may float, builds never do.
 mod freeze;
+mod floors;
 
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).

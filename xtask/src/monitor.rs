@@ -108,6 +108,7 @@ pub(crate) fn classify(
 pub fn run(args: &[String]) -> i32 {
     let mut lock_path = PathBuf::from("tools/TOOLS.lock");
     let mut evidence_dir = PathBuf::from("supply-chain/evidence");
+    let mut floors_path = PathBuf::from(crate::floors::DEFAULT_PATH);
     let mut it = args.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -119,6 +120,11 @@ pub fn run(args: &[String]) -> i32 {
             "--evidence" => {
                 if let Some(v) = it.next() {
                     evidence_dir = v.into();
+                }
+            }
+            "--floors" => {
+                if let Some(v) = it.next() {
+                    floors_path = v.into();
                 }
             }
             other => {
@@ -139,6 +145,17 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("monitor-vuln: no pins parsed from {}", lock_path.display());
         return 2;
     }
+    // Absolute floors apply to BLESSED bytes too: knowledge moves, and a floor crossed by
+    // the live frontier fails the monitor whether or not the instance is acked.
+    let floors = match crate::floors::load(&floors_path) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!(
+                "monitor-vuln: UNEVALUATED — {e} (fail-secure: no floors file is not no floors)"
+            );
+            return 1;
+        }
+    };
 
     println!(
         "# Vuln-axis knowledge delta — live frontier ({} pins)",
@@ -218,6 +235,7 @@ pub fn run(args: &[String]) -> i32 {
         let now_db = run_db.as_str();
         let fresh = extract_instances(&audit);
         let (new, carried, gone) = classify(&baseline, &fresh);
+        let stops = floors.vuln_stops(&fresh, &crate::floors::extract_cvss(&audit));
 
         println!(
             "## {} (`{}`)  [lock: {lock_src}]",
@@ -238,7 +256,11 @@ pub fn run(args: &[String]) -> i32 {
                 i.id, i.package, i.version
             );
         }
-        if new.is_empty() {
+        for why in &stops {
+            println!("  HARD-STOP: {why}");
+            fail = true;
+        }
+        if new.is_empty() && stops.is_empty() {
             println!("  OK — no advisory instance has appeared since bless");
         }
         for i in &new {
@@ -281,7 +303,7 @@ pub fn run(args: &[String]) -> i32 {
                 "FAIL — new unacked advisory instance(s) and/or UNEVALUATED pins (fail-secure: \
                  missing data never reads as clean)"
             } else {
-                "FAIL — new advisory instance(s) since bless need a recorded decision (ack or bump)"
+                "FAIL — new advisory instance(s) need a recorded decision (ack or bump), and/or an \n                 absolute floor is crossed (HARD-STOP: not ackable — bump or remove)"
             }
         } else {
             "PASS — every pinned tool's advisory set is unchanged-or-acked since bless"
