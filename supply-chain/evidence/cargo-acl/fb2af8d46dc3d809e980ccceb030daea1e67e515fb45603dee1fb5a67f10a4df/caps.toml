@@ -1,13 +1,17 @@
 # caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
-# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42758926100)
+# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42773487933)
 # subject: cargo-acl @ cackle-rs/cackle@e7109a3174378976ea881f1883439ba82524f061; frozen tools/locks/cargo-acl.lock sha256 0b4722fc28204aa400d280b53842c69001ff4683b3f1380e09275a8a9456abea
 # patch: 5536171c98867b350736bb11bbbe48f484c5886fdc12640f80a2fd19192f3d98  tools/patches/cargo-acl/0001-bump-object-0.40.patch
 # patch: 7bc264317fb7321468b8a50261ed8ca8926c96a48927f32517363f8e5cea94d1  tools/patches/cargo-acl/0002-tui-input-optional-under-ui.patch
 # build-args (shipped binary): --no-default-features; cackle has no default-features control, so this inventory is measured on DEFAULT features: a SUPERSET of the shipped binary's tree
 # sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
-# seed: 399e0476888559c1be187a85233ee9c4b221c4ee63a411d800ab66065900feec; cackle exit 0; pkg sections seed 84 -> measured 84
+# build_flags (as built, #387): [--locked,--no-default-features] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
+# profile (as built, #387): cackle-release = inherits release (debug_assertions off, as shipped) with opt-level 0 / lto off for attribution accuracy, per cackle CONFIG.md
+# seed: fb2af8d46dc3d809e980ccceb030daea1e67e515fb45603dee1fb5a67f10a4df; cackle exit 0; pkg sections seed 84 -> measured 84
 # caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
+build_flags = ["--locked","--no-default-features"]
+profile = "cackle-release"
 version = 2
 
 [sandbox]
@@ -46,19 +50,9 @@ allow_proc_macro = true
 
 [pkg.strum_macros]
 allow_proc_macro = true
-allow_apis = [
-    "env",
-]
 
 [pkg.rustversion]
 allow_proc_macro = true
-build.allow_apis = [
-    "fs",
-    "process",
-]
-allow_apis = [
-    "env",
-]
 
 [pkg.derive_more-impl]
 allow_proc_macro = true
@@ -74,10 +68,6 @@ allow_proc_macro = true
 
 [pkg.document-features]
 allow_proc_macro = true
-allow_apis = [
-    "env",
-    "fs",
-]
 
 [pkg.clap_derive]
 allow_proc_macro = true
@@ -176,9 +166,6 @@ build.allow_apis = [
 allow_unsafe = true
 
 [pkg.parking_lot_core]
-build.allow_apis = [
-    "env",
-]
 allow_unsafe = true
 
 [pkg.rustix]
@@ -341,11 +328,6 @@ allow_unsafe = true
 
 [pkg.crossterm]
 allow_unsafe = true
-allow_apis = [
-    "env",
-    "fs",
-    "process",
-]
 
 [pkg.tui-input]
 allow_unsafe = true
@@ -376,6 +358,3 @@ allow_apis = [
 ]
 
 [pkg.signal-hook-mio]
-allow_apis = [
-    "net",
-]

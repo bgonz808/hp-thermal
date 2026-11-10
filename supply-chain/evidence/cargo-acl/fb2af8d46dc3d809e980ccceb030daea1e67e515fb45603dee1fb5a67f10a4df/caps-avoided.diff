@@ -1,0 +1,52 @@
+# caps-avoided.diff — one-time record (#387): default-features/dev-profile inventory (origin/main) vs the AS-BUILT
+# inventory (build_flags = ["--locked", "--no-default-features"], profile cackle-release). Lines removed here are grants
+# the shipped flavour does not exercise. Refreshed only when the flavour or the lock changes.
+--- /tmp/asbuilt2/default.toml	2026-11-09 23:11:36.853999100 -0800
++++ /dev/fd/63	2026-11-09 23:11:37.000000000 -0800
+@@ -1,2 +1,4 @@
+ [common]
++build_flags = ["--locked","--no-default-features"]
++profile = "cackle-release"
+ version = 2
+@@ -39,5 +41,2 @@
+ allow_proc_macro = true
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -45,9 +44,2 @@
+ allow_proc_macro = true
+-build.allow_apis = [
+-    "fs",
+-    "process",
+-]
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -67,6 +59,2 @@
+ allow_proc_macro = true
+-allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+@@ -169,5 +157,2 @@
+ [pkg.parking_lot_core]
+-build.allow_apis = [
+-    "env",
+-]
+ allow_unsafe = true
+@@ -334,7 +319,2 @@
+ allow_unsafe = true
+-allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ 
+@@ -369,4 +349 @@
+ [pkg.signal-hook-mio]
+-allow_apis = [
+-    "net",
+-]

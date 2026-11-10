@@ -123,6 +123,36 @@ jobs:
           # CI). The written inventory records what was MEASURED, so the first Bubblewrap record
           # after a Disabled seed differs in its [sandbox] block and takes a human signature once.
           sed -e '/^\[sandbox\]/,/^\[/ s/^kind = "Disabled"/kind = "Bubblewrap"/' "$src" > src/cackle.toml
+          # AS BUILT (#387): cackle's documented `[common] build_flags` (default ["--all-targets"]) is
+          # set to exactly the producer's flavor from tools/build-args/<tool>, with no --all-targets:
+          # the shipped artifact has no test or example targets, and features nobody builds are not
+          # our attack surface. A missing build-args file means the default flavor, flags = [].
+          # `--locked` always: the producer passes it at every install site; cackle's inner cargo must
+          # fail closed the same way if the overlaid lock ever disagrees with the manifest.
+          flags='["--locked"]'
+          if [ -f "tools/build-args/$TOOL" ]; then
+            flags="[\"--locked\",$(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL" | sed 's/^/"/; s/$/"/' | paste -sd, -)]"
+          fi
+          # Profile (cackle CONFIG.md "Custom build profile"): analysis wants opt-level 0 (optimised
+          # builds mis-attribute API use), but the shipped binary is `release`, and `debug_assertions`
+          # differs between dev and release. cackle's documented answer is a profile that INHERITS
+          # release with optimisation off. It must exist in the measured tree, so it is appended to
+          # the staged root manifest here — measurement only; the producer never sees it.
+          cat >> src/Cargo.toml <<'TOML'
+
+          [profile.cackle-release]
+          inherits = "release"
+          opt-level = 0
+          split-debuginfo = "off"
+          strip = false
+          debug = 2
+          lto = "off"
+          TOML
+          # drop any build_flags the seed carried, then add ours right under [common]
+          awk -v f="$flags" '/^(build_flags|profile) *=/ {next} {print} /^\[common\]$/ && !done {print "build_flags = " f; print "profile = \"cackle-release\""; done=1}' src/cackle.toml > src/cackle.toml.new
+          mv src/cackle.toml.new src/cackle.toml
+          echo "build_flags=$flags" >> stage.env
+          grep -A3 '^\[common\]' src/cackle.toml | paste -sd' ' -
           grep -A1 '^\[sandbox\]' src/cackle.toml | paste -sd' ' -
           echo "seed_digest='$seed'" >> stage.env
           echo "seed: $src ($(grep -c '^\[pkg\.' seed.toml) pkg sections)"
@@ -179,6 +209,8 @@ jobs:
               echo "# build-args (shipped binary): $(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL" | paste -sd' ' -); cackle has no default-features control, so this inventory is measured on DEFAULT features: a SUPERSET of the shipped binary's tree"
             fi
             echo "# sandbox: $(grep -A1 '^\[sandbox\]' src/cackle.toml | grep kind | tr -d ' ') during measurement ($(bwrap --version 2>/dev/null | head -1))"
+            echo "# build_flags (as built, #387): ${build_flags:-?} — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried"
+            echo "# profile (as built, #387): cackle-release = inherits release (debug_assertions off, as shipped) with opt-level 0 / lto off for attribution accuracy, per cackle CONFIG.md"
             echo "# seed: ${seed_digest:-?}; cackle exit ${cackle_exit:-?}; pkg sections seed $(grep -c '^\[pkg\.' seed.toml 2>/dev/null || echo ?) -> measured $(grep -c '^\[pkg\.' src/cackle.toml 2>/dev/null || echo ?)"
             echo "# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)"
             grep -vE '^\s*#' src/cackle.toml 2>/dev/null || true
