@@ -1,0 +1,6 @@
+# Per-tool RUSTFLAGS, one argument per line; comments and blank lines ignored. The single
+# source read by the producer (build-tools.yml), the caps lane (caps-measure.yml) and
+# candidate-build.yml, and cross-checked by `xtask verify-allowances`: every -W here must have a
+# reviewed emission source in xtask/src/allowances.rs, and vice versa.
+# upstream abscissa_core status_* macros; future-incompat lint, issue #79813; ratcheted per #325.
+-W semicolon_in_expressions_from_macros

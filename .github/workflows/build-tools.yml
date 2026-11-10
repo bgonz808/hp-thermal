@@ -190,16 +190,13 @@ jobs:
             # and tools/patches/ cannot reach it — it patches the tool's git checkout, and
             # abscissa_core comes from crates.io. Tracked in #325; drop this line when a fixed
             # abscissa_core is released and picked up in tools/locks/cargo-audit.lock.
-            case " cargo-audit " in
-              *" $name "*)
-                # -W, not -A: WARN keeps the build green while EMITTING the diagnostics,
-                # and verify-allowances then re-justifies the allowance from what this very
-                # build emitted -- zero diagnostics fails the run until the -W is shed
-                # (#325). Allow would suppress the evidence the ratchet reads.
-                tool_rustflags="$tool_rustflags -W semicolon_in_expressions_from_macros"
-                echo "lint allowance for $name: -W semicolon_in_expressions_from_macros (upstream abscissa_core; #325; ratcheted on this build's diagnostics)"
-                ;;
-            esac
+            # Per-tool RUSTFLAGS from tools/rustflags/<name>, one argument per line: the single
+            # source for lint allowances. verify-allowances cross-checks it against the reviewed
+            # emission sources after the loop (#325).
+            if [ -f "tools/rustflags/$name" ]; then
+              while IFS= read -r fl; do [ -n "$fl" ] && tool_rustflags="$tool_rustflags $fl"; done < <(grep -vE '^[[:space:]]*(#|$)' "tools/rustflags/$name")
+              echo "rustflags for $name (tools/rustflags/$name): $(grep -vE '^[[:space:]]*(#|$)' "tools/rustflags/$name" | paste -sd' ' -)"
+            fi
             # An ARRAY, not a string. A string would have to be left unquoted at the call
             # site to split into separate arguments, and an unquoted expansion also globs --
             # so a stray matching file in the working directory could rewrite the build
