@@ -225,13 +225,23 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     cur.as_str().unwrap_or("")
 }
 
-pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
-    acks.entries.iter().any(|a| {
+/// The LAST quality-passing vuln statement for this instance, in file order. acks.jsonl is
+/// append-only, so file order is statement order — the OpenVEX sequence model (#251): a later
+/// statement supersedes an earlier one for the same product + vulnerability.
+pub(crate) fn last_vuln_ack<'a>(acks: &'a Acks, inst: &Instance) -> Option<&'a Value> {
+    acks.entries.iter().rev().find(|a| {
         s(a, &["axis"]) == "vuln"
             && s(a, &["vulnerability", "name"]) == inst.id
             && s(a, &["product", "package"]) == inst.package
             && s(a, &["product", "version"]) == inst.version
     })
+}
+
+/// Covered iff the instance's LAST statement is not `fixed`. A `fixed` statement records that
+/// the instance stopped applying (#251); if the same instance is reported again later, that is
+/// a reappearance the old acceptance never saw, so it must be signed off again (fail-closed).
+pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
+    last_vuln_ack(acks, inst).is_some_and(|a| s(a, &["status"]) != "fixed")
 }
 
 fn ack_covers_mal(acks: &Acks, digest: &str, engine: &str) -> bool {
@@ -323,10 +333,10 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
 }
 
 /// The exact line a maintainer commits to sign off — printed by the failing gate.
-/// status_notes is deliberately empty: the quality bar refuses it until a human
-/// Caps acks use `reviewed`: a caps ack signs an inventory, not a vulnerability status, so the
-/// OpenVEX statuses do not apply (the gate never reads `status`; it is documentation).
-/// writes the reason (no rubber-stamp path).
+/// status_notes is deliberately empty: the quality bar refuses it until a human writes the
+/// reason (no rubber-stamp path). Caps acks use `reviewed`: a caps ack signs an inventory, not a
+/// vulnerability status, so the OpenVEX statuses do not apply there. The gate reads `status` for
+/// exactly one thing: a vuln statement whose status is `fixed` withdraws coverage (#251).
 pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
@@ -338,6 +348,28 @@ pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
         "author": "",
         "timestamp": "",
         "refs": []
+    })
+    .to_string()
+}
+
+/// OpenVEX `fixed` statement for an instance the monitor classified as GONE (#251): the
+/// advisory DB at `db` no longer reports it against these bytes. The measured fact is the
+/// note; author and timestamp stay blank so the quality bar still demands a signer. Appended,
+/// never replacing the earlier statement — the sequence is the record.
+pub(crate) fn ack_template_vuln_fixed(tool: &str, inst: &Instance, db: &str) -> String {
+    serde_json::json!({
+        "schema": "hp-thermal/evidence-ack/v1",
+        "axis": "vuln",
+        "vulnerability": {"name": inst.id},
+        "product": {"name": tool, "package": inst.package, "version": inst.version},
+        "status": "fixed",
+        "status_notes": format!(
+            "no longer reported by RustSec against this lock at advisory DB {} (monitor-vuln); supersedes the earlier statement for this instance",
+            &db[..12.min(db.len())]
+        ),
+        "author": "",
+        "timestamp": "",
+        "refs": ["#251"]
     })
     .to_string()
 }
@@ -1029,6 +1061,40 @@ mod tests {
         let acks = ack(&good_vuln_ack("C", "r", "3"));
         let v = vuln_verdict("t", &[inst("C", "r", "3")], &[], 99, &acks);
         assert!(matches!(v, Verdict::RaiseCovered(_)));
+    }
+
+    #[test]
+    fn fixed_statement_withdraws_coverage_and_later_affected_restores_it() {
+        // #251: file order is statement order. affected -> fixed: not covered (a reappearance
+        // is new to the acceptance). affected -> fixed -> affected: covered again.
+        let affected = good_vuln_ack("B", "q", "2");
+        let fixed = affected.replace("\"status\":\"affected\"", "\"status\":\"fixed\"");
+        let mut acks = ack(&affected);
+        acks.entries.push(serde_json::from_str(&fixed).unwrap());
+        assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2")));
+        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 0, &acks);
+        assert!(matches!(v, Verdict::RaiseUncovered { .. }));
+        acks.entries.push(serde_json::from_str(&affected).unwrap());
+        assert!(ack_covers_vuln(&acks, &inst("B", "q", "2")));
+        // a fixed statement for ANOTHER instance changes nothing
+        let other =
+            good_vuln_ack("B", "q", "3").replace("\"status\":\"affected\"", "\"status\":\"fixed\"");
+        let mut acks2 = ack(&affected);
+        acks2.entries.push(serde_json::from_str(&other).unwrap());
+        assert!(ack_covers_vuln(&acks2, &inst("B", "q", "2")));
+    }
+
+    #[test]
+    fn fixed_template_is_a_fixed_statement_needing_a_signer() {
+        let t = ack_template_vuln_fixed("t", &inst("A", "p", "1"), "0123456789abcdef0123");
+        let v: Value = serde_json::from_str(&t).unwrap();
+        assert_eq!(v["status"], "fixed");
+        assert_eq!(v["vulnerability"]["name"], "A");
+        assert!(v["status_notes"].as_str().unwrap().contains("0123456789ab"));
+        assert!(
+            ack_quality(&v).is_err(),
+            "blank author/timestamp must still fail the quality bar"
+        );
     }
 
     #[test]

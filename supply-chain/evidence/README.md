@@ -33,6 +33,10 @@ parseable. The schema borrows established vocabularies rather than inventing one
   "vulnerabilities"; the vuln subset is cleanly exportable to conformant OpenVEX.
   Caps acks therefore carry `status: reviewed` (an inventory is signed, not a vulnerability status);
   mal acks keep `not_affected` for false positives, which is a real OpenVEX meaning.
+  Statements are a sequence, never edited or deleted: when `monitor-vuln` classifies an instance
+  as GONE it prints a `fixed` statement to append (#251); the LAST statement for an instance is
+  the one that counts, and a `fixed` last word withdraws coverage, so a reappearance is signed
+  off afresh.
 
 Raw scanner payloads (full `cargo audit --json`, full VT panels) are point-in-time and
 non-reproducible; they go to the content-addressed `tools` release store referenced by hash

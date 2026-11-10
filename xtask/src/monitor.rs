@@ -29,8 +29,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::gate::{
-    Instance, ack_covers_vuln, ack_template_vuln, extract_instances, load_acks, parse_tools_lock,
-    resolve_lock, run_audit,
+    Instance, ack_covers_vuln, ack_template_vuln, ack_template_vuln_fixed, extract_instances,
+    load_acks, parse_tools_lock, resolve_lock, run_audit,
 };
 
 /// Load the recorded baseline instance set for a blessed digest. `None` = no baseline
@@ -250,11 +250,39 @@ pub fn run(args: &[String]) -> i32 {
             carried.len(),
             gone.len()
         );
+        // #251: GONE is the OpenVEX `fixed` event. Name the statement it supersedes (the ack now
+        // standing in for a measurement that no longer holds) and print the `fixed` line to
+        // append — the earlier statement stays; the sequence is the record.
         for i in &gone {
             println!(
                 "  - resolved: {} {} {} (no longer reported)",
                 i.id, i.package, i.version
             );
+            let status = |a: &serde_json::Value, k: &str| {
+                a.get(k).and_then(|v| v.as_str()).unwrap_or("?").to_string()
+            };
+            match crate::gate::last_vuln_ack(&acks, i) {
+                Some(a) if status(a, "status") == "fixed" => {
+                    println!("      fixed statement already recorded");
+                }
+                Some(a) => {
+                    println!(
+                        "      supersedes the {} statement signed by {} on {} — record it by appending this line to supply-chain/evidence/{}/acks.jsonl (fill author / timestamp):",
+                        status(a, "status"),
+                        status(a, "author"),
+                        status(a, "timestamp"),
+                        p.name
+                    );
+                    println!("      {}", ack_template_vuln_fixed(&p.name, i, now_db));
+                }
+                None => {
+                    println!(
+                        "      no statement on record — record the fixed instance by appending this line to supply-chain/evidence/{}/acks.jsonl (fill author / timestamp):",
+                        p.name
+                    );
+                    println!("      {}", ack_template_vuln_fixed(&p.name, i, now_db));
+                }
+            }
         }
         for why in &stops {
             println!("  HARD-STOP: {why}");
