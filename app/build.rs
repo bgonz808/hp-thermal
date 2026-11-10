@@ -102,8 +102,9 @@ fn main() {
     // unmitigated CRT. BinSkim BA2024 gates the release on the linked result regardless.
     if env("CARGO_CFG_TARGET_ENV") == "msvc" {
         let arch = env("CARGO_CFG_TARGET_ARCH");
-        let tool = find_msvc_tools::find_tool(&arch, "link.exe")
-            .unwrap_or_else(|| panic!("MSVC link.exe not found for {arch}; cannot select the Spectre-mitigated CRT"));
+        let tool = find_msvc_tools::find_tool(&arch, "link.exe").unwrap_or_else(|| {
+            panic!("MSVC link.exe not found for {arch}; cannot select the Spectre-mitigated CRT")
+        });
         // LIB as rustc will hand it to link.exe; a vcvars shell leaves it in the process environment instead.
         let lib = tool
             .env()
@@ -112,15 +113,16 @@ fn main() {
             .map(|(_, v)| v.clone())
             .or_else(|| std::env::var_os("LIB"))
             .expect("no LIB path from the MSVC tool environment");
+        let lib_dir = arch_lib_dir(&arch);
         let spectre = std::env::split_paths(&lib)
-            .filter(|p| p.file_name().is_some_and(|n| n.eq_ignore_ascii_case(&arch_lib_dir(&arch))))
+            .filter(|p| p.file_name().is_some_and(|n| n.eq_ignore_ascii_case(&lib_dir)))
             .filter(|p| p.ancestors().any(|a| a.file_name().is_some_and(|n| n == "MSVC")))
-            .filter_map(|p| p.parent().map(|lib| lib.join("spectre").join(arch_lib_dir(&arch))))
+            .filter_map(|p| p.parent().map(|lib| lib.join("spectre").join(&lib_dir)))
             .find(|s| s.join("libcmt.lib").is_file())
             .unwrap_or_else(|| {
                 panic!(
                     "Spectre-mitigated CRT not found: no <VC>/Tools/MSVC/<ver>/lib/spectre/{} holding libcmt.lib beside LIB={} (#385; install the VS component \"C++ x64/x86 Spectre-mitigated libs\")",
-                    arch_lib_dir(&arch),
+                    lib_dir,
                     lib.to_string_lossy()
                 )
             });
