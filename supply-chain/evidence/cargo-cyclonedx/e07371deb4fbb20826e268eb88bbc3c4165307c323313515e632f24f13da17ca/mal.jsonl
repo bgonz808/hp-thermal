@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-cyclonedx","sha256":"e07371deb4fbb20826e268eb88bbc3c4165307c323313515e632f24f13da17ca"},"panelDate":"2026-11-10","detections":{"malicious":0,"total":70},"flags":[],"sandbox":[],"timesSubmitted":1,"source":"vt-submit run 42758880071 + monitor run 42758882958 (lookup; submission run 42757888990)"}

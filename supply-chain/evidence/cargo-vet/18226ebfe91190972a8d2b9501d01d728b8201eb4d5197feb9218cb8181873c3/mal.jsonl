@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-vet","sha256":"18226ebfe91190972a8d2b9501d01d728b8201eb4d5197feb9218cb8181873c3"},"panelDate":"2026-11-10","detections":{"malicious":0,"total":65},"flags":[],"sandbox":[],"timesSubmitted":1,"source":"vt-submit run 42758880071 + monitor run 42758882958 (lookup; submission run 42757888990)"}

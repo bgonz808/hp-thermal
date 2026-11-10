@@ -73,4 +73,9 @@ rustflags = [
 # Rebuild std with our profile settings (opt-level=z, lto=fat).
 # Requires rust-src component (provided by rust-toolchain.toml).
 build-std = ["std", "panic_abort"]
-build-std-features = ["optimize_for_size"]
+# `panic-unwind` is sysroot's DEFAULT feature, but naming any build-std-features at all drops
+# the defaults (cargo #17404, since nightly-2026-08-27). Without it the dev profile (which
+# unwinds) takes `panic_unwind` from the PREBUILT sysroot and drags sysroot core/alloc in
+# beside the build-std ones: `duplicate lang item core: sized`, and deny-partial-mitigations
+# correctly refuses the un-CFG'd copies. Release is `panic = "immediate-abort"` and unaffected.
+build-std-features = ["optimize_for_size", "panic-unwind"]

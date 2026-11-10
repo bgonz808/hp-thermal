@@ -58,10 +58,17 @@ fn main() {
     // https://learn.microsoft.com/cpp/build/reference/pdb  |  .../reference/pdbaltpath
     let pkg = env("CARGO_PKG_NAME");
     let out_dir = env("OUT_DIR");
+    // By STRUCTURE, not depth: cargo 1.99 lays OUT_DIR out as <profile>/build/<pkg>-<hash>/out,
+    // 1.100 as <profile>/build/<pkg>/<hash>/out -- one level deeper. The depth-3 arithmetic this
+    // replaced silently resolved to <profile>/build on 1.100, dropping the PDB one directory too
+    // deep, which the #41 pdb-link gate caught (a STALE pdb at the old path then failed the
+    // GUID/age bind rather than passing -- the fail direction working). The profile dir is the
+    // parent of the ancestor NAMED `build`; absent that, fail the build rather than guess.
     let profile_dir = std::path::Path::new(&out_dir)
         .ancestors()
-        .nth(3)
-        .expect("OUT_DIR should be <profile>/build/<pkg-hash>/out");
+        .find(|a| a.file_name().is_some_and(|n| n == "build"))
+        .and_then(|b| b.parent())
+        .expect("OUT_DIR should have an ancestor directory named `build` under the profile dir");
     let pdb_path = profile_dir.join(format!("{pkg}.pdb"));
     println!("cargo:rustc-link-arg-bins=/PDB:{}", pdb_path.display());
     println!("cargo:rustc-link-arg-bins=/PDBALTPATH:{pkg}.pdb");

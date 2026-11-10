@@ -77,6 +77,34 @@ pub fn pkg_blocks(caps: &str) -> BTreeMap<String, BTreeMap<String, BTreeSet<Stri
     out
 }
 
+/// Cargo 1.101 changed the build-script output layout from `build/<pkg>-<hash>/out` to
+/// `build/<pkg>/<hash>/out` (the OUT_DIR deepening app/build.rs also handles). The hash is
+/// the same; only the spelling moved. cackle records whichever its cargo emitted, so a
+/// toolchain bump makes identical directives look like additions. Compare the canonical
+/// form: `<pkg>/<16-hex>/out`. No regex crate: a hand parser over the one shape we accept.
+pub fn normalise_build_dir(v: &str) -> String {
+    let Some(i) = v.find("/build/") else {
+        return v.to_string();
+    };
+    let head = &v[..i + "/build/".len()];
+    let rest = &v[i + "/build/".len()..];
+    // rest = "<pkg>-<hash>/out..." (old) or "<pkg>/<hash>/out..." (new, already canonical)
+    let Some(slash) = rest.find('/') else {
+        return v.to_string();
+    };
+    let seg = &rest[..slash];
+    let tail = &rest[slash..];
+    if seg.len() > 17
+        && seg.as_bytes()[seg.len() - 17] == b'-'
+        && seg[seg.len() - 16..].bytes().all(|b| b.is_ascii_hexdigit())
+        && tail.starts_with("/out")
+    {
+        let (pkg, hash) = (&seg[..seg.len() - 17], &seg[seg.len() - 16..]);
+        return format!("{head}{pkg}/{hash}{tail}");
+    }
+    v.to_string()
+}
+
 fn collect_quoted(s: &str, into: &mut BTreeSet<String>) {
     let mut rest = s;
     while let Some(i) = rest.find('"') {
@@ -84,7 +112,7 @@ fn collect_quoted(s: &str, into: &mut BTreeSet<String>) {
         let Some(j) = after.find('"') else {
             break;
         };
-        into.insert(after[..j].to_string());
+        into.insert(normalise_build_dir(&after[..j]));
         rest = &after[j + 1..];
     }
 }
@@ -416,5 +444,53 @@ mod tests {
         assert_eq!(h.lock_sha256.as_deref(), Some(LOCK));
         assert!(!h.copied_forward);
         assert_eq!(header("[pkg.a]\n"), MeasurementHeader::default());
+    }
+    #[test]
+    fn build_dir_layouts_compare_equal_across_cargo_versions() {
+        let old = "cargo:rustc-link-search=native=/t/build/ring-b94dacf97f7f4882/out";
+        let new = "cargo:rustc-link-search=native=/t/build/ring/b94dacf97f7f4882/out";
+        assert_eq!(normalise_build_dir(old), normalise_build_dir(new));
+        assert_eq!(
+            normalise_build_dir(new),
+            new,
+            "new layout is already canonical"
+        );
+        // deeper tails and dashed package names survive
+        assert_eq!(
+            normalise_build_dir("cargo:include=/t/build/aws-lc-sys-c48f62605a6075e3/out/include"),
+            "cargo:include=/t/build/aws-lc-sys/c48f62605a6075e3/out/include"
+        );
+        // not a build dir, or not a 16-hex hash: untouched
+        for v in [
+            "cargo:rustc-link-lib=static=zstd",
+            "/t/build/ring-notahash/out",
+            "/registry/zstd-sys-2.1.2+zstd.1.5.7/zstd/lib",
+        ] {
+            assert_eq!(normalise_build_dir(v), v);
+        }
+    }
+
+    #[test]
+    fn head_with_both_layouts_is_still_a_subset_of_old_layout_base() {
+        // cackle auto-accept appends the new spelling without pruning the old one.
+        let base = format!(
+            "{}{INSTRUMENT}[pkg.ring]
+build.allow_build_instructions = [
+    \"cargo:rustc-link-search=native=/t/build/ring-b94dacf97f7f4882/out\",
+]
+",
+            hdr("0", LOCK)
+        );
+        let head = format!(
+            "{}{INSTRUMENT}[pkg.ring]
+build.allow_build_instructions = [
+    \"cargo:rustc-link-search=native=/t/build/ring-b94dacf97f7f4882/out\",
+    \"cargo:rustc-link-search=native=/t/build/ring/b94dacf97f7f4882/out\",
+]
+",
+            hdr("0", LOCK)
+        );
+        let r = subset_allow(&head, &base, LOCK, &names(&["ring"]), &names(&["ring"]));
+        assert!(r.is_ok(), "{r:?}");
     }
 }
