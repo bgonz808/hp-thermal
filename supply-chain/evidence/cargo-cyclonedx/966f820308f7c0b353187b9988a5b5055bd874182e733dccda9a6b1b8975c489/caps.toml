@@ -1,11 +1,14 @@
-# caps evidence — COPIED FORWARD from e5491a06a3b7: source-vantage inventory is a function of
-# (rev, lock), both UNCHANGED for this rebuild (producer run 42535184297, same pinned toolchain).
-# Digest moved for codegen reasons only (#176). The gate records this as an ack-requiring carry, not a measurement.
+# caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
+# generated: 2026-11-10, cargo-acl v0.9.1 (399e04768885, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42754585700)
+# subject: cargo-cyclonedx @ CycloneDX/cyclonedx-rust-cargo@e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1; frozen tools/locks/cargo-cyclonedx.lock sha256 3a3f58acf739d6a0b09729fe2dfaf80947d3249b92b046f17d28120fb39a1754
+# sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
+# seed: 966f820308f7c0b353187b9988a5b5055bd874182e733dccda9a6b1b8975c489; cackle exit 0; pkg sections seed 140 -> measured 140
+# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
 version = 2
 
 [sandbox]
-kind = "Disabled"
+kind = "Bubblewrap"
 
 [api.net]
 include = ["connect","mio::net","std::net","tokio::net"]

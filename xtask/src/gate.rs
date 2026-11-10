@@ -324,6 +324,8 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
 
 /// The exact line a maintainer commits to sign off — printed by the failing gate.
 /// status_notes is deliberately empty: the quality bar refuses it until a human
+/// Caps acks use `reviewed`: a caps ack signs an inventory, not a vulnerability status, so the
+/// OpenVEX statuses do not apply (the gate never reads `status`; it is documentation).
 /// writes the reason (no rubber-stamp path).
 pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
     serde_json::json!({
@@ -360,7 +362,7 @@ fn ack_template_caps(tool: &str, digest: &str) -> String {
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "caps",
         "product": {"name": tool, "digest": digest},
-        "status": "affected",
+        "status": "reviewed",
         "status_notes": "",
         "author": "",
         "timestamp": "",

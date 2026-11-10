@@ -31,6 +31,8 @@ parseable. The schema borrows established vocabularies rather than inventing one
   `author`, `timestamp`). Our records are an OpenVEX-*aligned profile* (a `schema` field names
   it), because OpenVEX permits no extension fields and mal/caps findings are not
   "vulnerabilities"; the vuln subset is cleanly exportable to conformant OpenVEX.
+  Caps acks therefore carry `status: reviewed` (an inventory is signed, not a vulnerability status);
+  mal acks keep `not_affected` for false positives, which is a real OpenVEX meaning.
 
 Raw scanner payloads (full `cargo audit --json`, full VT panels) are point-in-time and
 non-reproducible; they go to the content-addressed `tools` release store referenced by hash

@@ -1,11 +1,14 @@
-# caps evidence — COPIED FORWARD from 6cf437ed830b: source-vantage inventory is a function of
-# (rev, lock), both UNCHANGED for this rebuild (producer run 42535184297, same pinned toolchain).
-# Digest moved for codegen reasons only (#176). The gate records this as an ack-requiring carry, not a measurement.
+# caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
+# generated: 2026-11-10, cargo-acl v0.9.1 (399e04768885, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42754568571)
+# subject: cargo-auditable @ rust-secure-code/cargo-auditable@9dc5ff28ff204b73eae91bd96cde4413fdcb70e0; upstream Cargo.lock at 9dc5ff28ff204b73eae91bd96cde4413fdcb70e0 sha256 f3c55d84aba0c8476959f911be1bb22e7f311ae536f3be1215d69b82fc929aab
+# sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
+# seed: 4454725dfb2d62c7d8636c7a73add87b2b0d34c5da3378b25203a024f8e16a6a; cackle exit 0; pkg sections seed 52 -> measured 52
+# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
 version = 2
 
 [sandbox]
-kind = "Disabled"
+kind = "Bubblewrap"
 
 [api.net]
 include = ["std::net"]
