@@ -34,6 +34,14 @@ reviewed into this repo.
 - **`.github/workflows/tool-updates.yml`** — the hook (weekly). Flags when an upstream is newer
   than a pin.
 
+## Per-tool RUSTFLAGS (`tools/rustflags/<name>`)
+
+One argument per line, comments allowed: the single source for a tool's extra RUSTFLAGS, read
+by the producer, `caps-measure.yml` and `candidate-build.yml`. Today it holds only the
+`-W semicolon_in_expressions_from_macros` lint allowance for cargo-audit (#325). `xtask
+verify-allowances` cross-checks this directory against its reviewed emission sources both
+ways, so an allowance cannot exist in one place without the other.
+
 ## Build flavors (`tools/build-args/<name>`)
 
 Extra cargo arguments for one tool, one per line, comments allowed. Read by the producer on

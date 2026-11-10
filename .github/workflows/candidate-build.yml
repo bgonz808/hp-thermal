@@ -141,6 +141,11 @@ jobs:
           if [ "${#extra[@]}" -gt 0 ]; then
             ( cd "$(dirname "$manifest")" && cargo tree --locked -e normal,build --prefix none "${extra[@]}" 2>/dev/null | awk '{print $1}' | sort -u > "$RUNNER_TEMP/min.txt" && echo "  with [${extra[*]}]: $(wc -l < "$RUNNER_TEMP/min.txt") packages" && echo "  dropped: $(comm -23 "$RUNNER_TEMP/full.txt" "$RUNNER_TEMP/min.txt" | paste -sd' ' -)" ) | tee -a report.txt
           fi
+          # Producer parity: per-tool RUSTFLAGS from tools/rustflags/<tool> (lint allowances, #325).
+          if [ -f "tools/rustflags/$TOOL" ]; then
+            export RUSTFLAGS="${RUSTFLAGS:-} $(grep -vE '^[[:space:]]*(#|$)' "tools/rustflags/$TOOL" | paste -sd' ' -)"
+            echo "rustflags (producer parity): $RUSTFLAGS" | tee -a report.txt
+          fi
           echo "== cargo build --locked ${extra[*]} ==" | tee -a report.txt
           ( cd "$(dirname "$manifest")" && cargo build --locked "${extra[@]}" 2>&1 ) | tail -30 | tee -a report.txt
           if [ "$RUN_TESTS" = "true" ]; then
