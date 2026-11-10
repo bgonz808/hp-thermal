@@ -99,7 +99,11 @@ pub fn classify(diag: &str, lint: &str, marker: &str, expected_macros: &[&str]) 
     let count = [
         diag.matches(lint).count(),
         diag.matches(&lint.replace('_', "-")).count(),
-        if marker.is_empty() { 0 } else { diag.matches(marker).count() },
+        if marker.is_empty() {
+            0
+        } else {
+            diag.matches(marker).count()
+        },
     ]
     .into_iter()
     .max()
@@ -138,6 +142,49 @@ pub fn origin_macros(diag: &str) -> BTreeSet<String> {
     out
 }
 
+/// `tools/rustflags/<tool>` is the single source every workflow reads its `-W` flags from.
+/// This keeps it and `ALLOWANCES` (the reviewed emission sources) from drifting: every
+/// `-W <lint>` in a file needs an entry for that tool, and every entry must appear in its
+/// tool's file. Either direction missing is an error, never a silent pass.
+pub fn check_rustflags_dir(dir: &Path) -> Result<Vec<String>, Vec<String>> {
+    let mut ok = Vec::new();
+    let mut errs = Vec::new();
+    let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
+    if let Ok(rd) = std::fs::read_dir(dir) {
+        for e in rd.flatten() {
+            let tool = e.file_name().to_string_lossy().into_owned();
+            let text = std::fs::read_to_string(e.path()).unwrap_or_default();
+            for line in text
+                .lines()
+                .map(str::trim)
+                .filter(|l| !l.is_empty() && !l.starts_with('#'))
+            {
+                let Some(lint) = line.strip_prefix("-W ").map(str::trim) else {
+                    continue;
+                };
+                if ALLOWANCES.iter().any(|a| a.tool == tool && a.lint == lint) {
+                    ok.push(format!("{tool}: -W {lint} has a reviewed emission source"));
+                    seen.insert((tool.clone(), lint.to_string()));
+                } else {
+                    errs.push(format!(
+                        "{}: `-W {lint}` has NO entry in ALLOWANCES (unreviewed allowance)",
+                        e.path().display()
+                    ));
+                }
+            }
+        }
+    }
+    for a in ALLOWANCES {
+        if !seen.contains(&(a.tool.to_string(), a.lint.to_string())) {
+            errs.push(format!(
+                "ALLOWANCES has {}/{} but tools/rustflags/{} does not carry `-W {}`",
+                a.tool, a.lint, a.tool, a.lint
+            ));
+        }
+    }
+    if errs.is_empty() { Ok(ok) } else { Err(errs) }
+}
+
 pub fn run(args: &[String]) -> i32 {
     let mut diag_dir = ".".to_string();
     let mut it = args.iter().skip(1);
@@ -154,8 +201,23 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
     }
+    match check_rustflags_dir(Path::new("tools/rustflags")) {
+        Ok(lines) => {
+            for l in lines {
+                println!("  rustflags: {l}");
+            }
+        }
+        Err(errs) => {
+            for e in errs {
+                eprintln!("verify-allowances: {e}");
+            }
+            return 1;
+        }
+    }
 
-    println!("# every -W allowance must be re-justified by the diagnostics this build emitted (#325)");
+    println!(
+        "# every -W allowance must be re-justified by the diagnostics this build emitted (#325)"
+    );
     let mut failures = 0;
     for a in ALLOWANCES {
         let path = Path::new(&diag_dir).join(format!("diag-{}.log", a.tool));
@@ -194,7 +256,9 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
     if failures > 0 {
-        eprintln!("verify-allowances: {failures} allowance(s) not justified by this build's diagnostics");
+        eprintln!(
+            "verify-allowances: {failures} allowance(s) not justified by this build's diagnostics"
+        );
         return 1;
     }
     println!("# every allowance is still earning its place");
@@ -261,7 +325,12 @@ mod tests {
     fn lint_not_firing_means_the_allowance_must_go() {
         // The whole point: the workaround dies with the diagnostic instead of outliving it.
         assert_eq!(
-            classify("   Compiling cargo-audit v0.22.2\n    Finished release\n", LINT, MARKER, EXPECTED),
+            classify(
+                "   Compiling cargo-audit v0.22.2\n    Finished release\n",
+                LINT,
+                MARKER,
+                EXPECTED
+            ),
             Verdict::Obsolete
         );
     }
@@ -300,8 +369,44 @@ mod tests {
         for a in ALLOWANCES {
             assert!(a.issue.starts_with('#'), "{} has no issue", a.tool);
             assert!(!a.why.is_empty(), "{} has no rationale", a.tool);
-            assert!(!a.marker.is_empty(), "{} has no stable diagnostic marker", a.tool);
-            assert!(!a.expected_macros.is_empty(), "{} reviews no emission source", a.tool);
+            assert!(
+                !a.marker.is_empty(),
+                "{} has no stable diagnostic marker",
+                a.tool
+            );
+            assert!(
+                !a.expected_macros.is_empty(),
+                "{} reviews no emission source",
+                a.tool
+            );
         }
+    }
+    #[test]
+    fn rustflags_dir_and_allowances_must_agree_both_ways() {
+        let dir = std::env::temp_dir().join(format!("xtask-rustflags-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("cargo-audit"),
+            "# c\n-W semicolon_in_expressions_from_macros\n",
+        )
+        .unwrap();
+        assert!(check_rustflags_dir(&dir).is_ok());
+        std::fs::write(dir.join("cargo-deny"), "-W dead_code\n").unwrap();
+        assert!(
+            check_rustflags_dir(&dir)
+                .unwrap_err()
+                .iter()
+                .any(|e| e.contains("NO entry"))
+        );
+        std::fs::remove_file(dir.join("cargo-deny")).unwrap();
+        std::fs::write(dir.join("cargo-audit"), "# nothing\n").unwrap();
+        assert!(
+            check_rustflags_dir(&dir)
+                .unwrap_err()
+                .iter()
+                .any(|e| e.contains("does not carry"))
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

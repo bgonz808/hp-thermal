@@ -140,14 +140,15 @@ jobs:
           # [sandbox] kind = "Bubblewrap" (set above): bwrap confines each build script / proc
           # macro / rustc; the runner is the outer boundary.
           set +e
-          # Producer parity: cackle compiles the tree with the pinned nightly, so it needs the same
-          # lint allowance build-tools.yml grants, or the measurement fails to compile where the
-          # producer succeeds (measured: cargo-audit, cackle exit 255, run 42754577766). The
-          # allowance list is the producer's (#325, ratcheted there by verify-allowances); this
-          # mirrors it and must change with it.
-          case " cargo-audit " in
-            *" $TOOL "*) export RUSTFLAGS="${RUSTFLAGS:-} -W semicolon_in_expressions_from_macros"; echo "lint allowance (producer parity): $RUSTFLAGS" ;;
-          esac
+          # Producer parity: the same per-tool RUSTFLAGS the producer applies, from the one file
+          # tools/rustflags/<tool>; without them cargo-audit's tree does not compile under the
+          # pinned nightly (cackle exit 255, run 42754577766).
+          if [ -f "tools/rustflags/$TOOL" ]; then
+            extra_rustflags="$(grep -vE '^[[:space:]]*(#|$)' "tools/rustflags/$TOOL" | paste -sd' ' -)"
+            RUSTFLAGS="${RUSTFLAGS:-} $extra_rustflags"
+            export RUSTFLAGS
+            echo "rustflags (producer parity): $RUSTFLAGS"
+          fi
           "$TOOLS_DIR/cargo-acl" acl -n --ui none --auto-accept-fixes --path src > cackle.log 2>&1
           code=$?
           set -e
