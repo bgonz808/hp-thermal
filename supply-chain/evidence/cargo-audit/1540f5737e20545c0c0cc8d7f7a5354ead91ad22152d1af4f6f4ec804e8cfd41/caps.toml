@@ -1,12 +1,14 @@
 # caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
-# generated: 2026-11-08, cargo-acl v0.9.1 (6def52b694db, digest-verified), linux-native analysis, sandbox disabled (local WSL)
-# subject: cargo-audit @ frozen tools/locks/cargo-audit.lock (#356); seeded from superseded digest 80eb16891508, re-measured (not copied)
+# generated: 2026-11-10, cargo-acl v0.9.1 (399e04768885, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42755339181)
+# subject: cargo-audit @ rustsec/rustsec@281452c35cf0870969042374110f099a411bc185; frozen tools/locks/cargo-audit.lock sha256 317946f4a90d8507fffe22dfd668c3d9d506b0de4310b7dbef3dabfa99f85bc9
+# sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
+# seed: 1540f5737e20545c0c0cc8d7f7a5354ead91ad22152d1af4f6f4ec804e8cfd41; cackle exit 0; pkg sections seed 239 -> measured 239
 # caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
 version = 2
 
 [sandbox]
-kind = "Disabled"
+kind = "Bubblewrap"
 
 [api.net]
 include = ["connect","mio::net","std::net","tokio::net"]
@@ -347,6 +349,16 @@ allow_unsafe = true
 build.allow_apis = [
     "env",
 ]
+build.allow_build_instructions = [
+    "cargo:conf=OPENSSL_NO_ASYNC,OPENSSL_NO_BF,OPENSSL_NO_BLAKE2,OPENSSL_NO_BUF_FREELISTS,OPENSSL_NO_CAMELLIA,OPENSSL_NO_CAPIENG,OPENSSL_NO_CAST,OPENSSL_NO_CMS,OPENSSL_NO_COMP,OPENSSL_NO_CRYPTO_MDEBUG,OPENSSL_NO_CT,OPENSSL_NO_DANE,OPENSSL_NO_DEPRECATED,OPENSSL_NO_DGRAM,OPENSSL_NO_DYNAMIC_ENGINE,OPENSSL_NO_EC_NISTP_64_GCC_128,OPENSSL_NO_EC2M,OPENSSL_NO_EGD,OPENSSL_NO_ENGINE,OPENSSL_NO_GMP,OPENSSL_NO_GOST,OPENSSL_NO_HEARTBEATS,OPENSSL_NO_HW,OPENSSL_NO_IDEA,OPENSSL_NO_JPAKE,OPENSSL_NO_KRB5,OPENSSL_NO_MD2,OPENSSL_NO_MDC2,OPENSSL_NO_OCB,OPENSSL_NO_RC2,OPENSSL_NO_RC5,OPENSSL_NO_RFC3779,OPENSSL_NO_RIPEMD,OPENSSL_NO_RMD160,OPENSSL_NO_SCTP,OPENSSL_NO_SEED,OPENSSL_NO_SM2,OPENSSL_NO_SM3,OPENSSL_NO_SM4,OPENSSL_NO_SRP,OPENSSL_NO_SSL_TRACE,OPENSSL_NO_SSL2,OPENSSL_NO_SSL3,OPENSSL_NO_SSL3_METHOD,OPENSSL_NO_STATIC_ENGINE,OPENSSL_NO_STORE,OPENSSL_NO_TS,OPENSSL_NO_WHIRLPOOL",
+    "cargo:include=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out/include",
+    "cargo:libcrypto=aws_lc_0_47_0_crypto",
+    "cargo:libcrypto_path=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out/libaws_lc_0_47_0_crypto.a",
+    "cargo:libdir=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+    "cargo:link_kind=static",
+    "cargo:root=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+    "cargo:system_libs=",
+]
 allow_unsafe = true
 
 [pkg.memmap2]
@@ -664,6 +676,18 @@ build.allow_apis = [
     "process",
 ]
 build.allow_unsafe = true
+build.allow_build_instructions = [
+    "cargo:conf=OPENSSL_NO_ASYNC,OPENSSL_NO_BF,OPENSSL_NO_BLAKE2,OPENSSL_NO_BUF_FREELISTS,OPENSSL_NO_CAMELLIA,OPENSSL_NO_CAPIENG,OPENSSL_NO_CAST,OPENSSL_NO_CMS,OPENSSL_NO_COMP,OPENSSL_NO_CRYPTO_MDEBUG,OPENSSL_NO_CT,OPENSSL_NO_DANE,OPENSSL_NO_DEPRECATED,OPENSSL_NO_DGRAM,OPENSSL_NO_DYNAMIC_ENGINE,OPENSSL_NO_EC_NISTP_64_GCC_128,OPENSSL_NO_EC2M,OPENSSL_NO_EGD,OPENSSL_NO_ENGINE,OPENSSL_NO_GMP,OPENSSL_NO_GOST,OPENSSL_NO_HEARTBEATS,OPENSSL_NO_HW,OPENSSL_NO_IDEA,OPENSSL_NO_JPAKE,OPENSSL_NO_KRB5,OPENSSL_NO_MD2,OPENSSL_NO_MDC2,OPENSSL_NO_OCB,OPENSSL_NO_RC2,OPENSSL_NO_RC5,OPENSSL_NO_RFC3779,OPENSSL_NO_RIPEMD,OPENSSL_NO_RMD160,OPENSSL_NO_SCTP,OPENSSL_NO_SEED,OPENSSL_NO_SM2,OPENSSL_NO_SM3,OPENSSL_NO_SM4,OPENSSL_NO_SRP,OPENSSL_NO_SSL_TRACE,OPENSSL_NO_SSL2,OPENSSL_NO_SSL3,OPENSSL_NO_SSL3_METHOD,OPENSSL_NO_STATIC_ENGINE,OPENSSL_NO_STORE,OPENSSL_NO_TS,OPENSSL_NO_WHIRLPOOL",
+    "cargo:include=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out/include",
+    "cargo:libcrypto=aws_lc_0_47_0_crypto",
+    "cargo:libcrypto_path=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out/libaws_lc_0_47_0_crypto.a",
+    "cargo:libdir=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+    "cargo:link_kind=static",
+    "cargo:root=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+    "cargo:rustc-link-lib=static=aws_lc_0_47_0_crypto",
+    "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+    "cargo:system_libs=",
+]
 allow_unsafe = true
 
 [pkg.dunce]
