@@ -77,32 +77,48 @@ pub fn pkg_blocks(caps: &str) -> BTreeMap<String, BTreeMap<String, BTreeSet<Stri
     out
 }
 
-/// Cargo 1.101 changed the build-script output layout from `build/<pkg>-<hash>/out` to
-/// `build/<pkg>/<hash>/out` (the OUT_DIR deepening app/build.rs also handles). The hash is
-/// the same; only the spelling moved. cackle records whichever its cargo emitted, so a
-/// toolchain bump makes identical directives look like additions. Compare the canonical
-/// form: `<pkg>/<16-hex>/out`. No regex crate: a hand parser over the one shape we accept.
+/// Canonicalise a cargo build-script output path so the SAME directive compares equal across
+/// measurements. Everything before `/build/` is the target dir plus the PROFILE dir
+/// (`.../caps-build/cackle/build/...` vs `.../cackle-release/build/...`); the package segment
+/// is spelled `<pkg>-<hash>` (cargo <= 1.100) or `<pkg>/<hash>` (1.101+); the 16-hex hash
+/// moves with toolchain and profile. None of that is capability. The package, the directive
+/// kind and the tail under `/out` are. Measured: identical aws-lc-sys directives read as
+/// additions across a profile change (run 42778958576) and a toolchain change (run
+/// 42758902308) until this canonicalisation. No regex crate: a hand parser.
 pub fn normalise_build_dir(v: &str) -> String {
     let Some(i) = v.find("/build/") else {
         return v.to_string();
     };
-    let head = &v[..i + "/build/".len()];
+    // Keep what precedes the PATH (e.g. "cargo:rustc-link-search=native="): the path starts
+    // after the last '=' before "/build/", or at the string start.
+    let path_start = v[..i].rfind('=').map(|e| e + 1).unwrap_or(0);
+    let prefix = &v[..path_start];
     let rest = &v[i + "/build/".len()..];
-    // rest = "<pkg>-<hash>/out..." (old) or "<pkg>/<hash>/out..." (new, already canonical)
     let Some(slash) = rest.find('/') else {
         return v.to_string();
     };
-    let seg = &rest[..slash];
-    let tail = &rest[slash..];
-    if seg.len() > 17
+    let (seg, after_seg) = (&rest[..slash], &rest[slash..]);
+    let is_hash = |h: &str| h.len() == 16 && h.bytes().all(|b| b.is_ascii_hexdigit());
+    let (pkg, tail) = if seg.len() > 17
         && seg.as_bytes()[seg.len() - 17] == b'-'
-        && seg[seg.len() - 16..].bytes().all(|b| b.is_ascii_hexdigit())
-        && tail.starts_with("/out")
+        && is_hash(&seg[seg.len() - 16..])
     {
-        let (pkg, hash) = (&seg[..seg.len() - 17], &seg[seg.len() - 16..]);
-        return format!("{head}{pkg}/{hash}{tail}");
+        // old layout: "<pkg>-<hash>/out..."
+        (&seg[..seg.len() - 17], after_seg)
+    } else {
+        // new layout: "<pkg>/<hash>/out..."
+        let Some(stripped) = after_seg.strip_prefix('/') else {
+            return v.to_string();
+        };
+        match stripped.find('/') {
+            Some(s2) if is_hash(&stripped[..s2]) => (seg, &stripped[s2..]),
+            _ => return v.to_string(),
+        }
+    };
+    if !tail.starts_with("/out") {
+        return v.to_string();
     }
-    v.to_string()
+    format!("{prefix}<build>/{pkg}/HASH{tail}")
 }
 
 fn collect_quoted(s: &str, into: &mut BTreeSet<String>) {
@@ -446,24 +462,35 @@ mod tests {
         assert_eq!(header("[pkg.a]\n"), MeasurementHeader::default());
     }
     #[test]
-    fn build_dir_layouts_compare_equal_across_cargo_versions() {
-        let old = "cargo:rustc-link-search=native=/t/build/ring-b94dacf97f7f4882/out";
-        let new = "cargo:rustc-link-search=native=/t/build/ring/b94dacf97f7f4882/out";
-        assert_eq!(normalise_build_dir(old), normalise_build_dir(new));
+    fn build_dir_paths_compare_equal_across_layout_profile_and_hash() {
+        let a =
+            "cargo:rustc-link-search=native=/t/caps-build/cackle/build/ring-b94dacf97f7f4882/out";
+        let b = "cargo:rustc-link-search=native=/t/caps-build/cackle-release/build/ring/0123456789abcdef/out";
+        assert_eq!(normalise_build_dir(a), normalise_build_dir(b));
         assert_eq!(
-            normalise_build_dir(new),
-            new,
-            "new layout is already canonical"
+            normalise_build_dir(b),
+            "cargo:rustc-link-search=native=<build>/ring/HASH/out"
         );
-        // deeper tails and dashed package names survive
         assert_eq!(
-            normalise_build_dir("cargo:include=/t/build/aws-lc-sys-c48f62605a6075e3/out/include"),
-            "cargo:include=/t/build/aws-lc-sys/c48f62605a6075e3/out/include"
+            normalise_build_dir("cargo:include=/t/x/build/aws-lc-sys-c48f62605a6075e3/out/include"),
+            "cargo:include=<build>/aws-lc-sys/HASH/out/include"
+        );
+        assert_eq!(
+            normalise_build_dir(
+                "cargo:libcrypto_path=/t/y/build/aws-lc-sys/d604cf8917c70cbf/out/libaws_lc_0_47_0_crypto.a"
+            ),
+            "cargo:libcrypto_path=<build>/aws-lc-sys/HASH/out/libaws_lc_0_47_0_crypto.a"
+        );
+        // different packages must not collapse together
+        assert_ne!(
+            normalise_build_dir("cargo:root=/t/build/ring/0123456789abcdef/out"),
+            normalise_build_dir("cargo:root=/t/build/zstd-sys/0123456789abcdef/out")
         );
         // not a build dir, or not a 16-hex hash: untouched
         for v in [
             "cargo:rustc-link-lib=static=zstd",
             "/t/build/ring-notahash/out",
+            "/t/build/ring/notahash/out",
             "/registry/zstd-sys-2.1.2+zstd.1.5.7/zstd/lib",
         ] {
             assert_eq!(normalise_build_dir(v), v);
