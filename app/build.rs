@@ -89,6 +89,46 @@ fn main() {
     println!("cargo:rustc-link-arg-bins=/DELAYLOAD:powrprof.dll");
     println!("cargo:rustc-link-arg-bins=delayimp.lib");
 
+    // --- #385: Spectre-mitigated CRT (BinSkim BA2024) ---
+    // /Qspectre is COMPILE-TIME code generation (speculation barriers at vulnerable loads, Spectre v1);
+    // nothing on the running host supplies it. The CRT objects BinSkim flagged (libcmt, libvcruntime,
+    // delayimp) are pre-built by Microsoft and linked STATICALLY into hp-thermal.exe (+crt-static), so
+    // the mitigated variant must be chosen at link time. MSVC ships it as lib/spectre/x64 beside
+    // lib/x64; MSBuild's SpectreMitigation=Spectre does exactly this path prepend. -L native becomes
+    // /LIBPATH, which link.exe searches BEFORE the LIB environment, so the mitigated libcmt.lib wins.
+    // Discovery uses find-msvc-tools, the crate rustc itself uses to locate link.exe, so the spectre
+    // dir belongs to the toolset that actually links. FAIL-CLOSED: no spectre dir -> the build fails
+    // (install the VS component "C++ x64/x86 Spectre-mitigated libs") rather than silently linking the
+    // unmitigated CRT. BinSkim BA2024 gates the release on the linked result regardless.
+    if env("CARGO_CFG_TARGET_ENV") == "msvc" {
+        let arch = env("CARGO_CFG_TARGET_ARCH");
+        let tool = find_msvc_tools::find_tool(&arch, "link.exe").unwrap_or_else(|| {
+            panic!("MSVC link.exe not found for {arch}; cannot select the Spectre-mitigated CRT")
+        });
+        // LIB as rustc will hand it to link.exe; a vcvars shell leaves it in the process environment instead.
+        let lib = tool
+            .env()
+            .into_iter()
+            .find(|(k, _)| k.to_string_lossy().eq_ignore_ascii_case("LIB"))
+            .map(|(_, v)| v.clone())
+            .or_else(|| std::env::var_os("LIB"))
+            .expect("no LIB path from the MSVC tool environment");
+        let lib_dir = arch_lib_dir(&arch);
+        let spectre = std::env::split_paths(&lib)
+            .filter(|p| p.file_name().is_some_and(|n| n.eq_ignore_ascii_case(&lib_dir)))
+            .filter(|p| p.ancestors().any(|a| a.file_name().is_some_and(|n| n == "MSVC")))
+            .filter_map(|p| p.parent().map(|lib| lib.join("spectre").join(&lib_dir)))
+            .find(|s| s.join("libcmt.lib").is_file())
+            .unwrap_or_else(|| {
+                panic!(
+                    "Spectre-mitigated CRT not found: no <VC>/Tools/MSVC/<ver>/lib/spectre/{} holding libcmt.lib beside LIB={} (#385; install the VS component \"C++ x64/x86 Spectre-mitigated libs\")",
+                    lib_dir,
+                    lib.to_string_lossy()
+                )
+            });
+        println!("cargo:rustc-link-search=native={}", spectre.display());
+    }
+
     // --- Parse version from Cargo.toml ---
     let version = env("CARGO_PKG_VERSION");
     let parts: Vec<&str> = version.split('.').collect();
@@ -403,4 +443,14 @@ fn run(cmd: &str, args: &[&str]) -> String {
         .filter(|o| o.status.success())
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default()
+}
+
+/// MSVC lib subdirectory for a cargo target arch (`x86_64` -> `x64`).
+fn arch_lib_dir(arch: &str) -> String {
+    match arch {
+        "x86_64" => "x64".into(),
+        "x86" => "x86".into(),
+        "aarch64" => "arm64".into(),
+        other => other.into(),
+    }
 }
