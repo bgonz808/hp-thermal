@@ -1,67 +1,65 @@
+# Dependabot is the intake for dependency bumps; nothing here merges anything.
+#
+# Shape (#359): per ecosystem, ONE grouped PR for the update types that are same-line by the
+# ecosystem's own semver rules, and an individual PR for each major. A grouped PR carries the
+# sum of what cleared the 7-day cooldown that week; a backlog of individual PRs can no longer
+# exhaust the open-PR cap and silently block the next release (measured: five PRs open from
+# 2026-09 held back download-artifact 8.0.2, osv-scanner 2.7.0 and zizmor 0.7/0.8 until
+# 2026-11-09). Majors are never grouped and never auto-anything: a major is a maintainer read.
+#
+# Cargo: patch only is grouped. Rust crates below 1.0 treat MINOR as breaking, and Dependabot's
+# "minor" update type does not know that, so minor stays individual for cargo.
+# `ignore` is deliberately not used on majors: a hidden hold is lack of information reading as
+# clean.
 version: 2
-
-# Dependency vuln scanning + updates run on GitHub's infrastructure — NOT inside a
-# workflow job, so this carries no runner trust-boundary cost (no token exposure).
-# It scans Cargo.lock against the GitHub Advisory Database (which includes RustSec)
-# and opens review-able PRs.
 updates:
-  # The product crate — Cargo.lock lives in app/.
   - package-ecosystem: cargo
     directory: /app
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     cooldown:
       default-days: 7   # soak: don't adopt <7-day-old releases (zizmor: dependabot-cooldown)
-
-  # #226: BinSkim nupkg pin, exposed for Dependabot visibility via a packages.config inside the
-  # composite's own directory (covered by the release job's sparse checkout). Dependabot proposes
-  # version bumps; the composite's sha256 stays the execution authorization and fails closed on a
-  # version-only bump until a human verifies + updates the digest.
+    groups:
+      app-patch:
+        update-types:
+          - "patch"
   - package-ecosystem: nuget
     directory: /.github/actions/binskim-scan
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     cooldown:
       default-days: 7
-
-  # Keep the SHA-pinned GitHub Actions current: Dependabot proposes SHA bumps for you
-  # to review. This is the maintenance complement to pinning actions by SHA — you get
-  # immutability (the pin) AND freshness (reviewed bumps), instead of trusting a
-  # floating tag.
+    groups:
+      binskim-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     cooldown:
       default-days: 7
-    # github/codeql-action/init and .../analyze are the SAME action and MUST move on the
-    # SAME SHA -- CodeQL fails the run outright ("Not all workflow steps that use
-    # `github/codeql-action` actions use the same version") when they skew. Dependabot
-    # treats each sub-path as a separate dependency and opened one PR per half (#126,
-    # #129), so neither could merge green alone. Worse, merging one at a time leaves main
-    # red on `Analyze (rust)`, which the release source-gate requires -- i.e. a release
-    # freeze until the second lands. Grouping makes Dependabot propose them as one PR.
-    # Pattern note: `patterns` are WILDCARD matches (Dependabot's WildcardMatcher), NOT
-    # regex -- `[^/]+` would be read as a literal, not a quantifier. The trailing-slash
-    # form is used deliberately: `github/codeql-action/*` needs `*` to match only `init` /
-    # `analyze`, so it is correct whether or not `*` crosses a `/`. The looser
-    # `github/codeql-action*` would silently match NOTHING if `*` does not cross `/`, and
-    # a grouping rule that quietly no-ops is worse than none -- the split would come back
-    # unnoticed on the next release.
     groups:
+      # codeql-action's three sub-actions share one SHA and must move together (#358).
       codeql-action:
         patterns:
           - "github/codeql-action/*"
-
-  # xtask/ grew its first dependency (serde_json, for the #241 gate's evidence
-  # parsing) — its lockfile is now a real tree and gets the same coverage + soak.
+      actions-minor-patch:
+        update-types:
+          - "minor"
+          - "patch"
   - package-ecosystem: cargo
     directory: /xtask
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     cooldown:
       default-days: 7
-
-  # experiments/ (publish=false) can be added here later if its dependency
-  # surface grows.
+    groups:
+      xtask-patch:
+        update-types:
+          - "patch"
