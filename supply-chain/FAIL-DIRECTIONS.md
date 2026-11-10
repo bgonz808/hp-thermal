@@ -39,6 +39,7 @@ Verdict vocabulary: **CLOSED/secure** (failure blocks or pages), **OPEN/insecure
 | **caps gate, cargo-acl (linux/ELF)** | **no ELF walker → binary uploads ungated** | **OPEN/insecure** | tracked **#245** (ELF follow-up); caps evidence honestly UNEVALUATED meanwhile |
 | dependency-review on PR diffs | flags high-severity additions | CLOSED once **required**; until then advisory | control-plane click tracked **#261** |
 | **gate as a merge blocker** | red `evaluate` check blocks merge **only if required** in the ruleset | **OPEN until required** | control-plane click tracked **#261** |
+| Spectre-mitigated CRT selection (#385) | the toolset's `lib/spectre/<arch>` is missing or holds no libcmt.lib, or link.exe cannot be located | fail-closed: the build fails with the VS component to install, rather than linking the unmitigated CRT that the LIB default would silently supply; BinSkim BA2024 independently gates the release on the linked result | `app/build.rs` Spectre block (find-msvc-tools discovery, the crate rustc uses for link.exe); BinSkim release scan |
 
 ## Continuous monitoring (scheduled)
 

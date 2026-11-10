@@ -80,3 +80,6 @@ panic = "immediate-abort"
 # info into the .pdb by default, and `split-debuginfo="packed"` + `lto="fat"` is a
 # known-broken combo that silently drops the PDB (rust-lang/rust#104042).
 debug = "line-tables-only"
+
+[build-dependencies]
+find-msvc-tools = "0.1"
