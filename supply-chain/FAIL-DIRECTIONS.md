@@ -39,6 +39,7 @@ Verdict vocabulary: **CLOSED/secure** (failure blocks or pages), **OPEN/insecure
 | **caps gate, cargo-acl (linux/ELF)** | **no ELF walker → binary uploads ungated** | **OPEN/insecure** | tracked **#245** (ELF follow-up); caps evidence honestly UNEVALUATED meanwhile |
 | dependency-review on PR diffs | flags high-severity additions | CLOSED once **required**; until then advisory | control-plane click tracked **#261** |
 | **gate as a merge blocker** | red `evaluate` check blocks merge **only if required** in the ruleset | **OPEN until required** | control-plane click tracked **#261** |
+| BinSkim release gate, SARIF result with no `kind`/`level` (#385) | counted as a finding: SARIF 2.1.0 defaults (kind fail, level warning) are applied before counting; a kind outside the enumeration also counts as fail; the gating scan then fails on it | CLOSED/secure (was OPEN/insecure 2026-08-17..2026-11-10: BA2024 on two releases counted as nothing) | `.github/actions/binskim-scan/sarif-triage.ps1`; self-test step on `fixtures/kindless-result.sarif` runs before every scan |
 
 ## Continuous monitoring (scheduled)
 
