@@ -29,8 +29,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::gate::{
-    Instance, ack_covers_vuln, ack_template_vuln, ack_template_vuln_fixed, extract_instances,
-    load_acks, parse_tools_lock, resolve_lock, run_audit,
+    ack_covers_vuln, ack_template_vuln, ack_template_vuln_fixed, extract_instances, load_acks,
+    parse_tools_lock, resolve_lock, run_audit, Instance,
 };
 
 /// Load the recorded baseline instance set for a blessed digest. `None` = no baseline
