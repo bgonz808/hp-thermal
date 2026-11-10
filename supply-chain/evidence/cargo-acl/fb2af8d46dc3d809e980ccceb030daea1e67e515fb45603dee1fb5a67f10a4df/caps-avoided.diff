@@ -1,0 +1,51 @@
+# caps-avoided.diff — one-time record (#387): default-features inventory (git HEAD before this commit) vs the
+# AS-BUILT inventory (build_flags = ["--no-default-features"], no --all-targets). Lines removed here are grants the
+# shipped flavour does not exercise. Refreshed only when the flavour or the lock changes.
+--- /dev/fd/63	2026-11-09 22:53:37.000000000 -0800
++++ /dev/fd/62	2026-11-09 22:53:37.000000000 -0800
+@@ -1,2 +1,3 @@
+ [common]
++build_flags = ["--no-default-features"]
+ version = 2
+@@ -39,5 +40,2 @@
+ allow_proc_macro = true
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -45,9 +43,2 @@
+ allow_proc_macro = true
+-build.allow_apis = [
+-    "fs",
+-    "process",
+-]
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -67,6 +58,2 @@
+ allow_proc_macro = true
+-allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+@@ -169,5 +156,2 @@
+ [pkg.parking_lot_core]
+-build.allow_apis = [
+-    "env",
+-]
+ allow_unsafe = true
+@@ -334,7 +318,2 @@
+ allow_unsafe = true
+-allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ 
+@@ -369,4 +348 @@
+ [pkg.signal-hook-mio]
+-allow_apis = [
+-    "net",
+-]
