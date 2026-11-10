@@ -1,0 +1,79 @@
+# caps-avoided.diff — one-time record (#387): default-features inventory vs the AS-BUILT inventory (build_flags = --locked,
+# -p <tool>, tools/build-args; no --all-targets; profile cackle-release). Lines removed are grants the shipped package does not
+# exercise. Refreshed only when the flavour or the lock changes.
+--- /tmp/asbuilt-fleet2/cargo-auditable/base.plain	2026-11-10 00:32:33.985696600 -0800
++++ /dev/fd/63	2026-11-10 00:32:34.000000000 -0800
+@@ -1,2 +1,4 @@
+ [common]
++build_flags = ["--locked","-p","cargo-auditable"]
++profile = "cackle-release"
+ version = 2
+@@ -24,5 +26,2 @@
+ allow_proc_macro = true
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -30,9 +29,2 @@
+ allow_proc_macro = true
+-build.allow_apis = [
+-    "fs",
+-    "process",
+-]
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -107,6 +99,2 @@
+ [pkg.getrandom]
+-build.allow_apis = [
+-    "env",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -121,6 +109,2 @@
+ [pkg.libc]
+-build.allow_apis = [
+-    "env",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -141,7 +125,2 @@
+ [pkg.autocfg]
+-from.build.allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ 
+@@ -167,7 +146,2 @@
+ [pkg.rustix]
+-build.allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -218,11 +192,4 @@
+ [pkg.env_home]
+-from.test.allow_apis = [
+-    "env",
+-]
+ 
+ [pkg.which]
+-from.test.allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+@@ -236,5 +203,2 @@
+ [pkg.auditable-info]
+-allow_apis = [
+-    "fs",
+-]
+ 
+@@ -250,4 +214 @@
+ [pkg.auditable2cdx]
+-allow_apis = [
+-    "env",
+-]

@@ -1,10 +1,14 @@
 # caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
-# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42758886591)
+# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42783174618)
 # subject: cargo-deny @ EmbarkStudios/cargo-deny@bca0dde53651ee946720e4540b5ce2610bec8f06; frozen tools/locks/cargo-deny.lock sha256 1a825025d3b3d9c3a2405a553ce47cd97ec7eb594af99eef153d4ec7d453ece7
 # sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
-# seed: 6eef823bf4334b6f172e088c087040a619bc3603317b1f59196daea2379d8ccd; cackle exit 0; pkg sections seed 128 -> measured 128
+# build_flags (as built, #387): [--locked,-p,cargo-deny] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
+# profile (as built, #387): cackle-release = inherits release (debug_assertions off, as shipped) with opt-level 0 / lto off for attribution accuracy, per cackle CONFIG.md
+# seed: 9d5a690566e5ae7f7b2f81a495866483f9ca95cf635e1f3c6347356e27a68bd9; cackle exit 0; pkg sections seed 128 -> measured 128
 # caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
+build_flags = ["--locked","-p","cargo-deny"]
+profile = "cackle-release"
 version = 2
 
 [sandbox]
@@ -188,9 +192,6 @@ allow_unsafe = true
 
 [pkg.bytes]
 allow_unsafe = true
-from.test.allow_apis = [
-    "process",
-]
 
 [pkg.allocator-api2]
 allow_unsafe = true
@@ -275,23 +276,13 @@ build.allow_apis = [
 allow_unsafe = true
 
 [pkg.crc32fast]
-build.allow_apis = [
-    "env",
-    "process",
-]
 allow_unsafe = true
 
 [pkg.getrandom]
-build.allow_apis = [
-    "env",
-]
 allow_unsafe = true
 
 [pkg.once_cell]
 allow_unsafe = true
-from.test.allow_apis = [
-    "env",
-]
 
 [pkg.wyz]
 allow_unsafe = true
@@ -300,11 +291,6 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.rustix]
-build.allow_apis = [
-    "env",
-    "fs",
-    "process",
-]
 allow_unsafe = true
 
 [pkg.lock_api]
@@ -325,10 +311,6 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.httparse]
-build.allow_apis = [
-    "env",
-    "process",
-]
 allow_unsafe = true
 
 [pkg.crossbeam-channel]
@@ -407,9 +389,6 @@ allow_apis = [
 
 [pkg.console]
 allow_unsafe = true
-from.test.allow_apis = [
-    "env",
-]
 
 [pkg.flate2]
 allow_unsafe = true
@@ -450,9 +429,11 @@ build.allow_apis = [
 ]
 build.allow_build_instructions = [
     "cargo:include=/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zstd-sys-2.1.2+zstd.1.5.7/zstd/lib",
+    "cargo:root=/home/runner/work/_temp/caps-build/cackle-release/build/zstd-sys/920a401143eae1b7/out",
     "cargo:root=/home/runner/work/_temp/caps-build/cackle/build/zstd-sys-b5f0e2aa84868937/out",
     "cargo:root=/home/runner/work/_temp/caps-build/cackle/build/zstd-sys/b5f0e2aa84868937/out",
     "cargo:rustc-link-lib=static=zstd",
+    "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle-release/build/zstd-sys/920a401143eae1b7/out",
     "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/zstd-sys-b5f0e2aa84868937/out",
     "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/zstd-sys/b5f0e2aa84868937/out",
 ]
@@ -472,6 +453,7 @@ build.allow_apis = [
 build.allow_build_instructions = [
     "cargo:rustc-link-lib=static=ring_core_0_17_14_",
     "cargo:rustc-link-lib=static=ring_core_0_17_14__test",
+    "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle-release/build/ring/1535ea47fc9dded1/out",
     "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/ring-b94dacf97f7f4882/out",
     "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/ring/b94dacf97f7f4882/out",
 ]
@@ -538,11 +520,6 @@ allow_unsafe = true
 
 [pkg.insta]
 allow_unsafe = true
-from.test.allow_apis = [
-    "env",
-    "fs",
-    "process",
-]
 
 [pkg.cargo-deny]
 allow_unsafe = true
@@ -580,18 +557,7 @@ allow_apis = [
 ]
 
 [pkg.tempfile]
-from.test.allow_apis = [
-    "env",
-    "fs",
-]
 
 [pkg.ureq]
-from.test.allow_apis = [
-    "env",
-    "net",
-]
 
 [pkg.fs_extra]
-from.test.allow_apis = [
-    "fs",
-]

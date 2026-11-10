@@ -1,0 +1,117 @@
+# caps-avoided.diff — one-time record (#387): default-features inventory vs the AS-BUILT inventory (build_flags = --locked,
+# -p <tool>, tools/build-args; no --all-targets; profile cackle-release). Lines removed are grants the shipped package does not
+# exercise. Refreshed only when the flavour or the lock changes.
+--- /tmp/asbuilt-fleet2/cargo-audit/base.plain	2026-11-10 00:32:34.392124800 -0800
++++ /dev/fd/63	2026-11-10 00:32:34.000000000 -0800
+@@ -1,2 +1,4 @@
+ [common]
++build_flags = ["--locked","-p","cargo-audit"]
++profile = "cackle-release"
+ version = 2
+@@ -97,5 +99,2 @@
+ allow_proc_macro = true
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -347,2 +346,3 @@
+     "cargo:conf=OPENSSL_NO_ASYNC,OPENSSL_NO_BF,OPENSSL_NO_BLAKE2,OPENSSL_NO_BUF_FREELISTS,OPENSSL_NO_CAMELLIA,OPENSSL_NO_CAPIENG,OPENSSL_NO_CAST,OPENSSL_NO_CMS,OPENSSL_NO_COMP,OPENSSL_NO_CRYPTO_MDEBUG,OPENSSL_NO_CT,OPENSSL_NO_DANE,OPENSSL_NO_DEPRECATED,OPENSSL_NO_DGRAM,OPENSSL_NO_DYNAMIC_ENGINE,OPENSSL_NO_EC_NISTP_64_GCC_128,OPENSSL_NO_EC2M,OPENSSL_NO_EGD,OPENSSL_NO_ENGINE,OPENSSL_NO_GMP,OPENSSL_NO_GOST,OPENSSL_NO_HEARTBEATS,OPENSSL_NO_HW,OPENSSL_NO_IDEA,OPENSSL_NO_JPAKE,OPENSSL_NO_KRB5,OPENSSL_NO_MD2,OPENSSL_NO_MDC2,OPENSSL_NO_OCB,OPENSSL_NO_RC2,OPENSSL_NO_RC5,OPENSSL_NO_RFC3779,OPENSSL_NO_RIPEMD,OPENSSL_NO_RMD160,OPENSSL_NO_SCTP,OPENSSL_NO_SEED,OPENSSL_NO_SM2,OPENSSL_NO_SM3,OPENSSL_NO_SM4,OPENSSL_NO_SRP,OPENSSL_NO_SSL_TRACE,OPENSSL_NO_SSL2,OPENSSL_NO_SSL3,OPENSSL_NO_SSL3_METHOD,OPENSSL_NO_STATIC_ENGINE,OPENSSL_NO_STORE,OPENSSL_NO_TS,OPENSSL_NO_WHIRLPOOL",
++    "cargo:include=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out/include",
+     "cargo:include=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out/include",
+@@ -350,4 +350,6 @@
+     "cargo:libcrypto=aws_lc_0_47_0_crypto",
++    "cargo:libcrypto_path=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out/libaws_lc_0_47_0_crypto.a",
+     "cargo:libcrypto_path=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out/libaws_lc_0_47_0_crypto.a",
+     "cargo:libcrypto_path=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys/c48f62605a6075e3/out/libaws_lc_0_47_0_crypto.a",
++    "cargo:libdir=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out",
+     "cargo:libdir=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+@@ -355,2 +357,3 @@
+     "cargo:link_kind=static",
++    "cargo:root=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out",
+     "cargo:root=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+@@ -643,5 +646,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "process",
+-]
+ 
+@@ -678,2 +678,3 @@
+     "cargo:conf=OPENSSL_NO_ASYNC,OPENSSL_NO_BF,OPENSSL_NO_BLAKE2,OPENSSL_NO_BUF_FREELISTS,OPENSSL_NO_CAMELLIA,OPENSSL_NO_CAPIENG,OPENSSL_NO_CAST,OPENSSL_NO_CMS,OPENSSL_NO_COMP,OPENSSL_NO_CRYPTO_MDEBUG,OPENSSL_NO_CT,OPENSSL_NO_DANE,OPENSSL_NO_DEPRECATED,OPENSSL_NO_DGRAM,OPENSSL_NO_DYNAMIC_ENGINE,OPENSSL_NO_EC_NISTP_64_GCC_128,OPENSSL_NO_EC2M,OPENSSL_NO_EGD,OPENSSL_NO_ENGINE,OPENSSL_NO_GMP,OPENSSL_NO_GOST,OPENSSL_NO_HEARTBEATS,OPENSSL_NO_HW,OPENSSL_NO_IDEA,OPENSSL_NO_JPAKE,OPENSSL_NO_KRB5,OPENSSL_NO_MD2,OPENSSL_NO_MDC2,OPENSSL_NO_OCB,OPENSSL_NO_RC2,OPENSSL_NO_RC5,OPENSSL_NO_RFC3779,OPENSSL_NO_RIPEMD,OPENSSL_NO_RMD160,OPENSSL_NO_SCTP,OPENSSL_NO_SEED,OPENSSL_NO_SM2,OPENSSL_NO_SM3,OPENSSL_NO_SM4,OPENSSL_NO_SRP,OPENSSL_NO_SSL_TRACE,OPENSSL_NO_SSL2,OPENSSL_NO_SSL3,OPENSSL_NO_SSL3_METHOD,OPENSSL_NO_STATIC_ENGINE,OPENSSL_NO_STORE,OPENSSL_NO_TS,OPENSSL_NO_WHIRLPOOL",
++    "cargo:include=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out/include",
+     "cargo:include=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out/include",
+@@ -681,4 +682,6 @@
+     "cargo:libcrypto=aws_lc_0_47_0_crypto",
++    "cargo:libcrypto_path=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out/libaws_lc_0_47_0_crypto.a",
+     "cargo:libcrypto_path=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out/libaws_lc_0_47_0_crypto.a",
+     "cargo:libcrypto_path=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys/c48f62605a6075e3/out/libaws_lc_0_47_0_crypto.a",
++    "cargo:libdir=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out",
+     "cargo:libdir=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+@@ -686,2 +689,3 @@
+     "cargo:link_kind=static",
++    "cargo:root=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out",
+     "cargo:root=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+@@ -689,2 +693,3 @@
+     "cargo:rustc-link-lib=static=aws_lc_0_47_0_crypto",
++    "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle-release/build/aws-lc-sys/d604cf8917c70cbf/out",
+     "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/aws-lc-sys-c48f62605a6075e3/out",
+@@ -718,6 +723,2 @@
+ [pkg.jetscii]
+-build.allow_apis = [
+-    "env",
+-    "fs",
+-]
+ allow_unsafe = true
+@@ -728,6 +729,2 @@
+ [pkg.comrak]
+-build.allow_apis = [
+-    "env",
+-    "fs",
+-]
+ allow_unsafe = true
+@@ -765,6 +762,2 @@
+ [pkg.rust-embed-utils]
+-allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+@@ -780,5 +773,2 @@
+ [pkg.cvss]
+-test.allow_apis = [
+-    "fs",
+-]
+ 
+@@ -815,13 +805,4 @@
+ [pkg.quitters]
+-allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+ [pkg.platforms-data-gen]
+-allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ 
+@@ -932,6 +913,2 @@
+ allow_unsafe = true
+-allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+@@ -950,5 +927,2 @@
+ [pkg.glob]
+-allow_apis = [
+-    "fs",
+-]
+ 
+@@ -1102,6 +1076,2 @@
+ [pkg.rustsec-admin]
+-allow_apis = [
+-    "fs",
+-    "process",
+-]
+ 

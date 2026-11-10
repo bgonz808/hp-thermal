@@ -1,0 +1,28 @@
+# caps-avoided.diff — one-time record (#387): default-features inventory vs the AS-BUILT inventory (build_flags = --locked,
+# -p <tool>, tools/build-args; no --all-targets; profile cackle-release). Lines removed are grants the shipped package does not
+# exercise. Refreshed only when the flavour or the lock changes.
+--- /tmp/asbuilt-fleet2/cargo-vet/base.plain	2026-11-10 00:32:35.203814800 -0800
++++ /dev/fd/63	2026-11-10 00:32:35.000000000 -0800
+@@ -1,2 +1,4 @@
+ [common]
++build_flags = ["--locked","-p","cargo-vet"]
++profile = "cackle-release"
+ version = 2
+@@ -315,5 +317,2 @@
+ [pkg.indexmap]
+-build.allow_apis = [
+-    "env",
+-]
+ allow_unsafe = true
+@@ -479,2 +478,3 @@
+     "cargo:rustc-link-lib=static=ring_core_0_17_14__test",
++    "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle-release/build/ring/b63a726464996a99/out",
+     "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/ring-5b2e18cf6310251a/out",
+@@ -572,7 +572,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ 

@@ -1,10 +1,14 @@
 # caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
-# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42758894413)
+# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42783186170)
 # subject: cargo-auditable @ rust-secure-code/cargo-auditable@9dc5ff28ff204b73eae91bd96cde4413fdcb70e0; upstream Cargo.lock at 9dc5ff28ff204b73eae91bd96cde4413fdcb70e0 sha256 f3c55d84aba0c8476959f911be1bb22e7f311ae536f3be1215d69b82fc929aab
 # sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
-# seed: 4454725dfb2d62c7d8636c7a73add87b2b0d34c5da3378b25203a024f8e16a6a; cackle exit 0; pkg sections seed 52 -> measured 52
+# build_flags (as built, #387): [--locked,-p,cargo-auditable] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
+# profile (as built, #387): cackle-release = inherits release (debug_assertions off, as shipped) with opt-level 0 / lto off for attribution accuracy, per cackle CONFIG.md
+# seed: bdb34cf1af9584f70b52fd15a01401f848127b5ede4155eac1582c3683c6b9c6; cackle exit 0; pkg sections seed 52 -> measured 52
 # caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
+build_flags = ["--locked","-p","cargo-auditable"]
+profile = "cackle-release"
 version = 2
 
 [sandbox]
@@ -28,19 +32,9 @@ allow_proc_macro = true
 
 [pkg.strum_macros]
 allow_proc_macro = true
-allow_apis = [
-    "env",
-]
 
 [pkg.rustversion]
 allow_proc_macro = true
-build.allow_apis = [
-    "fs",
-    "process",
-]
-allow_apis = [
-    "env",
-]
 
 [pkg.cyclonedx-bom-macros]
 allow_proc_macro = true
@@ -111,10 +105,6 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.getrandom]
-build.allow_apis = [
-    "env",
-    "process",
-]
 allow_unsafe = true
 
 [pkg.camino]
@@ -125,10 +115,6 @@ build.allow_apis = [
 allow_unsafe = true
 
 [pkg.libc]
-build.allow_apis = [
-    "env",
-    "process",
-]
 allow_unsafe = true
 
 [pkg.thiserror]
@@ -145,11 +131,6 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.autocfg]
-from.build.allow_apis = [
-    "env",
-    "fs",
-    "process",
-]
 
 [pkg.foldhash]
 allow_unsafe = true
@@ -171,11 +152,6 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.rustix]
-build.allow_apis = [
-    "env",
-    "fs",
-    "process",
-]
 allow_unsafe = true
 
 [pkg.linux-raw-sys]
@@ -222,15 +198,8 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.env_home]
-from.test.allow_apis = [
-    "env",
-]
 
 [pkg.which]
-from.test.allow_apis = [
-    "env",
-    "fs",
-]
 
 [pkg.cargo-auditable]
 allow_apis = [
@@ -240,9 +209,6 @@ allow_apis = [
 ]
 
 [pkg.auditable-info]
-allow_apis = [
-    "fs",
-]
 
 [pkg.cargo_metadata]
 allow_apis = [
@@ -254,6 +220,3 @@ allow_apis = [
 allow_unsafe = true
 
 [pkg.auditable2cdx]
-allow_apis = [
-    "env",
-]

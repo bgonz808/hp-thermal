@@ -129,9 +129,13 @@ jobs:
           # our attack surface. A missing build-args file means the default flavor, flags = [].
           # `--locked` always: the producer passes it at every install site; cackle's inner cargo must
           # fail closed the same way if the overlaid lock ever disagrees with the manifest.
-          flags='["--locked"]'
+          # `-p $TOOL`: the producer runs `cargo install --path <the package's dir>`, i.e. ONLY the shipped
+          # package. Without -p cackle builds the whole workspace: in the rustsec monorepo that added
+          # rustsec-admin + platforms-data-gen (21 sections) and in cargo-auditable's auditable2cdx (22)
+          # to inventories of binaries we never install (measured 2026-11-10).
+          flags="[\"--locked\",\"-p\",\"$TOOL\"]"
           if [ -f "tools/build-args/$TOOL" ]; then
-            flags="[\"--locked\",$(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL" | sed 's/^/"/; s/$/"/' | paste -sd, -)]"
+            flags="[\"--locked\",\"-p\",\"$TOOL\",$(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL" | sed 's/^/"/; s/$/"/' | paste -sd, -)]"
           fi
           # Profile (cackle CONFIG.md "Custom build profile"): analysis wants opt-level 0 (optimised
           # builds mis-attribute API use), but the shipped binary is `release`, and `debug_assertions`
