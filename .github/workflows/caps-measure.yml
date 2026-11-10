@@ -123,6 +123,19 @@ jobs:
           # CI). The written inventory records what was MEASURED, so the first Bubblewrap record
           # after a Disabled seed differs in its [sandbox] block and takes a human signature once.
           sed -e '/^\[sandbox\]/,/^\[/ s/^kind = "Disabled"/kind = "Bubblewrap"/' "$src" > src/cackle.toml
+          # AS BUILT (#387): cackle's documented `[common] build_flags` (default ["--all-targets"]) is
+          # set to exactly the producer's flavor from tools/build-args/<tool>, with no --all-targets:
+          # the shipped artifact has no test or example targets, and features nobody builds are not
+          # our attack surface. A missing build-args file means the default flavor, flags = [].
+          flags="[]"
+          if [ -f "tools/build-args/$TOOL" ]; then
+            flags="[$(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL" | sed 's/^/"/; s/$/"/' | paste -sd, -)]"
+          fi
+          # drop any build_flags the seed carried, then add ours right under [common]
+          awk -v f="$flags" '/^build_flags *=/ {next} {print} /^\[common\]$/ && !done {print "build_flags = " f; done=1}' src/cackle.toml > src/cackle.toml.new
+          mv src/cackle.toml.new src/cackle.toml
+          echo "build_flags=$flags" >> stage.env
+          grep -A2 '^\[common\]' src/cackle.toml | paste -sd' ' -
           grep -A1 '^\[sandbox\]' src/cackle.toml | paste -sd' ' -
           echo "seed_digest='$seed'" >> stage.env
           echo "seed: $src ($(grep -c '^\[pkg\.' seed.toml) pkg sections)"
@@ -178,6 +191,7 @@ jobs:
               echo "# build-args (shipped binary): $(grep -vE '^[[:space:]]*(#|$)' "tools/build-args/$TOOL" | paste -sd' ' -); cackle has no default-features control, so this inventory is measured on DEFAULT features: a SUPERSET of the shipped binary's tree"
             fi
             echo "# sandbox: $(grep -A1 '^\[sandbox\]' src/cackle.toml | grep kind | tr -d ' ') during measurement ($(bwrap --version 2>/dev/null | head -1))"
+            echo "# build_flags (as built, #387): ${build_flags:-?} — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried"
             echo "# seed: ${seed_digest:-?}; cackle exit ${cackle_exit:-?}; pkg sections seed $(grep -c '^\[pkg\.' seed.toml 2>/dev/null || echo ?) -> measured $(grep -c '^\[pkg\.' src/cackle.toml 2>/dev/null || echo ?)"
             echo "# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)"
             grep -vE '^\s*#' src/cackle.toml 2>/dev/null || true
