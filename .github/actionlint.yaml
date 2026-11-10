@@ -1,0 +1,7 @@
+# actionlint's built-in runner-label list lags GitHub's. ubuntu-26.04 is a GitHub-hosted label,
+# GA since 2026-09-17 (github.blog changelog 2026-09-17; actions/runner-images#14747); the pinned
+# actionlint v1.7.12 predates it. Declaring it here is actionlint's documented way to teach it a
+# label. Remove the entry once the pinned actionlint knows the label natively.
+self-hosted-runner:
+  labels:
+    - ubuntu-26.04
