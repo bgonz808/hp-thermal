@@ -41,6 +41,21 @@ runs:
         if ($got -ne $env:BINSKIM_SHA256) { throw "BinSkim nupkg sha256 mismatch: got $got, expected $env:BINSKIM_SHA256" }
         Expand-Archive -Path $pkg -DestinationPath "$env:RUNNER_TEMP/binskim" -Force
 
+    # #385: the gate once counted `kind -eq 'fail'` literally. SARIF 2.1.0 leaves `kind` and `level`
+    # OPTIONAL with defaults fail / warning, and BinSkim emits findings exactly that way, so a real
+    # BA2024 finding counted as nothing on two releases. The triage lives in sarif-triage.ps1 and is
+    # proven on a kind-less fixture here, on EVERY run, before it judges the real SARIF.
+    - name: Self-test SARIF triage on a kind-less fixture (fail-closed)
+      shell: pwsh
+      run: |
+        . "$env:GITHUB_ACTION_PATH/sarif-triage.ps1"
+        $fx = Get-Content "$env:GITHUB_ACTION_PATH/fixtures/kindless-result.sarif" -Raw | ConvertFrom-Json
+        $c = Normalize-SarifRun $fx.runs[0]
+        $ba = @($fx.runs[0].results)[1]
+        if ($c.fail -ne 1 -or $c.pass -ne 1 -or $c.notApplicable -ne 1) { throw "sarif-triage self-test: counts pass=$($c.pass) fail=$($c.fail) na=$($c.notApplicable), expected 1/1/1 (fail-closed)" }
+        if ($ba.kind -ne 'fail' -or $ba.level -ne 'warning' -or $ba.message.text -notmatch 'libcmt\.lib') { throw "sarif-triage self-test: kind-less result -> kind=$($ba.kind) level=$($ba.level) text='$($ba.message.text)' (fail-closed)" }
+        "sarif-triage self-test: kind-less result counted as fail/warning with resolved text"
+
     - name: BinSkim analyze (offline, local PDB; fail-closed)
       shell: pwsh
       env:
@@ -74,32 +89,15 @@ runs:
         $results = @($o.runs[0].results)
         $errNotes = @(@($inv.toolConfigurationNotifications) + @($inv.toolExecutionNotifications)) |
           Where-Object { $_.level -eq 'error' }
-        $passN = @($results | Where-Object { $_.kind -eq 'pass' }).Count
-        $failN = @($results | Where-Object { $_.kind -eq 'fail' }).Count
-        $reviewN = @($results | Where-Object { $_.kind -eq 'review' }).Count
-        $openN = @($results | Where-Object { $_.kind -eq 'open' }).Count
-        $naN = @($results | Where-Object { $_.kind -eq 'notApplicable' }).Count
-        "binskim: exit=$code executionSuccessful=$($inv.executionSuccessful) pass=$passN fail=$failN review=$reviewN open=$openN na=$naN errNotifications=$($errNotes.Count)"
-
-        # GitHub code-scanning needs every result to carry message.text; BinSkim's pass/notApplicable
-        # results reference message.id only, which ingestion rejects ("expected a result message"). Give
-        # any text-less result a concrete message and persist it BEFORE the digest, so the custody chain
-        # and the code-scanning upload both cover the normalized bytes. Kinds and counts are unchanged.
-        $fixed = $false
-        foreach ($run in $o.runs) {
-          foreach ($r in @($run.results)) {
-            if (-not $r.message -or [string]::IsNullOrEmpty([string]$r.message.text)) {
-              $txt = "$($r.ruleId): $($r.kind)"
-              if ($r.PSObject.Properties['message'] -and $r.message) {
-                $r.message | Add-Member -NotePropertyName text -NotePropertyValue $txt -Force
-              } else {
-                $r | Add-Member -NotePropertyName message -NotePropertyValue ([pscustomobject]@{ text = $txt }) -Force
-              }
-              $fixed = $true
-            }
-          }
-        }
-        if ($fixed) { $o | ConvertTo-Json -Depth 100 | Set-Content $env:BS_SARIF -Encoding utf8 }
+        # #385: apply the SARIF defaults (no kind -> fail, no level -> warning/none) and resolve each
+        # result's message text from the rule's messageStrings BEFORE counting, so an omitted property
+        # can never read as "no finding". Persisted BEFORE the digest so the custody chain and the
+        # code-scanning upload (which rejects text-less results) cover the self-describing bytes.
+        . "$env:GITHUB_ACTION_PATH/sarif-triage.ps1"
+        $counts = Normalize-SarifRun $o.runs[0]
+        $o | ConvertTo-Json -Depth 100 | Set-Content $env:BS_SARIF -Encoding utf8
+        $passN = $counts.pass; $failN = $counts.fail; $reviewN = $counts.review; $openN = $counts.open; $naN = $counts.notApplicable
+        "binskim: exit=$code executionSuccessful=$($inv.executionSuccessful) pass=$passN fail=$failN review=$reviewN open=$openN informational=$($counts.informational) na=$naN errNotifications=$($errNotes.Count)"
 
         foreach ($n in $errNotes) { "::error::BinSkim could not scan: $($n.descriptor.id): $($n.message.text)" }
         if ((-not $inv.executionSuccessful) -or ($errNotes.Count -gt 0) -or ($passN -eq 0)) {
@@ -108,7 +106,7 @@ runs:
         }
         # Surface findings + Review/Open (tool punted -> needs a human) as warnings.
         foreach ($r in @($results | Where-Object { $_.kind -in @('fail','review','open') })) {
-          "::warning::BinSkim $($r.kind) $($r.ruleId): $($r.message.text)"
+          "::warning::BinSkim $($r.kind)/$($r.level) $($r.ruleId): $(($r.message.text -replace '\s+', ' ').Trim())"
         }
         # GATING (authoritative/release scan): any real finding fails the job. The PR early-warning
         # passes gate=false (report-only). Fail-closed above already ran unconditionally.
