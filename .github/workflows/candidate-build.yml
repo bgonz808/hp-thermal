@@ -143,7 +143,9 @@ jobs:
           fi
           # Producer parity: per-tool RUSTFLAGS from tools/rustflags/<tool> (lint allowances, #325).
           if [ -f "tools/rustflags/$TOOL" ]; then
-            export RUSTFLAGS="${RUSTFLAGS:-} $(grep -vE '^[[:space:]]*(#|$)' "tools/rustflags/$TOOL" | paste -sd' ' -)"
+            extra_rustflags="$(grep -vE '^[[:space:]]*(#|$)' "tools/rustflags/$TOOL" | paste -sd' ' -)"
+            RUSTFLAGS="${RUSTFLAGS:-} $extra_rustflags"
+            export RUSTFLAGS
             echo "rustflags (producer parity): $RUSTFLAGS" | tee -a report.txt
           fi
           echo "== cargo build --locked ${extra[*]} ==" | tee -a report.txt

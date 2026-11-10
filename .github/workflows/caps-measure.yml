@@ -144,7 +144,9 @@ jobs:
           # tools/rustflags/<tool>; without them cargo-audit's tree does not compile under the
           # pinned nightly (cackle exit 255, run 42754577766).
           if [ -f "tools/rustflags/$TOOL" ]; then
-            export RUSTFLAGS="${RUSTFLAGS:-} $(grep -vE '^[[:space:]]*(#|$)' "tools/rustflags/$TOOL" | paste -sd' ' -)"
+            extra_rustflags="$(grep -vE '^[[:space:]]*(#|$)' "tools/rustflags/$TOOL" | paste -sd' ' -)"
+            RUSTFLAGS="${RUSTFLAGS:-} $extra_rustflags"
+            export RUSTFLAGS
             echo "rustflags (producer parity): $RUSTFLAGS"
           fi
           "$TOOLS_DIR/cargo-acl" acl -n --ui none --auto-accept-fixes --path src > cackle.log 2>&1
