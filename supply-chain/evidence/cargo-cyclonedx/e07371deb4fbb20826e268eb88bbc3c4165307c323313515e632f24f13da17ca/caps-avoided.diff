@@ -1,0 +1,166 @@
+# caps-avoided.diff — one-time record (#387): default-features inventory vs the AS-BUILT inventory (build_flags from
+# tools/build-args + --locked, no --all-targets; profile cackle-release). Lines removed here are grants the shipped flavour
+# does not exercise. Refreshed only when the flavour or the lock changes.
+--- /tmp/asbuilt-fleet/cargo-cyclonedx/base.plain	2026-11-10 00:18:38.165175400 -0800
++++ /dev/fd/63	2026-11-10 00:18:38.000000000 -0800
+@@ -1,2 +1,4 @@
+ [common]
++build_flags = ["--locked"]
++profile = "cackle-release"
+ version = 2
+@@ -57,5 +59,2 @@
+ allow_proc_macro = true
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -85,5 +84,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "env",
+-]
+ 
+@@ -235,5 +231,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "fs",
+-]
+ 
+@@ -260,6 +253,2 @@
+ [pkg.object]
+-build.allow_apis = [
+-    "env",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -287,6 +276,2 @@
+ [pkg.owo-colors]
+-build.allow_apis = [
+-    "env",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -318,7 +303,2 @@
+ [pkg.eyre]
+-build.allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -335,6 +315,2 @@
+ [pkg.color-spantrace]
+-build.allow_apis = [
+-    "env",
+-    "process",
+-]
+ 
+@@ -378,5 +354,2 @@
+ allow_unsafe = true
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -389,6 +362,2 @@
+ [pkg.portable-atomic]
+-build.allow_apis = [
+-    "env",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -408,5 +377,2 @@
+ [pkg.crossbeam-utils]
+-build.allow_apis = [
+-    "env",
+-]
+ allow_unsafe = true
+@@ -417,5 +383,2 @@
+ [pkg.doc-comment]
+-build.allow_apis = [
+-    "process",
+-]
+ 
+@@ -431,9 +394,2 @@
+ [pkg.assert_cmd]
+-build.allow_apis = [
+-    "env",
+-    "fs",
+-]
+-from.test.allow_apis = [
+-    "process",
+-]
+ 
+@@ -444,5 +400,2 @@
+ allow_unsafe = true
+-allow_apis = [
+-    "env",
+-]
+ 
+@@ -450,5 +403,2 @@
+ allow_unsafe = true
+-allow_apis = [
+-    "process",
+-]
+ 
+@@ -486,5 +436,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "fs",
+-]
+ 
+@@ -495,5 +442,2 @@
+ allow_unsafe = true
+-allow_apis = [
+-    "fs",
+-]
+ 
+@@ -501,7 +445,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ 
+@@ -520,12 +459,4 @@
+ [pkg.ui_test]
+-allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ 
+ [pkg.rustc_version]
+-allow_apis = [
+-    "process",
+-]
+ 
+@@ -556,11 +487,4 @@
+ [pkg.walkdir]
+-from.test.allow_apis = [
+-    "fs",
+-]
+ 
+ [pkg.cyclonedx-bom]
+-test.allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+@@ -583,5 +507,2 @@
+ ]
+-test.allow_apis = [
+-    "process",
+-]
+ 
+@@ -598,10 +519,3 @@
+ [pkg.tempfile]
+-from.test.allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+ [pkg.assert_fs]
+-from.test.allow_apis = [
+-    "fs",
+-]

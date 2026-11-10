@@ -1,0 +1,93 @@
+# caps-avoided.diff — one-time record (#387): default-features inventory vs the AS-BUILT inventory (build_flags from
+# tools/build-args + --locked, no --all-targets; profile cackle-release). Lines removed here are grants the shipped flavour
+# does not exercise. Refreshed only when the flavour or the lock changes.
+--- /tmp/asbuilt-fleet/cargo-deny/base.plain	2026-11-10 00:18:36.399524400 -0800
++++ /dev/fd/63	2026-11-10 00:18:36.000000000 -0800
+@@ -1,2 +1,4 @@
+ [common]
++build_flags = ["--locked"]
++profile = "cackle-release"
+ version = 2
+@@ -184,5 +186,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "process",
+-]
+ 
+@@ -271,6 +270,2 @@
+ [pkg.crc32fast]
+-build.allow_apis = [
+-    "env",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -278,5 +273,2 @@
+ [pkg.getrandom]
+-build.allow_apis = [
+-    "env",
+-]
+ allow_unsafe = true
+@@ -285,5 +277,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "env",
+-]
+ 
+@@ -296,7 +285,2 @@
+ [pkg.rustix]
+-build.allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -321,6 +305,2 @@
+ [pkg.httparse]
+-build.allow_apis = [
+-    "env",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -403,5 +383,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "env",
+-]
+ 
+@@ -446,2 +423,3 @@
+     "cargo:include=/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zstd-sys-2.1.2+zstd.1.5.7/zstd/lib",
++    "cargo:root=/home/runner/work/_temp/caps-build/cackle-release/build/zstd-sys/920a401143eae1b7/out",
+     "cargo:root=/home/runner/work/_temp/caps-build/cackle/build/zstd-sys-b5f0e2aa84868937/out",
+@@ -449,2 +427,3 @@
+     "cargo:rustc-link-lib=static=zstd",
++    "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle-release/build/zstd-sys/920a401143eae1b7/out",
+     "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/zstd-sys-b5f0e2aa84868937/out",
+@@ -468,2 +447,3 @@
+     "cargo:rustc-link-lib=static=ring_core_0_17_14__test",
++    "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle-release/build/ring/1535ea47fc9dded1/out",
+     "cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/ring-b94dacf97f7f4882/out",
+@@ -534,7 +514,2 @@
+ allow_unsafe = true
+-from.test.allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ 
+@@ -576,16 +551,5 @@
+ [pkg.tempfile]
+-from.test.allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
+ [pkg.ureq]
+-from.test.allow_apis = [
+-    "env",
+-    "net",
+-]
+ 
+ [pkg.fs_extra]
+-from.test.allow_apis = [
+-    "fs",
+-]

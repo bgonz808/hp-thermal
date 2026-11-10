@@ -1,0 +1,30 @@
+# caps-avoided.diff — one-time record (#387): default-features inventory vs the AS-BUILT inventory (build_flags from
+# tools/build-args + --locked, no --all-targets; profile cackle-release). Lines removed here are grants the shipped flavour
+# does not exercise. Refreshed only when the flavour or the lock changes.
+--- /tmp/asbuilt-fleet/cargo-auditable/base.plain	2026-11-10 00:18:37.040464500 -0800
++++ /dev/fd/63	2026-11-10 00:18:37.000000000 -0800
+@@ -1,2 +1,4 @@
+ [common]
++build_flags = ["--locked"]
++profile = "cackle-release"
+ version = 2
+@@ -167,7 +169,2 @@
+ [pkg.rustix]
+-build.allow_apis = [
+-    "env",
+-    "fs",
+-    "process",
+-]
+ allow_unsafe = true
+@@ -218,11 +215,4 @@
+ [pkg.env_home]
+-from.test.allow_apis = [
+-    "env",
+-]
+ 
+ [pkg.which]
+-from.test.allow_apis = [
+-    "env",
+-    "fs",
+-]
+ 
