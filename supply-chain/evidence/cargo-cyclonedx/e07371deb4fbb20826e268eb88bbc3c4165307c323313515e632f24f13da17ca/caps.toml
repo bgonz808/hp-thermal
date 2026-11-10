@@ -1,13 +1,13 @@
 # caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
-# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42781387740)
+# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42783208887)
 # subject: cargo-cyclonedx @ CycloneDX/cyclonedx-rust-cargo@e58bd5590212f82c5b7e16dd3e2e819b0dbea5b1; frozen tools/locks/cargo-cyclonedx.lock sha256 3a3f58acf739d6a0b09729fe2dfaf80947d3249b92b046f17d28120fb39a1754
 # sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
-# build_flags (as built, #387): [--locked] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
+# build_flags (as built, #387): [--locked,-p,cargo-cyclonedx] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
 # profile (as built, #387): cackle-release = inherits release (debug_assertions off, as shipped) with opt-level 0 / lto off for attribution accuracy, per cackle CONFIG.md
 # seed: e07371deb4fbb20826e268eb88bbc3c4165307c323313515e632f24f13da17ca; cackle exit 0; pkg sections seed 140 -> measured 140
 # caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
-build_flags = ["--locked"]
+build_flags = ["--locked","-p","cargo-cyclonedx"]
 profile = "cackle-release"
 version = 2
 
@@ -288,18 +288,12 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.parking_lot_core]
-build.allow_apis = [
-    "env",
-]
 allow_unsafe = true
 
 [pkg.bit-vec]
 allow_unsafe = true
 
 [pkg.ahash]
-build.allow_apis = [
-    "env",
-]
 allow_unsafe = true
 
 [pkg.minimal-lexical]

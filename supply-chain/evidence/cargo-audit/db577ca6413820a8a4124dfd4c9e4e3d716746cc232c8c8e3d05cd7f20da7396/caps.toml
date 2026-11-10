@@ -1,13 +1,13 @@
 # caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
-# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42778958576)
+# generated: 2026-11-10, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 42783197227)
 # subject: cargo-audit @ rustsec/rustsec@281452c35cf0870969042374110f099a411bc185; frozen tools/locks/cargo-audit.lock sha256 317946f4a90d8507fffe22dfd668c3d9d506b0de4310b7dbef3dabfa99f85bc9
 # sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
-# build_flags (as built, #387): [--locked] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
+# build_flags (as built, #387): [--locked,-p,cargo-audit] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
 # profile (as built, #387): cackle-release = inherits release (debug_assertions off, as shipped) with opt-level 0 / lto off for attribution accuracy, per cackle CONFIG.md
 # seed: db577ca6413820a8a4124dfd4c9e4e3d716746cc232c8c8e3d05cd7f20da7396; cackle exit 0; pkg sections seed 239 -> measured 239
 # caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
-build_flags = ["--locked"]
+build_flags = ["--locked","-p","cargo-audit"]
 profile = "cackle-release"
 version = 2
 
@@ -105,9 +105,6 @@ allow_proc_macro = true
 
 [pkg.rust-embed-impl]
 allow_proc_macro = true
-allow_apis = [
-    "env",
-]
 
 [pkg.displaydoc]
 allow_proc_macro = true
@@ -732,20 +729,12 @@ allow_unsafe = true
 allow_unsafe = true
 
 [pkg.jetscii]
-build.allow_apis = [
-    "env",
-    "fs",
-]
 allow_unsafe = true
 
 [pkg.time]
 allow_unsafe = true
 
 [pkg.comrak]
-build.allow_apis = [
-    "env",
-    "fs",
-]
 allow_unsafe = true
 
 [pkg.typed-arena]
@@ -779,10 +768,6 @@ allow_apis = [
 ]
 
 [pkg.rust-embed-utils]
-allow_apis = [
-    "env",
-    "fs",
-]
 
 [pkg.tracing]
 allow_unsafe = true
@@ -828,11 +813,6 @@ allow_unsafe = true
 [pkg.quitters]
 
 [pkg.platforms-data-gen]
-allow_apis = [
-    "env",
-    "fs",
-    "process",
-]
 
 [pkg.hyper]
 allow_unsafe = true
@@ -939,10 +919,6 @@ allow_apis = [
 
 [pkg.askama_derive]
 allow_unsafe = true
-allow_apis = [
-    "env",
-    "fs",
-]
 
 [pkg.gix-odb]
 allow_unsafe = true
@@ -957,9 +933,6 @@ allow_apis = [
 ]
 
 [pkg.glob]
-allow_apis = [
-    "fs",
-]
 
 [pkg.askama]
 allow_unsafe = true
@@ -1109,10 +1082,6 @@ allow_apis = [
 ]
 
 [pkg.rustsec-admin]
-allow_apis = [
-    "fs",
-    "process",
-]
 
 [pkg.pkg-config]
 from.build.allow_apis = [
