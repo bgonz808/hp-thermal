@@ -1,0 +1,7 @@
+# Maintainer signing-key roster (OpenSSH ALLOWED SIGNERS format, see ssh-keygen(1)).
+# One line per device key: principal (committer email), options, public key. valid-after is the
+# day the key entered service; a retired key gets valid-before and stays listed so history still
+# verifies offline (`git log --show-signature` with gpg.ssh.allowedSignersFile pointing here).
+# GitHub's Verified badge is a convenience; this file is the record. Keys live on one device each,
+# never copied between devices. Dates are YYYYMMDD, UTC.
+bgonz808@gmail.com namespaces="git",valid-after="20261110" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKvlIX66vz8nInOEyM255ml4yHNTIww9CfrvW+bdnp0+
