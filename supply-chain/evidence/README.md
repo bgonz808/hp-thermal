@@ -33,10 +33,14 @@ parseable. The schema borrows established vocabularies rather than inventing one
   "vulnerabilities"; the vuln subset is cleanly exportable to conformant OpenVEX.
   Caps acks therefore carry `status: reviewed` (an inventory is signed, not a vulnerability status);
   mal acks keep `not_affected` for false positives, which is a real OpenVEX meaning.
-  Statements are a sequence, never edited or deleted: when `monitor-vuln` classifies an instance
-  as GONE it prints a `fixed` statement to append (#251); the LAST statement for an instance is
-  the one that counts, and a `fixed` last word withdraws coverage, so a reappearance is signed
-  off afresh.
+  Statements are a sequence, never edited or deleted; the LAST statement for an instance is the
+  one that counts (#251). When `monitor-vuln` classifies an instance as GONE (RustSec withdrew the
+  advisory or narrowed its `[versions]`; the bytes did not change, so never `fixed`) it prints a
+  `not_affected` / `vulnerable_code_not_present` statement to append, carrying the DB commit as a
+  CycloneDX-style property `hp-thermal:observed-absent-at-db`. A statement grounded that way is
+  void as coverage once the DB reports the instance again, so a reappearance is signed off afresh.
+  `fixed` is rejected on the vuln axis; `not_affected` needs a `justification` (CISA VEX minimum
+  requirements). Layout and file names here are repo-local; the vocabulary is OpenVEX / CycloneDX.
 
 Raw scanner payloads (full `cargo audit --json`, full VT panels) are point-in-time and
 non-reproducible; they go to the content-addressed `tools` release store referenced by hash
