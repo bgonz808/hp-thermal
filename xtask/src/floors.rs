@@ -28,6 +28,9 @@ pub struct Floors {
     pub vuln_shape: Option<VectorShape>,
     pub mal_malicious_engines: Option<u64>,
     pub mal_sandbox_malicious: bool,
+    /// Completeness precondition (#347 step 1): a panel with fewer verdict-bearing engines
+    /// than this is still running (or a partial rescan), not a verdict about the bytes.
+    pub mal_min_engines: Option<u64>,
     pub caps_new_grants: Vec<String>,
 }
 
@@ -73,6 +76,13 @@ pub fn parse(text: &str) -> Result<Floors, String> {
         .pointer("/mal/hard_stop_on_sandbox_malicious")
         .and_then(Value::as_bool)
         .unwrap_or(false);
+    let mal_min_engines = match v.pointer("/mal/min_verdict_engines") {
+        None | Some(Value::Null) => None,
+        Some(n) => Some(
+            n.as_u64()
+                .ok_or("mal.min_verdict_engines must be a non-negative integer")?,
+        ),
+    };
     let caps_new_grants = match v.pointer("/caps/hard_stop_new_grants") {
         None | Some(Value::Null) => Vec::new(),
         Some(a) => strs(Some(a))?,
@@ -81,8 +91,38 @@ pub fn parse(text: &str) -> Result<Floors, String> {
         vuln_shape,
         mal_malicious_engines,
         mal_sandbox_malicious,
+        mal_min_engines,
         caps_new_grants,
     })
+}
+
+/// The sandbox verdicts a mal record carries, whichever shape it uses: the stated object
+/// `{"state", "verdicts": [...]}` (#347 step 1) or the bare array of earlier records.
+pub fn sandbox_verdicts(panel: &Value) -> Vec<&Value> {
+    match panel.get("sandbox") {
+        Some(Value::Array(a)) => a.iter().collect(),
+        Some(Value::Object(o)) => o
+            .get("verdicts")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().collect())
+            .unwrap_or_default(),
+        _ => Vec::new(),
+    }
+}
+
+/// The sandbox readiness a mal record STATES. Object form: its `state` (`ANALYZED`, or
+/// `NOT READY` while no sandbox has reported — which is not "no behaviours", #347). Bare array
+/// (records before #347 step 1): `UNSTATED`. Missing or malformed: `MALFORMED`. Only ANALYZED
+/// says the behavioural axis was read; none of the others reads as clean.
+pub fn sandbox_state(panel: &Value) -> String {
+    match panel.get("sandbox") {
+        Some(Value::Array(_)) => "UNSTATED (record predates #347)".to_string(),
+        Some(Value::Object(o)) => match o.get("state").and_then(Value::as_str) {
+            Some(st) if !st.trim().is_empty() => st.to_string(),
+            _ => "MALFORMED (sandbox.state missing)".to_string(),
+        },
+        _ => "MALFORMED (no sandbox field)".to_string(),
+    }
 }
 
 fn req_str(v: &Value, key: &str) -> Result<String, String> {
@@ -177,12 +217,7 @@ impl Floors {
             ));
         }
         if self.mal_sandbox_malicious {
-            for sb in panel
-                .get("sandbox")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-            {
+            for sb in sandbox_verdicts(panel) {
                 let cat = sb.get("category").and_then(Value::as_str).unwrap_or("");
                 if cat.eq_ignore_ascii_case("malicious") {
                     let name = sb.get("name").and_then(Value::as_str).unwrap_or("?");
@@ -193,6 +228,24 @@ impl Floors {
             }
         }
         None
+    }
+
+    /// Completeness precondition on a mal record (#347 step 1). `Some(why)` when the record is
+    /// not a verdict at all: fewer verdict-bearing engines than `mal.min_verdict_engines`, or no
+    /// `detections.total` to judge by. Not a floor (nothing is being condemned) and not ALLOW —
+    /// the gate's UNEVALUATED, so it blocks and cannot be acked.
+    pub fn mal_incomplete(&self, panel: &Value) -> Option<String> {
+        let floor = self.mal_min_engines?;
+        match panel.pointer("/detections/total").and_then(Value::as_u64) {
+            None => {
+                Some("no detections.total: panel completeness unknown — not a verdict".to_string())
+            }
+            Some(n) if n < floor => Some(format!(
+                "panel INCOMPLETE: {n} engines returned a verdict (floor {floor}) — not a \
+                 verdict about these bytes, never read as clean"
+            )),
+            Some(_) => None,
+        }
     }
 
     /// Caps floor: a MEASURED head inventory granting a floor class to a package the prior
@@ -307,6 +360,7 @@ mod tests {
         assert!(f.vuln_shape.is_some());
         assert_eq!(f.mal_malicious_engines, Some(3));
         assert!(f.mal_sandbox_malicious);
+        assert_eq!(f.mal_min_engines, Some(50));
         assert_eq!(f.caps_new_grants, ["process", "net"]);
     }
 
@@ -387,6 +441,68 @@ mod tests {
             .is_some());
         // missing field is the gate's UNEVALUATED, not a floor
         assert!(f.mal_stop(&p(r#"{"sandbox":[]}"#)).is_none());
+        // the stated object form (#347 step 1) is read the same way
+        assert!(f
+            .mal_stop(&p(
+                r#"{"detections":{"malicious":0},"sandbox":{"state":"ANALYZED","verdicts":[{"name":"Zenbox","category":"malicious"}]}}"#
+            ))
+            .is_some());
+        assert!(
+            f.mal_stop(&p(
+                r#"{"detections":{"malicious":0},"sandbox":{"state":"NOT READY","verdicts":[]}}"#
+            ))
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn incomplete_panel_is_not_a_verdict() {
+        let f = policy();
+        let p = |s: &str| serde_json::from_str::<Value>(s).unwrap();
+        assert!(
+            f.mal_incomplete(&p(r#"{"detections":{"malicious":0,"total":70}}"#))
+                .is_none()
+        );
+        assert!(
+            f.mal_incomplete(&p(r#"{"detections":{"malicious":0,"total":50}}"#))
+                .is_none()
+        );
+        assert!(
+            f.mal_incomplete(&p(r#"{"detections":{"malicious":0,"total":12}}"#))
+                .is_some()
+        );
+        // no total at all: completeness unknown, same answer (fail-closed)
+        assert!(
+            f.mal_incomplete(&p(r#"{"detections":{"malicious":0}}"#))
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn sandbox_state_is_read_from_the_record_never_inferred() {
+        let p = |s: &str| serde_json::from_str::<Value>(s).unwrap();
+        assert_eq!(
+            sandbox_state(&p(r#"{"sandbox":{"state":"ANALYZED","verdicts":[]}}"#)),
+            "ANALYZED"
+        );
+        assert_eq!(
+            sandbox_state(&p(r#"{"sandbox":{"state":"NOT READY","verdicts":[]}}"#)),
+            "NOT READY"
+        );
+        assert!(sandbox_state(&p(r#"{"sandbox":[]}"#)).starts_with("UNSTATED"));
+        assert!(sandbox_state(&p(r#"{"sandbox":{"verdicts":[]}}"#)).starts_with("MALFORMED"));
+        assert!(sandbox_state(&p(r#"{}"#)).starts_with("MALFORMED"));
+        assert_eq!(
+            sandbox_verdicts(&p(
+                r#"{"sandbox":{"state":"ANALYZED","verdicts":[{"name":"Zenbox"}]}}"#
+            ))
+            .len(),
+            1
+        );
+        assert_eq!(
+            sandbox_verdicts(&p(r#"{"sandbox":[{"name":"Zenbox"}]}"#)).len(),
+            1
+        );
     }
 
     const BASE: &str = "# caps evidence\n[pkg.a]\nallow_apis = [\n    \"fs\",\n]\n\n[pkg.b]\nbuild.allow_apis = [\"env\"]\n";
