@@ -66,6 +66,9 @@ dependency tree is frozen at that rev's `Cargo.lock`). Consequences:
 - Editing `hp-thermal`'s own code or bumping its Rust toolchain does **not** change the tools —
   they are self-contained binaries, independent of the product build.
 - The **only** thing that warrants a rebuild is deliberately changing a `rev` in `TOOLS.lock`.
+- Rebuilding from unchanged inputs **reproduces the blessed digests**: the Windows lane links with
+  `/Brepro` (#401) so PE timestamps and the PDB GUID are content hashes, and the Linux lane is
+  reproducible as built. A producer run is therefore idempotent; a moved digest means an input moved.
 
 ## Dependabot interplay
 

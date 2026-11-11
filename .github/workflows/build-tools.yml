@@ -126,7 +126,12 @@ jobs:
         # stack-protector is absent because it only covers the whole binary with -Z build-std,
           # which rebuilds std per tool. Tracked separately rather than bundled: a cheap certain
           # win should not wait on an expensive uncertain one.
-          RUSTFLAGS: "-C control-flow-guard=checks -C link-arg=/DEPENDENTLOADFLAG:0x800 -C link-arg=/CETCOMPAT"
+          #
+          # /Brepro (#401): link.exe otherwise writes wall-clock TimeDateStamps and a fresh PDB GUID,
+          # so identical inputs produced different digests on every run (measured: 26 bytes, all
+          # timestamps + GUID). With /Brepro both derive from a content hash: a producer run that
+          # changes nothing reproduces the blessed digests, and the lane is idempotent.
+          RUSTFLAGS: "-C control-flow-guard=checks -C link-arg=/DEPENDENTLOADFLAG:0x800 -C link-arg=/CETCOMPAT -C link-arg=/Brepro"
         run: |
           set -euo pipefail
           mkdir -p out toolroot
