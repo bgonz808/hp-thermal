@@ -41,6 +41,9 @@ parseable. The schema borrows established vocabularies rather than inventing one
   void as coverage once the DB reports the instance again, so a reappearance is signed off afresh.
   `fixed` is rejected on the vuln axis; `not_affected` needs a `justification` (CISA VEX minimum
   requirements). Layout and file names here are repo-local; the vocabulary is OpenVEX / CycloneDX.
+  `monitor-vuln` also checks each baseline's `rawPayload` against the `tools` release store (GitHub's
+  asset digest vs the recorded sha256, no download); a missing or mismatched backing report makes
+  the pin UNEVALUATED.
 
 Raw scanner payloads (full `cargo audit --json`, full VT panels) are point-in-time and
 non-reproducible; they go to the content-addressed `tools` release store referenced by hash
