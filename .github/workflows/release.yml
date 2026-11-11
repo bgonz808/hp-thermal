@@ -897,10 +897,14 @@ jobs:
         id: provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # actions/attest-build-provenance v4.2.2
         with:
-          # Both shipped binaries are provenance subjects (one attestation, two digests).
+          # Every shipped file is a provenance subject (one attestation, four digests): the
+          # SBOM and SHA256SUMS were previously bound only through the exe's SBOM predicate and
+          # not verifiable by pointing `gh attestation verify` at the file itself.
           subject-path: |
             dist/hp-thermal.exe
             dist/hp-thermal.pdb
+            dist/hp-thermal.cdx.json
+            dist/SHA256SUMS
 
       # attest-sbom was folded into the general-purpose actions/attest (attest-sbom is
       # deprecated). `sbom-path` still auto-detects CycloneDX/SPDX and emits the same

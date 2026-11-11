@@ -76,13 +76,15 @@ jobs:
 
       # Previously-blessed cargo-audit, digest-verified, for the per-tool CVE posture below.
       # Bootstrap note: the PRIOR blessing vouches for the auditor of the NEXT candidates.
-      - name: Fetch prior-blessed cargo-audit (posture evidence)
+      # cargo-auditable: the PRIOR blessing builds the NEXT candidates (#386) so every Windows
+      # tool carries its `.dep-v0` dependency section — the binary-vantage vuln axis needs it.
+      - name: Fetch prior-blessed cargo-audit + cargo-auditable (posture evidence; auditable producer)
         id: audit-tool
         uses: ./.github/actions/fetch-tools
         with:
           token: ${{ github.token }}
           target: windows-x86_64
-          only: cargo-audit
+          only: cargo-audit cargo-auditable
           verify-attestations: "true"
 
       # NEGATIVE CONTROL ON THE EVIDENCE-PRODUCING AUDITOR (#223). Every posture line below
@@ -253,9 +255,9 @@ jobs:
               # 2>&1 | tee: the diagnostics land in diag-<name>.log for verify-allowances
               # to read AFTER the loop. pipefail is set, so cargo's failure still reaches
               # `|| built=0` through the pipe.
-              RUSTFLAGS="$tool_rustflags" cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
+              RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
             else
-              RUSTFLAGS="$tool_rustflags" cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
+              RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
             fi
             # REPORT EVERY FAILING TOOL, not the first. The loop used to exit here, so a
             # ~10-minute run answered "does cargo-audit build?" when the question was "which
@@ -318,8 +320,14 @@ jobs:
             if ! cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "supply-chain/policy/caps/$name.json"; then
               failed=1
             fi
+            # #386: the binary-vantage vuln axis needs cargo-auditable's `.dep-v0` section, and
+            # `cargo audit bin` is fail-open without it (partial list from panic strings, exit 0).
+            # Presence is proven in-tree here, BEFORE attest/upload.
+            if ! cargo run --manifest-path xtask/Cargo.toml -- verify-auditable "$exe"; then
+              failed=1
+            fi
           done
-          [ "$failed" = 0 ] || { echo "::error::one or more caps manifests need review (all violations listed above)"; exit 1; }
+          [ "$failed" = 0 ] || { echo "::error::one or more caps manifests need review, or a tool lacks .dep-v0 (all violations listed above)"; exit 1; }
 
       # #205: SLSA provenance, one attestation per subject file, signed via GitHub OIDC ->
       # Sigstore. Verify later with: gh attestation verify <asset> --repo <this repo>
@@ -455,6 +463,10 @@ jobs:
             # names carry a -<sha12>-linux-x86_64 suffix; recover the tool name
             name="$(echo "$base" | sed -E "s/-[0-9a-f]{12}-linux-x86_64$//")"
             cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "supply-chain/policy/caps/$name.json"
+            # #386: no blessed cargo-auditable exists for linux-x86_64 yet (step 3), so this lane
+            # builds non-auditable and SAYS so; it does not gate until that fleet member lands.
+            cargo run --manifest-path xtask/Cargo.toml -- verify-auditable "$exe" \
+              || echo "::warning::$base has no .dep-v0 — non-auditable linux build; binary-vantage scan would be fail-open (#386 step 3)"
           done
           # A gate that silently matched nothing would be indistinguishable from a passing one.
           [ "$found" = 1 ] || { echo "::error::no linux tool binaries matched - refusing to report a pass"; exit 1; }

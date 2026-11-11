@@ -161,6 +161,91 @@ fn gone_mechanism(db_dir: &Path, i: &Instance) -> Result<Option<GoneMechanism>, 
     }))
 }
 
+/// The baseline header's `rawPayload` pointer: the cargo-audit report the recorded instance set
+/// was derived from, kept in the `tools` release asset store by content-addressed name.
+fn baseline_raw_payload(
+    evidence_dir: &Path,
+    tool: &str,
+    digest: &str,
+) -> Option<(String, String, String)> {
+    let text =
+        std::fs::read_to_string(evidence_dir.join(tool).join(digest).join("vuln.jsonl")).ok()?;
+    let header: serde_json::Value =
+        serde_json::from_str(text.lines().find(|l| !l.trim().is_empty())?).ok()?;
+    let rp = header.get("rawPayload")?;
+    Some((
+        rp.get("store")?.as_str()?.to_string(),
+        rp.get("asset")?.as_str()?.to_string(),
+        rp.get("sha256")?.as_str()?.to_string(),
+    ))
+}
+
+/// Asset digests of a release as GitHub serves them (name -> sha256 hex). One call per run; a
+/// failure here makes every pin UNEVALUATED rather than silently skipping the custody check.
+fn store_digests(tag: &str) -> Result<std::collections::BTreeMap<String, String>, String> {
+    let out = std::process::Command::new("gh")
+        .args(["release", "view", tag, "--json", "assets"])
+        .output()
+        .map_err(|e| format!("cannot run gh: {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "gh release view {tag} failed: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout)
+        .map_err(|e| format!("gh release view {tag}: unparseable JSON ({e})"))?;
+    let mut m = std::collections::BTreeMap::new();
+    for a in v
+        .get("assets")
+        .and_then(|a| a.as_array())
+        .into_iter()
+        .flatten()
+    {
+        if let (Some(n), Some(d)) = (
+            a.get("name").and_then(|x| x.as_str()),
+            a.get("digest").and_then(|x| x.as_str()),
+        ) {
+            m.insert(
+                n.to_string(),
+                d.strip_prefix("sha256:").unwrap_or(d).to_string(),
+            );
+        }
+    }
+    Ok(m)
+}
+
+/// The backing report must exist in the store under its recorded digest. The store is an
+/// UNTRUSTED byte store by design; the digest committed in-tree is the trust anchor, GitHub's
+/// asset digest is what is compared here (no download). Missing or mismatched = the recorded
+/// instance set has no verifiable backing.
+fn raw_payload_custody(
+    store: &Result<std::collections::BTreeMap<String, String>, String>,
+    store_name: &str,
+    asset: &str,
+    sha: &str,
+) -> Result<(), String> {
+    if store_name != "tools release" {
+        return Err(format!(
+            "rawPayload store {store_name:?} is not one this check knows"
+        ));
+    }
+    let m = store
+        .as_ref()
+        .map_err(|e| format!("cannot read the tools release store: {e}"))?;
+    match m.get(asset) {
+        None => Err(format!(
+            "rawPayload asset {asset} is not in the tools release store"
+        )),
+        Some(d) if d != sha => Err(format!(
+            "rawPayload asset {asset}: store digest {} != recorded {}",
+            &d[..12.min(d.len())],
+            &sha[..12.min(sha.len())]
+        )),
+        Some(_) => Ok(()),
+    }
+}
+
 pub(crate) fn classify(
     baseline: &BTreeSet<Instance>,
     fresh: &BTreeSet<Instance>,
@@ -254,6 +339,8 @@ pub fn run(args: &[String]) -> i32 {
     // "unknown" for the rest would misrepresent a known instrument (#241 §5).
     let mut run_db = String::new();
     let db_dir = advisory_db_dir();
+    // Custody of the backing reports: one store listing for the whole run.
+    let store = store_digests("tools");
 
     for p in &pins {
         let acks = match load_acks(&evidence_dir.join(&p.name).join("acks.jsonl")) {
@@ -276,6 +363,17 @@ pub fn run(args: &[String]) -> i32 {
             fail = true;
             continue;
         };
+        // The baseline's backing report must be where the header says, under its digest.
+        let custody = match baseline_raw_payload(&evidence_dir, &p.name, &p.sha) {
+            None => Err("baseline header has no rawPayload pointer — the recorded instance set has no backing report".to_string()),
+            Some((store_name, asset, sha)) => raw_payload_custody(&store, &store_name, &asset, &sha),
+        };
+        if let Err(e) = custody {
+            println!("## {}\n  UNEVALUATED: {e}", p.name);
+            unevaluated += 1;
+            fail = true;
+            continue;
+        }
         // #255 §5: evaluate the lock the blessed binary was BUILT from — a committed frozen
         // lock (tools/locks/<name>.lock) overrides upstream's resolution, exactly as it does
         // in the producer. Evaluating upstream's lock for a frozen tool is stale toward old
@@ -534,6 +632,28 @@ mod tests {
         assert!(
             db_descends(nowhere, "0123456789abcdef", "0123456789abcdef").is_err(),
             "no clone -> error, never Ok"
+        );
+    }
+
+    #[test]
+    fn raw_payload_custody_needs_known_store_present_asset_and_matching_digest() {
+        let mut m = std::collections::BTreeMap::new();
+        m.insert("audit-raw-abc.json".to_string(), "abc123".to_string());
+        let store = Ok(m);
+        assert!(
+            raw_payload_custody(&store, "tools release", "audit-raw-abc.json", "abc123").is_ok()
+        );
+        assert!(raw_payload_custody(&store, "tools release", "audit-raw-abc.json", "zzz").is_err());
+        assert!(
+            raw_payload_custody(&store, "tools release", "audit-raw-missing.json", "abc123")
+                .is_err()
+        );
+        assert!(raw_payload_custody(&store, "elsewhere", "audit-raw-abc.json", "abc123").is_err());
+        let down: Result<std::collections::BTreeMap<String, String>, String> =
+            Err("offline".into());
+        assert!(
+            raw_payload_custody(&down, "tools release", "audit-raw-abc.json", "abc123").is_err(),
+            "store unreadable is not a pass"
         );
     }
 
