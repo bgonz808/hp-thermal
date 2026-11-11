@@ -29,7 +29,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::gate::{
-    Instance, ack_covers_vuln, ack_template_vuln, extract_instances, load_acks, parse_tools_lock,
+    GoneMechanism, Instance, ack_covers_vuln, ack_template_vuln,
+    ack_template_vuln_not_affected_observed, extract_instances, load_acks, parse_tools_lock,
     resolve_lock, run_audit,
 };
 
@@ -79,6 +80,87 @@ pub(crate) fn load_baseline(
 /// Classify a fresh scan against the recorded baseline. Matching is on the INSTANCE TUPLE
 /// (id, package, version) — never a bare advisory id (#241 §6), so a second resident version
 /// of an already-known advisory registers as NEW rather than hiding inside "carried".
+/// Where cargo-audit keeps its clone of rustsec/advisory-db (its documented default).
+fn advisory_db_dir() -> PathBuf {
+    if let Some(h) = std::env::var_os("CARGO_HOME") {
+        return PathBuf::from(h).join("advisory-db");
+    }
+    let home = std::env::var_os("HOME")
+        .or_else(|| std::env::var_os("USERPROFILE"))
+        .unwrap_or_default();
+    PathBuf::from(home).join(".cargo").join("advisory-db")
+}
+
+/// `now` must descend from `base` in the DB clone (equal passes). Unknown commits, a missing
+/// clone, or an unrelated history all fail: GONE is only meaningful against a newer DB (#251).
+fn db_descends(db_dir: &Path, base: &str, now: &str) -> Result<(), String> {
+    let hex = |c: &str| c.len() >= 7 && c.chars().all(|ch| ch.is_ascii_hexdigit());
+    if !hex(base) {
+        return Err(format!(
+            "baseline records no advisory-DB commit ({base:?}); cannot order this run's DB against it"
+        ));
+    }
+    if !hex(now) {
+        return Err(format!(
+            "this run's cargo-audit report carries no database.last-commit ({now:?}); cannot order it against the baseline"
+        ));
+    }
+    let st = std::process::Command::new("git")
+        .arg("-C")
+        .arg(db_dir)
+        .args(["merge-base", "--is-ancestor", base, now])
+        .status()
+        .map_err(|e| format!("cannot run git in {}: {e}", db_dir.display()))?;
+    match st.code() {
+        Some(0) => Ok(()),
+        Some(1) => Err(format!(
+            "advisory DB {} does not descend from the baseline's {} — stale or unrelated DB",
+            &now[..12.min(now.len())],
+            &base[..12.min(base.len())]
+        )),
+        c => Err(format!(
+            "git merge-base in {} failed (exit {c:?}) — is this cargo-audit's DB clone?",
+            db_dir.display()
+        )),
+    }
+}
+
+/// Exact `name`/`version` block match in a Cargo.lock. Unreadable lock -> false (caller
+/// treats absence as UNEVALUATED, never as GONE).
+fn lock_contains(lock: &Path, pkg: &str, ver: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(lock) else {
+        return false;
+    };
+    text.split("[[package]]").skip(1).any(|b| {
+        let has = |k: &str, v: &str| b.lines().any(|l| l.trim() == format!("{k} = \"{v}\""));
+        has("name", pkg) && has("version", ver)
+    })
+}
+
+/// Read why the DB stopped reporting an instance from `crates/<pkg>/<ID>.md` in the clone.
+/// Ok(None): a warning class with no advisory file (`yanked`) — registry state, not an advisory.
+/// Err: the file is missing or unreadable — the mechanism cannot be named, so no statement.
+fn gone_mechanism(db_dir: &Path, i: &Instance) -> Result<Option<GoneMechanism>, String> {
+    if !i.id.starts_with("RUSTSEC-") {
+        return Ok(None);
+    }
+    let path = db_dir
+        .join("crates")
+        .join(&i.package)
+        .join(format!("{}.md", i.id));
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| format!("advisory file {} unreadable ({e})", path.display()))?;
+    let withdrawn = text.lines().map(str::trim).find_map(|l| {
+        l.strip_prefix("withdrawn")
+            .and_then(|r| r.trim_start().strip_prefix('='))
+            .map(|r| r.trim().trim_matches('"').to_string())
+    });
+    Ok(Some(match withdrawn {
+        Some(d) if !d.is_empty() => GoneMechanism::Withdrawn(d),
+        _ => GoneMechanism::VersionsNarrowed,
+    }))
+}
+
 pub(crate) fn classify(
     baseline: &BTreeSet<Instance>,
     fresh: &BTreeSet<Instance>,
@@ -171,6 +253,7 @@ pub fn run(args: &[String]) -> i32 {
     // this invocation shares one DB by construction, so capture it once and reuse — reporting
     // "unknown" for the rest would misrepresent a known instrument (#241 §5).
     let mut run_db = String::new();
+    let db_dir = advisory_db_dir();
 
     for p in &pins {
         let acks = match load_acks(&evidence_dir.join(&p.name).join("acks.jsonl")) {
@@ -233,6 +316,15 @@ pub fn run(args: &[String]) -> i32 {
                 .to_string();
         }
         let now_db = run_db.as_str();
+        // #251: against an older or unrelated DB, every advisory it lacks would read as GONE.
+        // The clone cargo-audit fetched is a git repository: this run's commit must descend
+        // from the baseline's (equal counts), else the pin is UNEVALUATED.
+        if let Err(e) = db_descends(&db_dir, &base_db, now_db) {
+            println!("## {}\n  UNEVALUATED: {e}", p.name);
+            unevaluated += 1;
+            fail = true;
+            continue;
+        }
         let fresh = extract_instances(&audit);
         let (new, carried, gone) = classify(&baseline, &fresh);
         let stops = floors.vuln_stops(&fresh, &crate::floors::extract_cvss(&audit));
@@ -250,10 +342,67 @@ pub fn run(args: &[String]) -> i32 {
             carried.len(),
             gone.len()
         );
+        // #251: GONE means RustSec stopped asserting the advisory against these bytes. The
+        // bytes did not change, so this is never `fixed`: read the mechanism from the advisory
+        // file in the DB clone and print the grounded `not_affected` line to append. The earlier
+        // statement stays — the sequence is the record. No mechanism, no template.
         for i in &gone {
             println!(
                 "  - resolved: {} {} {} (no longer reported)",
                 i.id, i.package, i.version
+            );
+            let field = |a: &serde_json::Value, k: &str| {
+                a.get(k).and_then(|v| v.as_str()).unwrap_or("?").to_string()
+            };
+            if !lock_contains(&lock, &i.package, &i.version) {
+                println!(
+                    "      UNEVALUATED: {} {} is not in the lock evaluated ({lock_src}) — the lock drifted from the one the blessed bytes were built from; not GONE",
+                    i.package, i.version
+                );
+                unevaluated += 1;
+                fail = true;
+                continue;
+            }
+            let how = match gone_mechanism(&db_dir, i) {
+                Err(e) => {
+                    println!(
+                        "      UNEVALUATED: mechanism undetermined — {e}; no statement printed"
+                    );
+                    unevaluated += 1;
+                    fail = true;
+                    continue;
+                }
+                Ok(None) => {
+                    println!(
+                        "      `{}` is registry state, not an advisory: no VEX statement applies; the earlier statement stands",
+                        i.kind
+                    );
+                    continue;
+                }
+                Ok(Some(how)) => how,
+            };
+            match crate::gate::last_vuln_ack(&acks, i) {
+                Some(a) if crate::gate::observed_absent_at_db(a).is_some() => {
+                    println!(
+                        "      not_affected statement grounded in this observation already recorded"
+                    );
+                    continue;
+                }
+                Some(a) => println!(
+                    "      supersedes the {} statement signed by {} on {} — record it by appending this line to supply-chain/evidence/{}/acks.jsonl (fill author / timestamp):",
+                    field(a, "status"),
+                    field(a, "author"),
+                    field(a, "timestamp"),
+                    p.name
+                ),
+                None => println!(
+                    "      no statement on record — record the observation by appending this line to supply-chain/evidence/{}/acks.jsonl (fill author / timestamp):",
+                    p.name
+                ),
+            }
+            println!(
+                "      {}",
+                ack_template_vuln_not_affected_observed(&p.name, i, now_db, &how)
             );
         }
         for why in &stops {
@@ -323,6 +472,69 @@ mod tests {
             version: ver.into(),
             kind: "vulnerability".into(),
         }
+    }
+
+    #[test]
+    fn gone_mechanism_reads_withdrawn_else_narrowed_and_skips_registry_state() {
+        let dir = std::env::temp_dir().join(format!("mon-mech-{}", std::process::id()));
+        let crates = dir.join("crates").join("p");
+        std::fs::create_dir_all(&crates).unwrap();
+        std::fs::write(
+            crates.join("RUSTSEC-1.md"),
+            "```toml\nid = \"RUSTSEC-1\"\npackage = \"p\"\n#withdrawn = \"never\"\nwithdrawn = \"2026-02-03\"\n```\n",
+        )
+        .unwrap();
+        std::fs::write(
+            crates.join("RUSTSEC-2.md"),
+            "```toml\nid = \"RUSTSEC-2\"\n[versions]\npatched = [\">= 2\"]\n```\n",
+        )
+        .unwrap();
+        let i = |id: &str| Instance {
+            id: id.into(),
+            package: "p".into(),
+            version: "1".into(),
+            kind: "vulnerability".into(),
+        };
+        assert_eq!(
+            gone_mechanism(&dir, &i("RUSTSEC-1")).unwrap(),
+            Some(GoneMechanism::Withdrawn("2026-02-03".into()))
+        );
+        assert_eq!(
+            gone_mechanism(&dir, &i("RUSTSEC-2")).unwrap(),
+            Some(GoneMechanism::VersionsNarrowed)
+        );
+        assert!(
+            gone_mechanism(&dir, &i("RUSTSEC-3")).is_err(),
+            "missing advisory file is not a mechanism"
+        );
+        assert_eq!(gone_mechanism(&dir, &i("yanked")).unwrap(), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn lock_contains_needs_exact_name_and_version_in_one_block() {
+        let dir = std::env::temp_dir().join(format!("mon-lock-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let l = dir.join("Cargo.lock");
+        std::fs::write(&l, "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"b\"\nversion = \"2.0.0\"\n").unwrap();
+        assert!(lock_contains(&l, "a", "1.0.0"));
+        assert!(
+            !lock_contains(&l, "a", "2.0.0"),
+            "version from another block must not match"
+        );
+        assert!(!lock_contains(&dir.join("missing.lock"), "a", "1.0.0"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn db_descends_refuses_unknown_commits_before_touching_git() {
+        let nowhere = Path::new("/definitely/not/a/clone");
+        assert!(db_descends(nowhere, "unknown", "0123456789abcdef").is_err());
+        assert!(db_descends(nowhere, "0123456789abcdef", "unknown").is_err());
+        assert!(
+            db_descends(nowhere, "0123456789abcdef", "0123456789abcdef").is_err(),
+            "no clone -> error, never Ok"
+        );
     }
 
     #[test]

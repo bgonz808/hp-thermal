@@ -211,6 +211,32 @@ fn ack_quality(v: &Value) -> Result<(), String> {
     {
         return Err("timestamp missing".into());
     }
+    // #251: the subject of a vuln statement is an immutable blessed binary. OpenVEX `fixed`
+    // ("these product versions contain a fix") can never be true of it; an advisory that stops
+    // applying is recorded as `not_affected`. CISA's minimum requirements for VEX: a
+    // `not_affected` statement MUST carry a `justification` or an `impact_statement`.
+    if s(v, &["axis"]) == "vuln" {
+        match s(v, &["status"]) {
+            "fixed" => {
+                return Err(
+                    "status `fixed` is impossible for immutable blessed bytes (#251); record \
+                     `not_affected` with a justification"
+                        .into(),
+                );
+            }
+            "not_affected"
+                if s(v, &["justification"]).is_empty()
+                    && s(v, &["impact_statement"]).is_empty() =>
+            {
+                return Err(
+                    "not_affected without `justification` or `impact_statement` (CISA VEX minimum \
+                     requirements)"
+                        .into(),
+                );
+            }
+            _ => {}
+        }
+    }
     Ok(())
 }
 
@@ -225,13 +251,38 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     cur.as_str().unwrap_or("")
 }
 
-pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
-    acks.entries.iter().any(|a| {
+/// The LAST quality-passing vuln statement for this instance, in file order. acks.jsonl is
+/// append-only, so file order is statement order — the OpenVEX sequence model (#251): a later
+/// statement supersedes an earlier one for the same product + vulnerability.
+pub(crate) fn last_vuln_ack<'a>(acks: &'a Acks, inst: &Instance) -> Option<&'a Value> {
+    acks.entries.iter().rev().find(|a| {
         s(a, &["axis"]) == "vuln"
             && s(a, &["vulnerability", "name"]) == inst.id
             && s(a, &["product", "package"]) == inst.package
             && s(a, &["product", "version"]) == inst.version
     })
+}
+
+/// CycloneDX-style property (`properties: [{name, value}]`) naming the advisory-DB commit at
+/// which `monitor-vuln` observed the instance ABSENT. A statement carrying it is grounded in
+/// that observation, not in a review of the code (#251). Dropped on OpenVEX export.
+pub(crate) const OBSERVED_ABSENT_PROP: &str = "hp-thermal:observed-absent-at-db";
+
+pub(crate) fn observed_absent_at_db(a: &Value) -> Option<&str> {
+    a.get("properties")?
+        .as_array()?
+        .iter()
+        .find(|p| s(p, &["name"]) == OBSERVED_ABSENT_PROP)
+        .map(|p| s(p, &["value"]))
+        .filter(|v| !v.is_empty())
+}
+
+/// Covered iff the instance's LAST statement is not grounded in the DB's silence. Coverage is
+/// only ever asked about an instance the DB reports NOW, so a last statement that says "the DB
+/// did not report it" is contradicted by the measurement and void: the reappearance is RAISE
+/// uncovered until signed afresh (fail-closed, #251). Nothing is committed from CI for this.
+pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
+    last_vuln_ack(acks, inst).is_some_and(|a| observed_absent_at_db(a).is_none())
 }
 
 fn ack_covers_mal(acks: &Acks, digest: &str, engine: &str) -> bool {
@@ -323,10 +374,10 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
 }
 
 /// The exact line a maintainer commits to sign off — printed by the failing gate.
-/// status_notes is deliberately empty: the quality bar refuses it until a human
-/// Caps acks use `reviewed`: a caps ack signs an inventory, not a vulnerability status, so the
-/// OpenVEX statuses do not apply (the gate never reads `status`; it is documentation).
-/// writes the reason (no rubber-stamp path).
+/// status_notes is deliberately empty: the quality bar refuses it until a human writes the
+/// reason (no rubber-stamp path). Caps acks use `reviewed`: a caps ack signs an inventory, not a
+/// vulnerability status, so the OpenVEX statuses do not apply there. The gate reads `status` for
+/// exactly one thing: a vuln statement whose status is `fixed` withdraws coverage (#251).
 pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
@@ -338,6 +389,55 @@ pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
         "author": "",
         "timestamp": "",
         "refs": []
+    })
+    .to_string()
+}
+
+/// Why RustSec stopped reporting an instance, read from the advisory file in the DB clone.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum GoneMechanism {
+    /// `withdrawn = "<date>"` set on the advisory (CycloneDX `vulnerability.rejected`).
+    Withdrawn(String),
+    /// Advisory still published; its `[versions]` no longer cover this version.
+    VersionsNarrowed,
+}
+
+/// OpenVEX `not_affected` statement for an instance the monitor classified as GONE (#251).
+/// Justification `vulnerable_code_not_present` is the catalogue label for "component included,
+/// vulnerable code not present" — which is what a withdrawal or a narrowed range asserts about
+/// this version. The DB commit rides as a CycloneDX-style property so the gate can void the
+/// statement if the DB reports the instance again. Author and timestamp stay blank so the
+/// quality bar still demands a signer. Appended, never replacing — the sequence is the record.
+pub(crate) fn ack_template_vuln_not_affected_observed(
+    tool: &str,
+    inst: &Instance,
+    db: &str,
+    how: &GoneMechanism,
+) -> String {
+    let mechanism = match how {
+        GoneMechanism::Withdrawn(d) => format!("advisory withdrawn {d}"),
+        GoneMechanism::VersionsNarrowed => format!(
+            "advisory still published; its [versions] no longer cover {}",
+            inst.version
+        ),
+    };
+    serde_json::json!({
+        "schema": "hp-thermal/evidence-ack/v1",
+        "axis": "vuln",
+        "vulnerability": {"name": inst.id},
+        "product": {"name": tool, "package": inst.package, "version": inst.version},
+        "status": "not_affected",
+        "justification": "vulnerable_code_not_present",
+        "status_notes": format!(
+            "not reported by RustSec against {} {} at advisory DB {}: {mechanism} (monitor-vuln); supersedes the earlier statement for this instance",
+            inst.package,
+            inst.version,
+            &db[..12.min(db.len())]
+        ),
+        "properties": [{"name": OBSERVED_ABSENT_PROP, "value": db}],
+        "author": "",
+        "timestamp": "",
+        "refs": ["#251"]
     })
     .to_string()
 }
@@ -1029,6 +1129,81 @@ mod tests {
         let acks = ack(&good_vuln_ack("C", "r", "3"));
         let v = vuln_verdict("t", &[inst("C", "r", "3")], &[], 99, &acks);
         assert!(matches!(v, Verdict::RaiseCovered(_)));
+    }
+
+    #[test]
+    fn observed_absent_statement_is_void_for_a_reported_instance_and_later_affected_restores_it() {
+        // #251: file order is statement order. affected -> grounded not_affected: NOT covered
+        // (coverage is asked about an instance the DB reports now, which contradicts the
+        // grounding). affected -> grounded not_affected -> affected: covered again.
+        let affected = good_vuln_ack("B", "q", "2");
+        let observed = ack_template_vuln_not_affected_observed(
+            "t",
+            &inst("B", "q", "2"),
+            "0123456789abcdef0123",
+            &GoneMechanism::VersionsNarrowed,
+        )
+        .replace("\"author\":\"\"", "\"author\":\"a\"")
+        .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-10\"");
+        let mut acks = ack(&affected);
+        acks.entries.push(serde_json::from_str(&observed).unwrap());
+        assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2")));
+        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 0, &acks);
+        assert!(matches!(v, Verdict::RaiseUncovered { .. }));
+        acks.entries.push(serde_json::from_str(&affected).unwrap());
+        assert!(ack_covers_vuln(&acks, &inst("B", "q", "2")));
+        // a maintainer-reviewed not_affected (no grounding property) IS coverage
+        let reviewed = affected.replace(
+            "\"status\":\"affected\"",
+            "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+        );
+        assert!(ack_covers_vuln(&ack(&reviewed), &inst("B", "q", "2")));
+        // a grounded statement for ANOTHER instance changes nothing
+        let other = ack_template_vuln_not_affected_observed(
+            "t",
+            &inst("B", "q", "3"),
+            "0123456789abcdef0123",
+            &GoneMechanism::Withdrawn("2026-01-01".into()),
+        );
+        let mut acks2 = ack(&affected);
+        acks2.entries.push(serde_json::from_str(&other).unwrap());
+        assert!(ack_covers_vuln(&acks2, &inst("B", "q", "2")));
+    }
+
+    #[test]
+    fn not_affected_observed_template_is_grounded_and_needs_a_signer() {
+        let t = ack_template_vuln_not_affected_observed(
+            "t",
+            &inst("A", "p", "1"),
+            "0123456789abcdef0123",
+            &GoneMechanism::Withdrawn("2026-02-03".into()),
+        );
+        let v: Value = serde_json::from_str(&t).unwrap();
+        assert_eq!(v["status"], "not_affected");
+        assert_eq!(v["justification"], "vulnerable_code_not_present");
+        assert_eq!(v["vulnerability"]["name"], "A");
+        assert_eq!(observed_absent_at_db(&v), Some("0123456789abcdef0123"));
+        let notes = v["status_notes"].as_str().unwrap();
+        assert!(notes.contains("0123456789ab") && notes.contains("withdrawn 2026-02-03"));
+        assert!(
+            ack_quality(&v).is_err(),
+            "blank author/timestamp must still fail the quality bar"
+        );
+    }
+
+    #[test]
+    fn vuln_fixed_and_bare_not_affected_fail_the_quality_bar() {
+        let fixed =
+            good_vuln_ack("A", "p", "1").replace("\"status\":\"affected\"", "\"status\":\"fixed\"");
+        assert!(ack_quality(&serde_json::from_str(&fixed).unwrap()).is_err());
+        let bare = good_vuln_ack("A", "p", "1")
+            .replace("\"status\":\"affected\"", "\"status\":\"not_affected\"");
+        assert!(ack_quality(&serde_json::from_str(&bare).unwrap()).is_err());
+        let justified = bare.replace(
+            "\"status\":\"not_affected\"",
+            "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+        );
+        assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
     }
 
     #[test]
