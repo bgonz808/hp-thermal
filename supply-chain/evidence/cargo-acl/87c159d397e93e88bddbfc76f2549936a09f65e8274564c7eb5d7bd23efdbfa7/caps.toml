@@ -1,0 +1,360 @@
+# caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
+# generated: 2026-11-11, cargo-acl v0.9.1 (fb2af8d46dc3, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 43069492936)
+# subject: cargo-acl @ cackle-rs/cackle@e7109a3174378976ea881f1883439ba82524f061; frozen tools/locks/cargo-acl.lock sha256 237ed6c17345789ac8a3c751f9a19aa05144808a395ac4ca058fc35c5d5b1d6c
+# patch: 5536171c98867b350736bb11bbbe48f484c5886fdc12640f80a2fd19192f3d98  tools/patches/cargo-acl/0001-bump-object-0.40.patch
+# patch: 7bc264317fb7321468b8a50261ed8ca8926c96a48927f32517363f8e5cea94d1  tools/patches/cargo-acl/0002-tui-input-optional-under-ui.patch
+# build-args (shipped binary): --no-default-features; cackle has no default-features control, so this inventory is measured on DEFAULT features: a SUPERSET of the shipped binary's tree
+# sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
+# build_flags (as built, #387): [--locked,-p,cargo-acl,--no-default-features] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
+# profile (as built, #387): cackle-release = inherits release (debug_assertions off, as shipped) with opt-level 0 / lto off for attribution accuracy, per cackle CONFIG.md
+# seed: fb2af8d46dc3d809e980ccceb030daea1e67e515fb45603dee1fb5a67f10a4df; cackle exit 0; pkg sections seed 84 -> measured 84
+# caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
+[common]
+build_flags = ["--locked","-p","cargo-acl","--no-default-features"]
+profile = "cackle-release"
+version = 2
+
+[sandbox]
+kind = "Bubblewrap"
+
+[api.net]
+include = [
+    "mio::net","std::net"]
+
+[api.fs]
+include = [
+    "cargo-acl::fs",
+    "rustix::fs","std::fs"]
+
+[api.process]
+include = ["std::process"]
+
+[api.env]
+include = ["std::env",
+    "tempfile::env"]
+
+[pkg.thiserror-impl]
+allow_proc_macro = true
+
+[pkg.pest_derive]
+allow_proc_macro = true
+
+[pkg.phf_macros]
+allow_proc_macro = true
+
+[pkg.darling_macro]
+allow_proc_macro = true
+
+[pkg.instability]
+allow_proc_macro = true
+
+[pkg.strum_macros]
+allow_proc_macro = true
+
+[pkg.rustversion]
+allow_proc_macro = true
+
+[pkg.derive_more-impl]
+allow_proc_macro = true
+
+[pkg.num-derive]
+allow_proc_macro = true
+
+[pkg.wezterm-dynamic-derive]
+allow_proc_macro = true
+
+[pkg.serde_derive]
+allow_proc_macro = true
+
+[pkg.document-features]
+allow_proc_macro = true
+
+[pkg.clap_derive]
+allow_proc_macro = true
+allow_apis = [
+    "env",
+]
+
+[pkg.wit-bindgen-rust-macro]
+allow_proc_macro = true
+
+[pkg.wasm-bindgen-macro]
+allow_proc_macro = true
+
+[pkg.indoc]
+allow_proc_macro = true
+
+[pkg.unicode-ident]
+allow_unsafe = true
+
+[pkg.foldhash]
+allow_unsafe = true
+
+[pkg.itoa]
+allow_unsafe = true
+
+[pkg.static_assertions]
+allow_unsafe = true
+
+[pkg.ryu]
+allow_unsafe = true
+
+[pkg.either]
+allow_unsafe = true
+
+[pkg.bitflags]
+allow_unsafe = true
+
+[pkg.allocator-api2]
+allow_unsafe = true
+
+[pkg.scopeguard]
+allow_unsafe = true
+
+[pkg.log]
+allow_unsafe = true
+
+[pkg.powerfmt]
+allow_unsafe = true
+
+[pkg.smallvec]
+allow_unsafe = true
+
+[pkg.lock_api]
+allow_unsafe = true
+
+[pkg.linux-raw-sys]
+allow_unsafe = true
+
+[pkg.serde_core]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.libc]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.proc-macro2]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.thiserror]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.quote]
+build.allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.utf8parse]
+allow_unsafe = true
+
+[pkg.parking_lot_core]
+allow_unsafe = true
+
+[pkg.rustix]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.anstyle-query]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.simd-adler32]
+allow_unsafe = true
+
+[pkg.anstyle-parse]
+allow_unsafe = true
+
+[pkg.crc32fast]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.anstyle]
+allow_unsafe = true
+
+[pkg.zmij]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.hashbrown]
+allow_unsafe = true
+
+[pkg.serde_json]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.memchr]
+allow_unsafe = true
+
+[pkg.serde]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.camino]
+build.allow_apis = [
+    "env",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.twox-hash]
+allow_unsafe = true
+
+[pkg.deranged]
+allow_unsafe = true
+
+[pkg.getrandom]
+build.allow_apis = [
+    "env",
+]
+allow_unsafe = true
+
+[pkg.itertools]
+allow_unsafe = true
+
+[pkg.castaway]
+allow_unsafe = true
+
+[pkg.clap_lex]
+allow_unsafe = true
+
+[pkg.anstream]
+allow_unsafe = true
+
+[pkg.winnow]
+allow_unsafe = true
+
+[pkg.anyhow]
+build.allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+allow_unsafe = true
+
+[pkg.once_cell]
+allow_unsafe = true
+
+[pkg.object]
+allow_unsafe = true
+
+[pkg.flate2]
+allow_unsafe = true
+
+[pkg.lru]
+allow_unsafe = true
+
+[pkg.indexmap]
+allow_unsafe = true
+
+[pkg.colored]
+allow_unsafe = true
+allow_apis = [
+    "env",
+]
+
+[pkg.compact_str]
+allow_unsafe = true
+
+[pkg.ruzstd]
+allow_unsafe = true
+
+[pkg.is-terminal]
+allow_unsafe = true
+
+[pkg.errno]
+allow_unsafe = true
+
+[pkg.mio]
+allow_unsafe = true
+
+[pkg.signal-hook-registry]
+allow_unsafe = true
+
+[pkg.toml_parser]
+allow_unsafe = true
+
+[pkg.time]
+allow_unsafe = true
+
+[pkg.gimli]
+allow_unsafe = true
+
+[pkg.parking_lot]
+allow_unsafe = true
+
+[pkg.signal-hook]
+allow_unsafe = true
+
+[pkg.semver]
+allow_unsafe = true
+
+[pkg.syn]
+allow_unsafe = true
+
+[pkg.crossterm]
+allow_unsafe = true
+
+[pkg.tui-input]
+allow_unsafe = true
+
+[pkg.cargo-acl]
+allow_apis = [
+    "env",
+    "fs",
+    "process",
+]
+
+[pkg.tempfile]
+allow_apis = [
+    "env",
+    "fs",
+]
+
+[pkg.cargo_metadata]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.clap_builder]
+allow_apis = [
+    "env",
+    "process",
+]
+
+[pkg.signal-hook-mio]
