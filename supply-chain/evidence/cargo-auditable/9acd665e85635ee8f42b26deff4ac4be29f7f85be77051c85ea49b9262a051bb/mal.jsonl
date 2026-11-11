@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-auditable","sha256":"9acd665e85635ee8f42b26deff4ac4be29f7f85be77051c85ea49b9262a051bb"},"panelDate":"2026-11-11","detections":{"malicious":0,"total":71},"flags":[],"sandbox":[],"timesSubmitted":1,"source":"vt-submit run 42977766828 + monitor run 42977763754 (lookup; submission run 42976801598)"}
