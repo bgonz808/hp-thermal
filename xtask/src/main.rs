@@ -70,7 +70,9 @@ fn main() {
         ),
         Some("verify-timestamp") => cmd_verify_timestamp(
             args.get(1).map(String::as_str),
-            args.get(2).map(String::as_str),
+            // CEIL is positional; `--expect` in that slot is the flag, not a ceiling.
+            args.get(2).filter(|a| *a != "--expect").map(String::as_str),
+            expect_flag(&args),
         ),
         Some("audit-dll-closure") => cmd_audit_dll_closure(args.get(1).map(String::as_str)),
         Some("audit-dll-planting") => cmd_audit_dll_planting(
@@ -120,7 +122,7 @@ fn main() {
                 "  stamp-time [EXE] [EPOCH]  reconcile ALL PE timestamps to EPOCH (else SOURCE_DATE_EPOCH)"
             );
             eprintln!(
-                "  verify-timestamp [EXE] [CEIL]  fail if PE timestamps are implausible/inconsistent"
+                "  verify-timestamp [EXE] [CEIL] [--expect EPOCH]  fail if PE timestamps are implausible/inconsistent (--expect: COFF must equal EPOCH exactly; fleet mode)"
             );
             eprintln!(
                 "  audit-dll-closure [EXE]  flag non-KnownDLL transitive imports (DLL-plant surface, #106)"
@@ -205,6 +207,33 @@ fn epoch_arg_or_env(epoch: Option<&str>) -> Option<u32> {
         })
         .filter(|&e| e <= u32::MAX as u64)
         .map(|e| e as u32)
+}
+
+/// `--expect <epoch>` from the raw argv (position-independent; the two positionals stay as they are).
+fn expect_flag(args: &[String]) -> Option<u32> {
+    let i = args.iter().position(|a| a == "--expect")?;
+    epoch_arg_or_env(args.get(i + 1).map(String::as_str))
+}
+
+/// Exact-match plausibility for `--expect`: the COFF stamp must be non-zero, equal the expected
+/// epoch, and the expected epoch itself must not be future-dated (a wrong caller value cannot
+/// launder a future stamp through equality).
+fn coff_matches(coff: u32, expect: u32, ceiling: u32) -> Result<(), String> {
+    if coff == 0 {
+        return Err("COFF TimeDateStamp is 0 (zeroed / not stamped)".into());
+    }
+    if expect > ceiling {
+        return Err(format!(
+            "expected epoch 0x{expect:08X} is itself future-dated (ceiling 0x{ceiling:08X})"
+        ));
+    }
+    if coff != expect {
+        let (y, mo, d) = civil_date(coff);
+        return Err(format!(
+            "COFF 0x{coff:08X} = {y:04}-{mo:02}-{d:02} != expected 0x{expect:08X} (the pinned rev's commit epoch)"
+        ));
+    }
+    Ok(())
 }
 
 /// #104/#109: reconcile EVERY PE timestamp field to a deterministic, plausible epoch (the commit
@@ -292,7 +321,12 @@ fn cmd_stamp_time(exe: Option<&str>, epoch: Option<&str>) -> i32 {
 /// `IMAGE_DEBUG_TYPE_REPRO` marker may survive, and the resource-dir stamp must be 0 or match.
 /// Together they prove stamp-time actually reconciled every field. Runs ONLY on the post-stamp
 /// artifact (dist/), never in the pre-stamp `ci` pass. Ceiling overridable via arg / SOURCE_DATE_EPOCH.
-fn cmd_verify_timestamp(exe: Option<&str>, ceiling: Option<&str>) -> i32 {
+///
+/// `--expect EPOCH` (tool fleet, #386/#401): the caller KNOWS the stamp — the pinned upstream
+/// rev's commit epoch — so plausibility tightens to exact equality. The project floor does not
+/// apply in this mode: a tool's source legitimately predates this repo, and the floor's job
+/// (catch an unstamped /Brepro hash) is subsumed by equality. The consistency checks are shared.
+fn cmd_verify_timestamp(exe: Option<&str>, ceiling: Option<&str>, expect: Option<u32>) -> i32 {
     // hp-thermal's root commit (2026-07-22). No legitimate build predates the source; a rebased
     // root would trip this loudly (bump the constant), never pass silently.
     const FIRST_COMMIT_EPOCH: u32 = 1_784_744_572;
@@ -323,7 +357,12 @@ fn cmd_verify_timestamp(exe: Option<&str>, ceiling: Option<&str>) -> i32 {
     let mut ok = true;
     let (y, mo, d) = civil_date(coff);
     // --- Plausibility (COFF header) ---
-    if coff == 0 {
+    if let Some(exp) = expect {
+        if let Err(e) = coff_matches(coff, exp, ceiling) {
+            eprintln!("verify-timestamp: FAIL — {e}");
+            ok = false;
+        }
+    } else if coff == 0 {
         eprintln!("verify-timestamp: FAIL — COFF TimeDateStamp is 0 (zeroed / not stamped)");
         ok = false;
     } else if coff < FIRST_COMMIT_EPOCH {
@@ -1485,6 +1524,51 @@ pub(crate) fn pe_imported_functions(b: &[u8]) -> Option<Vec<String>> {
 
 #[cfg(test)]
 mod tests {
+    use super::{coff_matches, expect_flag};
+
+    #[test]
+    fn expect_mode_is_exact_and_refuses_future_expectations() {
+        assert!(coff_matches(100, 100, 1_000).is_ok());
+        assert!(coff_matches(0, 100, 1_000).unwrap_err().contains("is 0"));
+        assert!(
+            coff_matches(101, 100, 1_000)
+                .unwrap_err()
+                .contains("!= expected")
+        );
+        // a wrong caller value cannot launder a future stamp through equality
+        assert!(
+            coff_matches(2_000, 2_000, 1_000)
+                .unwrap_err()
+                .contains("future-dated")
+        );
+        // the project floor does NOT apply: an upstream rev may predate this repo
+        assert!(coff_matches(1, 1, 1_000).is_ok());
+    }
+
+    #[test]
+    fn expect_flag_is_position_independent_and_strict() {
+        let a = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            expect_flag(&a(&["verify-timestamp", "x.exe", "--expect", "42"])),
+            Some(42)
+        );
+        assert_eq!(
+            expect_flag(&a(&["verify-timestamp", "x.exe", "7", "--expect", "42"])),
+            Some(42)
+        );
+        assert_eq!(expect_flag(&a(&["verify-timestamp", "x.exe", "7"])), None);
+        // SOURCE_DATE_EPOCH is not consulted here in tests (unset); a bare flag yields None
+        if std::env::var("SOURCE_DATE_EPOCH").is_err() {
+            assert_eq!(
+                expect_flag(&a(&["verify-timestamp", "x.exe", "--expect"])),
+                None
+            );
+            assert_eq!(
+                expect_flag(&a(&["verify-timestamp", "x.exe", "--expect", "nope"])),
+                None
+            );
+        }
+    }
     use super::civil_date;
 
     /// Independent, obviously-correct reference: walk forward from 1970-01-01 one day at a

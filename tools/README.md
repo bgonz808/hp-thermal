@@ -69,6 +69,11 @@ dependency tree is frozen at that rev's `Cargo.lock`). Consequences:
 - Rebuilding from unchanged inputs **reproduces the blessed digests**: the Windows lane links with
   `/Brepro` (#401) so PE timestamps and the PDB GUID are content hashes, and the Linux lane is
   reproducible as built. A producer run is therefore idempotent; a moved digest means an input moved.
+  The hash timestamp decodes to a random year, so after linking the lane runs the release lane's
+  own `xtask stamp-time` (#104) with the pinned upstream rev's commit epoch — a date relevant to
+  the source, fixed by the pinned sha, independent of this repo's HEAD — and proves it with
+  `xtask verify-timestamp --expect <epoch>`. Check any blessed Windows tool yourself:
+  `git show -s --format=%ct <rev>` must equal its COFF `TimeDateStamp`. ELF has no such field.
 
 ## Dependabot interplay
 
