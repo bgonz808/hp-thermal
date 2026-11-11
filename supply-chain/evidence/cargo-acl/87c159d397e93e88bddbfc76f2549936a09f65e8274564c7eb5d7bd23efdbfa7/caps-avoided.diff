@@ -1,0 +1,5 @@
+@@ -12,3 +12,3 @@
+ [common]
+-build_flags = ["--locked","--no-default-features"]
++build_flags = ["--locked","-p","cargo-acl","--no-default-features"]
+ profile = "cackle-release"

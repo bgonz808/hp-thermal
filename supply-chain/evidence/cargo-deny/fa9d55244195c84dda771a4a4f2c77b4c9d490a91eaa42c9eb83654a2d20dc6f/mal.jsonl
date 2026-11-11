@@ -1,0 +1,1 @@
+{"schema":"hp-thermal/evidence-mal/v1","subject":{"name":"cargo-deny","sha256":"fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f"},"panelDate":"2026-11-11","detections":{"malicious":0,"total":70},"flags":[],"sandbox":[],"timesSubmitted":1,"source":"vt-submit run 43069699972 (lookup-first; first panel) + monitor run 43071121535 (lookup)"}
