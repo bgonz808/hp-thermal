@@ -57,11 +57,22 @@ pub(crate) fn parse_tools_lock(text: &str) -> Vec<ToolLine> {
         .collect()
 }
 
-/// Candidates = head entries that are new or whose rev/digest changed vs base.
+/// Candidates = head entries that are new or whose rev/digest changed vs base. An entry is
+/// identified by (name, target): one tool may be produced for several targets (#386 step 3,
+/// cargo-auditable on both lanes), and each target's bytes are their own candidate.
+///
+/// Baseline for a target seen for the first time: the same tool's blessed entry on another
+/// target. The compared inventories are properties of the tree + lock, not of the target —
+/// caps is measured linux-natively for every lane, vuln scans the lock — so a cross-target
+/// base is the true prior state and only the differences (none when the rev is the same) need
+/// review. mal is per digest and never compared against a base.
 fn candidates(base: &[ToolLine], head: &[ToolLine]) -> Vec<(Option<ToolLine>, ToolLine)> {
     head.iter()
         .filter_map(|h| {
-            let b = base.iter().find(|b| b.name == h.name);
+            let b = base
+                .iter()
+                .find(|b| b.name == h.name && b.target == h.target)
+                .or_else(|| base.iter().find(|b| b.name == h.name));
             match b {
                 Some(b) if b.rev == h.rev && b.sha == h.sha => None,
                 _ => Some((b.cloned(), h.clone())),
@@ -749,7 +760,10 @@ pub(crate) fn resolve_lock(
 // ---------- the gate ----------
 
 struct CandidateReport {
+    /// Display identity: `name [target]`.
     name: String,
+    /// Plain tool name: evidence directory and acks path.
+    tool: String,
     summary: String,
     axes: Vec<(&'static str, Verdict)>,
 }
@@ -831,7 +845,8 @@ pub fn run(args: &[String]) -> i32 {
         Err(e) => {
             for (_, h) in &cands {
                 reports.push(CandidateReport {
-                    name: h.name.clone(),
+                    name: format!("{} [{}]", h.name, h.target),
+                    tool: h.name.clone(),
                     summary: String::new(),
                     axes: vec![("floors", Verdict::Unevaluated(e.clone()))],
                 });
@@ -847,7 +862,8 @@ pub fn run(args: &[String]) -> i32 {
             Err(e) => {
                 // Malformed ack file: every axis that consults acks is unevaluable.
                 reports.push(CandidateReport {
-                    name: h.name.clone(),
+                    name: format!("{} [{}]", h.name, h.target),
+                    tool: h.name.clone(),
                     summary: String::new(),
                     axes: vec![("acks", Verdict::Unevaluated(e))],
                 });
@@ -868,7 +884,8 @@ pub fn run(args: &[String]) -> i32 {
                 ),
             ));
             reports.push(CandidateReport {
-                name: h.name.clone(),
+                name: format!("{} [{}]", h.name, h.target),
+                tool: h.name.clone(),
                 summary,
                 axes,
             });
@@ -967,7 +984,8 @@ pub fn run(args: &[String]) -> i32 {
             ));
         }
         reports.push(CandidateReport {
-            name: h.name.clone(),
+            name: format!("{} [{}]", h.name, h.target),
+            tool: h.name.clone(),
             summary,
             axes,
         });
@@ -1009,7 +1027,7 @@ pub fn run(args: &[String]) -> i32 {
                          `status_notes` (why), `author`, `timestamp`, `refs`, and commit each \
                          line to `supply-chain/evidence/{}/acks.jsonl`:",
                         needed.len(),
-                        r.name
+                        r.tool
                     );
                     for n in needed {
                         let _ = writeln!(md, "\n    ```json\n    {n}\n    ```");
@@ -1092,6 +1110,28 @@ mod tests {
         assert_eq!(candidates(&[mk("a", "1")], &[mk("b", "1")]).len(), 1);
         assert_eq!(candidates(&[mk("a", "1")], &[mk("a", "2")]).len(), 1);
         assert_eq!(candidates(&[], &[mk("a", "1")]).len(), 1); // new tool
+        // same name on a second target is its own candidate, compared against the other
+        // target's blessed entry (tree-level inventories); the first target's unchanged line
+        // is not re-evaluated (#386 step 3)
+        let other_target_named = |n: &str| ToolLine {
+            name: n.into(),
+            repo: "r".into(),
+            rev: "a".into(),
+            target: "u".into(),
+            sha: "9".into(),
+        };
+        let other_target = other_target_named("x");
+        let c = candidates(&[mk("a", "1")], &[mk("a", "1"), other_target]);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].1.target, "u");
+        let b = c[0].0.as_ref().expect("cross-target base");
+        assert_eq!((b.name.as_str(), b.target.as_str()), ("x", "t"));
+        // a genuinely new tool still has no base
+        assert!(
+            candidates(&[mk("a", "1")], &[other_target_named("y")])[0]
+                .0
+                .is_none()
+        );
     }
 
     #[test]
