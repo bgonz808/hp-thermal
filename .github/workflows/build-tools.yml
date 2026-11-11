@@ -131,6 +131,13 @@ jobs:
           # so identical inputs produced different digests on every run (measured: 26 bytes, all
           # timestamps + GUID). With /Brepro both derive from a content hash: a producer run that
           # changes nothing reproduces the blessed digests, and the lane is idempotent.
+          # The hash decodes to a random year (measured across the fleet: 1990..2077), which sits in
+          # a documented timestamp-anomaly heuristic bin, so after linking the SAME `xtask stamp-time`
+          # the release lane uses (#104) reconciles every PE timestamp to the pinned upstream rev's
+          # commit epoch — a date relevant to the source (reproducible-builds.org/docs/timestamps),
+          # fixed by the sha this repo pins, independent of this repo's HEAD (so still idempotent).
+          # `verify-timestamp --expect` then proves the stamp landed. ELF carries no timestamp; the
+          # linux lane needs neither step.
           RUSTFLAGS: "-C control-flow-guard=checks -C link-arg=/DEPENDENTLOADFLAG:0x800 -C link-arg=/CETCOMPAT -C link-arg=/Brepro"
         run: |
           set -euo pipefail
@@ -260,9 +267,14 @@ jobs:
               # 2>&1 | tee: the diagnostics land in diag-<name>.log for verify-allowances
               # to read AFTER the loop. pipefail is set, so cargo's failure still reaches
               # `|| built=0` through the pipe.
-              RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
+              epoch=$(git -C "src-$name" log -1 --format=%ct HEAD)
+              SOURCE_DATE_EPOCH="$epoch" RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
             else
-              RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
+              # No checkout on this path: fetch just the pinned commit for its epoch.
+              rm -rf "rev-$name"; git init -q "rev-$name"
+              git -C "rev-$name" fetch -q --depth 1 "https://github.com/$repo" "$rev"
+              epoch=$(git -C "rev-$name" log -1 --format=%ct FETCH_HEAD)
+              SOURCE_DATE_EPOCH="$epoch" RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
             fi
             # REPORT EVERY FAILING TOOL, not the first. The loop used to exit here, so a
             # ~10-minute run answered "does cargo-audit build?" when the question was "which
@@ -275,6 +287,17 @@ jobs:
             if [ "$built" -eq 0 ]; then
               build_failures="$build_failures $name"
               echo "::error::$name failed to build on $(rustc -V). Continuing so this run reports every incompatible tool."
+              echo "::endgroup::"
+              continue
+            fi
+            # Post-link stamp (#104 pattern, see the /Brepro note above), then prove it. Both are the
+            # release lane's own xtask subcommands; nothing is reimplemented here. `env -u RUSTFLAGS`:
+            # xtask is a lane utility, not a produced tool, and the later gate steps run it without
+            # the producer flags — same fingerprint, one build. A stamp or verify failure is a build
+            # failure for this tool (collected, reported with the rest), never a silently unstamped exe.
+            if ! env -u RUSTFLAGS cargo run -q --manifest-path xtask/Cargo.toml -- stamp-time "./toolroot/bin/$name.exe" "$epoch"                || ! env -u RUSTFLAGS cargo run -q --manifest-path xtask/Cargo.toml -- verify-timestamp "./toolroot/bin/$name.exe" --expect "$epoch"; then
+              build_failures="$build_failures $name"
+              echo "::error::$name: PE timestamp stamp/verify failed (epoch $epoch from $repo@${rev:0:12})"
               echo "::endgroup::"
               continue
             fi
