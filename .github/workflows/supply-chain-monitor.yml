@@ -75,7 +75,9 @@ jobs:
           # Blessed tool digests (strip inline comments; fields: name repo rev target sha256).
           while read -r name _repo _rev _target sha; do
             [ -n "${name:-}" ] || continue
-            HASHES["tool:$name"]="$sha"
+            # Keyed by (name, target): one tool may ship for two targets (#386), and a name-only key
+            # silently kept only the LAST line, so one digest was never looked up.
+            HASHES["tool:$name:$_target"]="$sha"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
           # Latest release exe digest, from its SHA256SUMS (the signed-bytes manifest).
           if gh release download --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS -O sums.txt --clobber 2>/dev/null; then
@@ -138,7 +140,7 @@ jobs:
             # TODO notes or missing author/timestamp do NOT silence). Fail-SECURE: oracle
             # failure or a malformed lattice yields NO acked engines, so detections page.
             case "$key" in
-              tool:*)    prod="${key#tool:}" ;;
+              tool:*)    prod="${key#tool:}"; prod="${prod%%:*}" ;;   # strip :<target>; acks are per digest
               release:*) prod="hp-thermal" ;;
               *)         prod="$key" ;;
             esac
