@@ -21,12 +21,13 @@ mod hardening;
 // #245: per-binary capability-manifest gate (binary vantage of the #241 caps axis).
 // Measures a binary's import surface against a committed manifest, fails closed on
 // divergence. One engine for every binary we produce (tools + releases). See caps.rs.
-mod canary;
-mod elf;
-mod toolchain;
-mod caps;
-mod provenance;
 mod allowances;
+mod auditable;
+mod canary;
+mod caps;
+mod elf;
+mod provenance;
+mod toolchain;
 
 // #241/#239: candidate ENUMERATION (discovery) for the promotion pipeline. Proposes
 // per-line representatives with soak + tier facts; promotes nothing. See explore.rs.
@@ -38,9 +39,9 @@ mod monitor;
 
 // #241: turn an explored candidate into a REPRODUCIBLE build input (frozen resolved
 // lock). The promotion pipeline's trust boundary — discovery may float, builds never do.
-mod freeze;
-mod floors;
 mod caps_subset;
+mod floors;
+mod freeze;
 mod sha256;
 
 /// The app crate lives in a sibling directory; xtask shells into it so app's
@@ -57,6 +58,7 @@ fn main() {
         Some("ci") => cmd_ci(args.iter().any(|a| a == "--fast")),
         Some("release-attest") => cmd_release_attest(),
         Some("verify-hardening") => cmd_verify_hardening(args.get(1).map(String::as_str)),
+        Some("verify-auditable") => auditable::cmd(args.get(1).map(String::as_str)),
         Some("capabilities") => cmd_capabilities(args.get(1).map(String::as_str)),
         Some("verify-artifact") => cmd_verify_artifact(
             args.get(1).map(String::as_str),
@@ -105,6 +107,9 @@ fn main() {
                 "  release-attest           production-artifact checks only (deny, auditable build, audit bin, verify-artifact)"
             );
             eprintln!("  verify-hardening [EXE]   check PE exploit-mitigation flags");
+            eprintln!(
+                "  verify-auditable BIN     require cargo-auditable's .dep-v0 section (PE/ELF) before any binary-vantage scan"
+            );
             eprintln!(
                 "  capabilities [EXE]       list imports (+ delay-load); fail off the golden allowlist"
             );
@@ -518,6 +523,9 @@ fn release_attest_checks() -> bool {
         APP_DIR,
         &["auditable", "build", "--release"],
     );
+    // #386: `audit bin` is fail-open on a binary without `.dep-v0` (partial list recovered
+    // from panic strings, exit 0). Prove the section is there before the scan may count.
+    ok &= auditable::check(RELEASE_EXE);
     ok &= cargo_tool_step("audit shipped binary", ".", &["audit", "bin", RELEASE_EXE]);
     ok &= cmd_verify_artifact(Some(RELEASE_EXE), Some(RELEASE_PDB)) == 0;
     ok

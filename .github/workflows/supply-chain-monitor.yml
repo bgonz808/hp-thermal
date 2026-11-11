@@ -281,4 +281,5 @@ jobs:
         shell: bash
         env:
           PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
+          GH_TOKEN: ${{ github.token }}   # read-only: lists the tools release's asset digests (rawPayload custody)
         run: cargo run --manifest-path xtask/Cargo.toml -- monitor-vuln
