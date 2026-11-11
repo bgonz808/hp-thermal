@@ -57,11 +57,15 @@ pub(crate) fn parse_tools_lock(text: &str) -> Vec<ToolLine> {
         .collect()
 }
 
-/// Candidates = head entries that are new or whose rev/digest changed vs base.
+/// Candidates = head entries that are new or whose rev/digest changed vs base. An entry is
+/// identified by (name, target): one tool may be produced for several targets (#386 step 3,
+/// cargo-auditable on both lanes), and each target's bytes are their own candidate.
 fn candidates(base: &[ToolLine], head: &[ToolLine]) -> Vec<(Option<ToolLine>, ToolLine)> {
     head.iter()
         .filter_map(|h| {
-            let b = base.iter().find(|b| b.name == h.name);
+            let b = base
+                .iter()
+                .find(|b| b.name == h.name && b.target == h.target);
             match b {
                 Some(b) if b.rev == h.rev && b.sha == h.sha => None,
                 _ => Some((b.cloned(), h.clone())),
@@ -831,7 +835,7 @@ pub fn run(args: &[String]) -> i32 {
         Err(e) => {
             for (_, h) in &cands {
                 reports.push(CandidateReport {
-                    name: h.name.clone(),
+                    name: format!("{} [{}]", h.name, h.target),
                     summary: String::new(),
                     axes: vec![("floors", Verdict::Unevaluated(e.clone()))],
                 });
@@ -847,7 +851,7 @@ pub fn run(args: &[String]) -> i32 {
             Err(e) => {
                 // Malformed ack file: every axis that consults acks is unevaluable.
                 reports.push(CandidateReport {
-                    name: h.name.clone(),
+                    name: format!("{} [{}]", h.name, h.target),
                     summary: String::new(),
                     axes: vec![("acks", Verdict::Unevaluated(e))],
                 });
@@ -868,7 +872,7 @@ pub fn run(args: &[String]) -> i32 {
                 ),
             ));
             reports.push(CandidateReport {
-                name: h.name.clone(),
+                name: format!("{} [{}]", h.name, h.target),
                 summary,
                 axes,
             });
@@ -967,7 +971,7 @@ pub fn run(args: &[String]) -> i32 {
             ));
         }
         reports.push(CandidateReport {
-            name: h.name.clone(),
+            name: format!("{} [{}]", h.name, h.target),
             summary,
             axes,
         });
@@ -1092,6 +1096,19 @@ mod tests {
         assert_eq!(candidates(&[mk("a", "1")], &[mk("b", "1")]).len(), 1);
         assert_eq!(candidates(&[mk("a", "1")], &[mk("a", "2")]).len(), 1);
         assert_eq!(candidates(&[], &[mk("a", "1")]).len(), 1); // new tool
+        // same name on a second target is its own NEW candidate; the first target's
+        // unchanged line is not re-evaluated (#386 step 3)
+        let other_target = ToolLine {
+            name: "x".into(),
+            repo: "r".into(),
+            rev: "a".into(),
+            target: "u".into(),
+            sha: "9".into(),
+        };
+        let c = candidates(&[mk("a", "1")], &[mk("a", "1"), other_target]);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].1.target, "u");
+        assert!(c[0].0.is_none(), "no base entry for that target");
     }
 
     #[test]

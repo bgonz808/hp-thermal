@@ -317,7 +317,8 @@ jobs:
           failed=0
           for exe in out/*.exe; do
             name="$(basename "$exe" .exe)"; name="${name%-*}"   # strip -<sha12>
-            if ! cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "supply-chain/policy/caps/$name.json"; then
+            m="supply-chain/policy/caps/$name.windows-x86_64.json"; [ -f "$m" ] || m="supply-chain/policy/caps/$name.json"
+            if ! cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "$m"; then
               failed=1
             fi
             # #386: the binary-vantage vuln axis needs cargo-auditable's `.dep-v0` section, and
@@ -396,14 +397,49 @@ jobs:
         with:
           components: "rust-src"
 
+      # #386 step 3: build through the PRIOR-blessed linux cargo-auditable when one exists. The
+      # first build of that member is the bootstrap: no blessed linux cargo-auditable yet, so the
+      # lane builds plain and SAYS so per binary; the next producer run is auditable end to end.
+      - name: Is a linux cargo-auditable blessed yet?
+        id: lx-aud
+        shell: bash
+        run: |
+          set -euo pipefail
+          zero=$(printf '0%.0s' $(seq 64))
+          sha=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' \
+                | awk '$1=="cargo-auditable" && $4=="linux-x86_64" {print $5}')
+          if [ -n "$sha" ] && [ "$sha" != "$zero" ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+            echo "blessed linux cargo-auditable ${sha:0:12}: this run builds through it"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::no blessed cargo-auditable linux-x86_64 in TOOLS.lock — BOOTSTRAP run: linux tools build non-auditable (#386 step 3)"
+          fi
+
+      - name: Fetch prior-blessed cargo-auditable (linux producer)
+        if: steps.lx-aud.outputs.have == 'true'
+        id: lx-aud-tool
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: linux-x86_64
+          only: cargo-auditable
+          verify-attestations: "true"
+
       - name: Build linux tools (content-addressed)
         shell: bash
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/tool-build
+          LX_AUDITABLE: ${{ steps.lx-aud-tool.outputs.tools-dir }}   # empty on the bootstrap run
         run: |
           set -euo pipefail
           mkdir -p out toolroot
           : > out/DIGEST-BLOCK.txt
+          if [ -n "${LX_AUDITABLE:-}" ]; then
+            INSTALL=("$LX_AUDITABLE/cargo-auditable" auditable install)
+          else
+            INSTALL=(cargo install)
+          fi
           while read -r name repo rev target _sha; do
             [ "$target" = "linux-x86_64" ] || continue
             echo "::group::building $name @ $rev"
@@ -436,9 +472,9 @@ jobs:
               cp "tools/locks/$name.lock" "src-$name/Cargo.lock"
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              cargo install --path "$(dirname "$manifest")" --locked --root ./toolroot "${tool_args[@]}"
+              "${INSTALL[@]}" --path "$(dirname "$manifest")" --locked --root ./toolroot "${tool_args[@]}"
             else
-              cargo install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${tool_args[@]}"
+              "${INSTALL[@]}" "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${tool_args[@]}"
             fi
             d=$(sha256sum "./toolroot/bin/$name" | cut -d' ' -f1)
             cp "./toolroot/bin/$name" "out/$name-${d:0:12}-linux-x86_64"
@@ -453,6 +489,8 @@ jobs:
       # manifest before it can be produced.
       - name: Caps-manifest gate (each produced linux tool binary)
         shell: bash
+        env:
+          LX_AUDITABLE: ${{ steps.lx-aud-tool.outputs.tools-dir }}
         run: |
           set -euo pipefail
           shopt -s nullglob
@@ -462,11 +500,18 @@ jobs:
             base="$(basename "$exe")"
             # names carry a -<sha12>-linux-x86_64 suffix; recover the tool name
             name="$(echo "$base" | sed -E "s/-[0-9a-f]{12}-linux-x86_64$//")"
-            cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "supply-chain/policy/caps/$name.json"
-            # #386: no blessed cargo-auditable exists for linux-x86_64 yet (step 3), so this lane
-            # builds non-auditable and SAYS so; it does not gate until that fleet member lands.
-            cargo run --manifest-path xtask/Cargo.toml -- verify-auditable "$exe" \
-              || echo "::warning::$base has no .dep-v0 — non-auditable linux build; binary-vantage scan would be fail-open (#386 step 3)"
+            # A per-target manifest (<name>.<target>.json) takes precedence: the same tool has a
+            # PE surface on the windows lane and an ELF surface here.
+            m="supply-chain/policy/caps/$name.linux-x86_64.json"; [ -f "$m" ] || m="supply-chain/policy/caps/$name.json"
+            cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "$m"
+            # #386: binary-vantage precondition. GATES once the lane builds through a blessed
+            # cargo-auditable; on the bootstrap run (none blessed yet) it warns, once.
+            if [ -n "${LX_AUDITABLE:-}" ]; then
+              cargo run --manifest-path xtask/Cargo.toml -- verify-auditable "$exe"
+            else
+              cargo run --manifest-path xtask/Cargo.toml -- verify-auditable "$exe" \
+                || echo "::warning::$base has no .dep-v0 — bootstrap build (#386 step 3); the next producer run gates this"
+            fi
           done
           # A gate that silently matched nothing would be indistinguishable from a passing one.
           [ "$found" = 1 ] || { echo "::error::no linux tool binaries matched - refusing to report a pass"; exit 1; }

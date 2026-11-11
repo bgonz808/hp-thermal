@@ -24,7 +24,10 @@ reviewed into this repo.
   re-bless never breaks in-flight consumers. Each asset carries a **SLSA provenance
   attestation** (#205): `gh attestation verify <asset> --repo bgonz808/hp-thermal` proves it
   was built by this repo's producer — blessing-time verification makes non-producer bytes
-  unblessable, closing the "swap digest to an attacker binary in one PR" seam.
+  unblessable, closing the "swap digest to an attacker binary in one PR" seam. A tool may
+  appear once per `target` (cargo-auditable is produced for both lanes, #386): the pair
+  (name, target) identifies an entry, and a per-target caps manifest
+  `supply-chain/policy/caps/<name>.<target>.json` takes precedence over `<name>.json`.
 - **`.github/actions/fetch-tools`** — the shared consumer: parses `TOOLS.lock`, downloads,
   digest-verifies fail-closed, and only then puts the binaries on `PATH`. Used by `release.yml`
   (the four release tools, least-privilege `only` list) and `supply-chain.yml` (`cargo-vet`).
