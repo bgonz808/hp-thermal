@@ -77,7 +77,7 @@ jobs:
             [ -n "${name:-}" ] || continue
             # Keyed by (name, target): one tool may ship for two targets (#386), and a name-only key
             # silently kept only the LAST line, so one digest was never looked up.
-            HASHES["tool:$name:$target"]="$sha"
+            HASHES["tool:$name:$_target"]="$sha"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
           # Latest release exe digest, from its SHA256SUMS (the signed-bytes manifest).
           if gh release download --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS -O sums.txt --clobber 2>/dev/null; then
