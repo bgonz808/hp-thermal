@@ -51,6 +51,9 @@ mod eox;
 // #405: tier 1 of the strictly-better fix automation — propose frozen-lock fixes as data.
 mod propose;
 
+// #396: the in-repo writer of vuln.jsonl — hashes the auditor it runs, refuses an unblessed one.
+mod record_vuln;
+
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
@@ -98,6 +101,7 @@ fn main() {
         Some("eox-check") => eox::run(&args),
         Some("freeze") => freeze::run(&args),
         Some("freeze-propose") => propose::run(&args),
+        Some("record-vuln") => record_vuln::run(&args),
         Some("verify-caps") => caps::run(args.get(1).map(String::as_str), {
             // optional --manifest <path>
             let mut mpath = None;

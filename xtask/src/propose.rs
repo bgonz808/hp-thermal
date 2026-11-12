@@ -388,6 +388,9 @@ pub fn run(args: &[String]) -> i32 {
         if frozen.is_file() {
             fargs.push("--base".into());
             fargs.push(frozen.display().to_string());
+            // Strictly better is measured against what we ship: the base IS the prior.
+            fargs.push("--prior-lock".into());
+            fargs.push(frozen.display().to_string());
         }
         let patches = patches_dir.join(&p.name);
         if patches.is_dir() {
