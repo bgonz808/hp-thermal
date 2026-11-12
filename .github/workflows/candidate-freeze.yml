@@ -67,6 +67,7 @@ jobs:
           target: windows-x86_64
           only: cargo-audit
           verify-attestations: "true"
+          lock-ref: main
 
       - name: Freeze
         shell: bash

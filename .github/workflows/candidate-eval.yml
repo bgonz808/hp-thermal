@@ -50,6 +50,7 @@ jobs:
           target: windows-x86_64
           only: cargo-audit
           verify-attestations: "true"
+          lock-ref: ${{ github.event.pull_request.base.sha || 'main' }}
 
       # NEGATIVE CONTROL BEFORE THE VERDICT (#223). The gate's vuln axis is only as good as
       # the auditor it calls, and a sabotaged or simply broken auditor fails by reporting

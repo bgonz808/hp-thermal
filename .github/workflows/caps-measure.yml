@@ -68,6 +68,7 @@ jobs:
           target: linux-x86_64
           only: cargo-acl
           verify-attestations: "true"
+          lock-ref: main
 
       - name: Stage the candidate tree exactly as the producer would
         shell: bash
