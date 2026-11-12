@@ -38,7 +38,7 @@ line silently **skipped** — a tool left unverified — and bash `read -r name 
 sha` would fold the extra field into `sha`, breaking digest verification. Adding a file
 breaks no parser; changing the format breaks several.
 
-## Producer behaviour
+## Producer behavior
 
 `build-tools.yml` checks for `tools/locks/<name>.lock`. If present it clones the pinned rev,
 copies this lock over the tree's own, locates the crate **by name** via `cargo metadata`

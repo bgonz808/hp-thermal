@@ -5,7 +5,7 @@ name: Candidate exploration (sandboxed)
 # attest, or upload anything — that asymmetry IS the security design.
 #
 # THREAT: exploration is the one place we deliberately reason about un-vetted newer
-# versions. Defence in depth, each layer assuming the others might fail:
+# versions. Defense in depth, each layer assuming the others might fail:
 #
 #   1. NO TARGET — this job holds NO secrets: no signing credential, no VT key, and only
 #      `contents: read` + `issues: write` (to file the report). A malicious dependency
