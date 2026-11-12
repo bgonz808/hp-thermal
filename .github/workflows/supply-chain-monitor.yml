@@ -116,6 +116,12 @@ jobs:
               continue
             fi
             mapfile -t engines < <(tr -d '\r' < engines.txt)   # CRLF scrub: comparisons stay byte-exact
+            # The FINDING is engine + verdict string (#380): acks are matched on both, so an engine
+            # that renames its verdict on these bytes is a new detection, not the acked one.
+            jq -r '.data.attributes.last_analysis_results
+                   | to_entries[]
+                   | select(.value.category == "malicious" or .value.category == "suspicious")
+                   | "\(.key)\t\(.value.result // "")"' resp.json | tr -d '\r' > findings.txt
             # Absolute floor (supply-chain/policy/floors.json): this many malicious verdicts is not a
             # false-positive profile. HARD-STOP regardless of acks; a parse failure is a FAIL, not 0.
             floor=$(jq -er '.mal.hard_stop_malicious_engines' supply-chain/policy/floors.json) \
@@ -157,7 +163,7 @@ jobs:
                    | "      \(.key) [\(.value.category)] \(.value.result // "-")"' resp.json || true
             # ONE lattice, two consumers (#278): acks come from the SAME evidence store the
             # gate reads (supply-chain/evidence/<product>/acks.jsonl), matched by the gate's
-            # own code (xtask mal-acks) — per-(digest, engine), quality bar enforced (empty/
+            # own code (xtask mal-acks) — per-(digest, engine, result) since #380, quality bar enforced (empty/
             # TODO notes or missing author/timestamp do NOT silence). Fail-SECURE: oracle
             # failure or a malformed lattice yields NO acked engines, so detections page.
             case "$key" in
@@ -167,14 +173,16 @@ jobs:
             esac
             "$XTASK" mal-acks --tool "$prod" --digest "$h" > acked.txt 2> ack.warn || : > acked.txt
             [ -s ack.warn ] && sed 's/^/::warning::/' ack.warn
-            for eng in "${engines[@]}"; do
-              if grep -qxF "$eng" acked.txt; then
-                echo "::warning::$key: $eng detection is ACKNOWLEDGED (supply-chain/evidence/$prod/acks.jsonl) - monitored, not paging"
+            while IFS= read -r finding; do
+              [ -n "$finding" ] || continue
+              eng="${finding%%$'\t'*}"; res="${finding#*$'\t'}"
+              if grep -qxF "$finding" acked.txt; then
+                echo "::warning::$key: $eng detection ($res) is ACKNOWLEDGED (supply-chain/evidence/$prod/acks.jsonl) - monitored, not paging"
               else
-                echo "::error::$key: NEW detection by $eng - review before further use/bless"
+                echo "::error::$key: NEW detection by $eng ($res) - review before further use/bless"
                 fail=1
               fi
-            done
+            done < findings.txt
 
             # --- Sandbox readiness (#347 step 1) ---
             # `sandbox_verdicts` rides in THIS response; nothing more is fetched to learn the state.

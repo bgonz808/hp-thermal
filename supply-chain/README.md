@@ -52,8 +52,11 @@ the enforcement layer's own burn-down list.
 
 ## The gate engines (`cargo xtask …`, first-party Rust — no external tool, no interpreter)
 
-- **`gate --base <TOOLS.lock>`** (#241) — 3-axis candidate evaluation (vuln/caps/mal)
-  vs. `evidence/`, with recorded-ack sign-off. Consumes this tree.
+- **`gate --base <TOOLS.lock> --base-evidence <dir>`** (#241) — 3-axis candidate evaluation
+  (vuln/caps/mal) vs. `evidence/`, with recorded-ack sign-off. Consumes this tree. Acks bind to
+  content (#380): a caps ack names the `caps.toml` sha256 it signs, a mal ack names engine +
+  verdict, and evidence edits under a pinned digest are evaluated against the base commit's
+  record rather than waved through.
 - **caps strict-subset ALLOW** (#367) — a measured inventory (caps-measure.yml header: exit code,
   lock sha256) that is a complete strict subset of the prior blessed inventory passes without a
   fresh signature. Empty, partial, copied-forward, or any addition falls back to RAISE.

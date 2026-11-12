@@ -77,14 +77,20 @@ jobs:
           # of the paired scan evaluates the lock its digest was built from. A frozen lock
           # added in THIS PR must not be retro-applied to the baseline digest; the head side
           # reads the working tree's tools/locks/ (gate default), the base side reads these.
-          mkdir -p /tmp/base-locks
+          mkdir -p /tmp/base-locks /tmp/base-evidence
           if [ -n "${BASE_SHA:-}" ]; then
             git show "$BASE_SHA:tools/TOOLS.lock" > /tmp/base-tools.lock
             git archive "$BASE_SHA" tools/locks 2>/dev/null \
               | tar -x -C /tmp/base-locks --strip-components=2 2>/dev/null \
               || true   # base has no tools/locks -> empty dir -> gate falls back to upstream
+            # #380 part 2: the BASE commit's evidence tree. An edit to a blessed digest's
+            # caps.toml / mal.jsonl (no TOOLS.lock change) is a candidate for the axes it touches;
+            # without this tree such a PR looked like "nothing to evaluate". No `|| true` here:
+            # the gate REQUIRES this directory, and a failed extraction must fail the gate.
+            git archive "$BASE_SHA" supply-chain/evidence | tar -x -C /tmp/base-evidence --strip-components=2
           else
             cp tools/TOOLS.lock /tmp/base-tools.lock
+            cp -R supply-chain/evidence/. /tmp/base-evidence/
             # A silent failure here leaves /tmp/base-locks EMPTY, and the gate would then compare the
             # head's FROZEN locks against the base's UPSTREAM resolution -- a wrong baseline that can
             # hide a regression. A missing glob (base had no frozen locks) is the ONLY acceptable
@@ -102,7 +108,8 @@ jobs:
           # so the comment posts even when the gate blocks.
           set +e
           cargo run --manifest-path xtask/Cargo.toml -- gate \
-            --base /tmp/base-tools.lock --base-locks-dir /tmp/base-locks --report gate-report.md
+            --base /tmp/base-tools.lock --base-locks-dir /tmp/base-locks \
+            --base-evidence /tmp/base-evidence --report gate-report.md
           echo "code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Post / update the evidence comment
