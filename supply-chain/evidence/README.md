@@ -41,6 +41,15 @@ parseable. The schema borrows established vocabularies rather than inventing one
   "vulnerabilities"; the vuln subset is cleanly exportable to conformant OpenVEX.
   Caps acks therefore carry `status: reviewed` (an inventory is signed, not a vulnerability status);
   mal acks keep `not_affected` for false positives, which is a real OpenVEX meaning.
+  **An ack names what it signs (#380).** A caps ack carries `evidence_sha256`, the sha256 of the
+  exact `caps.toml` bytes reviewed; it covers that content and nothing else, so a rewritten
+  inventory under a blessed digest is RAISE-uncovered until signed again (the gate prints the
+  template with the new hash). A mal ack covers one finding, `finding.engine` **and**
+  `finding.result`: an engine renaming its verdict on the same bytes is a new detection. Acks
+  lacking those fields fail the quality bar and are not counted. The 43 caps acks that predate the
+  field were bound (2026-11-11) to the `caps.toml` content at the commit each ack first appeared in;
+  five of them signed inventories the Bubblewrap refresh (#381) rewrote a day later, and each of
+  those digests carries a fresh ack for the rewritten content.
   Statements are a sequence, never edited or deleted; the LAST statement for an instance is the
   one that counts (#251). When `monitor-vuln` classifies an instance as GONE (RustSec withdrew the
   advisory or narrowed its `[versions]`; the bytes did not change, so never `fixed`) it prints a
@@ -73,14 +82,21 @@ truncation). Triggered by store size, not calendar.
 
 ## Rules
 
-1. **Acks bind to instances, not classes** — a new digest, engine, or advisory instance is never
-   covered by an old ack.
+1. **Acks bind to instances, not classes** — a new digest, engine, advisory instance, inventory
+   content or verdict string is never covered by an old ack.
 2. **Nothing here is deleted on supersession** — superseded digests keep their evidence
    (forensic history).
 3. Consumer: `cargo xtask gate` (first-party Rust — no external pinned tool, no python runtime)
    diffs baseline↔candidate, applies the #241 verdict algebra, and fails a bump PR until every
    RAISE item is covered by a committed ack, printing the exact ack lines to add. Committing them
    **is** the sign-off; closing the PR is the reject.
+4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
+   digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
+   on the axes it touched, against the base commit's record (the workflow extracts that tree). An
+   edited `vuln.jsonl` under a pinned digest is UNEVALUATED: baselines are written by the bless
+   flow and backed by a stored raw payload, never edited in place. Changed `acks.jsonl` files are
+   quality-checked even when nothing else changed; edits under non-frontier digests are listed in
+   the report and not evaluated.
 
 ## Known open items (bootstrap, 2026-08-21)
 

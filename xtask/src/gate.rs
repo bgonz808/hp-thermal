@@ -248,6 +248,35 @@ fn ack_quality(v: &Value) -> Result<(), String> {
             _ => {}
         }
     }
+    // #380: a sign-off names WHAT it signs. A caps ack binds to the sha256 of the inventory
+    // bytes; a mal ack binds to the engine AND its verdict string. Without those fields the
+    // line is not a usable sign-off and is rejected (reported, never counted).
+    match s(v, &["axis"]) {
+        "caps" => {
+            let h = s(v, &["evidence_sha256"]);
+            if h.len() != 64
+                || !h
+                    .bytes()
+                    .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+            {
+                return Err(
+                    "caps ack without `evidence_sha256` (64 lowercase hex of the caps.toml it \
+                     signs, #380) — it would cover any rewrite of that inventory"
+                        .into(),
+                );
+            }
+        }
+        "mal"
+            if s(v, &["finding", "engine"]).is_empty()
+                || s(v, &["finding", "result"]).is_empty() =>
+        {
+            return Err(
+                "mal ack without `finding.engine` and `finding.result` (#380) — a finding is                  engine + verdict, not engine alone"
+                    .into(),
+            );
+        }
+        _ => {}
+    }
     Ok(())
 }
 
@@ -296,29 +325,46 @@ pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
     last_vuln_ack(acks, inst).is_some_and(|a| observed_absent_at_db(a).is_none())
 }
 
-fn ack_covers_mal(acks: &Acks, digest: &str, engine: &str) -> bool {
+/// A mal ack covers one FINDING: (digest, engine, result). The result string is part of the
+/// finding's identity (#380): the same engine renaming its verdict — `Wacatac.B!ml` becoming a
+/// named family — is a new claim about the bytes, not the one that was reviewed.
+fn ack_covers_mal(acks: &Acks, digest: &str, engine: &str, result: &str) -> bool {
     acks.entries.iter().any(|a| {
         s(a, &["axis"]) == "mal"
             && s(a, &["product", "digest"]) == digest
             && s(a, &["finding", "engine"]) == engine
+            && s(a, &["finding", "result"]) == result
     })
 }
 
-fn ack_covers_caps(acks: &Acks, digest: &str) -> bool {
-    acks.entries
-        .iter()
-        .any(|a| s(a, &["axis"]) == "caps" && s(a, &["product", "digest"]) == digest)
+/// A caps ack covers one INVENTORY: (digest, sha256 of the caps.toml bytes it signed). #380:
+/// before this, `(axis, digest)` alone matched, so rewriting a blessed digest's caps.toml with
+/// new grants rode through under the old signature. An ack without `evidence_sha256` is
+/// quality-rejected (see `ack_quality`) and never reaches here.
+fn ack_covers_caps(acks: &Acks, digest: &str, caps_sha256: &str) -> bool {
+    acks.entries.iter().any(|a| {
+        s(a, &["axis"]) == "caps"
+            && s(a, &["product", "digest"]) == digest
+            && s(a, &["evidence_sha256"]) == caps_sha256
+    })
 }
 
-/// Engines with a quality-passing mal ack for `digest` — the ONE mal-ack semantics,
-/// shared by the gate (ack_covers_mal) and the weekly vt-monitor (#278). Sorted, deduped.
-pub(crate) fn mal_acked_engines(acks: &Acks, digest: &str) -> Vec<String> {
+/// Findings with a quality-passing mal ack for `digest`, as `engine<TAB>result` lines — the
+/// ONE mal-ack semantics, shared by the gate (ack_covers_mal) and the weekly vt-monitor
+/// (#278, result-bound since #380). Sorted, deduped.
+pub(crate) fn mal_acked_findings(acks: &Acks, digest: &str) -> Vec<String> {
     let mut out: Vec<String> = acks
         .entries
         .iter()
         .filter(|a| s(a, &["axis"]) == "mal" && s(a, &["product", "digest"]) == digest)
-        .map(|a| s(a, &["finding", "engine"]).to_string())
-        .filter(|e| !e.is_empty())
+        .map(|a| {
+            format!(
+                "{}\t{}",
+                s(a, &["finding", "engine"]),
+                s(a, &["finding", "result"])
+            )
+        })
+        .filter(|e| !e.starts_with('\t'))
         .collect();
     out.sort();
     out.dedup();
@@ -327,9 +373,10 @@ pub(crate) fn mal_acked_engines(acks: &Acks, digest: &str) -> Vec<String> {
 
 /// `xtask mal-acks --tool <name> --digest <sha256> [--evidence-dir <dir>]`
 ///
-/// Prints the acked engine names (one per line) for the given product digest, read from
-/// the SAME evidence lattice the gate consults (supply-chain/evidence/<tool>/acks.jsonl).
-/// #278: retires the parallel flat-file lattice the monitor used to read.
+/// Prints the acked findings (`engine<TAB>result`, one per line) for the given product
+/// digest, read from the SAME evidence lattice the gate consults
+/// (supply-chain/evidence/<tool>/acks.jsonl). #278: retires the parallel flat-file lattice the
+/// monitor used to read; #380: the result string is part of what was acked.
 ///
 /// Fail direction (fail-SECURE for a monitor): any problem — unreadable lattice, malformed
 /// JSONL, quality-rejected entries — yields FEWER acked engines, never more, so detections
@@ -372,7 +419,7 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
             for r in &acks.rejected {
                 eprintln!("warning: quality-rejected ack ignored (does not silence): {r}");
             }
-            for e in mal_acked_engines(&acks, digest) {
+            for e in mal_acked_findings(&acks, digest) {
                 println!("{e}");
             }
             0
@@ -468,11 +515,12 @@ fn ack_template_mal(tool: &str, digest: &str, engine: &str, result: &str) -> Str
     .to_string()
 }
 
-fn ack_template_caps(tool: &str, digest: &str) -> String {
+fn ack_template_caps(tool: &str, digest: &str, caps_sha256: &str) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "caps",
         "product": {"name": tool, "digest": digest},
+        "evidence_sha256": caps_sha256,
         "status": "reviewed",
         "status_notes": "",
         "author": "",
@@ -631,7 +679,7 @@ fn mal_verdict(
             {
                 let engine = s(f, &["engine"]);
                 let result = s(f, &["result"]);
-                if ack_covers_mal(acks, digest, engine) {
+                if ack_covers_mal(acks, digest, engine, result) {
                     covered.push(format!("{engine}={result} (acked)"));
                 } else {
                     needed.push(ack_template_mal(tool, digest, engine, result));
@@ -647,10 +695,17 @@ fn mal_verdict(
     }
 }
 
+/// The prior blessed inventory for a TOOLS.lock candidate: the base entry's caps.toml.
+fn base_caps_of(evidence_dir: &Path, tool: &str, base: Option<&ToolLine>) -> Option<String> {
+    base.and_then(|b| {
+        std::fs::read_to_string(evidence_dir.join(tool).join(&b.sha).join("caps.toml")).ok()
+    })
+}
+
 fn caps_verdict(
     tool: &str,
     evidence_dir: &Path,
-    base: Option<&ToolLine>,
+    base_caps: Option<String>,
     head: &ToolLine,
     acks: &Acks,
     floors: &crate::floors::Floors,
@@ -660,10 +715,12 @@ fn caps_verdict(
     let digest = head.sha.as_str();
     let dir = evidence_dir.join(tool).join(digest);
     if dir.join("caps.toml").exists() {
-        let head_caps = std::fs::read_to_string(dir.join("caps.toml")).unwrap_or_default();
-        let base_caps = base.and_then(|b| {
-            std::fs::read_to_string(evidence_dir.join(tool).join(&b.sha).join("caps.toml")).ok()
-        });
+        let head_bytes = std::fs::read(dir.join("caps.toml")).unwrap_or_default();
+        // #380: an ack signs CONTENT. The hash of the exact bytes under review is what a
+        // covering ack must name, so a rewritten inventory under a blessed digest has no
+        // signature until it is signed again.
+        let caps_sha = crate::sha256::sha256_hex(&head_bytes);
+        let head_caps = String::from_utf8_lossy(&head_bytes).into_owned();
         if let Some(why) = floors.caps_stop(&head_caps, base_caps.as_deref()) {
             return Verdict::HardStop(why);
         }
@@ -684,12 +741,14 @@ fn caps_verdict(
                 Err(why) => eprintln!("gate: caps subset rule not applicable for {tool}: {why}"),
             }
         }
-        if ack_covers_caps(acks, digest) {
-            Verdict::RaiseCovered(vec![format!("caps inventory {digest} reviewed + acked")])
+        if ack_covers_caps(acks, digest, &caps_sha) {
+            Verdict::RaiseCovered(vec![format!(
+                "caps inventory {digest} (content sha256 {caps_sha}) reviewed + acked"
+            )])
         } else {
             Verdict::RaiseUncovered {
                 covered: Vec::new(),
-                needed: vec![ack_template_caps(tool, digest)],
+                needed: vec![ack_template_caps(tool, digest, &caps_sha)],
             }
         }
     } else if dir.join("caps.UNEVALUATED").exists() {
@@ -783,6 +842,110 @@ pub(crate) fn resolve_lock(
     Ok((dest.to_path_buf(), "upstream".to_string()))
 }
 
+// ---------- evidence-only edits (#380 part 2) ----------
+
+/// The per-digest evidence files whose change on the LIVE FRONTIER re-opens evaluation.
+const EVIDENCE_FILES: &[&str] = &["caps.toml", "caps.UNEVALUATED", "mal.jsonl", "vuln.jsonl"];
+
+fn read_opt(p: &Path) -> Option<Vec<u8>> {
+    std::fs::read(p).ok()
+}
+
+/// Frontier entries that are NOT TOOLS.lock candidates but whose evidence directory differs
+/// from the base commit's. Before #380 such a PR reached the gate as "evidence/ack-only edit"
+/// and nothing was evaluated — so rewriting a blessed digest's caps.toml with new grants rode
+/// through under the digest's existing signature. Returns each with the changed file names.
+pub(crate) fn evidence_candidates(
+    head: &[ToolLine],
+    cands: &[(Option<ToolLine>, ToolLine)],
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+) -> Vec<(ToolLine, Vec<String>)> {
+    let mut out = Vec::new();
+    for h in head {
+        if cands
+            .iter()
+            .any(|(_, c)| c.name == h.name && c.target == h.target)
+        {
+            continue;
+        }
+        if h.sha == ZERO_DIGEST || h.sha.len() != 64 {
+            continue;
+        }
+        let changed: Vec<String> = EVIDENCE_FILES
+            .iter()
+            .filter(|f| {
+                let rel = Path::new(&h.name).join(&h.sha).join(f);
+                read_opt(&evidence_dir.join(&rel)) != read_opt(&base_evidence_dir.join(&rel))
+            })
+            .map(|f| f.to_string())
+            .collect();
+        if !changed.is_empty() {
+            out.push((h.clone(), changed));
+        }
+    }
+    out
+}
+
+/// Tools whose acks.jsonl differs from the base commit's — loaded and quality-checked even
+/// when nothing else changed, so a malformed or placeholder sign-off cannot land unnoticed.
+pub(crate) fn changed_ack_files(
+    head: &[ToolLine],
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+) -> Vec<String> {
+    let mut tools: Vec<String> = head.iter().map(|h| h.name.clone()).collect();
+    tools.sort();
+    tools.dedup();
+    tools
+        .into_iter()
+        .filter(|t| {
+            let rel = Path::new(t).join("acks.jsonl");
+            read_opt(&evidence_dir.join(&rel)) != read_opt(&base_evidence_dir.join(&rel))
+        })
+        .collect()
+}
+
+/// Changed evidence files under digests that are NOT on the frontier: reported, not evaluated
+/// (no gate consumes a record about bytes nobody runs — but a silent edit to history is still
+/// worth a line in the report).
+pub(crate) fn non_frontier_changes(
+    head: &[ToolLine],
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+) -> Vec<String> {
+    let frontier: BTreeSet<(String, String)> = head
+        .iter()
+        .map(|h| (h.name.clone(), h.sha.clone()))
+        .collect();
+    let mut seen = BTreeSet::new();
+    for root in [evidence_dir, base_evidence_dir] {
+        let Ok(tools) = std::fs::read_dir(root) else {
+            continue;
+        };
+        for t in tools.filter_map(Result::ok).filter(|e| e.path().is_dir()) {
+            let tool = t.file_name().to_string_lossy().into_owned();
+            let Ok(digests) = std::fs::read_dir(t.path()) else {
+                continue;
+            };
+            for d in digests.filter_map(Result::ok).filter(|e| e.path().is_dir()) {
+                let digest = d.file_name().to_string_lossy().into_owned();
+                if frontier.contains(&(tool.clone(), digest.clone())) {
+                    continue;
+                }
+                for f in EVIDENCE_FILES {
+                    let rel = Path::new(&tool).join(&digest).join(f);
+                    if read_opt(&evidence_dir.join(&rel)) != read_opt(&base_evidence_dir.join(&rel))
+                    {
+                        seen.insert(format!("{tool}/{}/{f}", &digest[..12.min(digest.len())]));
+                    }
+                }
+            }
+        }
+    }
+    seen.into_iter().collect()
+}
+
 // ---------- the gate ----------
 
 struct CandidateReport {
@@ -805,6 +968,9 @@ pub fn run(args: &[String]) -> i32 {
     // retro-applied to a baseline digest that was built from upstream's resolution.
     let mut locks_dir = PathBuf::from("tools/locks");
     let mut base_locks_dir: Option<PathBuf> = None;
+    // #380 part 2: the BASE commit's evidence tree, so edits to a blessed digest's evidence
+    // (no TOOLS.lock change) are evaluated rather than waved through as "evidence-only".
+    let mut base_evidence_dir: Option<PathBuf> = None;
     let mut floors_path = PathBuf::from(crate::floors::DEFAULT_PATH);
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
@@ -827,6 +993,7 @@ pub fn run(args: &[String]) -> i32 {
                 }
             }
             "--base-locks-dir" => base_locks_dir = it.next().map(PathBuf::from),
+            "--base-evidence" => base_evidence_dir = it.next().map(PathBuf::from),
             "--floors" => {
                 if let Some(v) = it.next() {
                     floors_path = PathBuf::from(v);
@@ -838,10 +1005,15 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
     }
-    let Some(base_path) = base_path else {
+    let (Some(base_path), Some(base_evidence_dir)) = (base_path, base_evidence_dir) else {
         eprintln!(
-            "usage: cargo xtask gate --base <base TOOLS.lock> [--head <head TOOLS.lock>] \
-             [--evidence <dir>] [--report <md>] [--locks-dir <d>] [--base-locks-dir <d>]              [--floors <json>]"
+            "usage: cargo xtask gate --base <base TOOLS.lock> --base-evidence <base evidence dir> \
+             [--head <head TOOLS.lock>] [--evidence <dir>] [--report <md>] [--locks-dir <d>] \
+             [--base-locks-dir <d>] [--floors <json>]"
+        );
+        eprintln!(
+            "gate: --base-evidence is required (#380): without the base commit's evidence tree, \
+             an evidence-only edit cannot be told from no edit, and that is the fail-open case"
         );
         return 2;
     };
@@ -859,6 +1031,9 @@ pub fn run(args: &[String]) -> i32 {
     let base = parse_tools_lock(&base_text);
     let head = parse_tools_lock(&head_text);
     let cands = candidates(&base, &head);
+    let ev_cands = evidence_candidates(&head, &cands, &evidence_dir, &base_evidence_dir);
+    let changed_acks = changed_ack_files(&head, &evidence_dir, &base_evidence_dir);
+    let historical = non_frontier_changes(&head, &evidence_dir, &base_evidence_dir);
 
     let mut reports = Vec::new();
     let mut db_stamp = String::new();
@@ -989,7 +1164,7 @@ pub fn run(args: &[String]) -> i32 {
             caps_verdict(
                 &h.name,
                 &evidence_dir,
-                b.as_ref(),
+                base_caps_of(&evidence_dir, &h.name, b.as_ref()),
                 h,
                 &acks,
                 floors,
@@ -1017,11 +1192,145 @@ pub fn run(args: &[String]) -> i32 {
         });
     }
 
+    // ---------- evidence-only candidates (#380 part 2) ----------
+    // The bytes did not change, so the vuln axis is not re-scanned (it reads the lock, not a
+    // file); the axes whose RECORD changed are evaluated against the base commit's record.
+    if let Some(floors) = floors.as_ref() {
+        for (h, changed) in &ev_cands {
+            let acks = match load_acks(&evidence_dir.join(&h.name).join("acks.jsonl")) {
+                Ok(a) => a,
+                Err(e) => {
+                    reports.push(CandidateReport {
+                        name: format!("{} [{}] (evidence edit)", h.name, h.target),
+                        tool: h.name.clone(),
+                        summary: String::new(),
+                        axes: vec![("acks", Verdict::Unevaluated(e))],
+                    });
+                    continue;
+                }
+            };
+            let mut axes = Vec::new();
+            let base_rec = base_evidence_dir.join(&h.name).join(&h.sha);
+            if changed.iter().any(|f| f.starts_with("caps.")) {
+                // Same rev on both sides: the lock the inventory was measured with is the lock
+                // the digest was built from, on both sides of the comparison.
+                let tmp = std::env::temp_dir();
+                let head_dest = tmp.join(format!("gate-{}-ev-head.lock", h.name));
+                let base_dest = tmp.join(format!("gate-{}-ev-base.lock", h.name));
+                let head_lock =
+                    resolve_lock(&h.name, &h.repo, &h.rev, Some(&locks_dir), &head_dest)
+                        .ok()
+                        .map(|(p, _)| p);
+                let base_lock = resolve_lock(
+                    &h.name,
+                    &h.repo,
+                    &h.rev,
+                    base_locks_dir.as_deref(),
+                    &base_dest,
+                )
+                .ok()
+                .map(|(p, _)| p);
+                let base_caps = std::fs::read_to_string(base_rec.join("caps.toml")).ok();
+                axes.push((
+                    "caps",
+                    caps_verdict(
+                        &h.name,
+                        &evidence_dir,
+                        base_caps,
+                        h,
+                        &acks,
+                        floors,
+                        (head_lock.as_deref(), base_lock.as_deref()),
+                    ),
+                ));
+            }
+            if changed.iter().any(|f| f == "mal.jsonl") {
+                axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
+            }
+            if changed.iter().any(|f| f == "vuln.jsonl") {
+                axes.push((
+                    "vuln",
+                    Verdict::Unevaluated(
+                        "vuln.jsonl edited under a blessed frontier digest: baselines are written \
+                         by the bless flow and backed by a stored raw payload, never edited in \
+                         place — regenerate through the producer instead"
+                            .into(),
+                    ),
+                ));
+            }
+            if !acks.rejected.is_empty() {
+                axes.push((
+                    "ack-quality",
+                    Verdict::Unevaluated(format!(
+                        "{} ack line(s) failed the quality bar and were NOT counted:\n    {}",
+                        acks.rejected.len(),
+                        acks.rejected.join("\n    ")
+                    )),
+                ));
+            }
+            reports.push(CandidateReport {
+                name: format!("{} [{}] (evidence edit)", h.name, h.target),
+                tool: h.name.clone(),
+                summary: format!(
+                    "evidence-only edit under blessed digest {}: {} changed; bytes unchanged, vuln not re-scanned",
+                    &h.sha[..12],
+                    changed.join(", ")
+                ),
+                axes,
+            });
+        }
+        // Ack-file edits with nothing else to evaluate: the quality bar still applies.
+        for tool in &changed_acks {
+            if ev_cands.iter().any(|(h, _)| &h.name == tool)
+                || cands.iter().any(|(_, h)| &h.name == tool)
+            {
+                continue; // already loaded and reported above
+            }
+            match load_acks(&evidence_dir.join(tool).join("acks.jsonl")) {
+                Ok(a) if a.rejected.is_empty() => reports.push(CandidateReport {
+                    name: format!("{tool} (acks edit)"),
+                    tool: tool.clone(),
+                    summary: String::new(),
+                    axes: vec![(
+                        "ack-quality",
+                        Verdict::Allow(format!(
+                            "{} ack line(s) pass the quality bar; nothing to evaluate against",
+                            a.entries.len()
+                        )),
+                    )],
+                }),
+                Ok(a) => reports.push(CandidateReport {
+                    name: format!("{tool} (acks edit)"),
+                    tool: tool.clone(),
+                    summary: String::new(),
+                    axes: vec![(
+                        "ack-quality",
+                        Verdict::Unevaluated(format!(
+                            "{} ack line(s) failed the quality bar:\n    {}",
+                            a.rejected.len(),
+                            a.rejected.join("\n    ")
+                        )),
+                    )],
+                }),
+                Err(e) => reports.push(CandidateReport {
+                    name: format!("{tool} (acks edit)"),
+                    tool: tool.clone(),
+                    summary: String::new(),
+                    axes: vec![("acks", Verdict::Unevaluated(e))],
+                }),
+            }
+        }
+    }
+
     // ---------- report ----------
     let mut md =
         String::from("<!-- candidate-eval -->\n## Candidate evaluation (3-axis gate, #241)\n\n");
-    if cands.is_empty() {
-        md.push_str("No TOOLS.lock candidates in this change — evidence/ack-only edit.\n");
+    if cands.is_empty() && ev_cands.is_empty() && changed_acks.is_empty() {
+        md.push_str(
+            "No TOOLS.lock candidates, no frontier evidence changes, no ack changes in this change.\n",
+        );
+    } else if cands.is_empty() {
+        md.push_str("No TOOLS.lock candidates; evidence/ack edits on the live frontier evaluated below (#380).\n");
     } else if !db_stamp.is_empty() {
         let _ = writeln!(
             md,
@@ -1065,6 +1374,14 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
         md.push('\n');
+    }
+    if !historical.is_empty() {
+        let _ = writeln!(
+            md,
+            "*Changed evidence under {} non-frontier digest file(s) — history, not evaluated (no gate consumes a record about bytes nobody runs): {}*\n",
+            historical.len(),
+            historical.join(", ")
+        );
     }
     let _ = writeln!(
         md,
@@ -1350,6 +1667,181 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    // ---------- #380: acks bind to content ----------
+
+    fn tl(name: &str, sha: &str) -> ToolLine {
+        ToolLine {
+            name: name.into(),
+            repo: "o/r".into(),
+            rev: "v".into(),
+            target: "x".into(),
+            sha: sha.into(),
+        }
+    }
+    fn floors() -> crate::floors::Floors {
+        crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap()
+    }
+    fn caps_ack(digest: &str, evidence_sha: Option<&str>) -> String {
+        let ev = evidence_sha
+            .map(|h| format!(r#","evidence_sha256":"{h}""#))
+            .unwrap_or_default();
+        format!(
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"caps","product":{{"name":"t","digest":"{digest}"}}{ev},"status":"reviewed","status_notes":"reviewed","author":"a","timestamp":"2026-11-11","refs":[]}}"#
+        )
+    }
+
+    #[test]
+    fn caps_ack_covers_the_inventory_content_it_signed_and_nothing_else() {
+        let dir = std::env::temp_dir().join(format!("gate-caps380-{}", std::process::id()));
+        let full = "cccccccccccc000000000000000000000000000000000000000000000000000c";
+        let rec = dir.join("t").join(full);
+        std::fs::create_dir_all(&rec).unwrap();
+        let signed =
+            "# caps evidence — cackle-generated inventory\n[api.fs]\ninclude = [\"std::fs\"]\n";
+        std::fs::write(rec.join("caps.toml"), signed).unwrap();
+        let signed_sha = crate::sha256::sha256_hex(signed.as_bytes());
+        let acks = ack(&caps_ack(full, Some(&signed_sha)));
+        let h = tl("t", full);
+        let v = caps_verdict("t", &dir, None, &h, &acks, &floors(), (None, None));
+        assert!(
+            matches!(v, Verdict::RaiseCovered(_)),
+            "signed content is covered: {v:?}"
+        );
+
+        // The Bubblewrap-refresh shape: same digest, inventory gains a grant. The old ack
+        // must NOT cover it, and the printed template must name the NEW content hash.
+        let rewritten = format!(
+            "{signed}\n[pkg.ring.build]\nallow_build_instructions = [\"cargo:rustc-link-lib=static=ring\"]\n"
+        );
+        std::fs::write(rec.join("caps.toml"), &rewritten).unwrap();
+        let v = caps_verdict("t", &dir, None, &h, &acks, &floors(), (None, None));
+        let Verdict::RaiseUncovered { needed, .. } = &v else {
+            panic!("rewritten inventory must be uncovered: {v:?}")
+        };
+        let new_sha = crate::sha256::sha256_hex(rewritten.as_bytes());
+        assert!(
+            needed[0].contains(&new_sha) && !needed[0].contains(&signed_sha),
+            "{needed:?}"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn caps_ack_without_evidence_hash_and_mal_ack_without_result_fail_the_quality_bar() {
+        let d = "d".repeat(64);
+        let e = ack_quality(&serde_json::from_str(&caps_ack(&d, None)).unwrap()).unwrap_err();
+        assert!(e.contains("evidence_sha256"), "{e}");
+        let e =
+            ack_quality(&serde_json::from_str(&caps_ack(&d, Some("ABC"))).unwrap()).unwrap_err();
+        assert!(e.contains("evidence_sha256"), "{e}");
+        ack_quality(&serde_json::from_str(&caps_ack(&d, Some(&"0".repeat(64)))).unwrap()).unwrap();
+        let mal_no_result = format!(
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"mal","finding":{{"engine":"APEX"}},"product":{{"name":"t","digest":"{d}"}},"status":"not_affected","status_notes":"n","author":"a","timestamp":"t","refs":[]}}"#
+        );
+        let e = ack_quality(&serde_json::from_str(&mal_no_result).unwrap()).unwrap_err();
+        assert!(e.contains("finding.result"), "{e}");
+    }
+
+    #[test]
+    fn mal_ack_covers_engine_and_result_not_engine_alone() {
+        let d = "e".repeat(64);
+        let a = ack(&format!(
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"mal","finding":{{"engine":"Microsoft","result":"Trojan:Win32/Wacatac.B!ml"}},"product":{{"name":"t","digest":"{d}"}},"status":"not_affected","status_notes":"ml heuristic","author":"a","timestamp":"t","refs":[]}}"#
+        ));
+        assert!(ack_covers_mal(
+            &a,
+            &d,
+            "Microsoft",
+            "Trojan:Win32/Wacatac.B!ml"
+        ));
+        assert!(
+            !ack_covers_mal(&a, &d, "Microsoft", "Trojan:Win32/Emotet"),
+            "a renamed verdict is a new finding"
+        );
+        assert!(!ack_covers_mal(&a, &d, "APEX", "Trojan:Win32/Wacatac.B!ml"));
+        assert_eq!(
+            mal_acked_findings(&a, &d),
+            vec!["Microsoft\tTrojan:Win32/Wacatac.B!ml".to_string()]
+        );
+    }
+
+    #[test]
+    fn evidence_only_edits_on_the_frontier_are_candidates_and_history_is_reported() {
+        let root = std::env::temp_dir().join(format!("gate-ev380-{}", std::process::id()));
+        let (head_ev, base_ev) = (root.join("head"), root.join("base"));
+        let on = "f".repeat(64);
+        let old = "0".repeat(64);
+        for (r, caps, mal_old) in [
+            (
+                &head_ev,
+                "[api.fs]\ninclude = [\"std::fs\", \"std::net\"]\n",
+                "edited",
+            ),
+            (&base_ev, "[api.fs]\ninclude = [\"std::fs\"]\n", "orig"),
+        ] {
+            let d = r.join("t").join(&on);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("caps.toml"), caps).unwrap();
+            std::fs::write(d.join("mal.jsonl"), "same\n").unwrap();
+            std::fs::write(d.join("vuln.jsonl"), "same\n").unwrap();
+            let h = r.join("t").join(&old);
+            std::fs::create_dir_all(&h).unwrap();
+            std::fs::write(h.join("mal.jsonl"), mal_old).unwrap();
+            std::fs::write(r.join("t").join("acks.jsonl"), "").unwrap();
+        }
+        let head = vec![tl("t", &on)];
+        let cands: Vec<(Option<ToolLine>, ToolLine)> = Vec::new();
+        let ev = evidence_candidates(&head, &cands, &head_ev, &base_ev);
+        assert_eq!(ev.len(), 1);
+        assert_eq!(
+            ev[0].1,
+            vec!["caps.toml".to_string()],
+            "only the changed file is named"
+        );
+        // a digest that IS a TOOLS.lock candidate is not double-reported
+        let as_cand = vec![(None, tl("t", &on))];
+        assert!(evidence_candidates(&head, &as_cand, &head_ev, &base_ev).is_empty());
+        // identical trees: nothing
+        assert!(evidence_candidates(&head, &cands, &head_ev, &head_ev).is_empty());
+        // non-frontier change is listed, never evaluated
+        let hist = non_frontier_changes(&head, &head_ev, &base_ev);
+        assert_eq!(hist, vec![format!("t/{}/mal.jsonl", &old[..12])]);
+        // acks unchanged -> no ack-file candidate; changed -> named
+        assert!(changed_ack_files(&head, &head_ev, &base_ev).is_empty());
+        std::fs::write(head_ev.join("t").join("acks.jsonl"), "{}\n").unwrap();
+        assert_eq!(
+            changed_ack_files(&head, &head_ev, &base_ev),
+            vec!["t".to_string()]
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn committed_ack_lattices_pass_the_quality_bar_after_the_380_migration() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../supply-chain/evidence");
+        let mut caps = 0;
+        let mut mal = 0;
+        for e in std::fs::read_dir(&root).unwrap().filter_map(Result::ok) {
+            let p = e.path().join("acks.jsonl");
+            if !p.is_file() {
+                continue;
+            }
+            let a = load_acks(&p).unwrap();
+            assert!(a.rejected.is_empty(), "{}: {:?}", p.display(), a.rejected);
+            caps += a
+                .entries
+                .iter()
+                .filter(|x| s(x, &["axis"]) == "caps")
+                .count();
+            mal += a
+                .entries
+                .iter()
+                .filter(|x| s(x, &["axis"]) == "mal")
+                .count();
+        }
+        assert!(caps >= 43 && mal >= 9, "caps {caps} mal {mal}");
+    }
+
     #[test]
     fn mal_digest_mismatch_is_unevaluated() {
         let dir = std::env::temp_dir().join(format!("gate-mal-{}", std::process::id()));
@@ -1489,9 +1981,15 @@ mod mal_acks_tests {
         )
         .unwrap();
         let acks = load_acks(&p).unwrap();
-        assert_eq!(mal_acked_engines(&acks, &d1), vec!["APEX".to_string()]);
-        assert_eq!(mal_acked_engines(&acks, &d2), vec!["Zenbox".to_string()]);
-        assert!(mal_acked_engines(&acks, &"c".repeat(64)).is_empty());
+        assert_eq!(
+            mal_acked_findings(&acks, &d1),
+            vec!["APEX\tMalicious".to_string()]
+        );
+        assert_eq!(
+            mal_acked_findings(&acks, &d2),
+            vec!["Zenbox\tMalicious".to_string()]
+        );
+        assert!(mal_acked_findings(&acks, &"c".repeat(64)).is_empty());
     }
 
     #[test]
@@ -1516,7 +2014,7 @@ mod mal_acks_tests {
             "placeholder notes must be quality-rejected"
         );
         assert!(
-            mal_acked_engines(&acks, &d).is_empty(),
+            mal_acked_findings(&acks, &d).is_empty(),
             "a quality-rejected ack must NOT silence the engine"
         );
     }
@@ -1524,6 +2022,6 @@ mod mal_acks_tests {
     #[test]
     fn missing_lattice_means_no_acks() {
         let acks = load_acks(Path::new("does/not/exist/acks.jsonl")).unwrap();
-        assert!(mal_acked_engines(&acks, &"e".repeat(64)).is_empty());
+        assert!(mal_acked_findings(&acks, &"e".repeat(64)).is_empty());
     }
 }
