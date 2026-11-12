@@ -6,111 +6,51 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [0.3.2] - 2026-11-12
 
-Patch release: the binary's runtime behaviour is unchanged since 0.3.2-rc.2; the shipped
-bytes change through a toolchain adoption and a linked-CRT hardening, and the pipeline that
-produces them is substantially stronger. `-rc.3` (2026-08-30) was the first candidate built by
-the pinned-toolchain tool fleet; everything below landed after it.
+Patch release. No runtime logic changed; the diff of `app/src` outside `#[cfg(test)]`
+is empty. The shipped bytes change through a toolchain adoption and a hardened C runtime.
+Everything else is dependency maintenance and build-pipeline work.
 
-**What changed in the app crate since 0.3.1, exactly:** `build.rs` (the Spectre-mitigated CRT
-lookup), `Cargo.toml` (`find-msvc-tools` as a build dependency; version), `rust-toolchain.toml`
-(nightly-2026-10-09), `.cargo/config.toml` (rustflags single-sourced), test-only changes in
-`capability.rs` (a probe lock for parallel tests), `install.rs` and `tray.rs` (delay-load
-resolution tests), and the cargo-vet import files. No runtime logic changed; the diff of
-`app/src` outside `#[cfg(test)]` is empty. Everything else in this release is dependency and
-tool-fleet maintenance and GitHub Actions pipeline work.
+### App crate
+- Links the MSVC Spectre-mitigated CRT, located with the same `find-msvc-tools` lookup
+  rustc uses for `link.exe`; a toolset without it fails the build. BinSkim's BA2024 check
+  now counts results that omit `kind`/`level`. (#385, #392, #393)
+- Toolchain nightly-2026-10-09, pinned by content in `tools/TOOLCHAIN.lock`, adopted after
+  an A/B of every instrument on the candidate. (#308, #384)
+- `find-msvc-tools` added as a build dependency; rustflags single-sourced in
+  `.cargo/config.toml`; test-only changes in `capability.rs`, `install.rs`, `tray.rs`.
 
-### Security (binary)
-- **Spectre-mitigated C runtime.** The release links the MSVC `lib/spectre` CRT, discovered
-  through the same `find-msvc-tools` lookup rustc uses for `link.exe`; a toolset without it is
-  a build failure, never a silent fall-back to the unmitigated CRT. The BinSkim release gate
-  independently checks the linked result (BA2024), and now counts SARIF results that carry no
-  `kind`/`level` by applying the SARIF 2.1.0 defaults — BA2024 had read as nothing since
-  2026-08-17. (#385, #392, #393)
-- **Toolchain nightly-2026-10-09 adopted** after an A/B of every instrument on the candidate
-  (caps, vuln, VT, BinSkim, verify-artifact): the fleet and the app move together, six tools
-  blessed with zero sign-offs. Still pinned by content in `tools/TOOLCHAIN.lock`. (#308, #384)
+### Build-tool fleet
+- All seven tool digests built through cargo-auditable, linked with `/Brepro`, PE timestamps
+  stamped to the pinned rev's commit epoch and verified exactly; three consecutive producer
+  runs reproduced every digest byte for byte. (#386, #399, #401–#403, #406, #407)
+- Caught up to upstream at zero advisory instances: cargo-auditable v0.7.7, cargo-vet
+  v0.10.3, cargo-cyclonedx 0.5.10. Locks are frozen against the prior blessed lock, so a rev
+  bump cannot resolve below what shipped; a new package name needs a committed statement;
+  instruments come from the prior-blessed lock. yaml-rust and number_prefix shed; rustix
+  1.1.6 and object 0.40 / ruzstd 0.9.1 fixed, with no acks. (#404, #420–#426, #325, #361,
+  #374, #375, #389)
 
-### Supply chain & release integrity (pipeline; no runtime change)
-- **Binary-vantage scans have a precondition.** `verify-auditable` refuses a binary without a
-  `.dep-v0` section before `cargo audit bin` runs — on its own that scan recovers a partial
-  dependency list from panic strings and exits 0, so a missing section read as cleaner. Gates
-  release-attest and the Windows producer; the SBOM and `SHA256SUMS` are attestation subjects.
-  (#386, #399)
-- **The tool fleet is auditable, stamped and idempotent.** All seven blessed tool digests are
-  built through cargo-auditable (a Linux cargo-auditable joins the fleet); Windows tools link
-  with `/Brepro` and have every PE timestamp stamped to the pinned upstream rev's commit epoch,
-  verified exactly (`verify-timestamp --expect`). Three consecutive producer runs reproduced all
-  seven digests byte for byte. (#386, #401, #402, #403, #406, #407)
-- **rustix 1.1.6 across the fleet** (RUSTSEC-2026-0486, unsound) via `xtask freeze
-  --require-improvement` atop each frozen lock — fixed, not acknowledged; cargo-auditable's
-  first frozen lock. (#404)
-- **Capabilities measured as built, sandboxed.** cackle runs with Bubblewrap on ubuntu-26.04
-  and with the producer's own build flags and a release-inheriting profile, so inventories
-  describe the shipped package and record every `cargo:` directive a build script emits
-  (31 directives on the fleet, all self-referential). A measured strict subset of the prior
-  blessed inventory passes without a fresh signature; anything else needs one. (#50, #367,
-  #381, #387, #388, #390, #391)
-- **Absolute floors.** `supply-chain/policy/floors.json` names the states no sign-off admits:
-  a critical-shape CVSS vector, a malware panel with too many malicious verdicts or a
-  malicious sandbox verdict, a measured inventory newly granting process/network. HARD-STOP
-  in the gate, FAIL in the monitors; a missing policy is unevaluated, never "no floors".
-  (#369)
-- **VirusTotal panels are read for completeness and sandbox state.** Fewer than 50
-  verdict-bearing engines is an incomplete panel (not a verdict); each digest's sandbox state
-  is recorded as ABSENT / NOT READY / ANALYZED rather than inferred; a `suspicious` sandbox
-  verdict blocks until a per-item sign-off exists. Lookups are keyed by (tool, target) — a
-  name-only key had dropped one digest. (#347, #408, #409)
-- **Vulnerability statements follow OpenVEX / CycloneDX vocabulary.** An advisory RustSec
-  withdraws or narrows away from a blessed binary is recorded `not_affected` /
-  `vulnerable_code_not_present`, grounded in the advisory-DB commit it was observed absent at,
-  and that statement is void the moment the DB reports it again; `fixed` is rejected for
-  immutable bytes. Monitor guards: DB ordering, lock drift, raw-payload custody. (#251, #345,
-  #395)
-- **Maintainer commit signing.** The signing-key roster lives in
-  `supply-chain/allowed_signers`; `main` requires signed commits. (#398)
-- **cargo-acl** builds `--no-default-features` with `tui-input` optional (122 → 71 packages),
-  on object 0.40 / ruzstd 0.9.1 (RUSTSEC-2026-0344 fixed). Per-tool RUSTFLAGS are
-  single-sourced under `tools/rustflags/` and cross-checked. (#325, #361, #374, #375, #389)
-- Versioning rule written down: dependency-only releases are PATCH. (#371)
-- **Sign-offs name what they sign.** A caps ack carries the sha256 of the `caps.toml` it
-  reviewed and covers nothing else; a malware ack covers one (engine, verdict) finding; and a
-  change to a blessed digest's evidence with no TOOLS.lock change is evaluated against the base
-  commit's record rather than waved through. The 43 existing caps acks were bound to the content
-  each one signed at the time. (#380)
-- **Build-script directives have a floor.** A measured inventory whose build script passes
-  arbitrary linker flags, searches a link path outside its own OUT_DIR or registry source, emits
-  a directive the evaluator cannot classify, or sets a `rustc-env`/`rustc-cfg` the prior
-  inventory lacked is HARD-STOP; the inventory parser fails closed on anything it cannot read.
-  (#382)
-- **Runner-image and toolchain lifetimes are tracked as data**, as OpenEoX Core v1.0 documents
-  (OASIS, CSD01) validated against a digest-pinned schema with the TC's own test vectors: every
-  `runs-on` label must have a record, and a label within 120 days of its image's deprecation
-  start fails CI; the weekly monitor cross-checks endoflife.date. The ubuntu-22.04 miss that
-  motivated this is the first record. (#376)
-- **Strictly-better lock fixes propose themselves.** A weekly job finds advisory instances with a
-  RustSec patched version, runs `xtask freeze --require-improvement` for the lowest soaked
-  non-yanked fix, soak-checks every transitive move, and opens one pull request with the frozen
-  lock. It never bumps a rev, blesses a digest, or merges; a refusal opens no PR. (#405)
-- **The gate's own test suite runs in PR CI.** The 150 unit tests that anchor every
-  FAIL-DIRECTIONS row had been running only on developer machines. (#410)
-- **xtask is lint-clean and tested in CI**; two LNK4199 warnings became delay-load tests;
-  every xtask build in the workflows is `--locked`. (#413–#417, #433)
-- **The tool fleet is caught up and at zero advisory instances.** cargo-auditable v0.7.7,
-  cargo-vet v0.10.3 and cargo-cyclonedx 0.5.10 blessed, each lock frozen **against the prior
-  blessed lock** (`--prior-lock --carry-forward`) so a rev bump never resolves below what
-  shipped, with per-item checksum, source and publisher continuity checks; a new package name
-  enters a frozen lock only with a committed lock-shape statement; the last two unmaintained
-  crates (yaml-rust, number_prefix) were shed by bumping their dev-only chains rather than
-  acknowledged. Instruments always come from the prior-blessed lock, never the branch under
-  evaluation. The vuln baseline is written by a measured recorder that hashes its auditor.
-  (#420–#426)
-- **Release SBOM is CycloneDX 1.6** (the VDR floor, structured `authors`), asserted in-job;
-  dry-run artifacts live one day, and the dispatch description states what a dry-run is and is
-  not. (#428, #431)
-- **Evidence lifecycle written down**: blessed evidence is immutable, never-blessed candidate
-  evidence is retired with its candidate; caps measurements seed from main's blessed inventory;
-  the bless cycle itself is `cargo xtask candidate-advance`, one idempotent fail-closed stage per
-  step. (#429, #430, #432)
+### Gate and evidence
+- Capabilities measured as built under Bubblewrap with the producer's flags; a strict subset
+  of the blessed inventory passes without a signature. Absolute floors (CVSS shape, malware
+  verdicts, new process/network grants, build-script directives) are HARD-STOP. (#50, #367,
+  #369, #381, #382, #387, #388, #390, #391)
+- Sign-offs bind to content: caps acks carry the inventory hash, malware acks name one
+  (engine, verdict), vuln statements use OpenVEX/CycloneDX vocabulary and expire when the
+  advisory DB changes. (#251, #345, #380, #395)
+- VirusTotal panels are read for completeness and sandbox state. (#347, #408, #409)
+- Blessed evidence is immutable; candidate evidence that was not blessed is retired with its
+  candidate; the bless cycle is `cargo xtask candidate-advance`. (#429, #430, #432)
+
+### Release and CI
+- Release SBOM is CycloneDX 1.6, asserted in-job; dry-run artifacts expire after one day.
+  (#428, #431)
+- Signed commits required on `main`; key roster in `supply-chain/allowed_signers`. (#398)
+- Runner-image and toolchain lifetimes tracked as OpenEoX documents; a label within 120 days
+  of deprecation fails CI. (#376)
+- A weekly job opens a PR for strictly-better lock fixes; merging stays manual. (#405)
+- xtask tested, lint-clean, and built `--locked` everywhere. (#410, #413–#417, #433)
+- Dependency-only releases are PATCH. (#371)
 
 ## [0.3.2-rc.2] - 2026-08-25
 
