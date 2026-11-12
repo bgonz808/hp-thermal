@@ -509,6 +509,15 @@ fn ci_source_checks() -> bool {
         "cargo",
         &["test", "--features", "noise-adapt"],
     );
+    // xtask's own suite: every FAIL-DIRECTIONS row is anchored to a test in this crate, so
+    // the gate engines' pinning tests must run where the app's do. --locked: the lockfile is
+    // under audit coverage and a silent re-resolution here would evade it.
+    ok &= step(
+        "test (xtask self)",
+        ".",
+        "cargo",
+        &["test", "--manifest-path", "xtask/Cargo.toml", "--locked"],
+    );
     ok
 }
 
