@@ -1775,6 +1775,24 @@ pub fn is_elevated() -> bool {
 mod tests {
     use super::*;
 
+    /// rstrtmgr.dll is DELAY-loaded (build.rs, #106). Two things this proves: the import resolves
+    /// on first use under the System32 pin, and the import EXISTS in the test image — `/DELAYLOAD`
+    /// has nothing to act on when the only caller is dead-stripped, and the linker says so
+    /// (LNK4199). Opening and closing a session is unprivileged and touches nothing.
+    #[test]
+    fn restart_manager_resolves_through_the_delay_load() {
+        use windows::Win32::System::RestartManager::{RmEndSession, RmStartSession};
+        let mut session: u32 = 0;
+        let mut key = [0u16; 64];
+        // SAFETY: `key` holds >= CCH_RM_SESSION_KEY+1 u16s; `session` is an out-param.
+        let err =
+            unsafe { RmStartSession(&mut session, None, windows::core::PWSTR(key.as_mut_ptr())) };
+        assert_eq!(err.0, 0, "RmStartSession: {err:?}");
+        // SAFETY: `session` is the live session opened above.
+        let err = unsafe { RmEndSession(session) };
+        assert_eq!(err.0, 0, "RmEndSession: {err:?}");
+    }
+
     /// The footing check must actually DETECT a loosened image ACL, not merely pass. Point
     /// it at a temp file whose ACL we control (re-ACLing a file we own needs no admin) and
     /// toggle write for the Users group. SIDs are used verbatim so it is locale-independent.
