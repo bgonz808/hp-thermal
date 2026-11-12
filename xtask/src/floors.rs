@@ -269,8 +269,17 @@ impl Floors {
         if !self.caps_new_grants.is_empty()
             && let Some(base_caps) = base_caps
         {
-            let base = grants(base_caps);
-            let head = grants(head_caps);
+            let (base, head) = match (grants(base_caps), grants(head_caps)) {
+                (Ok(b), Ok(h)) => (b, h),
+                (b, h) => {
+                    for e in [b, h].into_iter().filter_map(Result::err) {
+                        hits.push(format!(
+                            "inventory not parseable ({e}): unknown is never clean"
+                        ));
+                    }
+                    (BTreeMap::new(), BTreeMap::new())
+                }
+            };
             let floor: BTreeSet<&str> = self.caps_new_grants.iter().map(String::as_str).collect();
             for (pkg, classes) in &head {
                 let before = base.get(pkg).cloned().unwrap_or_default();
@@ -284,8 +293,26 @@ impl Floors {
         // #382: build-script directives. The absolute rules (linker flags, foreign link-search,
         // unclassifiable directives) need no prior; the relative one (rustc-env / rustc-cfg)
         // compares against the prior blessed inventory for the same package when there is one.
-        let prior = base_caps.map(build_instructions);
-        for (pkg, directives) in build_instructions(head_caps) {
+        let prior = match base_caps.map(build_instructions) {
+            None => None,
+            Some(Ok(m)) => Some(m),
+            Some(Err(e)) => {
+                hits.push(format!(
+                    "prior inventory not parseable ({e}): unknown is never clean"
+                ));
+                None
+            }
+        };
+        let head_dirs = match build_instructions(head_caps) {
+            Ok(m) => m,
+            Err(e) => {
+                hits.push(format!(
+                    "inventory not parseable ({e}): unknown is never clean"
+                ));
+                BTreeMap::new()
+            }
+        };
+        for (pkg, directives) in head_dirs {
             // A prior inventory that has nothing for this package is a prior with NO directives
             // for it (the package or its build script is new): the relative rule applies.
             let prior_pkg = prior
@@ -414,6 +441,14 @@ pub fn own_dir(pkg: &str, path: &str) -> bool {
     if pkg.is_empty() {
         return false;
     }
+    // A relative or empty segment anywhere (`..`, `.`, `//`, trailing `/`) is a traversal
+    // shape: `<own OUT_DIR>/../../usr/lib` must never read as "own". Foreign, whatever follows.
+    if p.split('/')
+        .skip(1)
+        .any(|seg| seg.is_empty() || seg == "." || seg == "..")
+    {
+        return false;
+    }
     for (i, _) in p.match_indices("/build/") {
         let rest = &p[i + "/build/".len()..];
         for sep in ['-', '/'] {
@@ -430,23 +465,99 @@ pub fn own_dir(pkg: &str, path: &str) -> bool {
     }
     if let Some(i) = p.find("/registry/src/") {
         let rest = &p[i + "/registry/src/".len()..];
+        // The segment after the index dir must be EXACTLY `<pkg>-<version>`: a version starts
+        // with a digit and uses semver characters only, and the segment ends there.
         if let Some((_, after_index)) = rest.split_once('/')
             && let Some(r) = after_index
                 .strip_prefix(pkg)
                 .and_then(|r| r.strip_prefix('-'))
-            && r.chars().next().is_some_and(|c| c.is_ascii_digit())
         {
-            return true;
+            let version = r.split('/').next().unwrap_or("");
+            if version.chars().next().is_some_and(|c| c.is_ascii_digit())
+                && version
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '+' | '-'))
+            {
+                return true;
+            }
         }
     }
     false
+}
+
+/// One line of a TOML array of strings: the strings on it (basic `"…"` with escapes, literal
+/// `'…'` without) and whether a `]` OUTSIDE any string closed the array. `Err` on an
+/// unterminated string or an unsupported escape — the caller treats that as "not parseable",
+/// never as "no more entries". A `#` outside strings starts a comment.
+fn scan_array_line(line: &str) -> Result<(Vec<String>, bool), String> {
+    enum St {
+        Outside,
+        Basic(String),
+        Literal(String),
+    }
+    let mut items = Vec::new();
+    let mut st = St::Outside;
+    let mut closed = false;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        st = match st {
+            St::Outside => match c {
+                '"' => St::Basic(String::new()),
+                '\'' => St::Literal(String::new()),
+                ']' => {
+                    closed = true;
+                    St::Outside
+                }
+                '#' => break,
+                _ => St::Outside,
+            },
+            St::Basic(mut s) => match c {
+                '"' => {
+                    items.push(s);
+                    St::Outside
+                }
+                '\\' => {
+                    match chars.next() {
+                        Some('"') => s.push('"'),
+                        Some('\\') => s.push('\\'),
+                        Some('n') => s.push('\n'),
+                        Some('t') => s.push('\t'),
+                        Some('r') => s.push('\r'),
+                        Some(other) => {
+                            return Err(format!("unsupported escape `\\{other}` in {line:?}"));
+                        }
+                        None => return Err(format!("dangling escape in {line:?}")),
+                    }
+                    St::Basic(s)
+                }
+                _ => {
+                    s.push(c);
+                    St::Basic(s)
+                }
+            },
+            St::Literal(mut s) => match c {
+                '\'' => {
+                    items.push(s);
+                    St::Outside
+                }
+                _ => {
+                    s.push(c);
+                    St::Literal(s)
+                }
+            },
+        };
+    }
+    if !matches!(st, St::Outside) {
+        return Err(format!("unterminated string in {line:?}"));
+    }
+    Ok((items, closed))
 }
 
 /// `[pkg.NAME]` -> the `cargo:` directives its build script emitted, from
 /// `build.allow_build_instructions` (or `allow_build_instructions` inside `[pkg.NAME.build]`).
 /// Order preserved; cackle writes these only when its sandbox captured the build script's
 /// stdout, so an inventory without them says nothing about directives.
-pub fn build_instructions(caps: &str) -> BTreeMap<String, Vec<String>> {
+pub fn build_instructions(caps: &str) -> Result<BTreeMap<String, Vec<String>>, String> {
     let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut pkg: Option<String> = None;
     let mut in_build_table = false;
@@ -457,7 +568,11 @@ pub fn build_instructions(caps: &str) -> BTreeMap<String, Vec<String>> {
             continue;
         }
         if line.starts_with('[') {
-            collecting = false;
+            if collecting {
+                return Err(
+                    "allow_build_instructions array not closed before the next table".into(),
+                );
+            }
             let inner = line.trim_start_matches('[').trim_end_matches(']').trim();
             match inner.strip_prefix("pkg.") {
                 Some(n) => {
@@ -479,10 +594,9 @@ pub fn build_instructions(caps: &str) -> BTreeMap<String, Vec<String>> {
             continue;
         };
         if collecting {
-            collect_quoted_vec(line, out.entry(p.clone()).or_default());
-            if line.contains(']') {
-                collecting = false;
-            }
+            let (items, closed) = scan_array_line(line)?;
+            out.entry(p.clone()).or_default().extend(items);
+            collecting = !closed;
             continue;
         }
         if let Some((key, rhs)) = line.split_once('=') {
@@ -490,24 +604,16 @@ pub fn build_instructions(caps: &str) -> BTreeMap<String, Vec<String>> {
             if key == "build.allow_build_instructions"
                 || (in_build_table && key == "allow_build_instructions")
             {
-                collect_quoted_vec(rhs, out.entry(p.clone()).or_default());
-                collecting = rhs.contains('[') && !rhs.contains(']');
+                let (items, closed) = scan_array_line(rhs)?;
+                out.entry(p.clone()).or_default().extend(items);
+                collecting = rhs.trim_start().starts_with('[') && !closed;
             }
         }
     }
-    out
-}
-
-fn collect_quoted_vec(s: &str, into: &mut Vec<String>) {
-    let mut rest = s;
-    while let Some(i) = rest.find('"') {
-        let after = &rest[i + 1..];
-        let Some(j) = after.find('"') else {
-            break;
-        };
-        into.push(after[..j].to_string());
-        rest = &after[j + 1..];
+    if collecting {
+        return Err("allow_build_instructions array not closed at end of file".into());
     }
+    Ok(out)
 }
 
 fn is_copied_forward(caps: &str) -> bool {
@@ -518,7 +624,7 @@ fn is_copied_forward(caps: &str) -> bool {
 
 /// `[pkg.NAME]` -> API classes granted in SHIPPING scopes: `allow_apis`, `build.allow_apis`,
 /// `from.build.allow_apis`. `test.*` / `from.test.*` are ignored.
-pub fn grants(caps: &str) -> BTreeMap<String, BTreeSet<String>> {
+pub fn grants(caps: &str) -> Result<BTreeMap<String, BTreeSet<String>>, String> {
     let mut out: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
     let mut pkg: Option<String> = None;
     let mut collecting = false;
@@ -528,7 +634,9 @@ pub fn grants(caps: &str) -> BTreeMap<String, BTreeSet<String>> {
             continue;
         }
         if line.starts_with('[') {
-            collecting = false;
+            if collecting {
+                return Err("allow_apis array not closed before the next table".into());
+            }
             pkg = line
                 .strip_prefix("[pkg.")
                 .and_then(|r| r.strip_suffix(']'))
@@ -539,10 +647,9 @@ pub fn grants(caps: &str) -> BTreeMap<String, BTreeSet<String>> {
             continue;
         };
         if collecting {
-            collect_quoted(line, out.entry(p.clone()).or_default());
-            if line.contains(']') {
-                collecting = false;
-            }
+            let (items, closed) = scan_array_line(line)?;
+            out.entry(p.clone()).or_default().extend(items);
+            collecting = !closed;
             continue;
         }
         if let Some((key, rhs)) = line.split_once('=') {
@@ -551,25 +658,16 @@ pub fn grants(caps: &str) -> BTreeMap<String, BTreeSet<String>> {
                 key,
                 "allow_apis" | "build.allow_apis" | "from.build.allow_apis"
             ) {
-                let set = out.entry(p.clone()).or_default();
-                collect_quoted(rhs, set);
-                collecting = rhs.contains('[') && !rhs.contains(']');
+                let (items, closed) = scan_array_line(rhs)?;
+                out.entry(p.clone()).or_default().extend(items);
+                collecting = rhs.trim_start().starts_with('[') && !closed;
             }
         }
     }
-    out
-}
-
-fn collect_quoted(s: &str, into: &mut BTreeSet<String>) {
-    let mut rest = s;
-    while let Some(i) = rest.find('"') {
-        let after = &rest[i + 1..];
-        let Some(j) = after.find('"') else {
-            break;
-        };
-        into.insert(after[..j].to_string());
-        rest = &after[j + 1..];
+    if collecting {
+        return Err("allow_apis array not closed at end of file".into());
     }
+    Ok(out)
 }
 
 #[cfg(test)]
@@ -972,9 +1070,81 @@ mod tests {
     }
 
     #[test]
+    fn array_parser_is_quote_aware_and_unparseable_inventories_are_floors() {
+        let f = policy();
+        // A `]` inside a string must not end the array early and hide what follows.
+        let head = "# caps evidence\n[pkg.p]\nbuild.allow_build_instructions = [\n    \"cargo:warning=]\",\n    \"cargo:rustc-link-arg=/evil\",\n]\n";
+        assert_eq!(build_instructions(head).unwrap()["p"].len(), 2);
+        assert!(
+            f.caps_stop(head, None)
+                .unwrap()
+                .contains("arbitrary linker flags")
+        );
+        let head = "# caps evidence\n[pkg.p]\nbuild.allow_build_instructions = [\"cargo:x=]\", \"cargo:rustc-link-arg=/evil\"]\n";
+        assert!(
+            f.caps_stop(head, None)
+                .unwrap()
+                .contains("arbitrary linker flags")
+        );
+        // TOML literal strings and escaped quotes are read, not skipped.
+        let head = "# caps evidence\n[pkg.p]\nbuild.allow_build_instructions = ['cargo:rustc-link-arg=/evil', \"cargo:warning=say \\\"hi\\\"\"] # note\n";
+        let b = build_instructions(head).unwrap();
+        assert_eq!(
+            b["p"],
+            ["cargo:rustc-link-arg=/evil", "cargo:warning=say \"hi\""]
+        );
+        assert!(f.caps_stop(head, None).is_some());
+        // Unterminated string / unclosed array: not parseable, and that is a floor, not silence.
+        for bad in [
+            "# caps evidence\n[pkg.p]\nbuild.allow_build_instructions = [\"cargo:x=1]\n",
+            "# caps evidence\n[pkg.p]\nbuild.allow_build_instructions = [\n    \"cargo:x=1\",\n[pkg.q]\nallow_unsafe = true\n",
+            "# caps evidence\n[pkg.p]\nbuild.allow_build_instructions = [\"cargo:x=\\u0041\"]\n",
+            "# caps evidence\n[pkg.p]\nallow_apis = [\"fs\"\n",
+        ] {
+            assert!(
+                f.caps_stop(bad, Some(BASE))
+                    .unwrap()
+                    .contains("not parseable"),
+                "{bad:?}"
+            );
+        }
+        // the same applies to a prior that cannot be read
+        let good = with_directives("p", &["cargo:rustc-cfg=a"]);
+        assert!(
+            f.caps_stop(&good, Some("[pkg.p]\nallow_apis = [\"fs\"\n"))
+                .unwrap()
+                .contains("prior inventory not parseable")
+        );
+    }
+
+    #[test]
+    fn own_dir_rejects_traversal_and_junk_segments() {
+        assert!(!own_dir(
+            "zstd-sys",
+            &format!("{OWN_OUT_NEW}/../../../../usr/lib")
+        ));
+        assert!(!own_dir("zstd-sys", &format!("{OWN_OUT_NEW}/./lib")));
+        assert!(!own_dir(
+            "zstd-sys",
+            &OWN_OUT_NEW.replace("/build/", "//build/")
+        ));
+        assert!(!own_dir("zstd-sys", &format!("{OWN_OUT_NEW}/")));
+        assert!(!own_dir(
+            "zstd-sys",
+            &OWN_SRC.replace("zstd-sys-2.1.2+zstd.1.5.7", "zstd-sys-2.1.2;rm")
+        ));
+        assert!(!own_dir(
+            "zstd-sys",
+            &OWN_SRC.replace("zstd-sys-2.1.2+zstd.1.5.7", "zstd-sys-2.1.2 x")
+        ));
+        assert!(own_dir("zstd-sys", OWN_SRC));
+        assert!(own_dir("zstd-sys", &OWN_SRC.replace("/zstd/lib", "")));
+    }
+
+    #[test]
     fn build_instructions_parser_reads_both_table_shapes() {
         let caps = "[pkg.a]\nbuild.allow_build_instructions = [\"cargo:x=1\",\n  \"cargo:y=2\",\n]\nallow_unsafe = true\n[pkg.b.build]\nallow_build_instructions = [\"cargo:z=3\"]\n[pkg.c]\nallow_apis = [\"fs\"]\n";
-        let b = build_instructions(caps);
+        let b = build_instructions(caps).unwrap();
         assert_eq!(b["a"], ["cargo:x=1", "cargo:y=2"]);
         assert_eq!(b["b"], ["cargo:z=3"]);
         assert!(!b.contains_key("c"));
@@ -998,6 +1168,7 @@ mod tests {
             };
             seen_inv += 1;
             seen_dirs += build_instructions(&caps)
+                .unwrap()
                 .values()
                 .map(Vec::len)
                 .sum::<usize>();
@@ -1015,7 +1186,8 @@ mod tests {
     fn grants_parser_handles_multiline_arrays_and_scopes() {
         let g = grants(
             "[pkg.x]\nallow_apis = [\n  \"fs\",\n  \"net\",\n]\nfrom.build.allow_apis = [\"process\"]\ntest.allow_apis = [\"env\"]\n[api.net]\ninclude = [\"std::net\"]\n",
-        );
+        )
+        .unwrap();
         let x = &g["x"];
         assert_eq!(
             x.iter().cloned().collect::<Vec<_>>(),
