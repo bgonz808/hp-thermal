@@ -213,7 +213,9 @@ jobs:
         # Fail here, not downstream: the VDR emitter (#396) and verifiers read 1.6 fields.
         run: |
           set -euo pipefail
-          f=$(ls ./*.cdx.json | head -1)
+          set -- ./*.cdx.json
+          f=$1
+          [ -f "$f" ] || { echo "::error::no *.cdx.json was produced"; exit 1; }
           jq -e '.bomFormat == "CycloneDX" and .specVersion == "1.6" and (.metadata.component.authors | length) > 0' "$f" > /dev/null             || { echo "::error::$f is not a CycloneDX 1.6 SBOM with structured authors"; jq '{bomFormat, specVersion}' "$f"; exit 1; }
           echo "sbom: $f specVersion $(jq -r .specVersion "$f"), $(jq '.components | length' "$f") components"
 
