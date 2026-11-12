@@ -91,16 +91,27 @@ pub fn instance_rows(audit: &Value) -> Vec<Value> {
 }
 
 /// Build the header from MEASURED facts only.
-pub fn header(
-    tool: &str,
-    digest: &str,
-    scanner_version: &str,
-    scanner_digest: &str,
-    audit: &Value,
-    lock_sha256: &str,
-    lock_provenance: &str,
-    raw_sha256: &str,
-) -> Result<Value, String> {
+/// Everything the header states about the instrument and the input, all measured by this command.
+pub struct Measured<'a> {
+    pub tool: &'a str,
+    pub digest: &'a str,
+    pub scanner_version: &'a str,
+    pub scanner_digest: &'a str,
+    pub lock_sha256: &'a str,
+    pub lock_provenance: &'a str,
+    pub raw_sha256: &'a str,
+}
+
+pub fn header(m: &Measured<'_>, audit: &Value) -> Result<Value, String> {
+    let Measured {
+        tool,
+        digest,
+        scanner_version,
+        scanner_digest,
+        lock_sha256,
+        lock_provenance,
+        raw_sha256,
+    } = *m;
     let db_commit = audit
         .pointer("/database/last-commit")
         .and_then(Value::as_str);
@@ -240,16 +251,16 @@ pub fn run(args: &[String]) -> i32 {
         }
     };
     let raw_sha = crate::sha256::sha256_hex(&raw);
-    let hdr = match header(
-        &tool,
-        &digest,
-        &scanner_version,
-        &scanner_digest,
-        &audit,
-        &lock_sha,
-        &provenance,
-        &raw_sha,
-    ) {
+    let measured = Measured {
+        tool: &tool,
+        digest: &digest,
+        scanner_version: &scanner_version,
+        scanner_digest: &scanner_digest,
+        lock_sha256: &lock_sha,
+        lock_provenance: &provenance,
+        raw_sha256: &raw_sha,
+    };
+    let hdr = match header(&measured, &audit) {
         Ok(h) => h,
         Err(e) => {
             eprintln!("record-vuln: {e}");
@@ -311,17 +322,22 @@ mod tests {
     fn header_is_built_from_measured_facts_and_refuses_a_db_less_report() {
         let audit = serde_json::json!({"database": {"last-commit": "abcdef1234567890", "last-updated": "2026-11-12T00:00:00Z"},
             "vulnerabilities": {"count": 0, "list": []}, "warnings": {}});
-        let h = header(
-            "t",
-            &"a".repeat(64),
-            "0.22.2",
-            &"b".repeat(64),
-            &audit,
-            &"c".repeat(64),
-            "frozen lock",
-            &"d".repeat(64),
-        )
-        .unwrap();
+        let (a, b, c, d) = (
+            "a".repeat(64),
+            "b".repeat(64),
+            "c".repeat(64),
+            "d".repeat(64),
+        );
+        let m = Measured {
+            tool: "t",
+            digest: &a,
+            scanner_version: "0.22.2",
+            scanner_digest: &b,
+            lock_sha256: &c,
+            lock_provenance: "frozen lock",
+            raw_sha256: &d,
+        };
+        let h = header(&m, &audit).unwrap();
         assert_eq!(h["scanner"]["digest"], "b".repeat(64));
         assert_eq!(h["scanner"]["version"], "0.22.2");
         assert_eq!(h["rawPayload"]["asset"], "audit-raw-dddddddddddd.json");
@@ -333,19 +349,7 @@ mod tests {
         );
         let no_db =
             serde_json::json!({"database": null, "vulnerabilities": {"count": 0, "list": []}});
-        assert!(
-            header(
-                "t",
-                &"a".repeat(64),
-                "0.22.2",
-                &"b".repeat(64),
-                &no_db,
-                "x",
-                "",
-                "y"
-            )
-            .is_err()
-        );
+        assert!(header(&m, &no_db).is_err());
     }
 
     #[test]
