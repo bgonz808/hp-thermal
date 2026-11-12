@@ -7,7 +7,11 @@ on:
     inputs:
       dry_run:
         description: "Dry run: build + attest, but publish NOTHING. Default true — must be
-          explicitly unset to publish via dispatch. A tag push ignores this and publishes."
+          explicitly unset to publish via dispatch. A tag push ignores this and publishes.
+          Dry-run outputs are rehearsal evidence: TEST ONLY-signed, attested (Rekor is append-only)
+          with workflow.ref = refs/heads/main, artifacts kept ONE day — approve the release-dryrun
+          gate the same day or re-dispatch. A verifier treats an attestation as a release only when
+          its workflow.ref is a refs/tags/v* ref."
         type: boolean
         default: true
 
@@ -203,6 +207,16 @@ jobs:
         # structured `authors` field; 1.7 is emitted by the same tool but not yet consumed.
         run: '"$TOOLS_DIR/cargo-cyclonedx.exe" cyclonedx --format json --spec-version 1.6'
 
+      - name: Assert SBOM shape (CycloneDX 1.6, structured authors)
+        working-directory: app
+        shell: bash
+        # Fail here, not downstream: the VDR emitter (#396) and verifiers read 1.6 fields.
+        run: |
+          set -euo pipefail
+          f=$(ls ./*.cdx.json | head -1)
+          jq -e '.bomFormat == "CycloneDX" and .specVersion == "1.6" and (.metadata.component.authors | length) > 0' "$f" > /dev/null             || { echo "::error::$f is not a CycloneDX 1.6 SBOM with structured authors"; jq '{bomFormat, specVersion}' "$f"; exit 1; }
+          echo "sbom: $f specVersion $(jq -r .specVersion "$f"), $(jq '.components | length' "$f") components"
+
       # #104: MUTATION before any seal. Patch the /Brepro hash timestamp (which decodes to an
       # implausible year and can trip timestomp heuristics) to the reproducible commit epoch —
       # plausible AND deterministic. link.exe has no /TIMESTAMP, so it's a post-link patch, and
@@ -256,6 +270,9 @@ jobs:
           name: dist-unsigned
           path: dist/
           if-no-files-found: error
+          # Dry-run outputs are rehearsal evidence (TEST ONLY-signed): keep them one day. A real
+          # release's durable outputs live on the GitHub Release; its artifacts keep the 90-day default.
+          retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
 
       # #195: seal the verifier's digest as an out-of-band job output (same channel as the
       # exe/pdb digests). The `verify` job asserts the downloaded xtask.exe against this
@@ -276,6 +293,9 @@ jobs:
           name: xtask-verifier
           path: xtask/target/release/xtask.exe
           if-no-files-found: error
+          # Dry-run outputs are rehearsal evidence (TEST ONLY-signed): keep them one day. A real
+          # release's durable outputs live on the GitHub Release; its artifacts keep the 90-day default.
+          retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
 
   # --- SIGN (#21/#130). The ONLY job holding a credential capable of signing as our
   #     published identity, so it is deliberately minimal: download, assert, log in, sign,
@@ -535,6 +555,9 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: error
+          # Dry-run outputs are rehearsal evidence (TEST ONLY-signed): keep them one day. A real
+          # release's durable outputs live on the GitHub Release; its artifacts keep the 90-day default.
+          retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
 
   # --- Digest chain (#42): re-download the artifact in a FRESH job and prove it is
   #     byte-identical to what build produced+verified, via TWO independent channels — the
@@ -770,6 +793,9 @@ jobs:
           name: binskim-release-sarif
           path: ${{ runner.temp }}/binskim-release.sarif
           if-no-files-found: warn
+          # Dry-run outputs are rehearsal evidence (TEST ONLY-signed): keep them one day. A real
+          # release's durable outputs live on the GitHub Release; its artifacts keep the 90-day default.
+          retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
 
   # #171: give the release SARIF a real chain of custody + a signed attestation, WITHOUT
   # over-privileging the scanner. binskim-release (contents:read) published the SARIF's sha256 as a
