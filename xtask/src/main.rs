@@ -52,6 +52,8 @@ mod eox;
 mod propose;
 
 // #396: the in-repo writer of vuln.jsonl — hashes the auditor it runs, refuses an unblessed one.
+/// `candidate-advance`: the bless cycle as idempotent stages (digest, vuln, caps, mal, summary).
+mod advance;
 mod record_vuln;
 
 /// The app crate lives in a sibling directory; xtask shells into it so app's
@@ -102,6 +104,7 @@ fn main() {
         Some("freeze") => freeze::run(&args),
         Some("freeze-propose") => propose::run(&args),
         Some("record-vuln") => record_vuln::run(&args),
+        Some("candidate-advance") => advance::run(&args),
         Some("verify-caps") => caps::run(args.get(1).map(String::as_str), {
             // optional --manifest <path>
             let mut mpath = None;
