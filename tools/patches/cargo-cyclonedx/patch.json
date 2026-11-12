@@ -1,0 +1,19 @@
+{
+  "schema": "hp-thermal/tool-patch/v1",
+  "tool": "cargo-cyclonedx",
+  "applies_to_rev": "769fa7dc5d23ac39d58b3c198421f7bd48d2ef5f",
+  "reason": "discharge manifest technical lag in a dev-dependency: cyclonedx-bom-macros pins ui_test ^0.27, whose indicatif ^0.17 carries the unmaintained number_prefix (RUSTSEC-2025-0119); ui_test 0.30.4+ requires indicatif ^0.18, which replaces it with unit-prefix. Manifest-only; generated with `cargo add --dev ui_test@0.30 --package cyclonedx-bom-macros` against the pinned rev.",
+  "intents": [
+    {
+      "crate": "ui_test",
+      "min": "0.30"
+    }
+  ],
+  "shed_when": "upstream's manifest satisfies the intent natively - git apply --check conflicts the moment that line changes upstream; delete this directory in the same PR that adopts the newer rev",
+  "refs": [
+    "#255",
+    "#426"
+  ],
+  "author": "bgonz808",
+  "timestamp": "2026-11-12"
+}
