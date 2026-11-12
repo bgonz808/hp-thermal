@@ -1,0 +1,553 @@
+name: Release pipeline (reusable)
+
+# SLSA Build L3 shape (GitHub docs: "Using artifact attestations and reusable workflows to
+# achieve SLSA v1 Build Level 3"): the build, the Authenticode signing, and the generation of
+# provenance + SBOM attestations run in THIS workflow, invoked by release.yml through
+# `workflow_call`. The Sigstore certificate therefore names this file as the signer workflow,
+# and consumers verify with `--signer-workflow <repo>/.github/workflows/release-pipeline.yml`.
+# The calling workflow cannot add or alter steps here; it only chooses to run it.
+#
+# Everything below `jobs:` for build and sign is the former release.yml content, moved verbatim.
+# `inputs.dry_run`, `github.ref`, `vars.*` and the `release`/`release-dryrun` environments
+# resolve exactly as before: a called workflow runs inside the caller's run and ref.
+
+on:
+  workflow_call:
+    inputs:
+      dry_run:
+        description: "true = build, sign (test profile), attest; publish nothing (caller decides)."
+        type: boolean
+        required: true
+    outputs:
+      exe_sha256:
+        value: ${{ jobs.sign.outputs.exe_sha256 }}
+      pdb_sha256:
+        value: ${{ jobs.sign.outputs.pdb_sha256 }}
+      exe_unsigned_sha256:
+        value: ${{ jobs.build.outputs.exe_unsigned_sha256 }}
+      xtask_sha256:
+        value: ${{ jobs.build.outputs.xtask_sha256 }}
+
+permissions:
+  contents: read
+
+jobs:
+  # --- Build on a READ-ONLY, secret-less runner. Tool installs execute code, so this
+  #     job is bounded to reading public source: it cannot push, publish, or exfiltrate.
+  build:
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    # Digest chain (#42/#130): publish the PRE-SIGN bytes' SHA-256 as job outputs — an
+    # OUT-OF-BAND channel (GitHub job metadata). The `sign` job asserts the artifact it
+    # downloads matches this before signing, closing the build->sign custody hop; it then
+    # republishes the POST-SIGN digests, which `verify` asserts against SHA256SUMS. Chain:
+    # build digest -> asserted at sign -> signed digest -> asserted at verify -> attested.
+    outputs:
+      exe_unsigned_sha256: ${{ steps.stage.outputs.exe_unsigned_sha256 }}
+      pdb_sha256: ${{ steps.stage.outputs.pdb_sha256 }}
+      xtask_sha256: ${{ steps.seal_xtask.outputs.xtask_sha256 }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0   # full history so build.rs `git rev-list --count HEAD` is accurate
+
+      - name: Install pinned toolchain + components
+        uses: ./.github/actions/install-toolchain
+        with:
+          components: "rust-src clippy rustfmt"
+
+      # Enforce dependency locking: fails if Cargo.lock is stale / would change. Nothing
+      # gets built or published against an unpinned dependency graph.
+      - name: Verify dependency lock (no drift)
+        working-directory: app
+        shell: bash
+        run: cargo metadata --locked --format-version 1 > /dev/null
+
+      # #138: the four cargo-* build tools are NO LONGER compiled on the release critical path.
+      # They are prebuilt once, out-of-band, by .github/workflows/build-tools.yml (from the same
+      # immutable git-rev pins), published to the `tools` release (a mutable byte store), and
+      # consumed here BY DIGEST. This removes ~76% of release wall-clock (the 984s compile) AND
+      # lifts 1192 build-script executions off the read-only, signed release path entirely — the
+      # #137 CARGO_TARGET_DIR dedup was only an interim win; this is the real fix.
+      #
+      # CANONICAL VERIFICATION (the load-bearing invariant): integrity is anchored to the sha256
+      # committed + human-reviewed in tools/TOOLS.lock — NOT to the `tools` release, whose assets
+      # are overwritable by anyone who can push a release. Every downloaded binary MUST match its
+      # committed digest or the release ABORTS here, BEFORE the tool is ever executed. An all-zero
+      # digest ("not blessed yet") also hard-fails, so the prebuilt flow can never run against an
+      # unverified anchor. A maintainer-account compromise can overwrite the `tools` asset but
+      # cannot rewrite the git-committed digest without a reviewed commit — so a swapped tool is
+      # caught here, not run.
+      #
+      # Bumping a tool stays a reviewed change: edit its rev in tools/TOOLS.lock -> run
+      # build-tools.yml -> commit the printed digest (see tools/README.md). #145 tracks upstream
+      # drift; adopting a newer rev is deliberate, never automatic.
+      #
+      # #221: the fetch+verify logic is factored into .github/actions/fetch-tools so every
+      # consumer (this job, supply-chain.yml) shares ONE parser and verification path. `only`
+      # is least-privilege: the release takes exactly the four tools it runs — cargo-vet (also
+      # in TOOLS.lock) never lands on this job's PATH.
+      - name: Fetch + verify prebuilt release tools (digest-pinned, fail-closed)
+        id: tools
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-deny cargo-auditable cargo-audit cargo-cyclonedx
+          verify-attestations: "true"
+
+      # NO PATH exposure (#221, maintainer decision after the zizmor github-env finding): the
+      # verified tools are consumed by ABSOLUTE PATH only. xtask receives the directory as
+      # PINNED_TOOLS_DIR (env-bound below) and invokes each cargo-<sub> binary directly —
+      # nothing is shadowable, no later step inherits ambient authority, and the finding is
+      # eliminated structurally rather than suppressed or relocated.
+
+      # --- #130/#195: xtask is pure-std with ZERO dependencies, so it builds to a standalone
+      #     binary in seconds. #195: build it ONCE, up front, in release profile, and invoke
+      #     THAT exe for every xtask step below (no dev-profile compile, no repeated
+      #     `cargo run` overhead). The same exe is uploaded for the POST-SIGN `verify` job,
+      #     so the verifier that re-checks the signed bytes downstream is byte-identical to
+      #     the binary that ran the in-release checks here — a custody improvement, not just
+      #     a wall-clock one. (A Rust toolchain must never exist in the credentialed `sign`
+      #     job, which is why `verify` needs the standalone exe at all.)
+      - name: Build xtask once (release; used for every xtask step + shipped to verify)
+        run: cargo build --locked --release --manifest-path xtask/Cargo.toml
+
+      # #196: production-artifact tier ONLY — cargo-deny policy + cargo-auditable release
+      # build (embeds the dep tree in the binary) + `cargo audit bin` on the artifact + PE
+      # exploit-mitigation verification. fmt/clippy/tests are NOT re-run here: source-gate
+      # already requires a provenance-verified green `ci` check on this exact SHA (#191 —
+      # posted by the GitHub Actions app, from ci.yml, SHA-bound), which ran that source
+      # tier. Re-running it in this workflow was never an independent trust domain (an
+      # attacker editing release.yml can edit the re-run too); the verified out-of-band CI
+      # verdict is the stronger control, and this drops ~2m24s of duplicate work.
+      - name: Attest build (deny / auditable / audit-bin / verify-hardening)
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: xtask/target/release/xtask.exe release-attest
+
+      - name: Generate SBOM (CycloneDX)
+        working-directory: app
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        # CycloneDX 1.6 (cargo-cyclonedx >= 0.5.10): the floor for the VDR (#396) and the
+        # structured `authors` field; 1.7 is emitted by the same tool but not yet consumed.
+        run: '"$TOOLS_DIR/cargo-cyclonedx.exe" cyclonedx --format json --spec-version 1.6'
+
+      - name: Assert SBOM shape (CycloneDX 1.6, structured authors)
+        working-directory: app
+        shell: bash
+        # Fail here, not downstream: the VDR emitter (#396) and verifiers read 1.6 fields.
+        run: |
+          set -euo pipefail
+          set -- ./*.cdx.json
+          f=$1
+          [ -f "$f" ] || { echo "::error::no *.cdx.json was produced"; exit 1; }
+          jq -e '.bomFormat == "CycloneDX" and .specVersion == "1.6" and (.metadata.component.authors | length) > 0' "$f" > /dev/null             || { echo "::error::$f is not a CycloneDX 1.6 SBOM with structured authors"; jq '{bomFormat, specVersion}' "$f"; exit 1; }
+          echo "sbom: $f specVersion $(jq -r .specVersion "$f"), $(jq '.components | length' "$f") components"
+
+      # #104: MUTATION before any seal. Patch the /Brepro hash timestamp (which decodes to an
+      # implausible year and can trip timestomp heuristics) to the reproducible commit epoch —
+      # plausible AND deterministic. link.exe has no /TIMESTAMP, so it's a post-link patch, and
+      # it MUST run before the SHA-256 / attestation below so those cover the stamped bytes.
+      # (Same source as build.rs's BUILD_DATE: SOURCE_DATE_EPOCH, else the HEAD commit time.)
+      - name: Stamp PE TimeDateStamp to the commit date
+        shell: bash
+        run: |
+          EPOCH="${SOURCE_DATE_EPOCH:-$(git log -1 --format=%ct)}"
+          xtask/target/release/xtask.exe stamp-time \
+            app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe "$EPOCH"
+
+      # Stage the UNSIGNED bytes. SHA256SUMS is deliberately NOT written here: it must cover
+      # the SIGNED bytes, so the `sign` job produces it. Only the out-of-band pre-sign digests
+      # are emitted, for the build->sign custody assertion (#42/#130).
+      - name: Stage artifacts (unsigned)
+        id: stage
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory dist | Out-Null
+          Copy-Item app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe dist/hp-thermal.exe
+          # Debug-symbol sidecar: build.rs names the pdb hp-thermal.pdb AT THE SOURCE (/PDB +
+          # /PDBALTPATH from CARGO_PKG_NAME), matching the exe basename embedded in its debug
+          # directory — so this is a straight copy, no rename.
+          Copy-Item app/target/x86_64-pc-windows-msvc/release/hp-thermal.pdb dist/hp-thermal.pdb
+          Copy-Item app/*.cdx.json dist/hp-thermal.cdx.json
+          $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
+          $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
+          "exe_unsigned_sha256=$exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+          "pdb_sha256=$pdb"          | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+
+      # PASS 1 of 2 (#130) — FAIL FAST, pre-sign. Catches a bad build before it consumes a
+      # signing operation AND a human environment approval. Authenticode only appends a
+      # certificate table and updates the PE checksum; imports, mitigation flags, the debug
+      # directory and the COFF TimeDateStamp are untouched, so a pass here still holds after
+      # signing. Pass 2 in `verify` re-asserts it on the signed bytes rather than assuming it,
+      # which is what keeps the "validate the EXACT bytes that ship" invariant intact.
+      - name: Verify staged artifact (pre-sign, fail-fast)
+        run: xtask/target/release/xtask.exe verify-artifact dist/hp-thermal.exe dist/hp-thermal.pdb
+
+      # #104/#109 gate: fail closed if the stamp step didn't run or left a field behind —
+      # implausible (zero / pre-project / future) or inconsistent (debug-dir != COFF,
+      # surviving REPRO marker). Runs on dist/ only (post-stamp); the pre-stamp `ci` pass on
+      # target/ still carries the /Brepro hash and must NOT be gated here.
+      - name: Verify PE timestamps (pre-sign, fail-fast)
+        run: xtask/target/release/xtask.exe verify-timestamp dist/hp-thermal.exe
+
+      - name: Upload unsigned artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # actions/upload-artifact v7.0.2
+        with:
+          name: dist-unsigned
+          path: dist/
+          if-no-files-found: error
+          # Dry-run outputs are rehearsal evidence (TEST ONLY-signed): keep them one day. A real
+          # release's durable outputs live on the GitHub Release; its artifacts keep the 90-day default.
+          retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
+
+      # #195: seal the verifier's digest as an out-of-band job output (same channel as the
+      # exe/pdb digests). The `verify` job asserts the downloaded xtask.exe against this
+      # BEFORE executing it — previously the CHECKER was the one artifact crossing the
+      # store un-asserted, inverted from the TOOLS.lock doctrine (byte stores are
+      # untrusted; digests authorize execution).
+      - name: Seal xtask verifier digest
+        id: seal_xtask
+        shell: pwsh
+        run: |
+          $x = (Get-FileHash xtask/target/release/xtask.exe -Algorithm SHA256).Hash.ToLower()
+          "xtask_sha256=$x" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+
+      # The verifier travels separately so `verify` needs neither the repo nor a toolchain.
+      - name: Upload xtask verifier
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # actions/upload-artifact v7.0.2
+        with:
+          name: xtask-verifier
+          path: xtask/target/release/xtask.exe
+          if-no-files-found: error
+          # Dry-run outputs are rehearsal evidence (TEST ONLY-signed): keep them one day. A real
+          # release's durable outputs live on the GitHub Release; its artifacts keep the 90-day default.
+          retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
+
+  # --- SIGN (#21/#130). The ONLY job holding a credential capable of signing as our
+  #     published identity, so it is deliberately minimal: download, assert, log in, sign,
+  #     hash, upload. NO repo checkout, NO toolchain, NO third-party tool builds — every
+  #     step inside a job with `id-token: write` can mint OIDC tokens, so the blast radius
+  #     is kept to actions we pin by SHA.
+  #
+  #     Trust path: GitHub mints a short-lived OIDC token whose subject is
+  #     `repo:<owner>/<repo>:environment:release`. Azure's federated credential accepts ONLY
+  #     that subject, which cannot be produced until the `release` environment's required
+  #     reviewer approves — so the human gate is part of the cryptographic path, not just
+  #     workflow etiquette. No secret exists to steal: the app registration has zero
+  #     password and zero certificate credentials.
+  #
+  #     Least privilege: the CI principal holds exactly one role assignment — Artifact
+  #     Signing Certificate Profile Signer — scoped to a single certificate profile.
+  sign:
+    needs: build
+    runs-on: windows-2025
+    # Two environments, deliberately. A real release (v* tag) deploys to `release`, whose
+    # ONLY deployment policy is the v* TAG rule -- so the production signing path cannot be
+    # reached from a branch at all. A workflow_dispatch dry-run deploys to `release-dryrun`,
+    # whose policy allows the `main` BRANCH.
+    #
+    # Why not one environment: a tag policy cannot match a branch ref, so a dispatch run
+    # against a tag-only environment is REJECTED at policy evaluation -- before the reviewer
+    # gate -- and the job dies in ~1s with zero steps and no approval prompt. Allowing `main`
+    # on the single `release` environment would instead have widened the production path.
+    #
+    # Both environments require the same human reviewer, and each has its own federated
+    # credential (subjects `...:environment:release` and `...:environment:release-dryrun`),
+    # so the OIDC subject distinguishes the two paths at the Azure end as well. This is also
+    # the seam #132 needs: `release` later moves to a production-only identity holding
+    # Certificate Profile Signer on rjg-publictrust, while `release-dryrun` keeps the
+    # test-profile identity.
+    environment: ${{ startsWith(github.ref, 'refs/tags/v') && 'release' || 'release-dryrun' }}
+    permissions:
+      contents: read
+      id-token: write        # OIDC -> Azure (federated, no secret)
+    outputs:
+      exe_sha256: ${{ steps.seal.outputs.exe_sha256 }}
+      pdb_sha256: ${{ steps.seal.outputs.pdb_sha256 }}
+    steps:
+      # FIRST step, before anything touches a credential. Every other exposure in this job
+      # is closed structurally -- there is no key to leak (the private key never leaves
+      # Microsoft's HSM; we send a digest and receive a signature), and the AZURE_* vars are
+      # identifiers, not credentials: they authenticate nothing without an OIDC assertion
+      # that only GitHub can mint for subject `repo:<owner>/<repo>:environment:release`.
+      #
+      # Verbose logging was the one remaining exposure that was hygiene rather than
+      # structure, so we close it by refusing to run. `runner.debug` is 1 whenever step
+      # debug logging is active, which covers ALL three ways it can be turned on: the
+      # ACTIONS_STEP_DEBUG repo secret, the repo variable, and the "Re-run jobs with debug
+      # logging" checkbox (which write-access holders can tick and we cannot prevent).
+      # Detect-and-refuse is the available control when prevention isn't.
+      - name: Refuse to sign under debug logging
+        if: ${{ runner.debug == '1' }}
+        shell: bash
+        run: |
+          echo "::error::ACTIONS_STEP_DEBUG is enabled; refusing to sign. Re-run without debug logging."
+          exit 1
+
+      - name: Download unsigned artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # actions/download-artifact v8.0.2
+        with:
+          name: dist-unsigned
+          path: dist
+
+      # Close the build->sign custody hop (#42/#130): the bytes we are about to sign must be
+      # exactly the bytes `build` produced and verified. Digests bound via env (not inlined
+      # as ${{ }}) so zizmor's template-injection audit stays clean.
+      - name: Assert incoming bytes match build output
+        shell: pwsh
+        env:
+          EXPECT_EXE: ${{ needs.build.outputs.exe_unsigned_sha256 }}
+          EXPECT_PDB: ${{ needs.build.outputs.pdb_sha256 }}
+        run: |
+          $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
+          $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
+          if ($exe -ne $env:EXPECT_EXE) { throw "pre-sign exe digest != build output (build->sign custody break)" }
+          if ($pdb -ne $env:EXPECT_PDB) { throw "pre-sign pdb digest != build output (build->sign custody break)" }
+          Write-Output "build->sign custody OK: signing the exact bytes build verified"
+
+      - name: Azure login (OIDC, federated — no secret)
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906  # Azure/login v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Timestamping is REQUIRED, not optional: certificates live 72 hours. Without an
+      # RFC3161 timestamp every release would stop validating three days after it shipped.
+      # The action defaults to http://timestamp.acs.microsoft.com; pinned explicitly here so
+      # the requirement is visible rather than inherited.
+      - name: Sign (Authenticode)
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        uses: Azure/artifact-signing-action@c7ab2a863ab5f9a846ddb8265964877ef296ee82  # Azure/artifact-signing-action v2.0.0
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files: ${{ github.workspace }}\dist\hp-thermal.exe
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      # Fail-closed signer verification. Consumes the RAW WinVerifyTrust HRESULT, NOT
+      # Get-AuthenticodeSignature.Status.
+      #
+      # Why not Status -- MEASURED on this project's Windows box, not assumed. Signing a PE
+      # with an untrusted root and then corrupting bytes, then reading both engines:
+      #   clean untrusted-root cert   Status=Valid        WVT HRESULT=0x800B0109 (UNTRUSTEDROOT)
+      #   SIGNATURE bytes corrupted   Status=Valid        WVT HRESULT=0x800B0100 (broken signature)
+      #   code bytes corrupted        Status=HashMismatch WVT HRESULT=0x80096010 (bad digest)
+      # Status returns 'Valid' for BOTH a legitimately-untrusted test root AND a
+      # cryptographically BROKEN signature -- so a Status=='Valid' gate would accept a broken
+      # signature, and a Status-in-(Valid,UnknownError) gate accepts every crypto failure that
+      # buckets into UnknownError (invalid timestamp countersignature, broken cert-chain link,
+      # broken primary signature, ASN.1 corruption). Status is a lossy enum; it discards the
+      # exact crypto verdict we need.
+      #
+      # WinVerifyTrust runs the full cryptography: the PE digest, the primary SignerInfo
+      # signature against the signer's PUBLIC KEY, every certificate's chain-link signature,
+      # and the timestamp countersignature. Its HRESULT distinguishes the ONE tolerable defect
+      # (0x800B0109 -- chain is cryptographically valid, we just don't have the test root
+      # installed on the runner) from every genuine crypto failure (each a different code).
+      #   production (tag)  -> require S_OK (0x0): full chain to a trusted PUBLIC root
+      #   test (dry-run)    -> require EXACTLY 0x800B0109: all signatures verified, only defect
+      #                        is the missing Microsoft test root. Any other value == real
+      #                        crypto failure -> throw.
+      #
+      # Identity is then pinned by the DURABLE 311.97 EKU (Microsoft doc: value unique to the
+      # identity-validation resource, STABLE across the daily cert renewals -- subject/thumb/
+      # public-key are not). The subject DN is a SECONDARY assertion only: "Robert Gonzales,
+      # San Francisco" is a common identity another CA could re-issue to a different person, so
+      # it is not the anchor. Full-string OID match, never a prefix. All values hardcoded so
+      # changing an accepted identity needs a reviewed PR, never a repo-variable flip (#132).
+      #
+      # NOT enforced here (documented so the check does not overclaim): certificate revocation
+      # (WTD_REVOKE_NONE -- the sign/verify jobs may lack OCSP/CRL reachability; a network
+      # blip must not flip a good release to rejected); nested-signature presence/absence;
+      # trust in Microsoft's assignment of the durable-identity octets. Byte integrity is the
+      # digest chain's job (build->sign->verify), not this step's.
+      - name: Assert the binary is actually signed
+        if: ${{ vars.SIGNING_ENABLED == 'true' }}
+        shell: pwsh
+        env:
+          EXPECT_PUBLIC_TRUST: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          # Durable identity anchors (311.97 EKUs, observed live from the profiles). Full-string
+          # match, never a prefix. Editing an accepted identity requires a reviewed PR (#132).
+          $ProdIdentityEku     = '1.3.6.1.4.1.311.97.560077468.167399228.786894322.562638940'
+          $ProdPublicTrustMark = '1.3.6.1.4.1.311.97.1.0'
+          $TestIdentityEku     = '1.3.6.1.4.1.311.97.1.2.881842232.80014427.164345747.789896896'
+          $LifetimeSigningEku  = '1.3.6.1.4.1.311.10.3.13'
+          $ProdSubject         = 'CN=Robert Gonzales, O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+          $TestSubject         = 'CN=Robert Gonzales(TEST ONLY), O=Robert Gonzales, L=San Francisco, S=ca, C=US'
+
+          Add-Type -Language CSharp -TypeDefinition @'
+          using System;
+          using System.Runtime.InteropServices;
+          public static class WinTrust {
+            [StructLayout(LayoutKind.Sequential)]
+            struct FI { public uint cb; [MarshalAs(UnmanagedType.LPWStr)] public string p; public IntPtr h; public IntPtr g; }
+            [StructLayout(LayoutKind.Sequential)]
+            struct WD { public uint cb; public IntPtr a; public IntPtr b; public uint ui; public uint rev; public uint uc;
+              public IntPtr file; public uint sa; public IntPtr st; public IntPtr url; public uint pf; public uint ctx; public IntPtr ss; }
+            [DllImport("wintrust.dll", CharSet=CharSet.Unicode)] static extern int WinVerifyTrust(IntPtr h, ref Guid g, ref WD d);
+            public static uint Verify(string path) {
+              Guid a = new Guid("00AAC56B-CD44-11d0-8CC2-00C04FC295EE"); // WINTRUST_ACTION_GENERIC_VERIFY_V2
+              var fi = new FI(); fi.cb=(uint)Marshal.SizeOf(typeof(FI)); fi.p=path;
+              IntPtr pf = Marshal.AllocHGlobal(Marshal.SizeOf(typeof(FI))); Marshal.StructureToPtr(fi, pf, false);
+              var d = new WD(); d.cb=(uint)Marshal.SizeOf(typeof(WD)); d.ui=2; d.rev=0; d.uc=1; d.file=pf; d.sa=1; // UI_NONE, REVOKE_NONE, CHOICE_FILE, VERIFY
+              int hr = WinVerifyTrust(IntPtr.Zero, ref a, ref d);
+              d.sa=2; WinVerifyTrust(IntPtr.Zero, ref a, ref d); Marshal.FreeHGlobal(pf); // STATEACTION_CLOSE
+              return unchecked((uint)hr);
+            }
+          }
+          '@
+          # 0x800B0109 parses as a NEGATIVE Int32 in PowerShell; the Int64 'L' literal keeps the
+          # uint32 comparison correct. (Verified: [uint32]0x800B0109 throws.)
+          [uint32]$S_OK                 = 0
+          [uint32]$CERT_E_UNTRUSTEDROOT = 0x800B0109L
+
+          $file = 'dist/hp-thermal.exe'
+          $sig  = Get-AuthenticodeSignature $file
+          [uint32]$hr = [WinTrust]::Verify((Resolve-Path $file).Path)
+
+          Write-Output ("wvt HRESULT: 0x{0:X8}" -f $hr)
+          Write-Output "status:      $($sig.Status) — $($sig.StatusMessage)"
+          if (-not $sig.SignerCertificate)      { throw "no signer certificate — the file is NOT signed" }
+          Write-Output "subject:     $($sig.SignerCertificate.Subject)"
+          if (-not $sig.TimeStamperCertificate) { throw "signature is NOT timestamped — it would expire with the 72h cert" }
+          Write-Output "timestamp:   $($sig.TimeStamperCertificate.Subject)"
+
+          # Union EKUs across every 2.5.29.37 extension, criticality-agnostic, so an ABSENCE
+          # assertion (no Lifetime EKU on prod) cannot be dodged by a duplicate extension.
+          $ekus = @()
+          foreach ($ext in ($sig.SignerCertificate.Extensions | Where-Object { $_.Oid.Value -eq '2.5.29.37' })) {
+            $ekus += ([System.Security.Cryptography.X509Certificates.X509EnhancedKeyUsageExtension]$ext).EnhancedKeyUsages | ForEach-Object Value
+          }
+          $ekus = $ekus | Sort-Object -Unique
+          Write-Output "ekus:        $($ekus -join '  ')"
+          $hasLifetimeEku = $ekus -contains $LifetimeSigningEku
+
+          switch ($env:EXPECT_PUBLIC_TRUST) {
+            'true' {
+              if ($hr -ne $S_OK) {
+                throw ("production WinVerifyTrust HRESULT is 0x{0:X8}, expected S_OK — chain not fully trusted/valid" -f $hr) }
+              if ($ekus -notcontains $ProdIdentityEku) {
+                throw "signer lacks the production durable-identity EKU ($ProdIdentityEku)" }
+              if ($ekus -notcontains $ProdPublicTrustMark) {
+                throw "signer lacks the Public Trust marker EKU ($ProdPublicTrustMark)" }
+              if ($hasLifetimeEku) {
+                throw "signer carries the Lifetime Signing EKU — a TEST-profile cert on the production path" }
+              if ($sig.SignerCertificate.Subject -ne $ProdSubject) {
+                throw "secondary check: subject '$($sig.SignerCertificate.Subject)' != pinned production subject" }
+              Write-Output "PRODUCTION signature verified: WVT=S_OK, prod durable-identity EKU, no test EKU."
+            }
+            'false' {
+              if ($hr -ne $CERT_E_UNTRUSTEDROOT) {
+                throw ("test WinVerifyTrust HRESULT is 0x{0:X8}, expected exactly CERT_E_UNTRUSTEDROOT (0x800B0109) — the only tolerated defect is the missing test root; anything else is a real crypto failure" -f $hr) }
+              if ($ekus -notcontains $TestIdentityEku) {
+                throw "signer lacks the test durable-identity EKU ($TestIdentityEku)" }
+              if (-not $hasLifetimeEku) {
+                throw "signer lacks the Lifetime Signing EKU — NOT a test-profile cert; refusing it on the dry-run path" }
+              if ($sig.SignerCertificate.Subject -ne $TestSubject) {
+                throw "secondary check: subject '$($sig.SignerCertificate.Subject)' != pinned test subject" }
+              Write-Output "TEST signature verified: WVT=CERT_E_UNTRUSTEDROOT (only defect is missing test root), test durable-identity EKU + Lifetime EKU."
+            }
+            default { throw "EXPECT_PUBLIC_TRUST is '$($env:EXPECT_PUBLIC_TRUST)' — refusing to guess the trust expectation" }
+          }
+
+      # SHA256SUMS is written HERE so it covers the signed bytes, preserving the load-bearing
+      # order: build -> stamp -> SIGN -> hash -> attest.
+      - name: Seal — SHA-256 over the signed bytes
+        id: seal
+        shell: pwsh
+        run: |
+          $exe = (Get-FileHash dist/hp-thermal.exe      -Algorithm SHA256).Hash.ToLower()
+          $pdb = (Get-FileHash dist/hp-thermal.pdb      -Algorithm SHA256).Hash.ToLower()
+          $cdx = (Get-FileHash dist/hp-thermal.cdx.json -Algorithm SHA256).Hash.ToLower()
+          # LF + no BOM so `sha256sum -c SHA256SUMS` parses on Linux/macOS. Out-File -Encoding
+          # ascii writes CRLF, whose trailing \r trips sha256sum ("No such file or directory").
+          # -NoNewline keeps exactly our explicit `n between/after entries.
+          $lines = @("$exe  hp-thermal.exe", "$pdb  hp-thermal.pdb", "$cdx  hp-thermal.cdx.json")
+          ($lines -join "`n") + "`n" | Set-Content -Path dist/SHA256SUMS -NoNewline -Encoding utf8NoBOM
+          "exe_sha256=$exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+          "pdb_sha256=$pdb" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
+
+      - name: Upload signed artifacts
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # actions/upload-artifact v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          # Dry-run outputs are rehearsal evidence (TEST ONLY-signed): keep them one day. A real
+          # release's durable outputs live on the GitHub Release; its artifacts keep the 90-day default.
+          retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
+
+  # Provenance + SBOM attestations are generated HERE, in the reusable workflow, so the signer
+  # identity in the Sigstore certificate is this file. Verified immediately, identity-pinned,
+  # before anything downstream may consume them; the bundles travel as a run artifact.
+  attest:
+    needs: sign
+    runs-on: windows-2025
+    permissions:
+      contents: read
+      id-token: write        # OIDC -> Sigstore (keyless)
+      attestations: write    # record provenance + SBOM attestations
+    steps:
+      - name: Download signed artifacts
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # actions/download-artifact v8.0.2
+        with:
+          name: dist
+          path: dist
+
+      - name: Attest build provenance
+        id: provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # actions/attest-build-provenance v4.2.2
+        with:
+          subject-path: |
+            dist/hp-thermal.exe
+            dist/hp-thermal.pdb
+            dist/hp-thermal.cdx.json
+            dist/SHA256SUMS
+
+      - name: Attest SBOM
+        id: sbom
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # actions/attest v4.2.2
+        with:
+          subject-path: dist/hp-thermal.exe
+          sbom-path: dist/hp-thermal.cdx.json
+
+      - name: Verify attestations (offline, identity-pinned to this reusable workflow)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PROVENANCE_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_BUNDLE: ${{ steps.sbom.outputs.bundle-path }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          signer="${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml"
+          for art in dist/hp-thermal.exe dist/hp-thermal.pdb; do
+            gh attestation verify "$art" --bundle "$PROVENANCE_BUNDLE" --repo "${GITHUB_REPOSITORY}" --signer-workflow "$signer"
+          done
+          gh attestation verify dist/hp-thermal.exe --bundle "$SBOM_BUNDLE" --repo "${GITHUB_REPOSITORY}" \
+            --predicate-type https://cyclonedx.org/bom --signer-workflow "$signer"
+          mkdir -p bundles
+          cp "$PROVENANCE_BUNDLE" bundles/hp-thermal.provenance.sigstore.jsonl
+          cp "$SBOM_BUNDLE"       bundles/hp-thermal.sbom.sigstore.jsonl
+
+      - name: Upload attestation bundles
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # actions/upload-artifact v7.0.2
+        with:
+          name: attestation-bundles
+          path: bundles/
+          if-no-files-found: error
+          retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
