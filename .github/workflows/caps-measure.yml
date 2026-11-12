@@ -23,7 +23,8 @@ on:
       seed_digest:
         description: >-
           Prior blessed digest whose caps.toml seeds the run (the [api.*] definitions ARE the
-          instrument). Empty = the digest currently pinned in tools/TOOLS.lock for `tool`.
+          instrument). Empty = the digest pinned for `tool` in MAIN's TOOLS.lock (the blessed
+          inventory, never the branch's own).
         type: string
         default: ""
 
@@ -114,12 +115,20 @@ jobs:
           set -euo pipefail
           seed="$SEED"
           if [ -z "$seed" ]; then
-            seed=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' \
-                    | awk -v t="$TOOL" '$1==t {print $5; exit}')
+            # Default seed = the BLESSED inventory on main, never the branch under measurement
+            # (same rule as fetch-tools lock-ref): a candidate's TOOLS.lock already names its own
+            # digest, and seeding from that re-measures a candidate against itself.
+            git fetch --quiet --depth 1 origin main
+            seed=$(git show origin/main:tools/TOOLS.lock | grep -vE '^\s*#|^\s*$' \
+                    | sed 's/[[:space:]]*#.*$//' | awk -v t="$TOOL" '$1==t {print $5; exit}')
+            src="origin/main:supply-chain/evidence/$TOOL/$seed/caps.toml"
+            git show "$src" > seed.toml 2>/dev/null \
+              || { echo "::error::no blessed seed inventory at $src — pass seed_digest"; exit 1; }
+          else
+            src="supply-chain/evidence/$TOOL/$seed/caps.toml"
+            [ -f "$src" ] || { echo "::error::no seed inventory at $src — pass seed_digest"; exit 1; }
+            cp "$src" seed.toml
           fi
-          src="supply-chain/evidence/$TOOL/$seed/caps.toml"
-          [ -f "$src" ] || { echo "::error::no seed inventory at $src — pass seed_digest"; exit 1; }
-          cp "$src" seed.toml
           # Measure under the Bubblewrap sandbox whatever the seed recorded (#50: sandbox ON in
           # CI). The written inventory records what was MEASURED, so the first Bubblewrap record
           # after a Disabled seed differs in its [sandbox] block and takes a human signature once.
