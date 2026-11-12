@@ -182,7 +182,9 @@ fn baseline_raw_payload(
 
 /// Asset digests of a release as GitHub serves them (name -> sha256 hex). One call per run; a
 /// failure here makes every pin UNEVALUATED rather than silently skipping the custody check.
-fn store_digests(tag: &str) -> Result<std::collections::BTreeMap<String, String>, String> {
+pub(crate) fn store_digests(
+    tag: &str,
+) -> Result<std::collections::BTreeMap<String, String>, String> {
     let out = std::process::Command::new("gh")
         .args(["release", "view", tag, "--json", "assets"])
         .output()

@@ -80,6 +80,17 @@ truncation). Triggered by store size, not calendar.
   cackle instrument, same-era VT panels (#241 §5). Recorded baselines are audit trail and the
   knowledge-delta input, never the comparison input for gating.
 
+## Bless cycle — `cargo xtask candidate-advance`
+
+The steps that turn a re-frozen candidate branch into a bless PR are stages of one command, run
+on the maintainer's machine with the maintainer's `gh` session and signing key (CI gains nothing;
+nothing merges): `digest --run <producer run>` (verifies the run built THIS branch's lock, writes
+the digest, retires a superseded never-blessed digest per rule 2), `vuln --auditor … --lock-provenance …`
+(record-vuln + raw payload upload, verified in the store), `caps` (dispatch, wait, verify the
+header names this lock, commit), `mal` (VT lookup first, submit only if absent, re-read, record),
+`summary [--pr N]` (title and body generated from this directory). `status` shows what is recorded
+and what is missing. Each stage refuses to run without its precondition and commits what it wrote.
+
 ## Rules
 
 1. **Acks bind to instances, not classes** — a new digest, engine, advisory instance, inventory
