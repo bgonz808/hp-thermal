@@ -84,8 +84,13 @@ truncation). Triggered by store size, not calendar.
 
 1. **Acks bind to instances, not classes** — a new digest, engine, advisory instance, inventory
    content or verdict string is never covered by an old ack.
-2. **Nothing here is deleted on supersession** — superseded digests keep their evidence
-   (forensic history).
+2. **Blessed evidence is immutable** — a digest that was ever pinned in `TOOLS.lock` on `main`
+   keeps its evidence forever (forensic history), even after a later bless supersedes it.
+   **Candidate evidence is retired with the candidate**: a digest that was measured on a
+   candidate branch but never blessed (its lock was re-frozen, its producer run superseded)
+   has its evidence directory, its stored raw payload and any ack bound to it removed on that
+   branch before the bless PR merges, so `main` only ever records digests that were real. The
+   candidate branch's commit history keeps the measurements; nothing on `main` refers to them.
 3. Consumer: `cargo xtask gate` (first-party Rust — no external pinned tool, no python runtime)
    diffs baseline↔candidate, applies the #241 verdict algebra, and fails a bump PR until every
    RAISE item is covered by a committed ack, printing the exact ack lines to add. Committing them
