@@ -11,6 +11,14 @@ bytes change through a toolchain adoption and a linked-CRT hardening, and the pi
 produces them is substantially stronger. `-rc.3` (2026-08-30) was the first candidate built by
 the pinned-toolchain tool fleet; everything below landed after it.
 
+**What changed in the app crate since 0.3.1, exactly:** `build.rs` (the Spectre-mitigated CRT
+lookup), `Cargo.toml` (`find-msvc-tools` as a build dependency; version), `rust-toolchain.toml`
+(nightly-2026-10-09), `.cargo/config.toml` (rustflags single-sourced), test-only changes in
+`capability.rs` (a probe lock for parallel tests), `install.rs` and `tray.rs` (delay-load
+resolution tests), and the cargo-vet import files. No runtime logic changed; the diff of
+`app/src` outside `#[cfg(test)]` is empty. Everything else in this release is dependency and
+tool-fleet maintenance and GitHub Actions pipeline work.
+
 ### Security (binary)
 - **Spectre-mitigated C runtime.** The release links the MSVC `lib/spectre` CRT, discovered
   through the same `find-msvc-tools` lookup rustc uses for `link.exe`; a toolset without it is
@@ -85,6 +93,24 @@ the pinned-toolchain tool fleet; everything below landed after it.
   lock. It never bumps a rev, blesses a digest, or merges; a refusal opens no PR. (#405)
 - **The gate's own test suite runs in PR CI.** The 150 unit tests that anchor every
   FAIL-DIRECTIONS row had been running only on developer machines. (#410)
+- **xtask is lint-clean and tested in CI**; two LNK4199 warnings became delay-load tests;
+  every xtask build in the workflows is `--locked`. (#413–#417, #433)
+- **The tool fleet is caught up and at zero advisory instances.** cargo-auditable v0.7.7,
+  cargo-vet v0.10.3 and cargo-cyclonedx 0.5.10 blessed, each lock frozen **against the prior
+  blessed lock** (`--prior-lock --carry-forward`) so a rev bump never resolves below what
+  shipped, with per-item checksum, source and publisher continuity checks; a new package name
+  enters a frozen lock only with a committed lock-shape statement; the last two unmaintained
+  crates (yaml-rust, number_prefix) were shed by bumping their dev-only chains rather than
+  acknowledged. Instruments always come from the prior-blessed lock, never the branch under
+  evaluation. The vuln baseline is written by a measured recorder that hashes its auditor.
+  (#420–#426)
+- **Release SBOM is CycloneDX 1.6** (the VDR floor, structured `authors`), asserted in-job;
+  dry-run artifacts live one day, and the dispatch description states what a dry-run is and is
+  not. (#428, #431)
+- **Evidence lifecycle written down**: blessed evidence is immutable, never-blessed candidate
+  evidence is retired with its candidate; caps measurements seed from main's blessed inventory;
+  the bless cycle itself is `cargo xtask candidate-advance`, one idempotent fail-closed stage per
+  step. (#429, #430, #432)
 
 ## [0.3.2-rc.2] - 2026-08-25
 
