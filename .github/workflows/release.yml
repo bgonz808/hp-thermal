@@ -199,7 +199,9 @@ jobs:
         shell: bash
         env:
           TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
-        run: '"$TOOLS_DIR/cargo-cyclonedx.exe" cyclonedx --format json'
+        # CycloneDX 1.6 (cargo-cyclonedx >= 0.5.10): the floor for the VDR (#396) and the
+        # structured `authors` field; 1.7 is emitted by the same tool but not yet consumed.
+        run: '"$TOOLS_DIR/cargo-cyclonedx.exe" cyclonedx --format json --spec-version 1.6'
 
       # #104: MUTATION before any seal. Patch the /Brepro hash timestamp (which decodes to an
       # implausible year and can trip timestomp heuristics) to the reproducible commit epoch —
