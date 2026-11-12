@@ -194,6 +194,32 @@ pub fn check_target(d: &Directive, now_epoch: i64, soak_days: i64) -> Result<i64
     Ok(age)
 }
 
+/// A quality-passing `lock-shape` statement accepting package `name` for `tool`.
+pub fn lock_shape_accepted(acks: &crate::gate::Acks, tool: &str, name: &str) -> bool {
+    acks.entries.iter().any(|a| {
+        a.get("axis").and_then(|v| v.as_str()) == Some("lock-shape")
+            && a.pointer("/product/name").and_then(|v| v.as_str()) == Some(tool)
+            && a.pointer("/package/name").and_then(|v| v.as_str()) == Some(name)
+    })
+}
+
+/// The statement a maintainer commits to accept a new package name. `status_notes` is empty on
+/// purpose: the quality bar refuses it until the review is written down.
+pub fn lock_shape_template(tool: &str, name: &str) -> String {
+    serde_json::json!({
+        "schema": "hp-thermal/evidence-ack/v1",
+        "axis": "lock-shape",
+        "product": {"name": tool},
+        "package": {"name": name},
+        "status": "reviewed",
+        "status_notes": "",
+        "author": "",
+        "timestamp": "",
+        "refs": []
+    })
+    .to_string()
+}
+
 /// Instances present after the freeze but not before — the thing a freeze must never add.
 pub fn added_instances(before: &BTreeSet<Instance>, after: &BTreeSet<Instance>) -> Vec<Instance> {
     let key = |i: &Instance| (i.id.clone(), i.package.clone(), i.version.clone());
@@ -314,6 +340,14 @@ pub fn run(args: &[String]) -> i32 {
     // the other half -- a change that fixes nothing is not better, however clean its delta
     // (measured: ruzstd 0.8.3 is newer than 0.8.2 and clears nothing, 0 fixed / 2 -> 2).
     let mut require_improvement = false;
+    // --accept-new-package <name>: a REVIEWED exception to the lockfile shape invariant. The
+    // invariant refuses any new package name because that is the shape a smuggled crate takes;
+    // when a legitimate fix cannot avoid pulling one in (tokio 1.51 -> windows-link), the human
+    // review the refusal asks for is recorded as a `lock-shape` statement in the tool's ack
+    // lattice, and this flag names the package. Without the statement the flag does nothing:
+    // the acceptance lives in a signed, committed line, not in a command-line argument.
+    let mut accept_new: Vec<String> = Vec::new();
+    let mut evidence_dir = PathBuf::from("supply-chain/evidence");
     let mut soak_overridden = false;
     let mut now_overridden = false;
     let mut it = args.iter().skip(1);
@@ -351,6 +385,16 @@ pub fn run(args: &[String]) -> i32 {
             "--base" => base = it.next().map(PathBuf::from),
             "--patches" => patches = it.next().map(PathBuf::from),
             "--require-improvement" => require_improvement = true,
+            "--accept-new-package" => {
+                if let Some(v) = it.next() {
+                    accept_new.push(v.clone());
+                }
+            }
+            "--evidence" => {
+                if let Some(v) = it.next() {
+                    evidence_dir = PathBuf::from(v);
+                }
+            }
             other => {
                 eprintln!("freeze: unknown arg {other}");
                 return 2;
@@ -604,13 +648,42 @@ pub fn run(args: &[String]) -> i32 {
     };
     let added_names = added_package_names(&names_before, &names_after);
     if !added_names.is_empty() {
-        eprintln!(
-            "  REFUSED: the directives INTRODUCED package name(s) {added_names:?} -- a drop-in \
-             may move versions and prune, never add. Review the new dependency by hand before \
-             any bless (lockfile shape invariant)."
-        );
-        let _ = std::fs::remove_dir_all(&work);
-        return 1;
+        // Each new name must be BOTH named on the command line and covered by a quality-passing
+        // `lock-shape` statement for this tool. Either half alone refuses.
+        let acks = crate::gate::load_acks(&evidence_dir.join(&tool).join("acks.jsonl"))
+            .unwrap_or_else(|e| {
+                eprintln!("  ack lattice unreadable ({e}) -- treating as NO acceptances");
+                crate::gate::Acks {
+                    entries: Vec::new(),
+                    rejected: Vec::new(),
+                }
+            });
+        let unaccepted: Vec<&String> = added_names
+            .iter()
+            .filter(|n| !(accept_new.contains(*n) && lock_shape_accepted(&acks, &tool, n)))
+            .collect();
+        if !unaccepted.is_empty() {
+            eprintln!(
+                "  REFUSED: the directives INTRODUCED package name(s) {added_names:?} -- a drop-in \
+                 may move versions and prune, never add. Review the new dependency by hand before \
+                 any bless (lockfile shape invariant). To accept a reviewed name: commit a \
+                 `lock-shape` statement for it in supply-chain/evidence/{tool}/acks.jsonl AND pass \
+                 --accept-new-package <name>:\n    {}",
+                unaccepted
+                    .iter()
+                    .map(|n| lock_shape_template(&tool, n))
+                    .collect::<Vec<_>>()
+                    .join("\n    ")
+            );
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+        for n in &added_names {
+            println!(
+                "  ACCEPTED new package name `{n}` under a reviewed lock-shape statement in \
+                 supply-chain/evidence/{tool}/acks.jsonl (shape invariant exception, recorded)"
+            );
+        }
     }
     let pruned: Vec<&String> = names_before.difference(&names_after).collect();
     if !pruned.is_empty() {
@@ -851,6 +924,48 @@ mod tests {
         let (genuine, unfixed) = split_regressions(&before, &after);
         assert_eq!(genuine, vec![inst("A", "p", "2.0")]);
         assert!(unfixed.is_empty());
+    }
+
+    #[test]
+    fn lock_shape_acceptance_needs_a_quality_statement_for_that_tool_and_name() {
+        let line = |tool: &str, name: &str, notes: &str| {
+            format!(
+                r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"lock-shape","product":{{"name":"{tool}"}},"package":{{"name":"{name}"}},"status":"reviewed","status_notes":"{notes}","author":"a","timestamp":"2026-11-12","refs":[]}}"#
+            )
+        };
+        let dir = std::env::temp_dir().join(format!("freeze-shape-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("acks.jsonl");
+        std::fs::write(
+            &p,
+            format!(
+                "{}\n{}\n{}\n",
+                line(
+                    "cargo-vet",
+                    "windows-link",
+                    "Microsoft windows-rs sub-crate, already in the app graph"
+                ),
+                line("cargo-vet", "evil", ""),
+                line("cargo-deny", "windows-link", "other tool")
+            ),
+        )
+        .unwrap();
+        let acks = crate::gate::load_acks(&p).unwrap();
+        assert!(lock_shape_accepted(&acks, "cargo-vet", "windows-link"));
+        assert!(
+            !lock_shape_accepted(&acks, "cargo-vet", "evil"),
+            "placeholder notes are quality-rejected"
+        );
+        assert!(
+            !lock_shape_accepted(&acks, "cargo-vet", "other"),
+            "unnamed package"
+        );
+        assert!(
+            !lock_shape_accepted(&acks, "cargo-audit", "windows-link"),
+            "per tool"
+        );
+        assert!(lock_shape_template("t", "p").contains(r#""axis":"lock-shape""#));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
