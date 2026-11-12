@@ -1,0 +1,13 @@
+diff --git a/cyclonedx-bom-macros/Cargo.toml b/cyclonedx-bom-macros/Cargo.toml
+index 91ab8ba..01a1ff1 100644
+--- a/cyclonedx-bom-macros/Cargo.toml
++++ b/cyclonedx-bom-macros/Cargo.toml
+@@ -13,7 +13,7 @@ rust-version.workspace = true
+ proc-macro = true
+ 
+ [dev-dependencies]
+-ui_test = "0.27"
++ui_test = "0.30"
+ 
+ [[test]]
+ name = "ui"
