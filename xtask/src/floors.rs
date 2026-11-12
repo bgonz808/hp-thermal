@@ -1108,12 +1108,31 @@ mod tests {
                 "{bad:?}"
             );
         }
-        // the same applies to a prior that cannot be read
+        // the same applies to a prior that cannot be read (grants side and directive side)
         let good = with_directives("p", &["cargo:rustc-cfg=a"]);
         assert!(
-            f.caps_stop(&good, Some("[pkg.p]\nallow_apis = [\"fs\"\n"))
-                .unwrap()
-                .contains("prior inventory not parseable")
+            f.caps_stop(
+                &good,
+                Some(
+                    "[pkg.p]
+allow_apis = [\"fs\"
+"
+                )
+            )
+            .unwrap()
+            .contains("not parseable")
+        );
+        assert!(
+            f.caps_stop(
+                &good,
+                Some(
+                    "[pkg.p]
+build.allow_build_instructions = [\"cargo:x=1
+"
+                )
+            )
+            .unwrap()
+            .contains("prior inventory not parseable")
         );
     }
 
