@@ -1,0 +1,173 @@
+{
+  "schema": "hp-thermal/eox-records/v1",
+  "_doc": [
+    "EoX (end-of-x) records for every environment this repo builds and measures on (#376): hosted runner images, the operating systems under them, and the pinned Rust channel. Each product's lifecycle statement is an OpenEoX Core v1.0 document (OASIS OpenEoX TC) embedded verbatim under `eox`, validated by `cargo xtask eox-check` against the schema copy pinned in SCHEMA.lock to the conformance clause 'EoX Core Information' (schema + section 7.1 mandatory tests). OpenEoX Core carries only the dated transition events; product identification is delegated to a surrounding schema by design (CSD01 section 4.1.4), which is what the fields beside `eox` are.",
+    "Vendor-announced dates only inside `eox`: a date the vendor has not published is `tba`, never an estimate. Estimates live in `projection`, labelled as such, with the pattern they rest on; a projection reaching the warning window is itself a finding ('confirm or correct'), and one reaching the failure window fails until a reviewed record replaces it.",
+    "`end_of_active_support` is the date a hosted runner image enters deprecation (brownouts begin; GitHub says deprecation, endoflife.date says end of active support). OpenEoX Core v1.0 has no event for it, so it sits beside `eox` as a shell field. A runner image has no security-only phase: `end_of_security_support` equals `end_of_life` (removal).",
+    "Operating-system records (kind `os`) map Canonical's standard security maintenance end to `end_of_security_support` and Expanded Security Maintenance end (Ubuntu Pro) to `end_of_life`; the paid Legacy add-on beyond ESM is not counted as vendor support here.",
+    "`crosscheck.endoflife` names the endoflife.date v1 API release the record is compared against in the weekly monitor (releaseDate ~ general_availability, eoasFrom ~ end_of_active_support, eolFrom / eoesFrom ~ the mapped end fields, null ~ tba). A mismatch FAILS (the record is stale or wrong); an unreachable source is a loud warning and never a pass.",
+    "Enforcement windows (`thresholds_days`): for every `runs-on` label a workflow uses, FAIL when the announced or projected end_of_active_support is within `fail` days (or has passed), WARN within `warn` days. Brownouts precede removal, so the clock runs to deprecation start, not to end_of_life. Dates are UTC calendar dates."
+  ],
+  "thresholds_days": { "fail": 120, "warn": 180 },
+  "one_image_rules": [
+    {
+      "_doc": "Every Linux job that consumes cargo-acl (cackle) builds and measures on ONE image: the glibc floor and bwrap behaviour are properties of the image, and a caps inventory measured on a different image than the producer built on is not a measurement of the producer's bytes (#381 fidelity note).",
+      "consumer_mentions": ["cargo-acl", "cackle"],
+      "label_prefix": "ubuntu-"
+    }
+  ],
+  "products": [
+    {
+      "id": "github-actions-runner-images/ubuntu-22.04",
+      "kind": "runner-image",
+      "vendor": "GitHub",
+      "runs_on": ["ubuntu-22.04"],
+      "base_os": "ubuntu/22.04",
+      "eox": {
+        "$schema": "https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json",
+        "general_availability": "2022-08-09T00:00:00Z",
+        "end_of_security_support": "2027-04-17T00:00:00Z",
+        "end_of_life": "2027-04-17T00:00:00Z",
+        "last_updated": "2026-11-12T03:00:00Z"
+      },
+      "end_of_active_support": "2026-09-17",
+      "sources": [
+        "https://github.com/actions/runner-images/issues/14254",
+        "https://endoflife.date/github-actions-runner-images"
+      ],
+      "crosscheck": { "endoflife": { "product": "github-actions-runner-images", "release": "ubuntu-22.04" } },
+      "note": "Not used by any workflow since 2026-11-09; kept as the record of the miss that motivated #376 (deprecation began 2026-09-17, brownouts 2027-03-23..04-13 14:00-00:00 UTC, removal 2027-04-17)."
+    },
+    {
+      "id": "github-actions-runner-images/ubuntu-24.04",
+      "kind": "runner-image",
+      "vendor": "GitHub",
+      "runs_on": ["ubuntu-24.04"],
+      "base_os": "ubuntu/24.04",
+      "eox": {
+        "$schema": "https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json",
+        "general_availability": "2024-05-14T00:00:00Z",
+        "end_of_security_support": "tba",
+        "end_of_life": "tba",
+        "last_updated": "2026-11-12T03:00:00Z"
+      },
+      "end_of_active_support": "tba",
+      "projection": {
+        "end_of_active_support": "2028-09-15",
+        "end_of_life": "2029-04-15",
+        "basis": "Pattern of the two retired LTS images: removal ~6.5 weeks before Canonical's standard-support end (20.04: OS 2025-05-31 -> image removed 2025-04-15; 22.04: OS 2027-06-01 -> removed 2027-04-17); deprecation start 3 months (20.04) to 7 months (22.04) before removal, the earlier figure is used. 24.04 OS standard support ends 2029-05-31."
+      },
+      "sources": [
+        "https://endoflife.date/github-actions-runner-images",
+        "https://github.com/actions/runner-images/issues/14254"
+      ],
+      "crosscheck": { "endoflife": { "product": "github-actions-runner-images", "release": "ubuntu-24.04" } }
+    },
+    {
+      "id": "github-actions-runner-images/ubuntu-26.04",
+      "kind": "runner-image",
+      "vendor": "GitHub",
+      "runs_on": ["ubuntu-26.04"],
+      "base_os": "ubuntu/26.04",
+      "eox": {
+        "$schema": "https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json",
+        "general_availability": "2026-09-17T00:00:00Z",
+        "end_of_security_support": "tba",
+        "end_of_life": "tba",
+        "last_updated": "2026-11-12T03:00:00Z"
+      },
+      "end_of_active_support": "tba",
+      "projection": {
+        "end_of_active_support": "2030-09-15",
+        "end_of_life": "2031-04-15",
+        "basis": "Same pattern as ubuntu-24.04; 26.04 OS standard support ends 2031-05-29. GA 2026-09-17 (actions/runner-images#14747); ubuntu-latest moved to it 2026-10-19..11-19 (#14748)."
+      },
+      "sources": [
+        "https://github.com/actions/runner-images/issues/14747",
+        "https://github.com/actions/runner-images/issues/14748",
+        "https://endoflife.date/github-actions-runner-images"
+      ],
+      "crosscheck": { "endoflife": { "product": "github-actions-runner-images", "release": "ubuntu-26.04" } }
+    },
+    {
+      "id": "github-actions-runner-images/windows-2025",
+      "kind": "runner-image",
+      "vendor": "GitHub",
+      "runs_on": ["windows-2025"],
+      "base_os": "windows-server/2025",
+      "eox": {
+        "$schema": "https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json",
+        "general_availability": "2025-04-10T00:00:00Z",
+        "end_of_security_support": "tba",
+        "end_of_life": "tba",
+        "last_updated": "2026-11-12T03:00:00Z"
+      },
+      "end_of_active_support": "tba",
+      "sources": [
+        "https://endoflife.date/github-actions-runner-images"
+      ],
+      "crosscheck": { "endoflife": { "product": "github-actions-runner-images", "release": "windows-2025" } },
+      "note": "No projection: GitHub retires a Windows image once two newer exist (windows-2019 retired 2025-06-30 after 2022 and 2025 shipped); no windows-2028 image is announced, so there is no pattern date to project from. The weekly cross-check is what catches the announcement."
+    },
+    {
+      "id": "ubuntu/22.04",
+      "kind": "os",
+      "vendor": "Canonical",
+      "runs_on": [],
+      "eox": {
+        "$schema": "https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json",
+        "general_availability": "2022-04-21T00:00:00Z",
+        "end_of_security_support": "2027-06-01T00:00:00Z",
+        "end_of_life": "2032-04-21T00:00:00Z",
+        "last_updated": "2026-11-12T03:00:00Z"
+      },
+      "sources": ["https://endoflife.date/ubuntu", "https://ubuntu.com/about/release-cycle"],
+      "crosscheck": { "endoflife": { "product": "ubuntu", "release": "22.04" } }
+    },
+    {
+      "id": "ubuntu/24.04",
+      "kind": "os",
+      "vendor": "Canonical",
+      "runs_on": [],
+      "eox": {
+        "$schema": "https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json",
+        "general_availability": "2024-04-25T00:00:00Z",
+        "end_of_security_support": "2029-05-31T00:00:00Z",
+        "end_of_life": "2034-04-25T00:00:00Z",
+        "last_updated": "2026-11-12T03:00:00Z"
+      },
+      "sources": ["https://endoflife.date/ubuntu", "https://ubuntu.com/about/release-cycle"],
+      "crosscheck": { "endoflife": { "product": "ubuntu", "release": "24.04" } }
+    },
+    {
+      "id": "ubuntu/26.04",
+      "kind": "os",
+      "vendor": "Canonical",
+      "runs_on": [],
+      "eox": {
+        "$schema": "https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json",
+        "general_availability": "2026-04-23T00:00:00Z",
+        "end_of_security_support": "2031-05-29T00:00:00Z",
+        "end_of_life": "2036-04-23T00:00:00Z",
+        "last_updated": "2026-11-12T03:00:00Z"
+      },
+      "sources": ["https://endoflife.date/ubuntu", "https://ubuntu.com/about/release-cycle"],
+      "crosscheck": { "endoflife": { "product": "ubuntu", "release": "26.04" } }
+    },
+    {
+      "id": "rust-toolchain/nightly-2026-10-09",
+      "kind": "toolchain-channel",
+      "vendor": "rust-lang",
+      "runs_on": [],
+      "eox": {
+        "$schema": "https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json",
+        "general_availability": "2026-10-09T00:00:00Z",
+        "end_of_security_support": "tba",
+        "end_of_life": "tba",
+        "last_updated": "2026-11-12T03:00:00Z"
+      },
+      "sources": ["https://forge.rust-lang.org/release/process.html", "tools/TOOLCHAIN.lock"],
+      "note": "rust-lang publishes no EoX for a channel: only the current stable, beta and nightly are supported, so a pinned nightly is unsupported the day the next one ships. The record exists so the pin is tracked as data; the operative control is the age proxy in the monitor (warn past 75 days) and the 30-day soak in TOOLCHAIN.lock. eox-check requires this id to match the lock's channel, so a toolchain bump must touch this record."
+    }
+  ]
+}

@@ -28,6 +28,9 @@ name: supply-chain monitor (static-pin posture)
 #                     job -> scheduled-failure notification.
 #   vuln-monitor    — same bytes, newer advisory DB: has anything appeared since bless?
 #   pin-staleness   — rust-toolchain nightly age; newer runner families (windows-2026 etc.).
+#   eox-check       — lifecycle (EoX) windows for every runs-on image + the pinned channel (#376):
+#                     OpenEoX Core records vs a digest-pinned schema, cross-checked against
+#                     endoflife.date; a newer schema stage upstream is a warning to review.
 #
 # Name: "monitor", not the former "surveillance" — the object watched is our own pinned
 # artifacts and their posture, never people; the loaded term misrepresented a benign
@@ -339,6 +342,79 @@ jobs:
               echo "::warning::runner family '$fam' is GA upstream - evaluate migrating pinned families (#226)"
             fi
           done
+
+  eox-check:
+    # #376: lifecycle (EoX) posture of every environment the workflows run on. The records
+    # (supply-chain/policy/eox/records.json) are OpenEoX Core documents validated against a
+    # digest-pinned schema copy; PR CI runs the same check offline. This job adds the two live
+    # reads: a cross-check of every record against endoflife.date, and a probe of whether the TC
+    # published a newer schema stage. An unreachable source is a loud warning (xtask prints
+    # UNKNOWN for the records it could not cross-check), never a pass.
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain
+        uses: ./.github/actions/install-toolchain
+
+      - name: Fetch endoflife.date v1 (cross-check source; a failed fetch is recorded, not fatal)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p eol
+          for p in github-actions-runner-images ubuntu; do
+            if ! curl -fsS --max-time 30 -o "eol/$p.json" "https://endoflife.date/api/v1/products/$p"; then
+              echo "::warning::endoflife.date product $p unreachable - its cross-check will be UNKNOWN (not a pass)"
+              rm -f "eol/$p.json"
+            fi
+          done
+
+      - name: OpenEoX schema publication probe (digests vs SCHEMA.lock)
+        shell: bash
+        run: |
+          set -euo pipefail
+          lock=supply-chain/policy/eox/SCHEMA.lock
+          want=$(awk '$1=="core.json"{print $3}' "$lock")
+          staged=$(awk '$1=="core.json"{print $2}' "$lock")
+          [ -n "$want" ] && [ -n "$staged" ] || { echo "::error::$lock has no core.json line"; exit 1; }
+          # The staged URL is immutable by OASIS convention: a different digest there is tampering
+          # or a silent re-publication, and either must fail.
+          if got=$(curl -fsS --max-time 30 "$staged" | sha256sum | cut -d' ' -f1); then
+            if [ "$got" != "$want" ]; then
+              echo "::error::$staged serves sha256 $got, SCHEMA.lock says $want - staged schema changed under us"
+              exit 1
+            fi
+            echo "staged schema digest matches SCHEMA.lock"
+          else
+            echo "::warning::$staged unreachable - staged-digest check UNKNOWN (not a pass)"
+          fi
+          # The TC's $id URL is un-staged: a different digest means a newer stage was published.
+          # Warning, not failure: the committed copy still governs until a reviewed bump.
+          latest=https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json
+          if got=$(curl -fsS --max-time 30 "$latest" | sha256sum | cut -d' ' -f1); then
+            if [ "$got" != "$want" ]; then
+              echo "::warning::OpenEoX Core schema at $latest changed (sha256 $got): a newer stage is published - review it and bump SCHEMA.lock (#376)"
+            else
+              echo "un-staged schema digest still equals the pinned stage"
+            fi
+          else
+            echo "::warning::$latest unreachable - newer-stage probe UNKNOWN"
+          fi
+
+      - name: EoX windows + endoflife.date cross-check
+        shell: bash
+        run: |
+          set -euo pipefail
+          args=(--crosscheck)
+          for p in github-actions-runner-images ubuntu; do
+            [ -f "eol/$p.json" ] && args+=(--endoflife "$p=eol/$p.json")
+          done
+          cargo run --quiet --manifest-path xtask/Cargo.toml -- eox-check "${args[@]}"
 
   vuln-monitor:
     # #226/#241 §5 — the knowledge-delta loop for the vuln axis. Separate job from vt-monitor
