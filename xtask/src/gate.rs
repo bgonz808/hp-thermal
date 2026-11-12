@@ -266,6 +266,12 @@ fn ack_quality(v: &Value) -> Result<(), String> {
                 );
             }
         }
+        "lock-shape" if s(v, &["package", "name"]).is_empty() => {
+            return Err(
+                "lock-shape statement without `package.name` -- it must name the one package it                  accepts into the frozen lock"
+                    .into(),
+            );
+        }
         "mal"
             if s(v, &["finding", "engine"]).is_empty()
                 || s(v, &["finding", "result"]).is_empty() =>
