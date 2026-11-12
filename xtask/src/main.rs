@@ -48,6 +48,9 @@ mod sha256;
 // in use, validated against the digest-pinned schema; fails inside the deprecation window.
 mod eox;
 
+// #405: tier 1 of the strictly-better fix automation — propose frozen-lock fixes as data.
+mod propose;
+
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
@@ -94,6 +97,7 @@ fn main() {
         Some("monitor-vuln") => monitor::run(&args),
         Some("eox-check") => eox::run(&args),
         Some("freeze") => freeze::run(&args),
+        Some("freeze-propose") => propose::run(&args),
         Some("verify-caps") => caps::run(args.get(1).map(String::as_str), {
             // optional --manifest <path>
             let mut mpath = None;
