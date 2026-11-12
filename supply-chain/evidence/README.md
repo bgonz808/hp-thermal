@@ -26,7 +26,7 @@ parseable. The schema borrows established vocabularies rather than inventing one
   `mal.min_verdict_engines` the panel is INCOMPLETE and the record is UNEVALUATED (#347 step 1).
   `sandbox.state` is what the panel STATED when read: `ANALYZED` (≥1 sandbox verdict, each
   recorded) or `NOT READY` (none yet — sandbox analysis lags the AV panel and some files are
-  never sandboxed; not "no behaviors"). Records written before #347 carry a bare `sandbox: []`
+  never sandboxed; not "no behaviours"). Records written before #347 carry a bare `sandbox: []`
   and read as `UNSTATED`. A `malicious` sandbox verdict is a floor; `suspicious` is UNEVALUATED
   until #347's per-item sign-off exists. The monitor prints each pinned digest's line ready to
   append verbatim. Written from schedule/dispatch runs only — PR workflows never call VT.

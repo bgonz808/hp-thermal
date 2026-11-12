@@ -1,7 +1,7 @@
 //! #367: the caps axis's "strictly better" rule. A MEASURED head inventory that is a strict
 //! subset of the prior blessed inventory is ALLOW without a fresh signature — but only after
 //! the measurement proves it is complete. An empty or partial inventory is trivially a
-//! "subset", so every condition below fails toward RAISE (today's behavior), never ALLOW.
+//! "subset", so every condition below fails toward RAISE (today's behaviour), never ALLOW.
 //!
 //! Conditions, all required:
 //!   1. measured, not COPIED FORWARD;
@@ -85,7 +85,7 @@ pub fn pkg_blocks(caps: &str) -> BTreeMap<String, BTreeMap<String, BTreeSet<Stri
 /// kind and the tail under `/out` are. Measured: identical aws-lc-sys directives read as
 /// additions across a profile change (run 42778958576) and a toolchain change (run
 /// 42758902308) until this canonicalisation. No regex crate: a hand parser.
-pub fn normalize_build_dir(v: &str) -> String {
+pub fn normalise_build_dir(v: &str) -> String {
     let Some(i) = v.find("/build/") else {
         return v.to_string();
     };
@@ -128,7 +128,7 @@ fn collect_quoted(s: &str, into: &mut BTreeSet<String>) {
         let Some(j) = after.find('"') else {
             break;
         };
-        into.insert(normalize_build_dir(&after[..j]));
+        into.insert(normalise_build_dir(&after[..j]));
         rest = &after[j + 1..];
     }
 }
@@ -466,25 +466,25 @@ mod tests {
         let a =
             "cargo:rustc-link-search=native=/t/caps-build/cackle/build/ring-b94dacf97f7f4882/out";
         let b = "cargo:rustc-link-search=native=/t/caps-build/cackle-release/build/ring/0123456789abcdef/out";
-        assert_eq!(normalize_build_dir(a), normalize_build_dir(b));
+        assert_eq!(normalise_build_dir(a), normalise_build_dir(b));
         assert_eq!(
-            normalize_build_dir(b),
+            normalise_build_dir(b),
             "cargo:rustc-link-search=native=<build>/ring/HASH/out"
         );
         assert_eq!(
-            normalize_build_dir("cargo:include=/t/x/build/aws-lc-sys-c48f62605a6075e3/out/include"),
+            normalise_build_dir("cargo:include=/t/x/build/aws-lc-sys-c48f62605a6075e3/out/include"),
             "cargo:include=<build>/aws-lc-sys/HASH/out/include"
         );
         assert_eq!(
-            normalize_build_dir(
+            normalise_build_dir(
                 "cargo:libcrypto_path=/t/y/build/aws-lc-sys/d604cf8917c70cbf/out/libaws_lc_0_47_0_crypto.a"
             ),
             "cargo:libcrypto_path=<build>/aws-lc-sys/HASH/out/libaws_lc_0_47_0_crypto.a"
         );
         // different packages must not collapse together
         assert_ne!(
-            normalize_build_dir("cargo:root=/t/build/ring/0123456789abcdef/out"),
-            normalize_build_dir("cargo:root=/t/build/zstd-sys/0123456789abcdef/out")
+            normalise_build_dir("cargo:root=/t/build/ring/0123456789abcdef/out"),
+            normalise_build_dir("cargo:root=/t/build/zstd-sys/0123456789abcdef/out")
         );
         // not a build dir, or not a 16-hex hash: untouched
         for v in [
@@ -493,7 +493,7 @@ mod tests {
             "/t/build/ring/notahash/out",
             "/registry/zstd-sys-2.1.2+zstd.1.5.7/zstd/lib",
         ] {
-            assert_eq!(normalize_build_dir(v), v);
+            assert_eq!(normalise_build_dir(v), v);
         }
     }
 

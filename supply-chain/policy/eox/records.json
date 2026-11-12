@@ -11,7 +11,7 @@
   "thresholds_days": { "fail": 120, "warn": 180 },
   "one_image_rules": [
     {
-      "_doc": "Every Linux job that consumes cargo-acl (cackle) builds and measures on ONE image: the glibc floor and bwrap behavior are properties of the image, and a caps inventory measured on a different image than the producer built on is not a measurement of the producer's bytes (#381 fidelity note).",
+      "_doc": "Every Linux job that consumes cargo-acl (cackle) builds and measures on ONE image: the glibc floor and bwrap behaviour are properties of the image, and a caps inventory measured on a different image than the producer built on is not a measurement of the producer's bytes (#381 fidelity note).",
       "consumer_mentions": ["cargo-acl", "cackle"],
       "label_prefix": "ubuntu-"
     }

@@ -121,9 +121,9 @@ pub fn sandbox_verdicts(panel: &Value) -> Vec<&Value> {
 }
 
 /// The sandbox readiness a mal record STATES. Object form: its `state` (`ANALYZED`, or
-/// `NOT READY` while no sandbox has reported — which is not "no behaviors", #347). Bare array
+/// `NOT READY` while no sandbox has reported — which is not "no behaviours", #347). Bare array
 /// (records before #347 step 1): `UNSTATED`. Missing or malformed: `MALFORMED`. Only ANALYZED
-/// says the behavioral axis was read; none of the others reads as clean.
+/// says the behavioural axis was read; none of the others reads as clean.
 pub fn sandbox_state(panel: &Value) -> String {
     match panel.get("sandbox") {
         Some(Value::Array(_)) => "UNSTATED (record predates #347)".to_string(),

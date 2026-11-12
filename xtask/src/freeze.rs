@@ -1330,7 +1330,7 @@ pub fn run(args: &[String]) -> i32 {
     let fixed_count = removed.len() - unfixed.len();
     if require_improvement && fixed_count == 0 {
         eprintln!(
-            "  REFUSED: --require-improvement set and the directives fix 0 instance(s) as measured \n             by RustSec -- newer is not better on this axis; nothing to certify, no lock written. \n             A fix outside RustSec's view (vendored C library, root store, behavior) needs its \n             own evidence through the maintainer queue, not this flag."
+            "  REFUSED: --require-improvement set and the directives fix 0 instance(s) as measured \n             by RustSec -- newer is not better on this axis; nothing to certify, no lock written. \n             A fix outside RustSec's view (vendored C library, root store, behaviour) needs its \n             own evidence through the maintainer queue, not this flag."
         );
         let _ = std::fs::remove_dir_all(&work);
         return 1;

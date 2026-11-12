@@ -23,7 +23,7 @@ name: vt-submit (lookup-first upsert, dispatch-only)
 # WHAT IT DOES NOT DO: no evidence is written (recompute-not-store), nothing is committed,
 # no gate consults this run. The panel it creates is read later by the monitor's lookups and
 # recorded as mal.jsonl by a human at bless time. The AV panel is usually ready in minutes;
-# sandbox/behavior results lag by design and are not waited for.
+# sandbox/behaviour results lag by design and are not waited for.
 #
 # Trigger is workflow_dispatch ONLY: the key never runs on schedule here, never on PRs, and
 # is never exposed to fork-triggered contexts.

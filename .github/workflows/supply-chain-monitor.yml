@@ -9,7 +9,7 @@ name: supply-chain monitor (static-pin posture)
 #
 # AXIS COVERAGE (honest, #241): this is the MAL axis today, plus environment staleness.
 #   * mal   — COVERED by vt-monitor below: AV panel (completeness-checked) + sandbox readiness
-#             and verdicts from the same lookup, behavior summary for anything flagged (#347).
+#             and verdicts from the same lookup, behaviour summary for anything flagged (#347).
 #   * vuln  — COVERED by vuln-monitor below: re-audits every pinned tool's lockfile against a
 #             FRESH advisory DB and diffs the instance set against the recorded baseline (whose
 #             header names the DB commit it was blessed at). New instance + no ack => fail.
@@ -186,7 +186,7 @@ jobs:
 
             # --- Sandbox readiness (#347 step 1) ---
             # `sandbox_verdicts` rides in THIS response; nothing more is fetched to learn the state.
-            # Zero verdicts is NOT "no behaviors": sandbox analysis lags the AV panel by hours or
+            # Zero verdicts is NOT "no behaviours": sandbox analysis lags the AV panel by hours or
             # longer, and some files are never sandboxed. Three states, none of which reads as clean
             # on its own: ABSENT (the 404 above), NOT READY (no verdict yet), ANALYZED (verdicts
             # present, each one shown). A parse failure is a failure, not an empty list.
@@ -214,9 +214,9 @@ jobs:
             if jq -e 'map(select(.category | ascii_downcase == "suspicious")) | length > 0' <<<"$sb" > /dev/null; then
               echo "::warning::$key: sandbox verdict suspicious — no per-item sign-off exists yet (#347); a bless of this digest is UNEVALUATED until it does"
             fi
-            # Behavior summary (public lookup, #347) for anything flagged — by an engine or by a
+            # Behaviour summary (public lookup, #347) for anything flagged — by an engine or by a
             # sandbox — and only once a sandbox report exists to summarise. One extra call per
-            # flagged hash. Unavailable means UNREAD, never "no behaviors".
+            # flagged hash. Unavailable means UNREAD, never "no behaviours".
             flagged=0
             [ "${#engines[@]}" -gt 0 ] && flagged=1
             jq -e 'map(select((.category | ascii_downcase) as $c | $c != "harmless" and $c != "undetected")) | length > 0' <<<"$sb" > /dev/null && flagged=1
@@ -225,10 +225,10 @@ jobs:
               bcode=$(curl -sS -o beh.json -w "%{http_code}" -H "x-apikey: $VT_API_KEY" \
                 "https://www.virustotal.com/api/v3/files/$h/behaviour_summary")
               if [ "$bcode" = "200" ] && jq -e '.data | type == "object"' beh.json > /dev/null 2>&1; then
-                echo "      behavior summary: verdicts=$(jq -c '.data.verdicts // []' beh.json) tags=$(jq -c '.data.tags // []' beh.json)"
+                echo "      behaviour summary: verdicts=$(jq -c '.data.verdicts // []' beh.json) tags=$(jq -c '.data.tags // []' beh.json)"
                 jq -r '.data.mitre_attack_techniques // [] | .[] | "        \(.id) [\(.severity // "-")] \(.signature_description // "")"' beh.json
               else
-                echo "::warning::$key: behavior summary unavailable (HTTP $bcode) — behaviors UNREAD, not absent"
+                echo "::warning::$key: behaviour summary unavailable (HTTP $bcode) — behaviours UNREAD, not absent"
               fi
             fi
             # The mal.jsonl line this panel would be recorded as (supply-chain/evidence/README.md).

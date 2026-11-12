@@ -245,7 +245,7 @@ pub(crate) fn rewrite_tools_lock(
 // ---------- run logs ----------
 
 /// `gh run view --log` lines are `job\tstep\t<timestamp> <message>` with the step's ANSI
-/// coloring embedded; return just the message.
+/// colouring embedded; return just the message.
 pub(crate) fn log_message(line: &str) -> String {
     let msg = line.rsplit('\t').next().unwrap_or(line);
     let msg = strip_ansi(msg);

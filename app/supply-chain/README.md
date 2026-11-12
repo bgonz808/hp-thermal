@@ -63,7 +63,7 @@ the PR.
 ## Why the store files carry no comments
 
 `cargo-vet` **owns the format of its store** (`config.toml`, `audits.toml`,
-`imports.lock`). It normalizes those files and treats anything it did not write as a
+`imports.lock`). It normalises those files and treats anything it did not write as a
 consistency error:
 
 ```
@@ -87,7 +87,7 @@ to them is always a real policy change rather than a formatting argument.
 
 - **Audit** — a human read the code and certified it (`safe-to-run` for build-time-only,
   `safe-to-deploy` for anything reaching the shipped binary). This is assurance.
-- **Import** — we delegate review to a named organization (Mozilla, Google, Bytecode
+- **Import** — we delegate review to a named organisation (Mozilla, Google, Bytecode
   Alliance) whose audits are published, versioned, and diffable. This is delegation, and
   it is revocable: dropping the import re-exposes everything it covered.
 - **Exemption** — we have *not* reviewed this crate and are shipping it regardless. This

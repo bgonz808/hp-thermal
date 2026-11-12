@@ -73,11 +73,11 @@ cargo xtask verify-hardening <exe>   # check the PE exploit-mitigation flags (CF
 
 Semver, `0.x` while pre-1.0 (see CHANGELOG.md). The rules that are not obvious from semver alone:
 
-- **Dependency-only change, no observable behavior change: PATCH.** A security fix in a
+- **Dependency-only change, no observable behaviour change: PATCH.** A security fix in a
   dependency is the canonical patch release; ship it, do not accumulate it.
-- **Dependency change with an observable behavior change** (root-store contents, platform or
+- **Dependency change with an observable behaviour change** (root-store contents, platform or
   MSRV support, a protocol default): still PATCH in `0.x`, and the CHANGELOG entry names the
-  behavior, not just the crate.
+  behaviour, not just the crate.
 - **MINOR is for the app's own features.** Never for dependencies alone.
 - **Release candidates** (`-rc.N`) are the soak window before a tag.
 - **Build metadata** (`+…`) records the build (commit), never the version. Tooling ignores it

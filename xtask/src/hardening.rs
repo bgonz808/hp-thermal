@@ -42,7 +42,7 @@ const COMMON_HARDENING: &[(&str, &str)] = &[
     ),
     (
         "link-arg=/CETCOMPAT",
-        "backward-edge CFI: opts into the hardware shadow stack, the ROP defense CFG does not provide",
+        "backward-edge CFI: opts into the hardware shadow stack, the ROP defence CFG does not provide",
     ),
 ];
 
