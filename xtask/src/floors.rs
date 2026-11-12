@@ -32,6 +32,12 @@ pub struct Floors {
     /// than this is still running (or a partial rescan), not a verdict about the bytes.
     pub mal_min_engines: Option<u64>,
     pub caps_new_grants: Vec<String>,
+    /// #382: build-script directive floors, evaluated on MEASURED inventories (Bubblewrap-mode
+    /// cackle records every `cargo:` line a build script emits). Each rule is armed separately
+    /// so the policy file shows what is enforced.
+    pub build_link_arg: bool,
+    pub build_foreign_link_search: bool,
+    pub build_new_env_cfg: bool,
 }
 
 pub fn load(path: &Path) -> Result<Floors, String> {
@@ -87,12 +93,16 @@ pub fn parse(text: &str) -> Result<Floors, String> {
         None | Some(Value::Null) => Vec::new(),
         Some(a) => strs(Some(a))?,
     };
+    let flag = |ptr: &str| v.pointer(ptr).and_then(Value::as_bool).unwrap_or(false);
     Ok(Floors {
         vuln_shape,
         mal_malicious_engines,
         mal_sandbox_malicious,
         mal_min_engines,
         caps_new_grants,
+        build_link_arg: flag("/build_instructions/hard_stop_link_arg"),
+        build_foreign_link_search: flag("/build_instructions/hard_stop_foreign_link_search"),
+        build_new_env_cfg: flag("/build_instructions/hard_stop_new_rustc_env_cfg"),
     })
 }
 
@@ -252,18 +262,38 @@ impl Floors {
     /// blessed inventory did not. `None` when not applicable (copied-forward head, no prior):
     /// applicability is the ack's business, not the floor's.
     pub fn caps_stop(&self, head_caps: &str, base_caps: Option<&str>) -> Option<String> {
-        if self.caps_new_grants.is_empty() || is_copied_forward(head_caps) {
+        if is_copied_forward(head_caps) {
             return None;
         }
-        let base = grants(base_caps?);
-        let head = grants(head_caps);
-        let floor: BTreeSet<&str> = self.caps_new_grants.iter().map(String::as_str).collect();
         let mut hits = Vec::new();
-        for (pkg, classes) in &head {
-            let before = base.get(pkg).cloned().unwrap_or_default();
-            for c in classes {
-                if floor.contains(c.as_str()) && !before.contains(c) {
-                    hits.push(format!("{pkg} newly granted `{c}`"));
+        if !self.caps_new_grants.is_empty()
+            && let Some(base_caps) = base_caps
+        {
+            let base = grants(base_caps);
+            let head = grants(head_caps);
+            let floor: BTreeSet<&str> = self.caps_new_grants.iter().map(String::as_str).collect();
+            for (pkg, classes) in &head {
+                let before = base.get(pkg).cloned().unwrap_or_default();
+                for c in classes {
+                    if floor.contains(c.as_str()) && !before.contains(c) {
+                        hits.push(format!("{pkg} newly granted `{c}`"));
+                    }
+                }
+            }
+        }
+        // #382: build-script directives. The absolute rules (linker flags, foreign link-search,
+        // unclassifiable directives) need no prior; the relative one (rustc-env / rustc-cfg)
+        // compares against the prior blessed inventory for the same package when there is one.
+        let prior = base_caps.map(build_instructions);
+        for (pkg, directives) in build_instructions(head_caps) {
+            // A prior inventory that has nothing for this package is a prior with NO directives
+            // for it (the package or its build script is new): the relative rule applies.
+            let prior_pkg = prior
+                .as_ref()
+                .map(|p| p.get(&pkg).map_or(&[][..], Vec::as_slice));
+            for d in &directives {
+                if let Some(why) = self.directive_stop(&pkg, d, prior_pkg) {
+                    hits.push(why);
                 }
             }
         }
@@ -273,6 +303,210 @@ impl Floors {
                 hits.join(", ")
             )
         })
+    }
+
+    fn build_armed(&self) -> bool {
+        self.build_link_arg || self.build_foreign_link_search || self.build_new_env_cfg
+    }
+
+    /// Classify one `cargo:` directive a build script emitted (#382). `Some(why)` is a floor.
+    /// Everything that is not a floor rides the ordinary inventory-change path (a new dynamic
+    /// `rustc-link-lib`, `system_libs=`, even a new self-named static lib is an ADDITION the
+    /// subset rule refuses and an ack must cover): no auto-ALLOW here.
+    fn directive_stop(
+        &self,
+        pkg: &str,
+        directive: &str,
+        prior: Option<&[String]>,
+    ) -> Option<String> {
+        if !self.build_armed() {
+            return None;
+        }
+        let d = normalize_directive(directive);
+        let (key, value) = d.split_once('=').unwrap_or((d.as_str(), ""));
+        let emits = format!("{pkg} build script emits `{directive}`");
+        match key {
+            k if k.starts_with("rustc-link-arg") || k.starts_with("rustc-cdylib-link-arg") => self
+                .build_link_arg
+                .then(|| format!("{emits}: arbitrary linker flags")),
+            "rustc-link-search" => {
+                let path = value.split_once('=').map_or(value, |(_, p)| p);
+                (self.build_foreign_link_search && !own_dir(pkg, path)).then(|| {
+                    format!("{emits}: link-search outside its own OUT_DIR / registry source")
+                })
+            }
+            "rustc-flags" => {
+                // `-L` is a link-search, `-l` a link-lib; anything else is an arbitrary flag.
+                let mut bad = Vec::new();
+                let mut toks = value.split_whitespace();
+                while let Some(t) = toks.next() {
+                    let (flag, inline) =
+                        if t.len() > 2 && (t.starts_with("-L") || t.starts_with("-l")) {
+                            (&t[..2], Some(&t[2..]))
+                        } else {
+                            (t, None)
+                        };
+                    match flag {
+                        "-L" => {
+                            let p = inline.or_else(|| toks.next()).unwrap_or("");
+                            let p = p.split_once('=').map_or(p, |(_, x)| x);
+                            if self.build_foreign_link_search && !own_dir(pkg, p) {
+                                bad.push(format!("-L {p} is outside its own dirs"));
+                            }
+                        }
+                        "-l" => {
+                            if inline.is_none() {
+                                toks.next();
+                            }
+                        }
+                        other => {
+                            if self.build_link_arg {
+                                bad.push(format!("`{other}` is neither -l nor -L"));
+                            }
+                        }
+                    }
+                }
+                (!bad.is_empty()).then(|| format!("{emits}: {}", bad.join("; ")))
+            }
+            "rustc-env" | "rustc-cfg" => match prior {
+                Some(p)
+                    if self.build_new_env_cfg && !p.iter().any(|x| normalize_directive(x) == d) =>
+                {
+                    Some(format!(
+                        "{emits}: not in the prior blessed inventory for this package"
+                    ))
+                }
+                _ => None,
+            },
+            "rustc-link-lib"
+            | "rustc-check-cfg"
+            | "rerun-if-changed"
+            | "rerun-if-env-changed"
+            | "warning"
+            | "error"
+            | "metadata" => None,
+            k if k.starts_with("rustc-") || k.starts_with("rerun-") => Some(format!(
+                "{emits}: unknown rustc directive, not classifiable (unknown is never clean)"
+            )),
+            // `cargo:KEY=VALUE` links metadata (include=, root=, conf=, system_libs=, ...): data
+            // handed to dependents' build scripts, not an instruction to rustc.
+            _ => None,
+        }
+    }
+}
+
+/// `cargo::` (Cargo >= 1.77) and `cargo:` spellings are one directive.
+fn normalize_directive(d: &str) -> String {
+    let d = d.trim();
+    d.strip_prefix("cargo::")
+        .or_else(|| d.strip_prefix("cargo:"))
+        .unwrap_or(d)
+        .to_string()
+}
+
+/// Is `path` inside the emitting package's own build OUT_DIR (`<target>/build/<pkg>-<hash>/out`
+/// or the newer `<target>/build/<pkg>/<hash>/out`) or its own registry source directory
+/// (`<registry>/src/<index>/<pkg>-<version>/`)? Byte-stable across runners because only the
+/// shape after `/build/` or `/registry/src/` is read, never the prefix.
+pub fn own_dir(pkg: &str, path: &str) -> bool {
+    let p = path.replace('\\', "/");
+    let pkg = pkg.split(':').next().unwrap_or(pkg);
+    if pkg.is_empty() {
+        return false;
+    }
+    for (i, _) in p.match_indices("/build/") {
+        let rest = &p[i + "/build/".len()..];
+        for sep in ['-', '/'] {
+            if let Some(r) = rest.strip_prefix(pkg).and_then(|r| r.strip_prefix(sep)) {
+                let hash_len = r.chars().take_while(|c| c.is_ascii_hexdigit()).count();
+                if hash_len == 16
+                    && let Some(after) = r[hash_len..].strip_prefix("/out")
+                    && (after.is_empty() || after.starts_with('/'))
+                {
+                    return true;
+                }
+            }
+        }
+    }
+    if let Some(i) = p.find("/registry/src/") {
+        let rest = &p[i + "/registry/src/".len()..];
+        if let Some((_, after_index)) = rest.split_once('/')
+            && let Some(r) = after_index
+                .strip_prefix(pkg)
+                .and_then(|r| r.strip_prefix('-'))
+            && r.chars().next().is_some_and(|c| c.is_ascii_digit())
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// `[pkg.NAME]` -> the `cargo:` directives its build script emitted, from
+/// `build.allow_build_instructions` (or `allow_build_instructions` inside `[pkg.NAME.build]`).
+/// Order preserved; cackle writes these only when its sandbox captured the build script's
+/// stdout, so an inventory without them says nothing about directives.
+pub fn build_instructions(caps: &str) -> BTreeMap<String, Vec<String>> {
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut pkg: Option<String> = None;
+    let mut in_build_table = false;
+    let mut collecting = false;
+    for raw in caps.lines() {
+        let line = raw.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        if line.starts_with('[') {
+            collecting = false;
+            let inner = line.trim_start_matches('[').trim_end_matches(']').trim();
+            match inner.strip_prefix("pkg.") {
+                Some(n) => {
+                    let (n, b) = match n.strip_suffix(".build") {
+                        Some(n) => (n, true),
+                        None => (n, false),
+                    };
+                    pkg = Some(n.trim_matches('"').to_string());
+                    in_build_table = b;
+                }
+                None => {
+                    pkg = None;
+                    in_build_table = false;
+                }
+            }
+            continue;
+        }
+        let Some(p) = &pkg else {
+            continue;
+        };
+        if collecting {
+            collect_quoted_vec(line, out.entry(p.clone()).or_default());
+            if line.contains(']') {
+                collecting = false;
+            }
+            continue;
+        }
+        if let Some((key, rhs)) = line.split_once('=') {
+            let key = key.trim();
+            if key == "build.allow_build_instructions"
+                || (in_build_table && key == "allow_build_instructions")
+            {
+                collect_quoted_vec(rhs, out.entry(p.clone()).or_default());
+                collecting = rhs.contains('[') && !rhs.contains(']');
+            }
+        }
+    }
+    out
+}
+
+fn collect_quoted_vec(s: &str, into: &mut Vec<String>) {
+    let mut rest = s;
+    while let Some(i) = rest.find('"') {
+        let after = &rest[i + 1..];
+        let Some(j) = after.find('"') else {
+            break;
+        };
+        into.push(after[..j].to_string());
+        rest = &after[j + 1..];
     }
 }
 
@@ -362,6 +596,7 @@ mod tests {
         assert!(f.mal_sandbox_malicious);
         assert_eq!(f.mal_min_engines, Some(50));
         assert_eq!(f.caps_new_grants, ["process", "net"]);
+        assert!(f.build_link_arg && f.build_foreign_link_search && f.build_new_env_cfg);
     }
 
     #[test]
@@ -539,6 +774,241 @@ mod tests {
         assert!(f.caps_stop(copied, Some(BASE)).is_none());
         let head = format!("{BASE}\n[pkg.c]\nallow_apis = [\"process\"]\n");
         assert!(f.caps_stop(&head, None).is_none());
+    }
+
+    // ---------- #382: build-script directives ----------
+
+    const OWN_OUT_OLD: &str =
+        "/home/runner/work/_temp/caps-build/cackle/build/zstd-sys-b5f0e2aa84868937/out";
+    const OWN_OUT_NEW: &str =
+        "/home/runner/work/_temp/caps-build/cackle-release/build/zstd-sys/920a401143eae1b7/out";
+    const OWN_SRC: &str = "/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zstd-sys-2.1.2+zstd.1.5.7/zstd/lib";
+
+    fn with_directives(pkg: &str, dirs: &[&str]) -> String {
+        let list = dirs
+            .iter()
+            .map(|d| format!("    \"{d}\",\n"))
+            .collect::<String>();
+        format!(
+            "# caps evidence — cackle-generated inventory\n[pkg.{pkg}]\nbuild.allow_build_instructions = [\n{list}]\n"
+        )
+    }
+
+    #[test]
+    fn own_dir_recognises_both_out_dir_layouts_and_the_registry_source_only_for_the_emitter() {
+        assert!(own_dir("zstd-sys", OWN_OUT_OLD));
+        assert!(own_dir("zstd-sys", OWN_OUT_NEW));
+        assert!(own_dir("zstd-sys", &format!("{OWN_OUT_NEW}/lib")));
+        assert!(own_dir("zstd-sys", OWN_SRC));
+        assert!(
+            own_dir("zstd-sys:2.1.2", OWN_SRC),
+            "version-qualified package names"
+        );
+        assert!(
+            !own_dir("ring", OWN_OUT_NEW),
+            "another package's OUT_DIR is foreign"
+        );
+        assert!(
+            !own_dir("zstd", OWN_OUT_NEW),
+            "prefix of the name is not the name"
+        );
+        assert!(!own_dir("zstd-sys", "/usr/lib"));
+        assert!(!own_dir(
+            "zstd-sys",
+            "/home/runner/work/_temp/caps-build/cackle/build/zstd-sys-notahash/out"
+        ));
+        assert!(
+            !own_dir(
+                "zstd-sys",
+                "/home/runner/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zstd-sys-fake/x"
+            ),
+            "registry dir must carry a version"
+        );
+        assert!(
+            own_dir("zstd-sys", &OWN_OUT_NEW.replace('/', "\\")),
+            "Windows separators"
+        );
+    }
+
+    #[test]
+    fn link_arg_and_foreign_link_search_are_floors_without_a_prior() {
+        let f = policy();
+        let head = with_directives("zstd-sys", &["cargo:rustc-link-arg=-Wl,-rpath,/tmp/x"]);
+        assert!(
+            f.caps_stop(&head, None)
+                .unwrap()
+                .contains("arbitrary linker flags")
+        );
+        let head = with_directives("zstd-sys", &["cargo::rustc-link-arg-bins=/evil"]);
+        assert!(
+            f.caps_stop(&head, None)
+                .unwrap()
+                .contains("arbitrary linker flags"),
+            "cargo:: spelling"
+        );
+        let head = with_directives("zstd-sys", &["cargo:rustc-cdylib-link-arg=-undefined"]);
+        assert!(f.caps_stop(&head, None).is_some());
+        let head = with_directives(
+            "zstd-sys",
+            &["cargo:rustc-link-search=native=/usr/local/lib"],
+        );
+        assert!(
+            f.caps_stop(&head, None)
+                .unwrap()
+                .contains("outside its own OUT_DIR")
+        );
+        let head = with_directives(
+            "zstd-sys",
+            &[&format!(
+                "cargo:rustc-link-search=native={}",
+                OWN_OUT_NEW.replace("zstd-sys", "ring")
+            )],
+        );
+        assert!(
+            f.caps_stop(&head, None)
+                .unwrap()
+                .contains("outside its own OUT_DIR"),
+            "another crate's OUT_DIR"
+        );
+        let head = with_directives("zstd-sys", &["cargo:rustc-flags=-L /opt/lib -l z"]);
+        assert!(f.caps_stop(&head, None).unwrap().contains("-L /opt/lib"));
+        let head = with_directives("zstd-sys", &["cargo:rustc-flags=-C link-arg=/evil"]);
+        assert!(
+            f.caps_stop(&head, None)
+                .unwrap()
+                .contains("neither -l nor -L")
+        );
+        let head = with_directives("zstd-sys", &["cargo:rustc-frobnicate=1"]);
+        assert!(
+            f.caps_stop(&head, None)
+                .unwrap()
+                .contains("unknown is never clean")
+        );
+    }
+
+    #[test]
+    fn self_referential_directives_and_links_metadata_are_not_floors() {
+        let f = policy();
+        let head = with_directives(
+            "zstd-sys",
+            &[
+                &format!("cargo:include={OWN_SRC}"),
+                &format!("cargo:root={OWN_OUT_NEW}"),
+                "cargo:rustc-link-lib=static=zstd",
+                "cargo:rustc-link-lib=z",
+                &format!("cargo:rustc-link-search=native={OWN_OUT_OLD}"),
+                &format!("cargo:rustc-link-search=native={OWN_OUT_NEW}"),
+                &format!("cargo:rustc-flags=-L {OWN_OUT_NEW} -l zstd"),
+                "cargo:system_libs=z",
+                "cargo:conf=ZSTD_STATIC",
+                "cargo:rerun-if-changed=build.rs",
+                "cargo:rustc-check-cfg=cfg(zstd_pkg)",
+                "cargo:warning=hello",
+            ],
+        );
+        assert_eq!(f.caps_stop(&head, None), None);
+        assert_eq!(
+            f.caps_stop(&head, Some(BASE)),
+            None,
+            "a dynamic -l z is RAISE territory (an addition), not a floor"
+        );
+    }
+
+    #[test]
+    fn rustc_env_and_cfg_are_floors_only_when_new_against_a_prior() {
+        let f = policy();
+        let prior = with_directives(
+            "ring",
+            &[
+                "cargo:rustc-cfg=ring_core",
+                "cargo:rustc-env=RING_CORE_PREFIX=ring_core_0_17_14_",
+            ],
+        );
+        let same = with_directives(
+            "ring",
+            &[
+                "cargo::rustc-cfg=ring_core",
+                "cargo:rustc-env=RING_CORE_PREFIX=ring_core_0_17_14_",
+            ],
+        );
+        assert_eq!(
+            f.caps_stop(&same, Some(&prior)),
+            None,
+            "spelling differences are not changes"
+        );
+        let new_cfg = with_directives(
+            "ring",
+            &[
+                "cargo:rustc-cfg=ring_core",
+                "cargo:rustc-cfg=unsafe_fast_path",
+            ],
+        );
+        assert!(
+            f.caps_stop(&new_cfg, Some(&prior))
+                .unwrap()
+                .contains("not in the prior blessed inventory")
+        );
+        let new_env = with_directives("ring", &["cargo:rustc-env=RUSTFLAGS_OVERRIDE=1"]);
+        assert!(f.caps_stop(&new_env, Some(&prior)).is_some());
+        let other_pkg_prior = with_directives("other", &["cargo:rustc-cfg=unsafe_fast_path"]);
+        assert!(
+            f.caps_stop(&new_cfg, Some(&other_pkg_prior)).is_some(),
+            "the prior is per package"
+        );
+        assert_eq!(
+            f.caps_stop(&new_cfg, None),
+            None,
+            "no prior: the ack path, not the floor"
+        );
+        let copied = format!(
+            "# caps evidence — COPIED FORWARD from abc\n{}",
+            with_directives("ring", &["cargo:rustc-link-arg=/evil"])
+        );
+        assert_eq!(
+            f.caps_stop(&copied, Some(&prior)),
+            None,
+            "not a measurement"
+        );
+    }
+
+    #[test]
+    fn build_instructions_parser_reads_both_table_shapes() {
+        let caps = "[pkg.a]\nbuild.allow_build_instructions = [\"cargo:x=1\",\n  \"cargo:y=2\",\n]\nallow_unsafe = true\n[pkg.b.build]\nallow_build_instructions = [\"cargo:z=3\"]\n[pkg.c]\nallow_apis = [\"fs\"]\n";
+        let b = build_instructions(caps);
+        assert_eq!(b["a"], ["cargo:x=1", "cargo:y=2"]);
+        assert_eq!(b["b"], ["cargo:z=3"]);
+        assert!(!b.contains_key("c"));
+    }
+
+    #[test]
+    fn frontier_inventories_pass_the_build_directive_floor_and_the_parser_sees_their_directives() {
+        let f = policy();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let lock = std::fs::read_to_string(root.join("tools/TOOLS.lock")).unwrap();
+        let mut seen_dirs = 0;
+        let mut seen_inv = 0;
+        for t in crate::gate::parse_tools_lock(&lock) {
+            let p = root
+                .join("supply-chain/evidence")
+                .join(&t.name)
+                .join(&t.sha)
+                .join("caps.toml");
+            let Ok(caps) = std::fs::read_to_string(&p) else {
+                continue;
+            };
+            seen_inv += 1;
+            seen_dirs += build_instructions(&caps)
+                .values()
+                .map(Vec::len)
+                .sum::<usize>();
+            assert_eq!(f.caps_stop(&caps, None), None, "{}", p.display());
+            assert_eq!(f.caps_stop(&caps, Some(&caps)), None, "{}", p.display());
+        }
+        assert!(seen_inv >= 5, "frontier inventories read: {seen_inv}");
+        assert!(
+            seen_dirs >= 20,
+            "the hand-audited directives (#381: 31) are visible to the parser: {seen_dirs}"
+        );
     }
 
     #[test]

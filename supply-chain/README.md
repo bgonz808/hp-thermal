@@ -62,8 +62,10 @@ the enforcement layer's own burn-down list.
   fresh signature. Empty, partial, copied-forward, or any addition falls back to RAISE.
 - **absolute floors** (`policy/floors.json`) — the state a signature cannot admit: a vulnerability
   with a critical-shape CVSS vector, a panel with too many malicious verdicts or a malicious sandbox
-  verdict, a measured inventory newly granting `process`/`net`. HARD-STOP in `gate`, FAIL in the
-  monitors, never ackable; a missing policy is UNEVALUATED, not "no floors".
+  verdict, a measured inventory newly granting `process`/`net` or recording a build script that
+  passes arbitrary linker flags, searches a foreign link path, emits an unclassifiable directive,
+  or sets a `rustc-env`/`rustc-cfg` the prior inventory lacked (#382). HARD-STOP in `gate`, FAIL
+  in the monitors, never ackable; a missing policy is UNEVALUATED, not "no floors".
 - **`eox-check`** (#376) — OpenEoX Core "Validator Basic" over `policy/eox/records.json` against
   the digest-pinned schema (TC test vectors vendored under `xtask/testdata/openeox/`), plus the
   lifecycle windows: every `runs-on` label in `.github/workflows/` must have a record, and the
