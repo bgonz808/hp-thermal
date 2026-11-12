@@ -411,6 +411,22 @@ pub fn spec_for(resident: &BTreeMap<String, Vec<String>>, d: &Directive) -> Stri
 /// Is the package already at or above the directive's version within the target's line? Then
 /// the move is moot (a sibling bump already carried it) and must not be attempted: `--precise`
 /// to a LOWER version would be the rollback this machinery exists to prevent.
+/// Does the live lock still hold ANY copy of the directive's semver line? Carry-forward
+/// directives are computed before the explicit moves run; when an explicit move drops a whole
+/// line (insta 1.49 sheds serde_yaml 0.8 and with it indexmap 1.x), there is nothing left to
+/// restore, and `--precise` on the bare name would drag the SURVIVING line down across lines.
+pub fn line_resident(resident: &BTreeMap<String, Vec<String>>, d: &Directive) -> bool {
+    let Some(target) = parse_ver(&d.version) else {
+        return true;
+    };
+    resident
+        .get(&d.package)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| parse_ver(v))
+        .any(|v| line_of(v) == line_of(target))
+}
+
 pub fn already_satisfied(resident: &BTreeMap<String, Vec<String>>, d: &Directive) -> bool {
     let Some(target) = parse_ver(&d.version) else {
         return false;
@@ -1058,10 +1074,20 @@ pub fn run(args: &[String]) -> i32 {
     // under the new rev's requirements and is reported with cargo's reason.
     let mut pending = carried_directives.clone();
     let mut carried_count = 0usize;
+    let mut moot: Vec<String> = Vec::new();
     while !pending.is_empty() {
         let mut next = Vec::new();
         let mut last_err: BTreeMap<String, String> = BTreeMap::new();
         for p in &pending {
+            // A carried line an explicit move removed entirely is moot, not unreachable: the
+            // explicit directive owns that change and `dropped_lines` reports it below.
+            let resident = std::fs::read_to_string(&lock)
+                .map(|t| lock_package_versions(&t))
+                .unwrap_or_default();
+            if !line_resident(&resident, p) {
+                moot.push(format!("{} {}", p.package, p.version));
+                continue;
+            }
             match attempt(p) {
                 Ok(true) => {
                     carried_count += 1;
@@ -1095,6 +1121,12 @@ pub fn run(args: &[String]) -> i32 {
         println!(
             "# carry-forward: {carried_count} of {} prior versions restored",
             carried_directives.len()
+        );
+    }
+    if !moot.is_empty() {
+        println!(
+            "  carry-forward lines removed by an explicit move (nothing left to restore): {}",
+            moot.join(", ")
         );
     }
     if !refused.is_empty() {
@@ -1667,6 +1699,28 @@ mod tests {
             "x@0",
             "unknown package falls back to the written spec"
         );
+        let gone_line = Directive {
+            package: "indexmap".into(),
+            version: "1.9.3".into(),
+            at: Some("1.9.1".into()),
+        };
+        let only_two = lock(&[("indexmap", "2.12.0")]);
+        assert!(
+            !line_resident(&only_two, &gone_line),
+            "line 1.x gone -> moot, never --precise across lines"
+        );
+        assert!(line_resident(
+            &lock(&[("indexmap", "1.9.1"), ("indexmap", "2.12.0")]),
+            &gone_line
+        ));
+        assert!(line_resident(
+            &only_two,
+            &Directive {
+                package: "indexmap".into(),
+                version: "2.3.0".into(),
+                at: None
+            }
+        ));
         let text = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"a\"\nversion = \"2.0.0\"\n\n[metadata]\nk = \"v\"\n";
         assert_eq!(lock_package_versions(text)["a"], ["1.0.0", "2.0.0"]);
     }
