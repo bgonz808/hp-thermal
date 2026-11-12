@@ -530,6 +530,19 @@ fn ci_source_checks() -> bool {
         "cargo",
         &["test", "--manifest-path", "xtask/Cargo.toml", "--locked"],
     );
+    // The gate engines are security code: they meet the same fmt/clippy bar as the app.
+    ok &= step(
+        "fmt (xtask)",
+        ".",
+        "cargo",
+        &["fmt", "--manifest-path", "xtask/Cargo.toml", "--check"],
+    );
+    ok &= step(
+        "clippy (xtask)",
+        ".",
+        "cargo",
+        &["clippy", "--manifest-path", "xtask/Cargo.toml", "--locked", "--", "-D", "warnings"],
+    );
     ok
 }
 

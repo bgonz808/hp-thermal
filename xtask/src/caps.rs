@@ -13,6 +13,7 @@
 //!     DYN_APIS + expected_dynamic bound *that dynamic resolution happens at all*, which
 //!     is weaker than bounding what it reaches;
 //!   * imported != called, so the surface also overstates in the other direction.
+//!
 //! So the honest claim is CHANGE DETECTION, not containment: an exact-match ratchet over
 //! a statically visible surface means a delta is always real and always reviewed. It does
 //! not mean the binary is limited to what the manifest lists. Real containment is an OS

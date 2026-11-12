@@ -171,11 +171,10 @@ fn declared_channel() -> Result<String, String> {
         };
         for line in text.lines() {
             let mut f = line.split_whitespace();
-            if f.next() == Some("channel") {
-                if let Some(c) = f.next() {
+            if f.next() == Some("channel")
+                && let Some(c) = f.next() {
                     return Ok(c.to_string());
                 }
-            }
         }
         return Err(format!("{p} has no 'channel' field"));
     }

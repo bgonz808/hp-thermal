@@ -173,11 +173,10 @@ pub fn elf_needed(b: &[u8]) -> Option<Vec<String>> {
     let strtab = vaddr_to_off(&phdrs, strtab_va)? as usize;
     let mut out = Vec::new();
     for (tag, val) in &dynamic {
-        if *tag == DT_NEEDED {
-            if let Some(s) = cstr_at(b, strtab.checked_add(*val as usize)?) {
+        if *tag == DT_NEEDED
+            && let Some(s) = cstr_at(b, strtab.checked_add(*val as usize)?) {
                 out.push(s.to_ascii_lowercase());
             }
-        }
     }
     Some(out)
 }
@@ -217,13 +216,11 @@ pub fn elf_imported_functions(b: &[u8]) -> Option<Vec<String>> {
         let st_name = u32_at(b, o)? as usize;
         let st_shndx = u16_at(b, o + 6)?;
         // SHN_UNDEF (0) means the symbol is imported rather than defined here.
-        if st_shndx == 0 && st_name != 0 {
-            if let Some(s) = cstr_at(b, strtab.checked_add(st_name)?) {
-                if !s.is_empty() {
+        if st_shndx == 0 && st_name != 0
+            && let Some(s) = cstr_at(b, strtab.checked_add(st_name)?)
+                && !s.is_empty() {
                     out.push(s.to_ascii_lowercase());
                 }
-            }
-        }
         o += syment;
     }
     Some(out)
@@ -260,8 +257,8 @@ fn cet_features(b: &[u8], phdrs: &[Phdr]) -> BTreeSet<String> {
         let (Some(pr_type), Some(pr_datasz)) = (u32_at(b, o), u32_at(b, o + 4)) else {
             break;
         };
-        if pr_type == GNU_PROPERTY_X86_FEATURE_1_AND && pr_datasz >= 4 {
-            if let Some(bits) = u32_at(b, o + 8) {
+        if pr_type == GNU_PROPERTY_X86_FEATURE_1_AND && pr_datasz >= 4
+            && let Some(bits) = u32_at(b, o + 8) {
                 if bits & GNU_PROPERTY_X86_FEATURE_1_IBT != 0 {
                     out.insert("CET_IBT".to_string());
                 }
@@ -269,7 +266,6 @@ fn cet_features(b: &[u8], phdrs: &[Phdr]) -> BTreeSet<String> {
                     out.insert("CET_SHSTK".to_string());
                 }
             }
-        }
         // records are 8-byte aligned on 64-bit
         o += 8 + ((pr_datasz as usize + 7) & !7);
     }
@@ -308,11 +304,10 @@ pub fn elf_hardening(b: &[u8]) -> Option<BTreeSet<String>> {
     // Absence of the header is deliberately NOT treated as protection: the kernel then
     // falls back to an architecture default that has historically been executable, so a
     // missing header is the unsafe reading, not a neutral one.
-    if let Some(gs) = phdrs.iter().find(|p| p.p_type == PT_GNU_STACK) {
-        if gs.p_flags & PF_X == 0 {
+    if let Some(gs) = phdrs.iter().find(|p| p.p_type == PT_GNU_STACK)
+        && gs.p_flags & PF_X == 0 {
             out.insert("NX_STACK".to_string());
         }
-    }
 
     // RELRO: the relocation region is made read-only after startup.
     if phdrs.iter().any(|p| p.p_type == PT_GNU_RELRO) {
@@ -341,11 +336,10 @@ pub fn elf_hardening(b: &[u8]) -> Option<BTreeSet<String>> {
     // Its presence is inferred from the guard-failure symbol the instrumentation calls.
     // Recorded because on Linux it is opt-in (`-Z stack-protector`), so unlike PIE/NX/RELRO
     // its absence is the expected default rather than a regression.
-    if let Some(funcs) = elf_imported_functions(b) {
-        if funcs.iter().any(|f| f.contains("__stack_chk_fail")) {
+    if let Some(funcs) = elf_imported_functions(b)
+        && funcs.iter().any(|f| f.contains("__stack_chk_fail")) {
             out.insert("STACK_PROTECTOR".to_string());
         }
-    }
 
     Some(out)
 }
