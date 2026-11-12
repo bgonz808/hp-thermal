@@ -1,0 +1,23 @@
+# SCHEMA.lock — the OpenEoX Core schema, pinned by CONTENT (#376).
+#
+# The records in records.json embed OpenEoX Core documents (OASIS OpenEoX TC, Core Schema
+# v1.0). `cargo xtask eox-check` validates each one against the committed copy of the schema
+# in schema/, and refuses to evaluate anything if that copy's sha256 differs from this lock:
+# the schema is part of the policy, so its identity is reviewed here, not trusted because a
+# file with the right name is present.
+#
+# Stage: Committee Specification Draft 01 (13 July 2026; public review closed 2026-08-13;
+# CISA-endorsed framework 2026-02-13). CSD01 is the latest published stage as of 2026-11-11.
+# The TC's `$id` is the un-staged URL https://docs.oasis-open.org/openeox/eox-core/v1.0/schema/core.json,
+# which today serves bytes identical to the csd01 copy pinned below. When a later stage is
+# published (CS01 / OASIS Standard), the un-staged URL will change: the monitor compares its
+# digest against this lock weekly and WARNS on divergence — that warning is the cue to review
+# the new stage and swap all three fields in one PR. The staged csd01 URL is immutable.
+#
+# Fields:  file  url  sha256
+#   file   — path under schema/ (committed verbatim, byte-for-byte as published).
+#   url    — the staged publication the bytes were taken from.
+#   sha256 — reviewed at commit time; also matched the TC repository blob
+#            (oasis-tcs/openeox fd771fe484a37e1cd5ed4e2e422e4d0a45313a5d, eox-core-v-1-0/schema/).
+core.json  https://docs.oasis-open.org/openeox/eox-core/v1.0/csd01/schema/core.json  7dca4f8e86769685c99ab26a1bb274694657d50a47da48aea915796f6c547a60
+meta.json  https://docs.oasis-open.org/openeox/eox-core/v1.0/csd01/schema/meta.json  d96bca6a65bf57213046f439efac019cb363092c730237d813253a4d0403c35b

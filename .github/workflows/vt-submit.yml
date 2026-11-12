@@ -41,7 +41,7 @@ permissions:
 
 jobs:
   submit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04   # pinned: floating labels are untrackable (#376 eox-check)
     permissions:
       contents: read
     steps:

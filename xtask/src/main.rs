@@ -44,6 +44,10 @@ mod floors;
 mod freeze;
 mod sha256;
 
+// #376: EoX tracking — OpenEoX Core documents for every runner image / OS / toolchain channel
+// in use, validated against the digest-pinned schema; fails inside the deprecation window.
+mod eox;
+
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
 const APP_DIR: &str = "app";
@@ -88,6 +92,7 @@ fn main() {
         Some("mal-acks") => gate::mal_acks_run(&args),
         Some("explore") => explore::run(&args),
         Some("monitor-vuln") => monitor::run(&args),
+        Some("eox-check") => eox::run(&args),
         Some("freeze") => freeze::run(&args),
         Some("verify-caps") => caps::run(args.get(1).map(String::as_str), {
             // optional --manifest <path>
@@ -132,6 +137,9 @@ fn main() {
             );
             eprintln!(
                 "  gate --base <TOOLS.lock>  3-axis candidate gate vs supply-chain/evidence (#241)"
+            );
+            eprintln!(
+                "  eox-check [--today D] [--crosscheck --endoflife <product>=<file>]...  OpenEoX lifecycle windows for every runs-on image + the pinned channel (#376)"
             );
             eprintln!(
                 "  mal-acks --tool <t> --digest <sha256>  acked engines from the evidence lattice (#278)"

@@ -10,6 +10,10 @@ directory, so a reviewer knows which hat they're wearing from the path alone):
     against the actual bytes. **Missing manifest = fail** (fail-secure; absence is never a
     skip). Authoring is a review, not a write: `verify-caps` on an un-manifested binary
     prints a proposed manifest (its measured surface) to commit.
+  - **`eox/`** — lifecycle (EoX) records (#376): one OpenEoX Core v1.0 document per runner
+    image / OS / toolchain channel in `records.json`; the schema copy they are validated
+    against in `schema/`, pinned by digest in `SCHEMA.lock`. Enforced by `cargo xtask eox-check`
+    (PR CI offline; the weekly monitor cross-checks endoflife.date).
   - `bump/` *(future)* — per-tool candidate-promotion policy (the bump pipeline).
 - **`evidence/`** — what we *measured*: per-digest records the gate consumes.
   - `<tool>/<full-sha256>/{vuln.jsonl,mal.jsonl,caps.toml}` + `<tool>/acks.jsonl`.
@@ -57,6 +61,12 @@ the enforcement layer's own burn-down list.
   with a critical-shape CVSS vector, a panel with too many malicious verdicts or a malicious sandbox
   verdict, a measured inventory newly granting `process`/`net`. HARD-STOP in `gate`, FAIL in the
   monitors, never ackable; a missing policy is UNEVALUATED, not "no floors".
+- **`eox-check`** (#376) — OpenEoX Core "Validator Basic" over `policy/eox/records.json` against
+  the digest-pinned schema (TC test vectors vendored under `xtask/testdata/openeox/`), plus the
+  lifecycle windows: every `runs-on` label in `.github/workflows/` must have a record, and the
+  check FAILS within 120 days of the image's deprecation start (announced or PROJECTED, labelled
+  as such), WARNS within 180. An unknown or floating label, an unpinned schema copy, or a schema
+  keyword outside the implemented subset fails closed; an unreachable endoflife.date is UNKNOWN.
 - **`verify-caps <binary> [--manifest <p>]`** (#245) — the binary vantage of the caps
   axis: measures a binary's import surface against `policy/caps/<binary>.json`, fails
   closed on off-allowlist imports, stale allow entries (ratchet), denied functions, or
