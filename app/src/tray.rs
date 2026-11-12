@@ -1748,3 +1748,19 @@ unsafe fn exit_if_service_newer(hwnd: HWND) {
     // No self-spawn — exit and let ensure_tray / the Run key bring up the new build.
     PostQuitMessage(0);
 }
+
+#[cfg(test)]
+mod delay_load_tests {
+    /// powrprof.dll is DELAY-loaded (build.rs, #106) for SetSuspendState on the Fn+F12 path. A
+    /// test cannot suspend the machine, so prove the delay-load resolves with the read-only
+    /// GetPwrCapabilities from the same DLL. This also keeps a powrprof import in the test image,
+    /// which `/DELAYLOAD` needs (LNK4199 otherwise).
+    #[test]
+    fn powrprof_resolves_through_the_delay_load() {
+        use windows::Win32::System::Power::{GetPwrCapabilities, SYSTEM_POWER_CAPABILITIES};
+        let mut caps = SYSTEM_POWER_CAPABILITIES::default();
+        // SAFETY: `caps` is a valid, writable out-struct of the documented size.
+        let ok = unsafe { GetPwrCapabilities(&mut caps) };
+        assert!(ok, "GetPwrCapabilities failed");
+    }
+}
