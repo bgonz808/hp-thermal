@@ -183,7 +183,7 @@ jobs:
       #     a wall-clock one. (A Rust toolchain must never exist in the credentialed `sign`
       #     job, which is why `verify` needs the standalone exe at all.)
       - name: Build xtask once (release; used for every xtask step + shipped to verify)
-        run: cargo build --release --manifest-path xtask/Cargo.toml
+        run: cargo build --locked --release --manifest-path xtask/Cargo.toml
 
       # #196: production-artifact tier ONLY — cargo-deny policy + cargo-auditable release
       # build (embeds the dep tree in the binary) + `cargo audit bin` on the artifact + PE

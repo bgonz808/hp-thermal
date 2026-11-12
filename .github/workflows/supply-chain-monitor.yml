@@ -307,7 +307,7 @@ jobs:
 
       - name: Evaluate the pinned toolchain against them
         shell: bash
-        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- toolchain-advisories --advisories rust-advisories.json
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- toolchain-advisories --advisories rust-advisories.json
 
   pin-staleness:
     runs-on: ubuntu-24.04
@@ -422,7 +422,7 @@ jobs:
           for p in github-actions-runner-images ubuntu; do
             [ -f "eol/$p.json" ] && args+=(--endoflife "$p=eol/$p.json")
           done
-          cargo run --quiet --manifest-path xtask/Cargo.toml -- eox-check "${args[@]}"
+          cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- eox-check "${args[@]}"
 
   vuln-monitor:
     # #226/#241 §5 — the knowledge-delta loop for the vuln axis. Separate job from vt-monitor
@@ -452,4 +452,4 @@ jobs:
         env:
           PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
           GH_TOKEN: ${{ github.token }}   # read-only: lists the tools release's asset digests (rawPayload custody)
-        run: cargo run --manifest-path xtask/Cargo.toml -- monitor-vuln
+        run: cargo run --locked --manifest-path xtask/Cargo.toml -- monitor-vuln

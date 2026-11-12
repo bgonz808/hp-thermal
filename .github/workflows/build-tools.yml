@@ -95,7 +95,7 @@ jobs:
         shell: bash
         env:
           PINNED_TOOLS_DIR: ${{ steps.audit-tool.outputs.tools-dir }}
-        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
 
       - name: Build windows tools (content-addressed) + posture for ALL tools
         shell: bash
@@ -296,7 +296,7 @@ jobs:
             # xtask is a lane utility, not a produced tool, and the later gate steps run it without
             # the producer flags — same fingerprint, one build. A stamp or verify failure is a build
             # failure for this tool (collected, reported with the rest), never a silently unstamped exe.
-            if ! env -u RUSTFLAGS cargo run -q --manifest-path xtask/Cargo.toml -- stamp-time "./toolroot/bin/$name.exe" "$epoch"                || ! env -u RUSTFLAGS cargo run -q --manifest-path xtask/Cargo.toml -- verify-timestamp "./toolroot/bin/$name.exe" --expect "$epoch"; then
+            if ! env -u RUSTFLAGS cargo run --locked -q --manifest-path xtask/Cargo.toml -- stamp-time "./toolroot/bin/$name.exe" "$epoch"                || ! env -u RUSTFLAGS cargo run -q --manifest-path xtask/Cargo.toml -- verify-timestamp "./toolroot/bin/$name.exe" --expect "$epoch"; then
               build_failures="$build_failures $name"
               echo "::error::$name: PE timestamp stamp/verify failed (epoch $epoch from $repo@${rev:0:12})"
               echo "::endgroup::"
@@ -333,7 +333,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo run --manifest-path xtask/Cargo.toml -- verify-allowances --diag-dir .
+          cargo run --locked --manifest-path xtask/Cargo.toml -- verify-allowances --diag-dir .
 
       - name: Caps-manifest gate (each produced tool binary)
         shell: bash
@@ -347,13 +347,13 @@ jobs:
           for exe in out/*.exe; do
             name="$(basename "$exe" .exe)"; name="${name%-*}"   # strip -<sha12>
             m="supply-chain/policy/caps/$name.windows-x86_64.json"; [ -f "$m" ] || m="supply-chain/policy/caps/$name.json"
-            if ! cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "$m"; then
+            if ! cargo run --locked --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "$m"; then
               failed=1
             fi
             # #386: the binary-vantage vuln axis needs cargo-auditable's `.dep-v0` section, and
             # `cargo audit bin` is fail-open without it (partial list from panic strings, exit 0).
             # Presence is proven in-tree here, BEFORE attest/upload.
-            if ! cargo run --manifest-path xtask/Cargo.toml -- verify-auditable "$exe"; then
+            if ! cargo run --locked --manifest-path xtask/Cargo.toml -- verify-auditable "$exe"; then
               failed=1
             fi
           done
@@ -536,13 +536,13 @@ jobs:
             # A per-target manifest (<name>.<target>.json) takes precedence: the same tool has a
             # PE surface on the windows lane and an ELF surface here.
             m="supply-chain/policy/caps/$name.linux-x86_64.json"; [ -f "$m" ] || m="supply-chain/policy/caps/$name.json"
-            cargo run --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "$m"
+            cargo run --locked --manifest-path xtask/Cargo.toml -- verify-caps "$exe" --manifest "$m"
             # #386: binary-vantage precondition. GATES once the lane builds through a blessed
             # cargo-auditable; on the bootstrap run (none blessed yet) it warns, once.
             if [ -n "${LX_AUDITABLE:-}" ]; then
-              cargo run --manifest-path xtask/Cargo.toml -- verify-auditable "$exe"
+              cargo run --locked --manifest-path xtask/Cargo.toml -- verify-auditable "$exe"
             else
-              cargo run --manifest-path xtask/Cargo.toml -- verify-auditable "$exe" \
+              cargo run --locked --manifest-path xtask/Cargo.toml -- verify-auditable "$exe" \
                 || echo "::warning::$base has no .dep-v0 — bootstrap build (#386 step 3); the next producer run gates this"
             fi
           done

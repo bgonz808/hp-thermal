@@ -57,7 +57,7 @@ jobs:
 
       # STATIC tier (blocking): fail on any NEW pre-main transitive dep (new DLL-plant surface).
       - name: Static gate — transitive DLL-plant surface
-        run: cargo run --manifest-path xtask/Cargo.toml -- audit-dll-closure app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
+        run: cargo run --locked --manifest-path xtask/Cargo.toml -- audit-dll-closure app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
 
       # CAPABILITY RATCHET (blocking): EXACT-match import allowlist. The gate FAILS unless the
       # binary's concrete-DLL imports equal ALLOWED exactly — nothing is allowed to drift:
@@ -68,7 +68,7 @@ jobs:
       #     that DLL later.
       # Gated here (not only in the tag-time release build) so it runs on every import-affecting PR.
       - name: Capability ratchet — exact-match import allowlist
-        run: cargo run --manifest-path xtask/Cargo.toml -- capabilities app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
+        run: cargo run --locked --manifest-path xtask/Cargo.toml -- capabilities app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe
 
       # DYNAMIC tier (BLOCKING): plant a bare proxy under ncrypt's name next to a throwaway exe copy
       # and detect whether the run-dir copy wins the loader search — via marker (dynamic load) OR an
@@ -81,7 +81,7 @@ jobs:
       - name: Dynamic tier — plant test (ncrypt, blocking)
         shell: pwsh
         run: |
-          cargo run --manifest-path xtask/Cargo.toml -- audit-dll-planting app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe ncrypt.dll
+          cargo run --locked --manifest-path xtask/Cargo.toml -- audit-dll-planting app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe ncrypt.dll
           $code = $LASTEXITCODE
           $msg = switch ($code) {
             1 { "**PLANTABLE** — ncrypt loaded from the run dir. Regression: rstrtmgr (or another static importer of ncrypt) is back — the pre-main DLL-hijack gap is reopened." }
