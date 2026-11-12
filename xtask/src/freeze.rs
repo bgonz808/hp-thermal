@@ -268,10 +268,37 @@ pub fn spec_for(resident: &BTreeMap<String, Vec<String>>, d: &Directive) -> Stri
         Some(vs) if vs.len() == 1 => d.package.clone(),
         Some(vs) => match &d.at {
             Some(cur) if vs.contains(cur) => format!("{}@{cur}", d.package),
-            _ => d.package.clone(),
+            _ => {
+                // `at` went stale (an earlier move re-resolved it): the copy in the TARGET's
+                // semver line is the one meant, when exactly one is resident there.
+                let target_line = parse_ver(&d.version).map(line_of);
+                let same_line: Vec<&String> = vs
+                    .iter()
+                    .filter(|v| parse_ver(v).map(line_of) == target_line)
+                    .collect();
+                match same_line.as_slice() {
+                    [one] => format!("{}@{one}", d.package),
+                    _ => d.package.clone(),
+                }
+            }
         },
         None => d.spec(),
     }
+}
+
+/// Is the package already at or above the directive's version within the target's line? Then
+/// the move is moot (a sibling bump already carried it) and must not be attempted: `--precise`
+/// to a LOWER version would be the rollback this machinery exists to prevent.
+pub fn already_satisfied(resident: &BTreeMap<String, Vec<String>>, d: &Directive) -> bool {
+    let Some(target) = parse_ver(&d.version) else {
+        return false;
+    };
+    resident
+        .get(&d.package)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| parse_ver(v))
+        .any(|v| line_of(v) == line_of(target) && v >= target)
 }
 
 /// Names present after the directives that were not present before. Non-empty means the
@@ -738,6 +765,7 @@ pub fn run(args: &[String]) -> i32 {
             }
         },
     };
+    let mut carried_directives: Vec<Directive> = Vec::new();
     if carry_forward {
         let Some(prior) = &prior else {
             eprintln!("freeze: --carry-forward needs --prior-lock");
@@ -752,7 +780,7 @@ pub fn run(args: &[String]) -> i32 {
                 return 1;
             }
         };
-        let mut carried = carry_forward_directives(&start, prior, &parsed);
+        let carried = carry_forward_directives(&start, prior, &parsed);
         if carried.is_empty() {
             println!("# carry-forward: nothing resolved below the prior blessed lock");
         }
@@ -772,9 +800,7 @@ pub fn run(args: &[String]) -> i32 {
                 }
             }
         }
-        // Carried moves go first: they restore the baseline the explicit directives build on.
-        carried.extend(parsed);
-        parsed = carried;
+        carried_directives = carried;
     }
 
     // 3. Advisory posture BEFORE (the starting lock), at this DB state.
@@ -794,45 +820,98 @@ pub fn run(args: &[String]) -> i32 {
     // turned a ten-directive batch into ten cycles of discovery (the same defect fixed in the
     // caps gate, #305, and the producer loop, #324). Nothing is written on any refusal: a
     // partial set is not the set that was reviewed, so no delta is computed for it either.
-    let mut refused: Vec<String> = Vec::new();
-    for p in &parsed {
-        // An earlier directive's re-resolution may already have moved this package, so a
-        // `pkg@current` spec written beforehand can match nothing. Resolve the spec against the
-        // lock as it stands now: bare when one version is resident, `pkg@current` otherwise.
-        let spec = match std::fs::read_to_string(&lock) {
-            Ok(t) => spec_for(&lock_package_versions(&t), p),
-            Err(_) => p.spec(),
-        };
+    // One `cargo update -p --precise` attempt; Ok(true) moved, Ok(false) already satisfied,
+    // Err(reason) unreachable (cargo's own words: the requirement that caps the move).
+    let attempt = |p: &Directive| -> Result<bool, String> {
+        let resident = std::fs::read_to_string(&lock)
+            .map(|t| lock_package_versions(&t))
+            .unwrap_or_default();
+        if already_satisfied(&resident, p) {
+            return Ok(false);
+        }
+        let spec = spec_for(&resident, p);
         let out = Command::new("cargo")
             .current_dir(&work)
             .args(["update", "-p", &spec, "--precise", &p.version])
             .env_remove("CARGO")
             .env_remove("RUSTC")
             .env_remove("RUSTUP_TOOLCHAIN")
-            .output();
-        match out {
-            Ok(o) if o.status.success() => println!("  updated {} -> {}", p.package, p.version),
-            Ok(o) => {
-                // cargo's own words: the requirement that caps the move is the actionable fact.
-                let err = String::from_utf8_lossy(&o.stderr);
-                let why: Vec<&str> = err
-                    .lines()
-                    .filter(|l| !l.trim().is_empty() && !l.contains("Updating crates.io index"))
-                    .take(6)
-                    .collect();
-                eprintln!(
-                    "  REFUSED: cargo update -p {spec} --precise {} failed — unreachable from this \
-                     tree's requirements:\n      {}",
-                    p.version,
-                    why.join("\n      ")
-                );
-                refused.push(format!("{}={}", p.package, p.version));
-            }
-            Err(e) => {
-                eprintln!("  REFUSED: cannot run cargo update for {}: {e}", p.package);
+            .output()
+            .map_err(|e| format!("cannot run cargo update: {e}"))?;
+        if out.status.success() {
+            return Ok(true);
+        }
+        let err = String::from_utf8_lossy(&out.stderr);
+        let why: Vec<&str> = err
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.contains("Updating crates.io index"))
+            .take(6)
+            .collect();
+        Err(format!(
+            "cargo update -p {spec} --precise {} failed — unreachable from this tree's \
+             requirements:\n      {}",
+            p.version,
+            why.join("\n      ")
+        ))
+    };
+    let mut refused: Vec<String> = Vec::new();
+    // Explicit directives are the fixes; they move first and a failure is a hard refusal.
+    for p in &parsed {
+        match attempt(p) {
+            Ok(true) => println!("  updated {} -> {}", p.package, p.version),
+            Ok(false) => println!(
+                "  {} already at or above {} in its line (moved by a sibling)",
+                p.package, p.version
+            ),
+            Err(why) => {
+                eprintln!("  REFUSED: {why}");
                 refused.push(format!("{}={}", p.package, p.version));
             }
         }
+    }
+    // Carry-forward moves can depend on each other (icu_collections needs icu_normalizer to have
+    // moved first): apply in passes until a pass makes no progress; what remains is unreachable
+    // under the new rev's requirements and is reported with cargo's reason.
+    let mut pending = carried_directives.clone();
+    let mut carried_count = 0usize;
+    while !pending.is_empty() {
+        let mut next = Vec::new();
+        let mut last_err: BTreeMap<String, String> = BTreeMap::new();
+        for p in &pending {
+            match attempt(p) {
+                Ok(true) => {
+                    carried_count += 1;
+                    println!(
+                        "  carried {} -> {} (prior blessed version)",
+                        p.package, p.version
+                    );
+                }
+                Ok(false) => {}
+                Err(why) => {
+                    last_err.insert(p.package.clone(), why);
+                    next.push(p.clone());
+                }
+            }
+        }
+        if next.len() == pending.len() {
+            for p in &next {
+                eprintln!(
+                    "  REFUSED: carry-forward {}={}: {}",
+                    p.package,
+                    p.version,
+                    last_err.get(&p.package).map(String::as_str).unwrap_or("?")
+                );
+                refused.push(format!("{}={}", p.package, p.version));
+            }
+            break;
+        }
+        pending = next;
+    }
+    if !carried_directives.is_empty() {
+        println!(
+            "# carry-forward: {carried_count} of {} prior versions restored",
+            carried_directives.len()
+        );
     }
     if !refused.is_empty() {
         eprintln!(
