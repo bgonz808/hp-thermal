@@ -102,7 +102,7 @@ jobs:
             # explore's error text landed in the report body as CONTENT and the job stayed green.
             # Absence of findings is this workflow's expected output, which is exactly why absence
             # of FUNCTION must be made loud instead of left for a reader to infer.
-            if cargo run --quiet --manifest-path xtask/Cargo.toml -- \
+            if cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- \
               explore --lockfile "$name.lock" --tool "$name" --digest "$sha" >> report.md 2>&1
             then :; else
               rc=$?

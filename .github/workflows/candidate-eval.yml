@@ -62,7 +62,7 @@ jobs:
         shell: bash
         env:
           PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
-        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
 
       - name: Run the gate
         id: gate
@@ -108,7 +108,7 @@ jobs:
           # Capture the verdict, always produce the report; enforcement is the last step
           # so the comment posts even when the gate blocks.
           set +e
-          cargo run --manifest-path xtask/Cargo.toml -- gate \
+          cargo run --locked --manifest-path xtask/Cargo.toml -- gate \
             --base /tmp/base-tools.lock --base-locks-dir /tmp/base-locks \
             --base-evidence /tmp/base-evidence --report gate-report.md
           echo "code=$?" >> "$GITHUB_OUTPUT"

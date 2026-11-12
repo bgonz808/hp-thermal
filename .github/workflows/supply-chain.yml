@@ -60,7 +60,7 @@ jobs:
         shell: bash
         env:
           PINNED_TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
-        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
 
   vet:
     # windows-latest (#221): cargo-vet is consumed as a digest-pinned prebuilt exe from

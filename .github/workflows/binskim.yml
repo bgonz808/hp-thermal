@@ -77,7 +77,7 @@ jobs:
       # pointed at the old pdb name; only the release build caught it.) No args -> uses the
       # RELEASE_EXE/RELEASE_PDB consts, so it also validates those point at the real build outputs.
       - name: Verify release artifact (in-house PE checks)
-        run: cargo run --manifest-path xtask/Cargo.toml -- verify-artifact
+        run: cargo run --locked --manifest-path xtask/Cargo.toml -- verify-artifact
 
       # Shared scan core (.github/actions/binskim-scan): fetch+digest-verify BinSkim, analyze offline
       # against the native hp-thermal.pdb, fail-closed on couldn't-scan. gate-on-findings=false here

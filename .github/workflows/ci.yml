@@ -37,16 +37,16 @@ jobs:
       # silently unhardened, and nothing else would notice. This asserts the common set is in
       # both -- it deliberately says nothing about the flags that differ on purpose.
       - name: Hardening flags present in every windows build path
-        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- verify-hardening-flags
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- verify-hardening-flags
 
       # #376: every runs-on label in the workflows has a lifecycle record, none is inside its
       # deprecation window, and the records conform to the digest-pinned OpenEoX Core schema.
       # Offline here; the weekly monitor adds the endoflife.date cross-check.
       - name: EoX records + runner-image lifecycle windows
-        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- eox-check
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- eox-check
 
       - name: Checks (fmt / clippy / test, both feature configs)
-        run: cargo run --manifest-path xtask/Cargo.toml -- ci --fast
+        run: cargo run --locked --manifest-path xtask/Cargo.toml -- ci --fast
 
   # Read-only security scanning (no secrets, no write scope, egress-audited). LAYERED
   # by design — no single scanner or DB is complete:

@@ -93,7 +93,7 @@ jobs:
           [ "$DRY" = "true" ] && args+=(--dry-run)
           [ "$ALLOW_ADDED" = "true" ] && args+=(--allow-added-advisories)
 
-          cargo run --quiet --manifest-path xtask/Cargo.toml -- "${args[@]}" | tee freeze-report.txt
+          cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- "${args[@]}" | tee freeze-report.txt
 
       - name: Upload the report (and the lock, if one was written)
         if: always()
