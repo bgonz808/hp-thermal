@@ -1,11 +1,11 @@
 # caps evidence — cackle-generated inventory; the [api.*] sections ARE the instrument (#241 s5)
-# generated: 2026-11-12, cargo-acl v0.9.1 (87c159d397e9, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 43189734482)
-# subject: cargo-vet @ mozilla/cargo-vet@cef4dd43a0b9d2d37febf0e5ad42abc6d9ea5472; frozen tools/locks/cargo-vet.lock sha256 9e8d8e14112f07e780528eb52a45c9f0c7eaf8e4a2ed0ec45834c73a6d75fb17
+# generated: 2026-11-12, cargo-acl v0.9.1 (87c159d397e9, digest+attestation verified), linux-native analysis, GitHub-hosted runner (caps-measure run 43269325267)
+# subject: cargo-vet @ mozilla/cargo-vet@cef4dd43a0b9d2d37febf0e5ad42abc6d9ea5472; frozen tools/locks/cargo-vet.lock sha256 4e288ef183f9ad8e50ca7542c3ab6b42a105f3a03d52ecd5dfc940bd81a99705
 # patch: deff8a9d21cc9458ec675d2327398558b8f42deed0d1f775e4187ac3417d558b  tools/patches/cargo-vet/0001-bump-indicatif.patch
 # sandbox: kind="Bubblewrap" during measurement (bubblewrap 0.11.1)
 # build_flags (as built, #387): [--locked,-p,cargo-vet] — the producer's flavor, no --all-targets; features and targets that do not ship are not inventoried
 # profile (as built, #387): cackle-release = inherits release (debug_assertions off, as shipped) with opt-level 0 / lto off for attribution accuracy, per cackle CONFIG.md
-# seed: 88ea05d37ed371a780bf0d1fcc63debcf59afe81315ba431d7fc8b1a359a2ba1; cackle exit 0; pkg sections seed 183 -> measured 183
+# seed: e8105b023b7afe006e9b8edd44e10e4a75255ba4dc654621854ecbf4059c9a4d; cackle exit 0; pkg sections seed 183 -> measured 180
 # caveats: linux-target proxy for windows binaries; enforcement config to be hand-curated (#50)
 [common]
 build_flags = ["--locked","-p","cargo-vet"]
@@ -394,9 +394,6 @@ allow_unsafe = true
 [pkg.socket2]
 allow_unsafe = true
 
-[pkg.linked-hash-map]
-allow_unsafe = true
-
 [pkg.mio]
 allow_unsafe = true
 allow_apis = [
@@ -718,8 +715,6 @@ allow_apis = [
 
 [pkg.tower-http]
 
-[pkg.serde_yaml]
-
 [pkg.indicatif]
 
 [pkg.strsim]
@@ -727,8 +722,6 @@ allow_apis = [
 [pkg.base64]
 
 [pkg.toml_datetime]
-
-[pkg.yaml-rust]
 
 [pkg.smawk]
 
