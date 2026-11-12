@@ -592,7 +592,7 @@ mod fixtures {
             let h = elf_hardening(&b).unwrap();
             assert!(
                 h.contains("BIND_NOW"),
-                "encoding {dynamic:?} not recognised: {h:?}"
+                "encoding {dynamic:?} not recognized: {h:?}"
             );
         }
     }

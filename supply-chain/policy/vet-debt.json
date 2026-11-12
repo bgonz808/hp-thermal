@@ -1,0 +1,22 @@
+{
+  "schema": "hp-thermal/vet-debt/v1",
+  "_about": "Compiled crates exempted from cargo-vet audit with a dated reason. `xtask vet-guard` fails CI when an exempted crate is compiled without a live row here, and when a row expires. Rows are retired by an audit (ours or imported), never by extending the date without a new reason.",
+  "xtask": [
+    {
+      "crate": "serde_json",
+      "version": "1.0.154",
+      "expires": "2027-02-12",
+      "why": "No safe-to-deploy root in any import set (Google's full audits are safe-to-run; Mozilla and ISRG hold deltas only). Compiled into xtask. Under OSS-Fuzz continuous fuzzing. Audit in sittings or adopt an imported root before expiry.",
+      "author": "bgonz808",
+      "recorded": "2026-11-12"
+    },
+    {
+      "crate": "memchr",
+      "version": "2.8.3",
+      "expires": "2027-02-12",
+      "why": "No safe-to-deploy chain reaching 2.8.x (Mozilla delta ends 2.7.4; Google audits are safe-to-run). Compiled into xtask. In-repo fuzz targets upstream. Same plan.",
+      "author": "bgonz808",
+      "recorded": "2026-11-12"
+    }
+  ]
+}

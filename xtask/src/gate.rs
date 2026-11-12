@@ -467,7 +467,7 @@ pub(crate) enum GoneMechanism {
 }
 
 /// OpenVEX `not_affected` statement for an instance the monitor classified as GONE (#251).
-/// Justification `vulnerable_code_not_present` is the catalogue label for "component included,
+/// Justification `vulnerable_code_not_present` is the catalog label for "component included,
 /// vulnerable code not present" — which is what a withdrawal or a narrowed range asserts about
 /// this version. The DB commit rides as a CycloneDX-style property so the gate can void the
 /// statement if the DB reports the instance again. Author and timestamp stay blank so the
@@ -657,7 +657,7 @@ fn mal_verdict(
     }) {
         let name = sb.get("name").and_then(Value::as_str).unwrap_or("?");
         return Verdict::Unevaluated(format!(
-            "sandbox {name} verdict suspicious: per-item behaviour sign-off is #347's next \
+            "sandbox {name} verdict suspicious: per-item behavior sign-off is #347's next \
              step; not readable as clean"
         ));
     }
