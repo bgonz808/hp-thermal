@@ -38,7 +38,7 @@
 //!   * nothing is blessed: the digest still comes from a producer run over this lock, and the
 //!     #241 gate still evaluates it. This only makes the candidate reproducible.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -145,6 +145,95 @@ pub fn lock_package_names_from_str(text: &str) -> BTreeSet<String> {
         }
     }
     out
+}
+
+/// `name -> resident versions` of a Cargo.lock (several when semver-incompatible copies coexist).
+pub fn lock_package_versions(text: &str) -> BTreeMap<String, Vec<String>> {
+    let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut in_pkg = false;
+    let mut name: Option<String> = None;
+    for line in text.lines() {
+        let l = line.trim();
+        if l == "[[package]]" {
+            in_pkg = true;
+            name = None;
+            continue;
+        }
+        if l.starts_with('[') {
+            in_pkg = false;
+            continue;
+        }
+        if !in_pkg {
+            continue;
+        }
+        if let Some(rest) = l.strip_prefix("name = \"") {
+            name = rest.split('"').next().map(str::to_string);
+        } else if let Some(rest) = l.strip_prefix("version = \"")
+            && let Some(n) = &name
+            && let Some(v) = rest.split('"').next()
+        {
+            out.entry(n.clone()).or_default().push(v.to_string());
+        }
+    }
+    out
+}
+
+/// Highest resident version by canonical semver (`parse_ver`); unparseable versions sort last.
+fn max_version(vs: &[String]) -> Option<&String> {
+    vs.iter().max_by_key(|v| parse_ver(v))
+}
+
+/// Packages whose highest resident version in `after` is LOWER than in `prior`:
+/// `(name, prior, after)`. Packages absent from either side are not downgrades.
+pub fn downgrades(
+    after: &BTreeMap<String, Vec<String>>,
+    prior: &BTreeMap<String, Vec<String>>,
+) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for (n, pv) in prior {
+        let (Some(p), Some(a)) = (max_version(pv), after.get(n).and_then(|v| max_version(v)))
+        else {
+            continue;
+        };
+        if let (Some(pp), Some(aa)) = (parse_ver(p), parse_ver(a))
+            && aa < pp
+        {
+            out.push((n.clone(), p.clone(), a.clone()));
+        }
+    }
+    out
+}
+
+/// Directives that lift every package resolved below the prior blessed version back to it,
+/// skipping packages the explicit directives already name.
+pub fn carry_forward_directives(
+    start: &BTreeMap<String, Vec<String>>,
+    prior: &BTreeMap<String, Vec<String>>,
+    explicit: &[Directive],
+) -> Vec<Directive> {
+    downgrades(start, prior)
+        .into_iter()
+        .filter(|(n, _, _)| !explicit.iter().any(|d| &d.package == n))
+        .map(|(n, p, a)| Directive {
+            package: n,
+            version: p,
+            at: Some(a),
+        })
+        .collect()
+}
+
+/// The `cargo update -p` spec for a directive against the lock AS IT STANDS: bare when exactly
+/// one version of the package is resident (unambiguous, and immune to an earlier directive
+/// having moved it), `pkg@current` when several coexist.
+pub fn spec_for(resident: &BTreeMap<String, Vec<String>>, d: &Directive) -> String {
+    match resident.get(&d.package) {
+        Some(vs) if vs.len() == 1 => d.package.clone(),
+        Some(vs) => match &d.at {
+            Some(cur) if vs.contains(cur) => format!("{}@{cur}", d.package),
+            _ => d.package.clone(),
+        },
+        None => d.spec(),
+    }
 }
 
 /// Names present after the directives that were not present before. Non-empty means the
@@ -348,6 +437,17 @@ pub fn run(args: &[String]) -> i32 {
     // the acceptance lives in a signed, committed line, not in a command-line argument.
     let mut accept_new: Vec<String> = Vec::new();
     let mut evidence_dir = PathBuf::from("supply-chain/evidence");
+    // --prior-lock <lock>: the resolution we PREVIOUSLY blessed for this tool (tools/locks/<tool>.lock
+    // on main). A rev bump starts from upstream's committed lock, which may be months older than
+    // our curation, so without this the "delta" would be measured against a baseline we never
+    // shipped: 122 packages resolved LOWER than our blessed cargo-vet lock when v0.10.3 was first
+    // frozen (2026-11-12). Three effects: names already in the prior lock are not "new" to the
+    // shape invariant (they were blessed, for this tool); every package resolved below its prior
+    // version is a REGRESSION and refuses the write unless --allow-downgrade names it; and
+    // --carry-forward adds directives that lift such packages back to the prior version first.
+    let mut prior_lock: Option<PathBuf> = None;
+    let mut carry_forward = false;
+    let mut allow_downgrade: Vec<String> = Vec::new();
     let mut soak_overridden = false;
     let mut now_overridden = false;
     let mut it = args.iter().skip(1);
@@ -393,6 +493,13 @@ pub fn run(args: &[String]) -> i32 {
             "--evidence" => {
                 if let Some(v) = it.next() {
                     evidence_dir = PathBuf::from(v);
+                }
+            }
+            "--prior-lock" => prior_lock = it.next().map(PathBuf::from),
+            "--carry-forward" => carry_forward = true,
+            "--allow-downgrade" => {
+                if let Some(v) = it.next() {
+                    allow_downgrade.push(v.clone());
                 }
             }
             other => {
@@ -580,6 +687,58 @@ pub fn run(args: &[String]) -> i32 {
         }
     };
 
+    // 2c. --prior-lock: what we last blessed for this tool. Read once; used for carry-forward
+    // directives here, for the shape invariant and the regression check below.
+    let prior: Option<BTreeMap<String, Vec<String>>> = match &prior_lock {
+        None => None,
+        Some(pl) => match std::fs::read_to_string(pl) {
+            Ok(t) => Some(lock_package_versions(&t)),
+            Err(e) => {
+                eprintln!("freeze: --prior-lock {} unreadable: {e}", pl.display());
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+        },
+    };
+    if carry_forward {
+        let Some(prior) = &prior else {
+            eprintln!("freeze: --carry-forward needs --prior-lock");
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        };
+        let start = match std::fs::read_to_string(&lock) {
+            Ok(t) => lock_package_versions(&t),
+            Err(e) => {
+                eprintln!("freeze: cannot read the starting lock: {e}");
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+        };
+        let mut carried = carry_forward_directives(&start, prior, &parsed);
+        if carried.is_empty() {
+            println!("# carry-forward: nothing resolved below the prior blessed lock");
+        }
+        for d in &carried {
+            // A previously blessed version still has to be non-yanked today.
+            match check_target(d, now_epoch, soak) {
+                Ok(_) => println!(
+                    "# carry-forward: {} {} -> {} (prior blessed version)",
+                    d.package,
+                    d.at.as_deref().unwrap_or("?"),
+                    d.version
+                ),
+                Err(e) => {
+                    eprintln!("  REFUSED: carry-forward {}: {e}", d.package);
+                    let _ = std::fs::remove_dir_all(&work);
+                    return 1;
+                }
+            }
+        }
+        // Carried moves go first: they restore the baseline the explicit directives build on.
+        carried.extend(parsed);
+        parsed = carried;
+    }
+
     // 3. Advisory posture BEFORE (the starting lock), at this DB state.
     let before = match run_audit(&lock, false) {
         Ok(a) => extract_instances(&a),
@@ -599,9 +758,16 @@ pub fn run(args: &[String]) -> i32 {
     // partial set is not the set that was reviewed, so no delta is computed for it either.
     let mut refused: Vec<String> = Vec::new();
     for p in &parsed {
+        // An earlier directive's re-resolution may already have moved this package, so a
+        // `pkg@current` spec written beforehand can match nothing. Resolve the spec against the
+        // lock as it stands now: bare when one version is resident, `pkg@current` otherwise.
+        let spec = match std::fs::read_to_string(&lock) {
+            Ok(t) => spec_for(&lock_package_versions(&t), p),
+            Err(_) => p.spec(),
+        };
         let st = Command::new("cargo")
             .current_dir(&work)
-            .args(["update", "-p", &p.spec(), "--precise", &p.version])
+            .args(["update", "-p", &spec, "--precise", &p.version])
             .env_remove("CARGO")
             .env_remove("RUSTC")
             .env_remove("RUSTUP_TOOLCHAIN")
@@ -646,7 +812,18 @@ pub fn run(args: &[String]) -> i32 {
             return 1;
         }
     };
-    let added_names = added_package_names(&names_before, &names_after);
+    let mut added_names = added_package_names(&names_before, &names_after);
+    if let Some(prior) = &prior {
+        let (known, novel): (Vec<String>, Vec<String>) =
+            added_names.into_iter().partition(|n| prior.contains_key(n));
+        for n in &known {
+            println!(
+                "  carried name `{n}`: not in upstream's lock, but in the prior blessed lock for \
+                 this tool — already in service, not a new party"
+            );
+        }
+        added_names = novel;
+    }
     if !added_names.is_empty() {
         // Each new name must be BOTH named on the command line and covered by a quality-passing
         // `lock-shape` statement for this tool. Either half alone refuses.
@@ -688,6 +865,48 @@ pub fn run(args: &[String]) -> i32 {
     let pruned: Vec<&String> = names_before.difference(&names_after).collect();
     if !pruned.is_empty() {
         println!("  pruned (no longer needed by the new versions): {pruned:?}");
+    }
+    // Strictly better is measured against what WE shipped, not against upstream's lock: a
+    // package resolved below its previously blessed version is a regression (fixed bugs lost,
+    // possibly fixed advisories lost), whatever the advisory delta says. Refused unless named.
+    if let Some(prior) = &prior {
+        let after_v = match std::fs::read_to_string(&lock) {
+            Ok(t) => lock_package_versions(&t),
+            Err(e) => {
+                eprintln!("freeze: cannot read the updated lock: {e}");
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+        };
+        let regressed = downgrades(&after_v, prior);
+        let blocking: Vec<&(String, String, String)> = regressed
+            .iter()
+            .filter(|(n, _, _)| !allow_downgrade.contains(n))
+            .collect();
+        for (n, from, to) in &regressed {
+            if allow_downgrade.contains(n) {
+                println!("  downgrade allowed by flag: {n} {from} -> {to}");
+            }
+        }
+        if !blocking.is_empty() {
+            eprintln!(
+                "  REFUSED: {} package(s) resolve BELOW the prior blessed lock ({}): {} -- not strictly \
+                 better than what we ship. Use --carry-forward to lift them to the prior versions, \
+                 or --allow-downgrade <pkg> for a reviewed exception.",
+                blocking.len(),
+                prior_lock
+                    .as_ref()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_default(),
+                blocking
+                    .iter()
+                    .map(|(n, f, t)| format!("{n} {f}->{t}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
     }
 
     let after = match run_audit(&lock, true) {
@@ -966,6 +1185,95 @@ mod tests {
         );
         assert!(lock_shape_template("t", "p").contains(r#""axis":"lock-shape""#));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn prior_lock_helpers_measure_regressions_and_resolve_specs_against_the_live_lock() {
+        let lock = |pairs: &[(&str, &str)]| -> BTreeMap<String, Vec<String>> {
+            let mut m: BTreeMap<String, Vec<String>> = BTreeMap::new();
+            for (n, v) in pairs {
+                m.entry(n.to_string()).or_default().push(v.to_string());
+            }
+            m
+        };
+        let prior = lock(&[
+            ("flate2", "1.1.9"),
+            ("miniz_oxide", "0.8.9"),
+            ("adler2", "2.0.1"),
+            ("only-prior", "1.0.0"),
+        ]);
+        let start = lock(&[
+            ("flate2", "1.0.24"),
+            ("miniz_oxide", "0.5.3"),
+            ("miniz_oxide", "0.7.4"),
+            ("adler", "1.0.2"),
+            ("newer", "9.9.9"),
+        ]);
+        let d = downgrades(&start, &prior);
+        assert_eq!(
+            d,
+            vec![
+                (
+                    "flate2".to_string(),
+                    "1.1.9".to_string(),
+                    "1.0.24".to_string()
+                ),
+                (
+                    "miniz_oxide".to_string(),
+                    "0.8.9".to_string(),
+                    "0.7.4".to_string()
+                ),
+            ],
+            "max resident version compared; names absent on one side are not downgrades"
+        );
+        let explicit = [Directive {
+            package: "flate2".into(),
+            version: "1.1.9".into(),
+            at: None,
+        }];
+        let cf = carry_forward_directives(&start, &prior, &explicit);
+        assert_eq!(cf.len(), 1, "explicitly named packages are not duplicated");
+        assert_eq!(
+            (
+                cf[0].package.as_str(),
+                cf[0].version.as_str(),
+                cf[0].at.as_deref()
+            ),
+            ("miniz_oxide", "0.8.9", Some("0.7.4"))
+        );
+        // spec resolution against the live lock
+        assert_eq!(
+            spec_for(&start, &cf[0]),
+            "miniz_oxide@0.7.4",
+            "two copies resident -> disambiguate"
+        );
+        assert_eq!(
+            spec_for(&start, &explicit[0]),
+            "flate2",
+            "one copy resident -> bare spec"
+        );
+        let moved = Directive {
+            package: "flate2".into(),
+            version: "1.1.9".into(),
+            at: Some("1.0.0".into()),
+        };
+        assert_eq!(
+            spec_for(&start, &moved),
+            "flate2",
+            "stale @current is ignored when unambiguous"
+        );
+        let gone = Directive {
+            package: "x".into(),
+            version: "1".into(),
+            at: Some("0".into()),
+        };
+        assert_eq!(
+            spec_for(&start, &gone),
+            "x@0",
+            "unknown package falls back to the written spec"
+        );
+        let text = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"a\"\nversion = \"2.0.0\"\n\n[metadata]\nk = \"v\"\n";
+        assert_eq!(lock_package_versions(text)["a"], ["1.0.0", "2.0.0"]);
     }
 
     #[test]
