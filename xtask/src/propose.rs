@@ -34,7 +34,7 @@ use std::process::Command;
 
 use serde_json::Value;
 
-use crate::explore::{SOAK_DAYS, candidates_from_versions, fetch_versions};
+use crate::explore::{SOAK_DAYS, candidates_from_versions, fetch_versions, line_of, parse_ver};
 use crate::freeze::{Directive, check_target};
 use crate::gate::{Instance, parse_tools_lock, resolve_lock, run_audit};
 use crate::toolchain::{parse_ver as parse_rust_ver, range_contains};
@@ -340,6 +340,9 @@ pub fn run(args: &[String]) -> i32 {
         let mut directives: Vec<Directive> = Vec::new();
         let mut fixes: Vec<String> = Vec::new();
         let mut notes: Vec<String> = Vec::new();
+        let prior_versions = std::fs::read_to_string(locks_dir.join(format!("{}.lock", p.name)))
+            .map(|t| crate::freeze::lock_package_versions(&t))
+            .unwrap_or_default();
         for ((pkg, cur), (reqs, ids)) in &groups {
             let versions = match fetch_versions(pkg) {
                 Ok(v) => v,
@@ -350,7 +353,23 @@ pub fn run(args: &[String]) -> i32 {
                 }
             };
             match pick_target(cur, &versions, reqs, now) {
-                Ok(Some(target)) => {
+                Ok(Some(mut target)) => {
+                    // Strictly better is measured against what we ship: never propose a fix
+                    // BELOW the version already in the prior blessed lock for this line.
+                    if let Some(prior) = prior_versions.get(pkg)
+                        && let Some(t) = parse_ver(&target)
+                        && let Some(best) = prior
+                            .iter()
+                            .filter_map(|v| parse_ver(v).map(|pv| (pv, v)))
+                            .filter(|(pv, _)| line_of(*pv) == line_of(t) && *pv > t)
+                            .max_by_key(|(pv, _)| *pv)
+                    {
+                        notes.push(format!(
+                            "{pkg} {cur}: patched floor {target} raised to prior blessed {}",
+                            best.1
+                        ));
+                        target = best.1.clone();
+                    }
                     directives.push(Directive {
                         package: pkg.clone(),
                         version: target,

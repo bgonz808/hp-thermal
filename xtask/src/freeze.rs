@@ -42,7 +42,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::explore::{age_days, parse_ver};
+use crate::explore::{age_days, line_of, parse_ver};
 use crate::gate::{Instance, extract_instances, run_audit};
 
 /// One `pkg=version` (or `pkg@current=version`) promotion directive.
@@ -178,34 +178,194 @@ pub fn lock_package_versions(text: &str) -> BTreeMap<String, Vec<String>> {
     out
 }
 
+/// One `[[package]]` entry's provenance fields.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LockEntry {
+    pub source: Option<String>,
+    pub checksum: Option<String>,
+}
+
+/// `(name, version) -> {source, checksum}` of a Cargo.lock.
+pub fn lock_entries(text: &str) -> BTreeMap<(String, String), LockEntry> {
+    let mut out: BTreeMap<(String, String), LockEntry> = BTreeMap::new();
+    let mut in_pkg = false;
+    let (mut name, mut version): (Option<String>, Option<String>) = (None, None);
+    let mut cur = LockEntry::default();
+    let flush = |out: &mut BTreeMap<(String, String), LockEntry>,
+                 name: &mut Option<String>,
+                 version: &mut Option<String>,
+                 cur: &mut LockEntry| {
+        if let (Some(n), Some(v)) = (name.take(), version.take()) {
+            out.insert((n, v), std::mem::take(cur));
+        }
+        *cur = LockEntry::default();
+    };
+    for line in text.lines() {
+        let l = line.trim();
+        if l == "[[package]]" {
+            flush(&mut out, &mut name, &mut version, &mut cur);
+            in_pkg = true;
+            continue;
+        }
+        if l.starts_with('[') {
+            flush(&mut out, &mut name, &mut version, &mut cur);
+            in_pkg = false;
+            continue;
+        }
+        if !in_pkg {
+            continue;
+        }
+        let field = |k: &str| {
+            l.strip_prefix(k)
+                .and_then(|r| r.split('"').next())
+                .map(str::to_string)
+        };
+        if let Some(v) = field("name = \"") {
+            name = Some(v);
+        } else if let Some(v) = field("version = \"") {
+            version = Some(v);
+        } else if let Some(v) = field("source = \"") {
+            cur.source = Some(v);
+        } else if let Some(v) = field("checksum = \"") {
+            cur.checksum = Some(v);
+        }
+    }
+    flush(&mut out, &mut name, &mut version, &mut cur);
+    out
+}
+
+/// The crates.io registry source string every fleet dependency must carry.
+pub const CRATES_IO_SOURCE: &str = "registry+https://github.com/rust-lang/crates.io-index";
+
+/// Identical (name, version) on both sides whose recorded checksums DIFFER: the registry served
+/// different bytes for a version we already vetted. Never acceptable; no flag.
+pub fn checksum_mismatches(
+    after: &BTreeMap<(String, String), LockEntry>,
+    prior: &BTreeMap<(String, String), LockEntry>,
+) -> Vec<(String, String, String, String)> {
+    let mut out = Vec::new();
+    for (k, pe) in prior {
+        if let (Some(ae), Some(pc)) = (after.get(k), &pe.checksum)
+            && let Some(ac) = &ae.checksum
+            && ac != pc
+        {
+            out.push((k.0.clone(), k.1.clone(), pc.clone(), ac.clone()));
+        }
+    }
+    out
+}
+
+/// Entries whose source is not the crates.io index (git, path, another registry) and that the
+/// prior blessed lock did not already carry with that same source. The root package has no
+/// source and is skipped.
+pub fn foreign_sources(
+    after: &BTreeMap<(String, String), LockEntry>,
+    prior: &BTreeMap<(String, String), LockEntry>,
+) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for (k, ae) in after {
+        let Some(src) = &ae.source else { continue };
+        if src == CRATES_IO_SOURCE {
+            continue;
+        }
+        let known = prior
+            .iter()
+            .any(|(pk, pe)| pk.0 == k.0 && pe.source.as_deref() == Some(src.as_str()));
+        if !known {
+            out.push((k.0.clone(), k.1.clone(), src.clone()));
+        }
+    }
+    out
+}
+
+/// crates.io login of the account that published `pkg@version` (None when the API omits it).
+pub fn published_by(pkg: &str, version: &str) -> Result<Option<String>, String> {
+    let url = format!("https://crates.io/api/v1/crates/{pkg}/{version}");
+    let out = Command::new("curl")
+        .args(["-sSfL", "-H", "User-Agent: hp-thermal-freeze", &url])
+        .output()
+        .map_err(|e| format!("curl: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("{pkg} {version} not found on crates.io"));
+    }
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).map_err(|e| format!("crates.io JSON: {e}"))?;
+    Ok(v.pointer("/version/published_by/login")
+        .and_then(|l| l.as_str())
+        .map(str::to_string))
+}
+
+/// Which directive an advisory instance traces to: the one naming its package, else transitive.
+pub fn attribute<'a>(inst_package: &str, directives: &'a [Directive]) -> Option<&'a Directive> {
+    directives.iter().find(|d| d.package == inst_package)
+}
+
 /// Highest resident version by canonical semver (`parse_ver`); unparseable versions sort last.
 fn max_version(vs: &[String]) -> Option<&String> {
     vs.iter().max_by_key(|v| parse_ver(v))
 }
 
-/// Packages whose highest resident version in `after` is LOWER than in `prior`:
-/// `(name, prior, after)`. Packages absent from either side are not downgrades.
+/// Resident versions grouped by semver LINE (major, or 0.minor): Cargo coexists lines, and a
+/// dependent switching from `syn ^3` to `syn ^2` is upstream choosing a line, not a rollback.
+fn by_line(vs: &[String]) -> BTreeMap<(u64, u64), Vec<String>> {
+    let mut m: BTreeMap<(u64, u64), Vec<String>> = BTreeMap::new();
+    for v in vs {
+        if let Some(pv) = parse_ver(v) {
+            m.entry(line_of(pv)).or_default().push(v.clone());
+        }
+    }
+    m
+}
+
+/// Rollbacks WITHIN a semver line: for every (package, line) resident on both sides, the
+/// highest `after` version is lower than the highest `prior` version. `(name, prior, after)`.
+/// A line present only in `prior` is not a downgrade (see `dropped_lines`): upstream's manifest
+/// no longer resolves that line, and a directive cannot cross lines without a manifest change.
 pub fn downgrades(
     after: &BTreeMap<String, Vec<String>>,
     prior: &BTreeMap<String, Vec<String>>,
 ) -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     for (n, pv) in prior {
-        let (Some(p), Some(a)) = (max_version(pv), after.get(n).and_then(|v| max_version(v)))
-        else {
-            continue;
-        };
-        if let (Some(pp), Some(aa)) = (parse_ver(p), parse_ver(a))
-            && aa < pp
-        {
-            out.push((n.clone(), p.clone(), a.clone()));
+        let Some(av) = after.get(n) else { continue };
+        let (pl, al) = (by_line(pv), by_line(av));
+        for (line, pvs) in &pl {
+            let Some(avs) = al.get(line) else { continue };
+            if let (Some(p), Some(a)) = (max_version(pvs), max_version(avs))
+                && let (Some(pp), Some(aa)) = (parse_ver(p), parse_ver(a))
+                && aa < pp
+            {
+                out.push((n.clone(), p.clone(), a.clone()));
+            }
         }
     }
     out
 }
 
-/// Directives that lift every package resolved below the prior blessed version back to it,
-/// skipping packages the explicit directives already name.
+/// Semver lines we shipped that the new resolution no longer contains at all (`name line-max`):
+/// reported, never auto-restored — that is upstream's dependency choice, reviewed through the
+/// caps and vuln axes like any other change to the tree.
+pub fn dropped_lines(
+    after: &BTreeMap<String, Vec<String>>,
+    prior: &BTreeMap<String, Vec<String>>,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    for (n, pv) in prior {
+        let al = after.get(n).map(|v| by_line(v)).unwrap_or_default();
+        for (line, pvs) in by_line(pv) {
+            if !al.contains_key(&line)
+                && let Some(p) = max_version(&pvs)
+            {
+                out.push(format!("{n} {p}"));
+            }
+        }
+    }
+    out
+}
+
+/// Directives that lift every within-line rollback back to the prior blessed version, skipping
+/// packages the explicit directives already name. `at` is the resident version in that line, so
+/// the spec stays unambiguous when several lines coexist.
 pub fn carry_forward_directives(
     start: &BTreeMap<String, Vec<String>>,
     prior: &BTreeMap<String, Vec<String>>,
@@ -230,10 +390,37 @@ pub fn spec_for(resident: &BTreeMap<String, Vec<String>>, d: &Directive) -> Stri
         Some(vs) if vs.len() == 1 => d.package.clone(),
         Some(vs) => match &d.at {
             Some(cur) if vs.contains(cur) => format!("{}@{cur}", d.package),
-            _ => d.package.clone(),
+            _ => {
+                // `at` went stale (an earlier move re-resolved it): the copy in the TARGET's
+                // semver line is the one meant, when exactly one is resident there.
+                let target_line = parse_ver(&d.version).map(line_of);
+                let same_line: Vec<&String> = vs
+                    .iter()
+                    .filter(|v| parse_ver(v).map(line_of) == target_line)
+                    .collect();
+                match same_line.as_slice() {
+                    [one] => format!("{}@{one}", d.package),
+                    _ => d.package.clone(),
+                }
+            }
         },
         None => d.spec(),
     }
+}
+
+/// Is the package already at or above the directive's version within the target's line? Then
+/// the move is moot (a sibling bump already carried it) and must not be attempted: `--precise`
+/// to a LOWER version would be the rollback this machinery exists to prevent.
+pub fn already_satisfied(resident: &BTreeMap<String, Vec<String>>, d: &Directive) -> bool {
+    let Some(target) = parse_ver(&d.version) else {
+        return false;
+    };
+    resident
+        .get(&d.package)
+        .into_iter()
+        .flatten()
+        .filter_map(|v| parse_ver(v))
+        .any(|v| line_of(v) == line_of(target) && v >= target)
 }
 
 /// Names present after the directives that were not present before. Non-empty means the
@@ -448,6 +635,10 @@ pub fn run(args: &[String]) -> i32 {
     let mut prior_lock: Option<PathBuf> = None;
     let mut carry_forward = false;
     let mut allow_downgrade: Vec<String> = Vec::new();
+    // --allow-publisher-change <pkg>: an explicit target published by a different crates.io
+    // account than the version we ship is the maintainer-takeover shape; refused unless named
+    // after review.
+    let mut allow_publisher_change: Vec<String> = Vec::new();
     let mut soak_overridden = false;
     let mut now_overridden = false;
     let mut it = args.iter().skip(1);
@@ -500,6 +691,11 @@ pub fn run(args: &[String]) -> i32 {
             "--allow-downgrade" => {
                 if let Some(v) = it.next() {
                     allow_downgrade.push(v.clone());
+                }
+            }
+            "--allow-publisher-change" => {
+                if let Some(v) = it.next() {
+                    allow_publisher_change.push(v.clone());
                 }
             }
             other => {
@@ -700,6 +896,60 @@ pub fn run(args: &[String]) -> i32 {
             }
         },
     };
+    // 2d. Publisher continuity (per explicit directive): the account that published the target
+    // must be the one that published the version we ship, unless the change was reviewed.
+    {
+        let start_v = std::fs::read_to_string(&lock)
+            .map(|t| lock_package_versions(&t))
+            .unwrap_or_default();
+        for d in &parsed {
+            let cur = d.at.clone().or_else(|| {
+                let target_line = parse_ver(&d.version).map(line_of);
+                start_v.get(&d.package).and_then(|vs| {
+                    vs.iter()
+                        .find(|v| parse_ver(v).map(line_of) == target_line)
+                        .cloned()
+                })
+            });
+            let Some(cur) = cur else { continue };
+            if cur == d.version {
+                continue;
+            }
+            match (
+                published_by(&d.package, &cur),
+                published_by(&d.package, &d.version),
+            ) {
+                (Ok(Some(a)), Ok(Some(b))) if a != b => {
+                    if allow_publisher_change.contains(&d.package) {
+                        println!(
+                            "  publisher change allowed by flag: {} {cur} ({a}) -> {} ({b})",
+                            d.package, d.version
+                        );
+                    } else {
+                        eprintln!(
+                            "  REFUSED: {} {cur} was published by `{a}`, {} by `{b}` -- a new \
+                             publisher on a crate we ship is reviewed before it is adopted \
+                             (--allow-publisher-change {} after review)",
+                            d.package, d.version, d.package
+                        );
+                        let _ = std::fs::remove_dir_all(&work);
+                        return 1;
+                    }
+                }
+                (Ok(_), Ok(_)) => {}
+                (Err(e), _) | (_, Err(e)) => {
+                    eprintln!(
+                        "  REFUSED: publisher continuity for {} is UNKNOWN ({e}) -- not read as unchanged",
+                        d.package
+                    );
+                    let _ = std::fs::remove_dir_all(&work);
+                    return 1;
+                }
+            }
+        }
+    }
+
+    let mut carried_directives: Vec<Directive> = Vec::new();
     if carry_forward {
         let Some(prior) = &prior else {
             eprintln!("freeze: --carry-forward needs --prior-lock");
@@ -714,7 +964,7 @@ pub fn run(args: &[String]) -> i32 {
                 return 1;
             }
         };
-        let mut carried = carry_forward_directives(&start, prior, &parsed);
+        let carried = carry_forward_directives(&start, prior, &parsed);
         if carried.is_empty() {
             println!("# carry-forward: nothing resolved below the prior blessed lock");
         }
@@ -734,9 +984,7 @@ pub fn run(args: &[String]) -> i32 {
                 }
             }
         }
-        // Carried moves go first: they restore the baseline the explicit directives build on.
-        carried.extend(parsed);
-        parsed = carried;
+        carried_directives = carried;
     }
 
     // 3. Advisory posture BEFORE (the starting lock), at this DB state.
@@ -756,34 +1004,98 @@ pub fn run(args: &[String]) -> i32 {
     // turned a ten-directive batch into ten cycles of discovery (the same defect fixed in the
     // caps gate, #305, and the producer loop, #324). Nothing is written on any refusal: a
     // partial set is not the set that was reviewed, so no delta is computed for it either.
-    let mut refused: Vec<String> = Vec::new();
-    for p in &parsed {
-        // An earlier directive's re-resolution may already have moved this package, so a
-        // `pkg@current` spec written beforehand can match nothing. Resolve the spec against the
-        // lock as it stands now: bare when one version is resident, `pkg@current` otherwise.
-        let spec = match std::fs::read_to_string(&lock) {
-            Ok(t) => spec_for(&lock_package_versions(&t), p),
-            Err(_) => p.spec(),
-        };
-        let st = Command::new("cargo")
+    // One `cargo update -p --precise` attempt; Ok(true) moved, Ok(false) already satisfied,
+    // Err(reason) unreachable (cargo's own words: the requirement that caps the move).
+    let attempt = |p: &Directive| -> Result<bool, String> {
+        let resident = std::fs::read_to_string(&lock)
+            .map(|t| lock_package_versions(&t))
+            .unwrap_or_default();
+        if already_satisfied(&resident, p) {
+            return Ok(false);
+        }
+        let spec = spec_for(&resident, p);
+        let out = Command::new("cargo")
             .current_dir(&work)
             .args(["update", "-p", &spec, "--precise", &p.version])
             .env_remove("CARGO")
             .env_remove("RUSTC")
             .env_remove("RUSTUP_TOOLCHAIN")
-            .status();
-        match st {
-            Ok(s) if s.success() => println!("  updated {} -> {}", p.package, p.version),
-            _ => {
-                eprintln!(
-                    "  REFUSED: cargo update -p {} --precise {} failed — the version is likely \
-                     unreachable from this tree's requirements (see the escalation ladder in \
-                     `xtask explore`)",
-                    p.package, p.version
-                );
+            .output()
+            .map_err(|e| format!("cannot run cargo update: {e}"))?;
+        if out.status.success() {
+            return Ok(true);
+        }
+        let err = String::from_utf8_lossy(&out.stderr);
+        let why: Vec<&str> = err
+            .lines()
+            .filter(|l| !l.trim().is_empty() && !l.contains("Updating crates.io index"))
+            .take(6)
+            .collect();
+        Err(format!(
+            "cargo update -p {spec} --precise {} failed — unreachable from this tree's \
+             requirements:\n      {}",
+            p.version,
+            why.join("\n      ")
+        ))
+    };
+    let mut refused: Vec<String> = Vec::new();
+    // Explicit directives are the fixes; they move first and a failure is a hard refusal.
+    for p in &parsed {
+        match attempt(p) {
+            Ok(true) => println!("  updated {} -> {}", p.package, p.version),
+            Ok(false) => println!(
+                "  {} already at or above {} in its line (moved by a sibling)",
+                p.package, p.version
+            ),
+            Err(why) => {
+                eprintln!("  REFUSED: {why}");
                 refused.push(format!("{}={}", p.package, p.version));
             }
         }
+    }
+    // Carry-forward moves can depend on each other (icu_collections needs icu_normalizer to have
+    // moved first): apply in passes until a pass makes no progress; what remains is unreachable
+    // under the new rev's requirements and is reported with cargo's reason.
+    let mut pending = carried_directives.clone();
+    let mut carried_count = 0usize;
+    while !pending.is_empty() {
+        let mut next = Vec::new();
+        let mut last_err: BTreeMap<String, String> = BTreeMap::new();
+        for p in &pending {
+            match attempt(p) {
+                Ok(true) => {
+                    carried_count += 1;
+                    println!(
+                        "  carried {} -> {} (prior blessed version)",
+                        p.package, p.version
+                    );
+                }
+                Ok(false) => {}
+                Err(why) => {
+                    last_err.insert(p.package.clone(), why);
+                    next.push(p.clone());
+                }
+            }
+        }
+        if next.len() == pending.len() {
+            for p in &next {
+                eprintln!(
+                    "  REFUSED: carry-forward {}={}: {}",
+                    p.package,
+                    p.version,
+                    last_err.get(&p.package).map(String::as_str).unwrap_or("?")
+                );
+                refused.push(format!("{}={}", p.package, p.version));
+            }
+            break;
+        }
+        pending = next;
+    }
+    if !carried_directives.is_empty() {
+        println!(
+            "# carry-forward: {carried_count} of {} prior versions restored",
+            carried_directives.len()
+        );
     }
     if !refused.is_empty() {
         eprintln!(
@@ -878,7 +1190,56 @@ pub fn run(args: &[String]) -> i32 {
                 return 1;
             }
         };
+        // Same version, different bytes: tampering or registry corruption, never acceptable.
+        let (after_e, prior_e) = (
+            std::fs::read_to_string(&lock)
+                .map(|t| lock_entries(&t))
+                .unwrap_or_default(),
+            prior_lock
+                .as_ref()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .map(|t| lock_entries(&t))
+                .unwrap_or_default(),
+        );
+        let bad_sums = checksum_mismatches(&after_e, &prior_e);
+        if !bad_sums.is_empty() {
+            eprintln!(
+                "  REFUSED: {} identical package version(s) carry a DIFFERENT checksum than the prior \
+                 blessed lock -- the registry served other bytes for a version we vetted: {}",
+                bad_sums.len(),
+                bad_sums
+                    .iter()
+                    .map(|(n, v, p, a)| format!("{n} {v} prior {}.. now {}..", &p[..12], &a[..12]))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+        let foreign = foreign_sources(&after_e, &prior_e);
+        if !foreign.is_empty() {
+            eprintln!(
+                "  REFUSED: {} package(s) resolve from a source other than crates.io that the prior \
+                 lock did not carry: {}",
+                foreign.len(),
+                foreign
+                    .iter()
+                    .map(|(n, v, src)| format!("{n} {v} <- {src}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
         let regressed = downgrades(&after_v, prior);
+        let dropped = dropped_lines(&after_v, prior);
+        if !dropped.is_empty() {
+            println!(
+                "  lines we shipped that this resolution no longer contains (upstream's dependency \
+                 choice, not a rollback; reviewed through caps/vuln): {}",
+                dropped.join(", ")
+            );
+        }
         let blocking: Vec<&(String, String, String)> = regressed
             .iter()
             .filter(|(n, _, _)| !allow_downgrade.contains(n))
@@ -958,6 +1319,17 @@ pub fn run(args: &[String]) -> i32 {
             i.id, i.package, i.version
         );
     }
+    let via = |pkg: &str| -> String {
+        let all: Vec<Directive> = parsed
+            .iter()
+            .chain(carried_directives.iter())
+            .cloned()
+            .collect();
+        match attribute(pkg, &all) {
+            Some(d) => format!("via directive {}={}", d.package, d.version),
+            None => "transitive".to_string(),
+        }
+    };
     // #357: the instances that remain ARE the human queue; name them, do not just count them.
     for i in carried_instances(&before, &after) {
         println!(
@@ -967,8 +1339,11 @@ pub fn run(args: &[String]) -> i32 {
     }
     for i in &genuine {
         println!(
-            "  + {} {} {}  <-- GENUINELY ADDED",
-            i.id, i.package, i.version
+            "  + {} {} {}  <-- GENUINELY ADDED ({})",
+            i.id,
+            i.package,
+            i.version,
+            via(&i.package)
         );
     }
     if !genuine.is_empty() && !allow_added {
@@ -1201,13 +1576,18 @@ mod tests {
             ("miniz_oxide", "0.8.9"),
             ("adler2", "2.0.1"),
             ("only-prior", "1.0.0"),
+            ("syn", "3.0.3"),
+            ("toml", "0.8.23"),
+            ("toml", "1.1.4+spec-1.1.0"),
         ]);
         let start = lock(&[
             ("flate2", "1.0.24"),
             ("miniz_oxide", "0.5.3"),
-            ("miniz_oxide", "0.7.4"),
+            ("miniz_oxide", "0.8.2"),
             ("adler", "1.0.2"),
             ("newer", "9.9.9"),
+            ("syn", "2.0.111"),
+            ("toml", "0.8.22"),
         ]);
         let d = downgrades(&start, &prior);
         assert_eq!(
@@ -1221,10 +1601,25 @@ mod tests {
                 (
                     "miniz_oxide".to_string(),
                     "0.8.9".to_string(),
-                    "0.7.4".to_string()
+                    "0.8.2".to_string()
+                ),
+                (
+                    "toml".to_string(),
+                    "0.8.23".to_string(),
+                    "0.8.22".to_string()
                 ),
             ],
-            "max resident version compared; names absent on one side are not downgrades"
+            "within-line rollbacks only: 0.5.3 is another line, syn 3->2 is a line switch, not a rollback"
+        );
+        assert_eq!(
+            dropped_lines(&start, &prior),
+            vec![
+                "adler2 2.0.1".to_string(),
+                "only-prior 1.0.0".to_string(),
+                "syn 3.0.3".to_string(),
+                "toml 1.1.4+spec-1.1.0".to_string()
+            ],
+            "lines we shipped that are gone (whole packages included) are reported, never carried"
         );
         let explicit = [Directive {
             package: "flate2".into(),
@@ -1232,20 +1627,20 @@ mod tests {
             at: None,
         }];
         let cf = carry_forward_directives(&start, &prior, &explicit);
-        assert_eq!(cf.len(), 1, "explicitly named packages are not duplicated");
+        assert_eq!(cf.len(), 2, "explicitly named packages are not duplicated");
         assert_eq!(
             (
                 cf[0].package.as_str(),
                 cf[0].version.as_str(),
                 cf[0].at.as_deref()
             ),
-            ("miniz_oxide", "0.8.9", Some("0.7.4"))
+            ("miniz_oxide", "0.8.9", Some("0.8.2")),
+            "at = the resident version IN THAT LINE"
         );
-        // spec resolution against the live lock
         assert_eq!(
             spec_for(&start, &cf[0]),
-            "miniz_oxide@0.7.4",
-            "two copies resident -> disambiguate"
+            "miniz_oxide@0.8.2",
+            "two lines resident -> disambiguate"
         );
         assert_eq!(
             spec_for(&start, &explicit[0]),
@@ -1274,6 +1669,57 @@ mod tests {
         );
         let text = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"a\"\nversion = \"2.0.0\"\n\n[metadata]\nk = \"v\"\n";
         assert_eq!(lock_package_versions(text)["a"], ["1.0.0", "2.0.0"]);
+    }
+
+    #[test]
+    fn lock_entries_checksum_continuity_and_foreign_sources() {
+        let prior = lock_entries(concat!(
+            "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"aaaa000000000000\"\n\n",
+            "[[package]]\nname = \"g\"\nversion = \"0.1.0\"\nsource = \"git+https://example.org/g#abc\"\n\n",
+            "[[package]]\nname = \"root\"\nversion = \"0.1.0\"\n"
+        ));
+        assert_eq!(
+            prior[&("a".to_string(), "1.0.0".to_string())]
+                .checksum
+                .as_deref(),
+            Some("aaaa000000000000")
+        );
+        assert_eq!(
+            prior[&("root".to_string(), "0.1.0".to_string())],
+            LockEntry::default()
+        );
+        let after = lock_entries(concat!(
+            "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"bbbb000000000000\"\n\n",
+            "[[package]]\nname = \"g\"\nversion = \"0.2.0\"\nsource = \"git+https://example.org/g#def\"\n\n",
+            "[[package]]\nname = \"p\"\nversion = \"1.0.0\"\nsource = \"path+file:///tmp/p\"\n\n",
+            "[[package]]\nname = \"root\"\nversion = \"0.1.0\"\n"
+        ));
+        let m = checksum_mismatches(&after, &prior);
+        assert_eq!(m.len(), 1);
+        assert_eq!(
+            (m[0].0.as_str(), m[0].1.as_str()),
+            ("a", "1.0.0"),
+            "same version, different bytes"
+        );
+        let f = foreign_sources(&after, &prior);
+        assert_eq!(
+            f.len(),
+            2,
+            "a git source whose pinned rev moved is a new source (new bytes); a path source is new"
+        );
+        assert_eq!(f[0].0, "g");
+        assert_eq!(f[1].0, "p");
+        assert!(foreign_sources(&prior, &prior).is_empty());
+        let d = [Directive {
+            package: "a".into(),
+            version: "1.0.0".into(),
+            at: None,
+        }];
+        assert_eq!(
+            attribute("a", &d).map(|x| x.version.as_str()),
+            Some("1.0.0")
+        );
+        assert!(attribute("zzz", &d).is_none());
     }
 
     #[test]
