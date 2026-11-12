@@ -28,6 +28,13 @@ inputs:
       one without executing the producer, which builds from the pinned rev, not their bytes.
       Default false until every blessed digest has an attested producer run behind it.
     default: "false"
+  lock-ref:
+    description: >-
+      Commit-ish whose tools/TOOLS.lock names the PRIOR-BLESSED digests to fetch (`main`, or a
+      pull request's base sha). Empty = the working tree's lock. Candidate workflows pass a ref so
+      the branch under evaluation can never starve itself of instruments: a candidate's own entry
+      is zeroed or re-pinned, and the instrument must be a digest the base already blessed.
+    default: ""
 outputs:
   tools-dir:
     description: >-
@@ -49,8 +56,18 @@ runs:
         ONLY: ${{ inputs.only }}
         TOOLS_TAG: ${{ inputs.tools-tag }}
         VERIFY_ATTESTATIONS: ${{ inputs.verify-attestations }}
+        LOCK_REF: ${{ inputs.lock-ref }}
       run: |
         set -euo pipefail
+        # Which lock names the instruments: the working tree's, or the prior-blessed one at a
+        # ref (candidate workflows). The ref is fetched, never trusted from the checkout.
+        lock=tools/TOOLS.lock
+        if [ -n "${LOCK_REF:-}" ]; then
+          lock="${RUNNER_TEMP}/prior-TOOLS.lock"
+          git fetch -q --depth=1 origin "$LOCK_REF"
+          git show FETCH_HEAD:tools/TOOLS.lock > "$lock"
+          echo "instruments from the prior-blessed lock at $LOCK_REF ($(git rev-parse --short FETCH_HEAD))"
+        fi
         dest="${RUNNER_TEMP}/pinned-tools"
         rm -rf "$dest"; mkdir -p "$dest"
         zero="0000000000000000000000000000000000000000000000000000000000000000"
@@ -67,7 +84,7 @@ runs:
           fi
           matched=$((matched+1))
           if [ "$sha" = "$zero" ] || [ -z "${sha:-}" ]; then
-            echo "::error::tools/TOOLS.lock digest for '$name' is unset (all-zero). Run build-tools.yml and commit the printed digest before this tool can be used." >&2
+            echo "::error::$lock digest for '$name' is unset (all-zero). Run build-tools.yml and commit the printed digest before this tool can be used." >&2
             exit 1
           fi
           # #225: the CONTENT-ADDRESSED asset name derives from the committed digest — the name
@@ -80,8 +97,8 @@ runs:
           esac
           printf '%s  %s/%s\n' "$sha" "$dest" "$local_name" >> "$dest/EXPECTED.sha256"
           printf '%s %s %s\n' "$ca" "$legacy" "$local_name" >> "$dest/ASSETS"
-        done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
-        [ "$matched" -gt 0 ] || { echo "::error::no TOOLS.lock entries matched target='$WANT_TARGET' only='$ONLY'" >&2; exit 1; }
+        done < <(grep -vE '^\s*#|^\s*$' "$lock" | sed 's/[[:space:]]*#.*$//')
+        [ "$matched" -gt 0 ] || { echo "::error::no entries in $lock matched target='$WANT_TARGET' only='$ONLY'" >&2; exit 1; }
         # Pull each asset: content-addressed name first, legacy fallback; stage under the plain
         # binary name either way (so `cargo <sub>`-style invocation resolves it).
         while read -r ca legacy local_name; do

@@ -54,6 +54,7 @@ jobs:
           target: windows-x86_64
           only: cargo-audit
           verify-attestations: "true"
+          lock-ref: main
 
       - name: Canary - the auditor must still detect a known-bad (#223)
         shell: bash
