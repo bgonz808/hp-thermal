@@ -541,7 +541,15 @@ fn ci_source_checks() -> bool {
         "clippy (xtask)",
         ".",
         "cargo",
-        &["clippy", "--manifest-path", "xtask/Cargo.toml", "--locked", "--", "-D", "warnings"],
+        &[
+            "clippy",
+            "--manifest-path",
+            "xtask/Cargo.toml",
+            "--locked",
+            "--",
+            "-D",
+            "warnings",
+        ],
     );
     ok
 }

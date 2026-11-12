@@ -139,9 +139,10 @@ pub fn lock_package_names_from_str(text: &str) -> BTreeSet<String> {
         }
         if in_pkg
             && let Some(rest) = l.strip_prefix("name = \"")
-                && let Some(end) = rest.find('"') {
-                    out.insert(rest[..end].to_string());
-                }
+            && let Some(end) = rest.find('"')
+        {
+            out.insert(rest[..end].to_string());
+        }
     }
     out
 }

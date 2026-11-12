@@ -495,7 +495,9 @@ mod tests {
     #[test]
     fn off_allowlist_import_fails() {
         let meas = m(&["kernel32.dll", "winhttp.dll"], &[]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
+        let man = manifest(
+            r#"{"allow_imports":["kernel32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#,
+        );
         let v = check(&meas, &man).0;
         assert!(
             v.iter()
@@ -507,7 +509,9 @@ mod tests {
     fn stale_allow_entry_fails_ratchet() {
         // allowlist permits a DLL the binary no longer imports -> surface shrank, ratchet.
         let meas = m(&["kernel32.dll"], &[]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll","ole32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
+        let man = manifest(
+            r#"{"allow_imports":["kernel32.dll","ole32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#,
+        );
         let v = check(&meas, &man).0;
         assert!(
             v.iter()
@@ -519,7 +523,9 @@ mod tests {
     fn denied_function_fails_even_on_allowed_dll() {
         // kernel32 is allowlisted, but importing a denied primitive from it is caught.
         let meas = m(&["kernel32.dll"], &["writeprocessmemory"]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
+        let man = manifest(
+            r#"{"allow_imports":["kernel32.dll"],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#,
+        );
         let v = check(&meas, &man).0;
         assert!(
             v.iter()
@@ -531,7 +537,9 @@ mod tests {
     fn deny_cannot_be_weakened_below_baseline() {
         // manifest omits the denylist entirely — BASELINE_DENY still enforced.
         let meas = m(&["kernel32.dll"], &["createremotethread"]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"deny_functions":[],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
+        let man = manifest(
+            r#"{"allow_imports":["kernel32.dll"],"deny_functions":[],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#,
+        );
         let v = check(&meas, &man).0;
         assert!(v.iter().any(|x| x.contains("createremotethread")));
     }
@@ -539,7 +547,9 @@ mod tests {
     #[test]
     fn undeclared_dynamic_resolution_fails() {
         let meas = m(&["kernel32.dll"], &["loadlibraryw"]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"expected_dynamic":[],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#);
+        let man = manifest(
+            r#"{"allow_imports":["kernel32.dll"],"expected_dynamic":[],"hardening":["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]}"#,
+        );
         let v = check(&meas, &man).0;
         assert!(
             v.iter()
@@ -592,9 +602,14 @@ mod tests {
     fn lost_mitigation_is_a_regression() {
         // The toolchain-bump scenario this exists for: CFG silently stops being emitted.
         let meas = m_hard(&["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA"]);
-        let man = man_hard(r#"["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA","CONTROL_FLOW_GUARD"]"#);
+        let man =
+            man_hard(r#"["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA","CONTROL_FLOW_GUARD"]"#);
         let v = check(&meas, &man).0;
-        assert!(v.iter().any(|x| x.contains("REGRESSED") && x.contains("CONTROL_FLOW_GUARD")), "{v:?}");
+        assert!(
+            v.iter()
+                .any(|x| x.contains("REGRESSED") && x.contains("CONTROL_FLOW_GUARD")),
+            "{v:?}"
+        );
     }
 
     #[test]
@@ -614,16 +629,27 @@ mod tests {
     fn gained_mitigation_still_requires_review() {
         // Strictly an improvement, but the manifest must stay an accurate description of
         // the artifact -- otherwise a later loss of the same bit would go unnoticed.
-        let meas = m_hard(&["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA", "CONTROL_FLOW_GUARD"]);
+        let meas = m_hard(&[
+            "ASLR_DYNAMICBASE",
+            "DEP_NX",
+            "HIGH_ENTROPY_VA",
+            "CONTROL_FLOW_GUARD",
+        ]);
         let man = man_hard(r#"["ASLR_DYNAMICBASE","DEP_NX","HIGH_ENTROPY_VA"]"#);
         let v = check(&meas, &man).0;
-        assert!(v.iter().any(|x| x.contains("CHANGED") && x.contains("CONTROL_FLOW_GUARD")), "{v:?}");
+        assert!(
+            v.iter()
+                .any(|x| x.contains("CHANGED") && x.contains("CONTROL_FLOW_GUARD")),
+            "{v:?}"
+        );
     }
 
     #[test]
     fn manifest_without_hardening_is_unevaluated_not_exempt() {
         let meas = m_hard(&["ASLR_DYNAMICBASE", "DEP_NX", "HIGH_ENTROPY_VA"]);
-        let man = manifest(r#"{"allow_imports":["kernel32.dll"],"allow_import_prefixes":[],"expected_dynamic":[]}"#);
+        let man = manifest(
+            r#"{"allow_imports":["kernel32.dll"],"allow_import_prefixes":[],"expected_dynamic":[]}"#,
+        );
         let v = check(&meas, &man).0;
         assert!(v.iter().any(|x| x.contains("UNEVALUATED")), "{v:?}");
     }
@@ -634,17 +660,29 @@ mod tests {
         // the decoder would be unreachable from any real binary -- indistinguishable from
         // one that never fires (the #303 lesson, applied to PE).
         assert_eq!(cet_from_ex_bits(0x1), Some("CET_COMPAT"));
-        assert_eq!(cet_from_ex_bits(0x3), Some("CET_COMPAT"), "other ex bits must not mask it");
+        assert_eq!(
+            cet_from_ex_bits(0x3),
+            Some("CET_COMPAT"),
+            "other ex bits must not mask it"
+        );
         // Negative: absence of the entry (0) and unrelated bits must NOT claim CET.
         assert_eq!(cet_from_ex_bits(0x0), None);
-        assert_eq!(cet_from_ex_bits(0x2), None, "an unrelated ex bit must not read as CET");
+        assert_eq!(
+            cet_from_ex_bits(0x2),
+            None,
+            "an unrelated ex bit must not read as CET"
+        );
     }
 
     #[test]
     fn bit_decoding_matches_the_pe_spec() {
         // 0x4140 = CFG(0x4000) | DEP(0x0100) | ASLR(0x0040); HIGH_ENTROPY(0x0020) clear.
         let h = hardening_from_bits(0x4140);
-        assert!(h.contains("CONTROL_FLOW_GUARD") && h.contains("DEP_NX") && h.contains("ASLR_DYNAMICBASE"));
+        assert!(
+            h.contains("CONTROL_FLOW_GUARD")
+                && h.contains("DEP_NX")
+                && h.contains("ASLR_DYNAMICBASE")
+        );
         assert!(!h.contains("HIGH_ENTROPY_VA"));
         assert!(hardening_from_bits(0).is_empty());
     }

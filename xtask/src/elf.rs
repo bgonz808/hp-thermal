@@ -174,9 +174,10 @@ pub fn elf_needed(b: &[u8]) -> Option<Vec<String>> {
     let mut out = Vec::new();
     for (tag, val) in &dynamic {
         if *tag == DT_NEEDED
-            && let Some(s) = cstr_at(b, strtab.checked_add(*val as usize)?) {
-                out.push(s.to_ascii_lowercase());
-            }
+            && let Some(s) = cstr_at(b, strtab.checked_add(*val as usize)?)
+        {
+            out.push(s.to_ascii_lowercase());
+        }
     }
     Some(out)
 }
@@ -216,11 +217,13 @@ pub fn elf_imported_functions(b: &[u8]) -> Option<Vec<String>> {
         let st_name = u32_at(b, o)? as usize;
         let st_shndx = u16_at(b, o + 6)?;
         // SHN_UNDEF (0) means the symbol is imported rather than defined here.
-        if st_shndx == 0 && st_name != 0
+        if st_shndx == 0
+            && st_name != 0
             && let Some(s) = cstr_at(b, strtab.checked_add(st_name)?)
-                && !s.is_empty() {
-                    out.push(s.to_ascii_lowercase());
-                }
+            && !s.is_empty()
+        {
+            out.push(s.to_ascii_lowercase());
+        }
         o += syment;
     }
     Some(out)
@@ -257,15 +260,17 @@ fn cet_features(b: &[u8], phdrs: &[Phdr]) -> BTreeSet<String> {
         let (Some(pr_type), Some(pr_datasz)) = (u32_at(b, o), u32_at(b, o + 4)) else {
             break;
         };
-        if pr_type == GNU_PROPERTY_X86_FEATURE_1_AND && pr_datasz >= 4
-            && let Some(bits) = u32_at(b, o + 8) {
-                if bits & GNU_PROPERTY_X86_FEATURE_1_IBT != 0 {
-                    out.insert("CET_IBT".to_string());
-                }
-                if bits & GNU_PROPERTY_X86_FEATURE_1_SHSTK != 0 {
-                    out.insert("CET_SHSTK".to_string());
-                }
+        if pr_type == GNU_PROPERTY_X86_FEATURE_1_AND
+            && pr_datasz >= 4
+            && let Some(bits) = u32_at(b, o + 8)
+        {
+            if bits & GNU_PROPERTY_X86_FEATURE_1_IBT != 0 {
+                out.insert("CET_IBT".to_string());
             }
+            if bits & GNU_PROPERTY_X86_FEATURE_1_SHSTK != 0 {
+                out.insert("CET_SHSTK".to_string());
+            }
+        }
         // records are 8-byte aligned on 64-bit
         o += 8 + ((pr_datasz as usize + 7) & !7);
     }
@@ -305,9 +310,10 @@ pub fn elf_hardening(b: &[u8]) -> Option<BTreeSet<String>> {
     // falls back to an architecture default that has historically been executable, so a
     // missing header is the unsafe reading, not a neutral one.
     if let Some(gs) = phdrs.iter().find(|p| p.p_type == PT_GNU_STACK)
-        && gs.p_flags & PF_X == 0 {
-            out.insert("NX_STACK".to_string());
-        }
+        && gs.p_flags & PF_X == 0
+    {
+        out.insert("NX_STACK".to_string());
+    }
 
     // RELRO: the relocation region is made read-only after startup.
     if phdrs.iter().any(|p| p.p_type == PT_GNU_RELRO) {
@@ -337,9 +343,10 @@ pub fn elf_hardening(b: &[u8]) -> Option<BTreeSet<String>> {
     // Recorded because on Linux it is opt-in (`-Z stack-protector`), so unlike PIE/NX/RELRO
     // its absence is the expected default rather than a regression.
     if let Some(funcs) = elf_imported_functions(b)
-        && funcs.iter().any(|f| f.contains("__stack_chk_fail")) {
-            out.insert("STACK_PROTECTOR".to_string());
-        }
+        && funcs.iter().any(|f| f.contains("__stack_chk_fail"))
+    {
+        out.insert("STACK_PROTECTOR".to_string());
+    }
 
     Some(out)
 }
@@ -350,7 +357,9 @@ mod tests {
 
     #[test]
     fn rejects_non_elf_and_elf32() {
-        assert!(!is_elf64_le(b"MZ\x90\x00 not an elf at all, this is a PE stub....."));
+        assert!(!is_elf64_le(
+            b"MZ\x90\x00 not an elf at all, this is a PE stub....."
+        ));
         // ELF32 (EI_CLASS = 1) must be declined, not parsed with 64-bit offsets: a walker
         // that mis-parses reports a confident, wrong capability set.
         let mut elf32 = vec![0u8; 0x80];
@@ -382,7 +391,10 @@ mod tests {
         b[5] = 1;
         b[0x36..0x38].copy_from_slice(&56u16.to_le_bytes()); // phentsize
         b[0x38..0x3A].copy_from_slice(&0xFFFFu16.to_le_bytes()); // absurd phnum
-        assert!(program_headers(&b).is_none(), "an absurd phnum must be refused");
+        assert!(
+            program_headers(&b).is_none(),
+            "an absurd phnum must be refused"
+        );
     }
 }
 
@@ -536,7 +548,10 @@ mod fixtures {
             None,
         );
         let h = elf_hardening(&b).unwrap();
-        assert!(!h.contains("PIE"), "a shared library must not read as PIE: {h:?}");
+        assert!(
+            !h.contains("PIE"),
+            "a shared library must not read as PIE: {h:?}"
+        );
         // The unrelated mitigations must still be reported, so this is a precise miss rather
         // than the parser failing wholesale.
         assert!(h.contains("NX_STACK") && h.contains("RELRO"), "{h:?}");
@@ -575,7 +590,10 @@ mod fixtures {
         ] {
             let b = synth(ET_DYN, &[(PT_GNU_STACK, 6), (PT_INTERP, 4)], &dynamic, None);
             let h = elf_hardening(&b).unwrap();
-            assert!(h.contains("BIND_NOW"), "encoding {dynamic:?} not recognised: {h:?}");
+            assert!(
+                h.contains("BIND_NOW"),
+                "encoding {dynamic:?} not recognised: {h:?}"
+            );
         }
     }
 
@@ -618,9 +636,6 @@ mod fixtures {
     #[test]
     fn absent_property_note_yields_no_cet_claim() {
         let h = elf_hardening(&good()).unwrap();
-        assert!(
-            !h.contains("CET_IBT") && !h.contains("CET_SHSTK"),
-            "{h:?}"
-        );
+        assert!(!h.contains("CET_IBT") && !h.contains("CET_SHSTK"), "{h:?}");
     }
 }

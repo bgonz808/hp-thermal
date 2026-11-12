@@ -50,7 +50,10 @@ const COMMON_HARDENING: &[(&str, &str)] = &[
 /// point: the check should fail for an unregistered site rather than silently ignore it.
 const SOURCES: &[(&str, &str)] = &[
     ("app/.cargo/config.toml", "hp-thermal.exe"),
-    (".github/workflows/build-tools.yml", "the five PE build tools"),
+    (
+        ".github/workflows/build-tools.yml",
+        "the five PE build tools",
+    ),
 ];
 
 /// Non-comment content of a file, so a flag that is merely *mentioned* in a comment does not
@@ -85,7 +88,10 @@ pub fn run(_args: &[String]) -> i32 {
             }
         }
         if absent.is_empty() {
-            println!("  {path}  ({what}): all {} common flags present", COMMON_HARDENING.len());
+            println!(
+                "  {path}  ({what}): all {} common flags present",
+                COMMON_HARDENING.len()
+            );
         } else {
             println!("  {path}  ({what}): MISSING {absent:?}");
             for f in &absent {

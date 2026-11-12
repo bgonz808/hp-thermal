@@ -794,8 +794,14 @@ mod newly_soaked_tests {
         // The h2 0.4.16 case: published 2026-08-17, evaluated 2026-08-24 => exactly 7d.
         // At the boundary it MUST count as newly soaked, or a fix that becomes adoptable
         // exactly on a monitor tick is never announced.
-        assert!(cand(7, 7).newly_soaked(7, 7), "age == soak must be newly soaked");
-        assert!(cand(13, 7).newly_soaked(7, 7), "last day of the window still counts");
+        assert!(
+            cand(7, 7).newly_soaked(7, 7),
+            "age == soak must be newly soaked"
+        );
+        assert!(
+            cand(13, 7).newly_soaked(7, 7),
+            "last day of the window still counts"
+        );
         assert!(
             !cand(14, 7).newly_soaked(7, 7),
             "soak+cadence is EXCLUSIVE: it has been adoptable a full cycle, stop shouting"
@@ -815,13 +821,22 @@ mod newly_soaked_tests {
         // that was adoptable yesterday is simply not soaked today. No grandfathering.
         let c = cand(7, 7);
         assert!(c.newly_soaked(7, 7));
-        let stricter = Candidate { soaked: 7 >= 30, ..c };
-        assert!(!stricter.newly_soaked(30, 7), "policy change must demote, not grandfather");
+        let stricter = Candidate {
+            soaked: 7 >= 30,
+            ..c
+        };
+        assert!(
+            !stricter.newly_soaked(30, 7),
+            "policy change must demote, not grandfather"
+        );
     }
 
     #[test]
     fn saturating_cadence_cannot_overflow_into_a_pass() {
         let c = cand(7, 7);
-        assert!(c.newly_soaked(7, i64::MAX), "saturating add must not wrap to a negative bound");
+        assert!(
+            c.newly_soaked(7, i64::MAX),
+            "saturating add must not wrap to a negative bound"
+        );
     }
 }

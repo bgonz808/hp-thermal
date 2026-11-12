@@ -239,7 +239,10 @@ pub fn run(args: &[String]) -> i32 {
         ver.patch,
         if ver.pre { "-pre" } else { "" }
     );
-    println!("# source: GitHub Security Advisories, rust-lang/rust ({} entries)", list.len());
+    println!(
+        "# source: GitHub Security Advisories, rust-lang/rust ({} entries)",
+        list.len()
+    );
 
     let mut affected = 0;
     let mut unevaluated = 0;
