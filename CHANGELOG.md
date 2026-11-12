@@ -4,7 +4,7 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
-## [0.3.2] - TBD (date set at tag time)
+## [0.3.2] - 2026-11-12
 
 Patch release: the binary's runtime behaviour is unchanged since 0.3.2-rc.2; the shipped
 bytes change through a toolchain adoption and a linked-CRT hardening, and the pipeline that
