@@ -4,6 +4,67 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+## [0.3.2] - TBD (date set at tag time)
+
+Patch release: the binary's runtime behaviour is unchanged since 0.3.2-rc.2; the shipped
+bytes change through a toolchain adoption and a linked-CRT hardening, and the pipeline that
+produces them is substantially stronger. `-rc.3` (2026-08-30) was the first candidate built by
+the pinned-toolchain tool fleet; everything below landed after it.
+
+### Security (binary)
+- **Spectre-mitigated C runtime.** The release links the MSVC `lib/spectre` CRT, discovered
+  through the same `find-msvc-tools` lookup rustc uses for `link.exe`; a toolset without it is
+  a build failure, never a silent fall-back to the unmitigated CRT. The BinSkim release gate
+  independently checks the linked result (BA2024), and now counts SARIF results that carry no
+  `kind`/`level` by applying the SARIF 2.1.0 defaults — BA2024 had read as nothing since
+  2026-08-17. (#385, #392, #393)
+- **Toolchain nightly-2026-10-09 adopted** after an A/B of every instrument on the candidate
+  (caps, vuln, VT, BinSkim, verify-artifact): the fleet and the app move together, six tools
+  blessed with zero sign-offs. Still pinned by content in `tools/TOOLCHAIN.lock`. (#308, #384)
+
+### Supply chain & release integrity (pipeline; no runtime change)
+- **Binary-vantage scans have a precondition.** `verify-auditable` refuses a binary without a
+  `.dep-v0` section before `cargo audit bin` runs — on its own that scan recovers a partial
+  dependency list from panic strings and exits 0, so a missing section read as cleaner. Gates
+  release-attest and the Windows producer; the SBOM and `SHA256SUMS` are attestation subjects.
+  (#386, #399)
+- **The tool fleet is auditable, stamped and idempotent.** All seven blessed tool digests are
+  built through cargo-auditable (a Linux cargo-auditable joins the fleet); Windows tools link
+  with `/Brepro` and have every PE timestamp stamped to the pinned upstream rev's commit epoch,
+  verified exactly (`verify-timestamp --expect`). Three consecutive producer runs reproduced all
+  seven digests byte for byte. (#386, #401, #402, #403, #406, #407)
+- **rustix 1.1.6 across the fleet** (RUSTSEC-2026-0486, unsound) via `xtask freeze
+  --require-improvement` atop each frozen lock — fixed, not acknowledged; cargo-auditable's
+  first frozen lock. (#404)
+- **Capabilities measured as built, sandboxed.** cackle runs with Bubblewrap on ubuntu-26.04
+  and with the producer's own build flags and a release-inheriting profile, so inventories
+  describe the shipped package and record every `cargo:` directive a build script emits
+  (31 directives on the fleet, all self-referential). A measured strict subset of the prior
+  blessed inventory passes without a fresh signature; anything else needs one. (#50, #367,
+  #381, #387, #388, #390, #391)
+- **Absolute floors.** `supply-chain/policy/floors.json` names the states no sign-off admits:
+  a critical-shape CVSS vector, a malware panel with too many malicious verdicts or a
+  malicious sandbox verdict, a measured inventory newly granting process/network. HARD-STOP
+  in the gate, FAIL in the monitors; a missing policy is unevaluated, never "no floors".
+  (#369)
+- **VirusTotal panels are read for completeness and sandbox state.** Fewer than 50
+  verdict-bearing engines is an incomplete panel (not a verdict); each digest's sandbox state
+  is recorded as ABSENT / NOT READY / ANALYZED rather than inferred; a `suspicious` sandbox
+  verdict blocks until a per-item sign-off exists. Lookups are keyed by (tool, target) — a
+  name-only key had dropped one digest. (#347, #408, #409)
+- **Vulnerability statements follow OpenVEX / CycloneDX vocabulary.** An advisory RustSec
+  withdraws or narrows away from a blessed binary is recorded `not_affected` /
+  `vulnerable_code_not_present`, grounded in the advisory-DB commit it was observed absent at,
+  and that statement is void the moment the DB reports it again; `fixed` is rejected for
+  immutable bytes. Monitor guards: DB ordering, lock drift, raw-payload custody. (#251, #345,
+  #395)
+- **Maintainer commit signing.** The signing-key roster lives in
+  `supply-chain/allowed_signers`; `main` requires signed commits. (#398)
+- **cargo-acl** builds `--no-default-features` with `tui-input` optional (122 → 71 packages),
+  on object 0.40 / ruzstd 0.9.1 (RUSTSEC-2026-0344 fixed). Per-tool RUSTFLAGS are
+  single-sourced under `tools/rustflags/` and cross-checked. (#325, #361, #374, #375, #389)
+- Versioning rule written down: dependency-only releases are PATCH. (#371)
+
 ## [0.3.2-rc.2] - 2026-08-25
 
 Release-candidate cut to exercise two things before a real release depends on them:
