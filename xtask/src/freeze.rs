@@ -42,7 +42,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use crate::explore::{age_days, parse_ver};
+use crate::explore::{age_days, line_of, parse_ver};
 use crate::gate::{Instance, extract_instances, run_audit};
 
 /// One `pkg=version` (or `pkg@current=version`) promotion directive.
@@ -183,29 +183,67 @@ fn max_version(vs: &[String]) -> Option<&String> {
     vs.iter().max_by_key(|v| parse_ver(v))
 }
 
-/// Packages whose highest resident version in `after` is LOWER than in `prior`:
-/// `(name, prior, after)`. Packages absent from either side are not downgrades.
+/// Resident versions grouped by semver LINE (major, or 0.minor): Cargo coexists lines, and a
+/// dependent switching from `syn ^3` to `syn ^2` is upstream choosing a line, not a rollback.
+fn by_line(vs: &[String]) -> BTreeMap<(u64, u64), Vec<String>> {
+    let mut m: BTreeMap<(u64, u64), Vec<String>> = BTreeMap::new();
+    for v in vs {
+        if let Some(pv) = parse_ver(v) {
+            m.entry(line_of(pv)).or_default().push(v.clone());
+        }
+    }
+    m
+}
+
+/// Rollbacks WITHIN a semver line: for every (package, line) resident on both sides, the
+/// highest `after` version is lower than the highest `prior` version. `(name, prior, after)`.
+/// A line present only in `prior` is not a downgrade (see `dropped_lines`): upstream's manifest
+/// no longer resolves that line, and a directive cannot cross lines without a manifest change.
 pub fn downgrades(
     after: &BTreeMap<String, Vec<String>>,
     prior: &BTreeMap<String, Vec<String>>,
 ) -> Vec<(String, String, String)> {
     let mut out = Vec::new();
     for (n, pv) in prior {
-        let (Some(p), Some(a)) = (max_version(pv), after.get(n).and_then(|v| max_version(v)))
-        else {
-            continue;
-        };
-        if let (Some(pp), Some(aa)) = (parse_ver(p), parse_ver(a))
-            && aa < pp
-        {
-            out.push((n.clone(), p.clone(), a.clone()));
+        let Some(av) = after.get(n) else { continue };
+        let (pl, al) = (by_line(pv), by_line(av));
+        for (line, pvs) in &pl {
+            let Some(avs) = al.get(line) else { continue };
+            if let (Some(p), Some(a)) = (max_version(pvs), max_version(avs))
+                && let (Some(pp), Some(aa)) = (parse_ver(p), parse_ver(a))
+                && aa < pp
+            {
+                out.push((n.clone(), p.clone(), a.clone()));
+            }
         }
     }
     out
 }
 
-/// Directives that lift every package resolved below the prior blessed version back to it,
-/// skipping packages the explicit directives already name.
+/// Semver lines we shipped that the new resolution no longer contains at all (`name line-max`):
+/// reported, never auto-restored — that is upstream's dependency choice, reviewed through the
+/// caps and vuln axes like any other change to the tree.
+pub fn dropped_lines(
+    after: &BTreeMap<String, Vec<String>>,
+    prior: &BTreeMap<String, Vec<String>>,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    for (n, pv) in prior {
+        let al = after.get(n).map(|v| by_line(v)).unwrap_or_default();
+        for (line, pvs) in by_line(pv) {
+            if !al.contains_key(&line)
+                && let Some(p) = max_version(&pvs)
+            {
+                out.push(format!("{n} {p}"));
+            }
+        }
+    }
+    out
+}
+
+/// Directives that lift every within-line rollback back to the prior blessed version, skipping
+/// packages the explicit directives already name. `at` is the resident version in that line, so
+/// the spec stays unambiguous when several lines coexist.
 pub fn carry_forward_directives(
     start: &BTreeMap<String, Vec<String>>,
     prior: &BTreeMap<String, Vec<String>>,
@@ -765,22 +803,33 @@ pub fn run(args: &[String]) -> i32 {
             Ok(t) => spec_for(&lock_package_versions(&t), p),
             Err(_) => p.spec(),
         };
-        let st = Command::new("cargo")
+        let out = Command::new("cargo")
             .current_dir(&work)
             .args(["update", "-p", &spec, "--precise", &p.version])
             .env_remove("CARGO")
             .env_remove("RUSTC")
             .env_remove("RUSTUP_TOOLCHAIN")
-            .status();
-        match st {
-            Ok(s) if s.success() => println!("  updated {} -> {}", p.package, p.version),
-            _ => {
+            .output();
+        match out {
+            Ok(o) if o.status.success() => println!("  updated {} -> {}", p.package, p.version),
+            Ok(o) => {
+                // cargo's own words: the requirement that caps the move is the actionable fact.
+                let err = String::from_utf8_lossy(&o.stderr);
+                let why: Vec<&str> = err
+                    .lines()
+                    .filter(|l| !l.trim().is_empty() && !l.contains("Updating crates.io index"))
+                    .take(6)
+                    .collect();
                 eprintln!(
-                    "  REFUSED: cargo update -p {} --precise {} failed — the version is likely \
-                     unreachable from this tree's requirements (see the escalation ladder in \
-                     `xtask explore`)",
-                    p.package, p.version
+                    "  REFUSED: cargo update -p {spec} --precise {} failed — unreachable from this \
+                     tree's requirements:\n      {}",
+                    p.version,
+                    why.join("\n      ")
                 );
+                refused.push(format!("{}={}", p.package, p.version));
+            }
+            Err(e) => {
+                eprintln!("  REFUSED: cannot run cargo update for {}: {e}", p.package);
                 refused.push(format!("{}={}", p.package, p.version));
             }
         }
@@ -879,6 +928,14 @@ pub fn run(args: &[String]) -> i32 {
             }
         };
         let regressed = downgrades(&after_v, prior);
+        let dropped = dropped_lines(&after_v, prior);
+        if !dropped.is_empty() {
+            println!(
+                "  lines we shipped that this resolution no longer contains (upstream's dependency \
+                 choice, not a rollback; reviewed through caps/vuln): {}",
+                dropped.join(", ")
+            );
+        }
         let blocking: Vec<&(String, String, String)> = regressed
             .iter()
             .filter(|(n, _, _)| !allow_downgrade.contains(n))
@@ -1201,13 +1258,18 @@ mod tests {
             ("miniz_oxide", "0.8.9"),
             ("adler2", "2.0.1"),
             ("only-prior", "1.0.0"),
+            ("syn", "3.0.3"),
+            ("toml", "0.8.23"),
+            ("toml", "1.1.4+spec-1.1.0"),
         ]);
         let start = lock(&[
             ("flate2", "1.0.24"),
             ("miniz_oxide", "0.5.3"),
-            ("miniz_oxide", "0.7.4"),
+            ("miniz_oxide", "0.8.2"),
             ("adler", "1.0.2"),
             ("newer", "9.9.9"),
+            ("syn", "2.0.111"),
+            ("toml", "0.8.22"),
         ]);
         let d = downgrades(&start, &prior);
         assert_eq!(
@@ -1221,10 +1283,25 @@ mod tests {
                 (
                     "miniz_oxide".to_string(),
                     "0.8.9".to_string(),
-                    "0.7.4".to_string()
+                    "0.8.2".to_string()
+                ),
+                (
+                    "toml".to_string(),
+                    "0.8.23".to_string(),
+                    "0.8.22".to_string()
                 ),
             ],
-            "max resident version compared; names absent on one side are not downgrades"
+            "within-line rollbacks only: 0.5.3 is another line, syn 3->2 is a line switch, not a rollback"
+        );
+        assert_eq!(
+            dropped_lines(&start, &prior),
+            vec![
+                "adler2 2.0.1".to_string(),
+                "only-prior 1.0.0".to_string(),
+                "syn 3.0.3".to_string(),
+                "toml 1.1.4+spec-1.1.0".to_string()
+            ],
+            "lines we shipped that are gone (whole packages included) are reported, never carried"
         );
         let explicit = [Directive {
             package: "flate2".into(),
@@ -1232,20 +1309,20 @@ mod tests {
             at: None,
         }];
         let cf = carry_forward_directives(&start, &prior, &explicit);
-        assert_eq!(cf.len(), 1, "explicitly named packages are not duplicated");
+        assert_eq!(cf.len(), 2, "explicitly named packages are not duplicated");
         assert_eq!(
             (
                 cf[0].package.as_str(),
                 cf[0].version.as_str(),
                 cf[0].at.as_deref()
             ),
-            ("miniz_oxide", "0.8.9", Some("0.7.4"))
+            ("miniz_oxide", "0.8.9", Some("0.8.2")),
+            "at = the resident version IN THAT LINE"
         );
-        // spec resolution against the live lock
         assert_eq!(
             spec_for(&start, &cf[0]),
-            "miniz_oxide@0.7.4",
-            "two copies resident -> disambiguate"
+            "miniz_oxide@0.8.2",
+            "two lines resident -> disambiguate"
         );
         assert_eq!(
             spec_for(&start, &explicit[0]),
