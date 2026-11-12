@@ -20,8 +20,16 @@ parseable. The schema borrows established vocabularies rather than inventing one
   versions, so one advisory can have multiple simultaneous instances and instance-count changes
   are signal (#241 §6). `aliases` carries CVE/GHSA/RUSTSEC for cross-scanner canonicalization.
 - **mal.jsonl** — VirusTotal panel snapshot: `{subject, panelDate, detections{malicious,total},
-  flags[{engine,result}], sandbox[{name,category,confidence}], …}`. Written from
-  schedule/dispatch runs only — PR workflows never call VT.
+  flags[{engine,result}], sandbox{state, verdicts[{name,category,confidence,classification[]}],
+  firstSubmission, readOn}, timesSubmitted, source}`. `detections.total` counts verdict-bearing
+  engines (malicious+suspicious+undetected+harmless); below `policy/floors.json`
+  `mal.min_verdict_engines` the panel is INCOMPLETE and the record is UNEVALUATED (#347 step 1).
+  `sandbox.state` is what the panel STATED when read: `ANALYZED` (≥1 sandbox verdict, each
+  recorded) or `NOT READY` (none yet — sandbox analysis lags the AV panel and some files are
+  never sandboxed; not "no behaviours"). Records written before #347 carry a bare `sandbox: []`
+  and read as `UNSTATED`. A `malicious` sandbox verdict is a floor; `suspicious` is UNEVALUATED
+  until #347's per-item sign-off exists. The monitor prints each pinned digest's line ready to
+  append verbatim. Written from schedule/dispatch runs only — PR workflows never call VT.
 - **caps.toml** — the cackle-generated capability inventory; its `[api.*]` sections ARE the
   instrument it was measured with, so it stays native TOML (converting would sever that
   identity). A `caps.UNEVALUATED` file in its place records *why* no data exists — fail-secure:

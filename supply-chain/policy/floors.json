@@ -11,9 +11,10 @@
     }
   },
   "mal": {
-    "_doc": "Per-engine acks exist for heuristic/ML false positives; a panel with this many malicious verdicts, or any sandbox behavioural verdict of malicious, is not a false-positive profile.",
+    "_doc": "Per-engine acks exist for heuristic/ML false positives; a panel with this many malicious verdicts, or any sandbox behavioural verdict of malicious, is not a false-positive profile. min_verdict_engines is a COMPLETENESS precondition, not a floor (#347 step 1): a panel where fewer engines returned a verdict (malicious+suspicious+undetected+harmless) is still running or a partial rescan, so the record is UNEVALUATED in the gate and FAILS the monitor, never read as clean. Basis: the fleet's complete panels measured 63-71 engines (ELF low, PE high) against VirusTotal's ~70 integrated engines; 50 sits well under a complete panel and well over a half-run one.",
     "hard_stop_malicious_engines": 3,
-    "hard_stop_on_sandbox_malicious": true
+    "hard_stop_on_sandbox_malicious": true,
+    "min_verdict_engines": 50
   },
   "caps": {
     "_doc": "Applies only to a MEASURED head inventory with a prior blessed inventory to compare against (a COPIED FORWARD record is not a measurement; a new tool has no prior). Test-scope grants are ignored (they do not ship). A package newly granted one of these classes in runtime or build scope is HARD-STOP.",

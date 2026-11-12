@@ -588,12 +588,38 @@ fn mal_verdict(
     if let Some(why) = floors.mal_stop(&v) {
         return Verdict::HardStop(why);
     }
+    // #347 step 1: completeness and readiness are PRECONDITIONS on reading the panel at all.
+    // A short panel is not a verdict; a suspicious sandbox verdict has no per-item sign-off
+    // yet (that is #347's verify-behavior step). Both are UNEVALUATED: they block and cannot
+    // be acked away. NOT READY / UNSTATED are named in the verdict, not yet blocking.
+    if let Some(why) = floors.mal_incomplete(&v) {
+        return Verdict::Unevaluated(format!("{}: {why}", path.display()));
+    }
+    let sandbox = crate::floors::sandbox_state(&v);
+    if let Some(sb) = crate::floors::sandbox_verdicts(&v).into_iter().find(|sb| {
+        sb.get("category")
+            .and_then(Value::as_str)
+            .is_some_and(|c| c.eq_ignore_ascii_case("suspicious"))
+    }) {
+        let name = sb.get("name").and_then(Value::as_str).unwrap_or("?");
+        return Verdict::Unevaluated(format!(
+            "sandbox {name} verdict suspicious: per-item behaviour sign-off is #347's next \
+             step; not readable as clean"
+        ));
+    }
+    let total = v
+        .pointer("/detections/total")
+        .and_then(Value::as_u64)
+        .unwrap_or(0);
     let malicious = v
         .get("detections")
         .and_then(|d| d.get("malicious"))
         .and_then(Value::as_u64);
     match malicious {
-        Some(0) => Verdict::Allow(format!("panel {}: 0 detections", s(&v, &["panelDate"]))),
+        Some(0) => Verdict::Allow(format!(
+            "panel {}: 0 detections of {total} engines; sandbox {sandbox}",
+            s(&v, &["panelDate"])
+        )),
         Some(_) => {
             let mut covered = Vec::new();
             let mut needed = Vec::new();
@@ -1353,6 +1379,81 @@ mod tests {
         let v = mal_verdict("t", &dir, &h, &acks, &floors);
         assert!(matches!(v, Verdict::Unevaluated(_)), "got {v:?}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// One mal record on disk → its gate verdict (#347 step 1 cases).
+    fn mal_verdict_for(tag: &str, record: &str) -> Verdict {
+        let dir = std::env::temp_dir().join(format!("gate-mal-{tag}-{}", std::process::id()));
+        let full = "bbbbbbbbbbbb000000000000000000000000000000000000000000000000000b";
+        let tool_dir = dir.join("t").join(full);
+        std::fs::create_dir_all(&tool_dir).unwrap();
+        std::fs::write(tool_dir.join("mal.jsonl"), record.replace("DIGEST", full)).unwrap();
+        let h = ToolLine {
+            name: "t".into(),
+            repo: "r".into(),
+            rev: "v".into(),
+            target: "x".into(),
+            sha: full.into(),
+        };
+        let acks = Acks {
+            entries: vec![],
+            rejected: vec![],
+        };
+        let floors =
+            crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
+        let v = mal_verdict("t", &dir, &h, &acks, &floors);
+        let _ = std::fs::remove_dir_all(&dir);
+        v
+    }
+
+    #[test]
+    fn incomplete_panel_is_unevaluated_not_allow() {
+        let v = mal_verdict_for(
+            "short",
+            r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0,"total":9},"flags":[],"sandbox":{"state":"NOT READY","verdicts":[]}}"#,
+        );
+        assert!(
+            matches!(v, Verdict::Unevaluated(ref w) if w.contains("INCOMPLETE")),
+            "got {v:?}"
+        );
+        let v = mal_verdict_for(
+            "nototal",
+            r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0},"flags":[],"sandbox":[]}"#,
+        );
+        assert!(matches!(v, Verdict::Unevaluated(_)), "got {v:?}");
+    }
+
+    #[test]
+    fn sandbox_state_is_named_and_suspicious_is_unevaluated() {
+        let v = mal_verdict_for(
+            "ready",
+            r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0,"total":70},"flags":[],"sandbox":{"state":"NOT READY","verdicts":[]}}"#,
+        );
+        assert!(
+            matches!(v, Verdict::Allow(ref w) if w.contains("sandbox NOT READY")),
+            "got {v:?}"
+        );
+        let v = mal_verdict_for(
+            "legacy",
+            r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0,"total":70},"flags":[],"sandbox":[]}"#,
+        );
+        assert!(
+            matches!(v, Verdict::Allow(ref w) if w.contains("UNSTATED")),
+            "got {v:?}"
+        );
+        let v = mal_verdict_for(
+            "susp",
+            r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0,"total":70},"flags":[],"sandbox":{"state":"ANALYZED","verdicts":[{"name":"Zenbox","category":"suspicious"}]}}"#,
+        );
+        assert!(
+            matches!(v, Verdict::Unevaluated(ref w) if w.contains("suspicious")),
+            "got {v:?}"
+        );
+        let v = mal_verdict_for(
+            "mal",
+            r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0,"total":70},"flags":[],"sandbox":{"state":"ANALYZED","verdicts":[{"name":"Zenbox","category":"malicious"}]}}"#,
+        );
+        assert!(matches!(v, Verdict::HardStop(_)), "got {v:?}");
     }
 }
 
