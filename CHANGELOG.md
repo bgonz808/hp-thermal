@@ -64,6 +64,27 @@ the pinned-toolchain tool fleet; everything below landed after it.
   on object 0.40 / ruzstd 0.9.1 (RUSTSEC-2026-0344 fixed). Per-tool RUSTFLAGS are
   single-sourced under `tools/rustflags/` and cross-checked. (#325, #361, #374, #375, #389)
 - Versioning rule written down: dependency-only releases are PATCH. (#371)
+- **Sign-offs name what they sign.** A caps ack carries the sha256 of the `caps.toml` it
+  reviewed and covers nothing else; a malware ack covers one (engine, verdict) finding; and a
+  change to a blessed digest's evidence with no TOOLS.lock change is evaluated against the base
+  commit's record rather than waved through. The 43 existing caps acks were bound to the content
+  each one signed at the time. (#380)
+- **Build-script directives have a floor.** A measured inventory whose build script passes
+  arbitrary linker flags, searches a link path outside its own OUT_DIR or registry source, emits
+  a directive the evaluator cannot classify, or sets a `rustc-env`/`rustc-cfg` the prior
+  inventory lacked is HARD-STOP; the inventory parser fails closed on anything it cannot read.
+  (#382)
+- **Runner-image and toolchain lifetimes are tracked as data**, as OpenEoX Core v1.0 documents
+  (OASIS, CSD01) validated against a digest-pinned schema with the TC's own test vectors: every
+  `runs-on` label must have a record, and a label within 120 days of its image's deprecation
+  start fails CI; the weekly monitor cross-checks endoflife.date. The ubuntu-22.04 miss that
+  motivated this is the first record. (#376)
+- **Strictly-better lock fixes propose themselves.** A weekly job finds advisory instances with a
+  RustSec patched version, runs `xtask freeze --require-improvement` for the lowest soaked
+  non-yanked fix, soak-checks every transitive move, and opens one pull request with the frozen
+  lock. It never bumps a rev, blesses a digest, or merges; a refusal opens no PR. (#405)
+- **The gate's own test suite runs in PR CI.** The 150 unit tests that anchor every
+  FAIL-DIRECTIONS row had been running only on developer machines. (#410)
 
 ## [0.3.2-rc.2] - 2026-08-25
 
