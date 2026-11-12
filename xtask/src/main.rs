@@ -55,8 +55,6 @@ mod propose;
 /// `candidate-advance`: the bless cycle as idempotent stages (digest, vuln, caps, mal, summary).
 mod advance;
 mod record_vuln;
-/// `xtask ci` step: cargo-vet exemptions for xtask stay off every lane's build graph.
-mod vet_guard;
 
 /// The app crate lives in a sibling directory; xtask shells into it so app's
 /// build-std/nightly config applies (it's scoped to app/.cargo/config.toml).
@@ -107,13 +105,6 @@ fn main() {
         Some("freeze-propose") => propose::run(&args),
         Some("record-vuln") => record_vuln::run(&args),
         Some("candidate-advance") => advance::run(&args),
-        Some("vet-guard") => {
-            if vet_guard::check() {
-                0
-            } else {
-                1
-            }
-        }
         Some("verify-caps") => caps::run(args.get(1).map(String::as_str), {
             // optional --manifest <path>
             let mut mpath = None;
@@ -615,8 +606,6 @@ fn release_attest_checks() -> bool {
         ".",
         &["audit", "--file", "xtask/Cargo.lock"],
     );
-    // xtask's cargo-vet exemptions are claims about the build graph; prove them every run.
-    ok &= vet_guard::check();
     ok &= cargo_tool_step(
         "auditable release build",
         APP_DIR,

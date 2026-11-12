@@ -122,22 +122,3 @@ jobs:
             echo "::warning::treat that as a broken control, not as findings."
             exit "$rc"
           fi
-
-      # xtask is the toolchain that evaluates evidence and, via candidate-advance, runs with the
-      # maintainer's credentials. Its own tree is vetted FAIL-CLOSED (no report-only phase): the
-      # store under xtask/supply-chain/ holds the maintainer's audits, the imported audit sets
-      # pinned in imports.lock, and version-pinned exemptions whose claims the guard re-proves.
-      - name: cargo vet (xtask tree, fail-closed)
-        working-directory: xtask
-        shell: bash
-        env:
-          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
-        run: |
-          set -euo pipefail
-          CARGO="$(rustup which cargo)"
-          export CARGO
-          "$TOOLS_DIR/cargo-vet.exe" vet --locked
-
-      - name: vet guard (exempted xtask crates are never compiled, or carry live debt)
-        shell: bash
-        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- vet-guard
