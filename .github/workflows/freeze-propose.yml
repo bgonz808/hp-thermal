@@ -1,0 +1,151 @@
+name: Freeze proposals (strictly-better lock fixes)
+
+# #405 — the automated half of "fix rather than ack". For every tool in tools/TOOLS.lock, find
+# advisory instances whose RustSec entry names a patched version, and if a soaked, non-yanked
+# version reaches it, run the existing `xtask freeze --require-improvement` (atop the frozen lock
+# and the tool's patches, exactly as the producer builds) and soak/yank-check every transitive
+# move the resolver made. What passes becomes ONE pull request. What does not is reported.
+#
+# Three tiers, each with only the authority it needs:
+#   compute  — contents: read, no secrets. xtask freeze-propose on windows-2025 (the blessed
+#              cargo-audit is a Windows PE; canary first, #223). Output is DATA: locks + report.
+#   propose  — contents: write + pull-requests: write, still no stored secrets (job-scoped
+#              GITHUB_TOKEN). Commits via the Git Data API so the commit is GitHub-signed and
+#              authored by github-actions[bot] — visibly NOT in supply-chain/allowed_signers, so
+#              bot authorship stays distinguishable from maintainer authorship. One branch
+#              (freeze/proposal), one open PR, refreshed in place.
+#   merge    — the maintainer, always. Nothing here merges, labels for merge, or bypasses review.
+#
+# A PR opened with GITHUB_TOKEN does not trigger pull_request workflows (GitHub rule), so the
+# required checks (evaluate, ci, …) do NOT run until the maintainer closes and reopens it. That
+# is the fail-closed direction: the proposal cannot reach main unexamined. Nothing is blessed
+# here — a lock is a build input; the digest still comes from build-tools.yml and `xtask gate`.
+#
+# Fail-secure: a freeze refusal (soak, yank, added advisory, zero fixed, unreachable range, a
+# transitive move not past soak) produces NO PR and is reported in the run; an instrument or
+# network failure fails the compute job (red run), never an empty "nothing to fix".
+
+on:
+  schedule:
+    - cron: "47 7 * * 1"   # Mondays 07:47 UTC, after the monitor (06:17) has run
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  compute:
+    runs-on: windows-2025   # the blessed cargo-audit is a Windows PE
+    permissions:
+      contents: read
+    outputs:
+      count: ${{ steps.summarize.outputs.count }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch prior-blessed auditor (digest + attestation verified)
+        id: auditor
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-audit
+          verify-attestations: "true"
+
+      - name: Canary - the auditor must still detect a known-bad (#223)
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
+        run: cargo run --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
+
+      - name: Compute strictly-better proposals
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
+        run: |
+          set -euo pipefail
+          cargo run --quiet --manifest-path xtask/Cargo.toml -- freeze-propose --out proposal | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Summarize
+        id: summarize
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          count=0
+          [ -f proposal/proposals.json ] && count=$(jq '.proposals | length' proposal/proposals.json)
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "proposals: $count"
+
+      - name: Upload the proposal (report, machine-readable list, locks)
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact v7.0.2
+        with:
+          name: freeze-proposal
+          path: proposal/
+          if-no-files-found: warn
+          retention-days: 30
+
+  propose:
+    needs: compute
+    if: needs.compute.outputs.count != '0' && needs.compute.outputs.count != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write        # the freeze/proposal branch only (main is ruleset-protected)
+      pull-requests: write   # the one proposal PR
+    steps:
+      - name: Download the proposal
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # actions/download-artifact v8.0.1
+        with:
+          name: freeze-proposal
+          path: proposal
+
+      - name: Commit the locks via the Git Data API and open or refresh ONE pull request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R: ${{ github.repository }}
+          RUN: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          ls proposal/locks/*.lock
+          base=$(gh api "repos/$R/git/ref/heads/main" --jq .object.sha)
+          entries='[]'
+          for f in proposal/locks/*.lock; do
+            tool=$(basename "$f" .lock)
+            blob=$(gh api "repos/$R/git/blobs" -f encoding=base64 -f content="$(base64 -w0 "$f")" --jq .sha)
+            entries=$(jq -c --arg p "tools/locks/$tool.lock" --arg s "$blob" \
+              '. + [{path:$p, mode:"100644", type:"blob", sha:$s}]' <<<"$entries")
+          done
+          tree=$(jq -n --arg b "$base" --argjson t "$entries" '{base_tree:$b, tree:$t}' \
+                 | gh api "repos/$R/git/trees" --input - --jq .sha)
+          tools=$(jq -r '[.proposals[].tool] | join(", ")' proposal/proposals.json)
+          fixes=$(jq -r '[.proposals[].fixes[]] | unique | join(", ")' proposal/proposals.json)
+          msg="freeze-propose: $tools — $fixes (#405, run $RUN)"
+          commit=$(jq -n --arg m "$msg" --arg t "$tree" --arg p "$base" '{message:$m, tree:$t, parents:[$p]}' \
+                   | gh api "repos/$R/git/commits" --input - --jq .sha)
+          branch=freeze/proposal
+          if gh api "repos/$R/git/ref/heads/$branch" > /dev/null 2>&1; then
+            jq -n --arg s "$commit" '{sha:$s, force:true}' \
+              | gh api -X PATCH "repos/$R/git/refs/heads/$branch" --input - > /dev/null
+          else
+            jq -n --arg s "$commit" --arg r "refs/heads/$branch" '{ref:$r, sha:$s}' \
+              | gh api "repos/$R/git/refs" --input - > /dev/null
+          fi
+          {
+            cat proposal/report.md
+            echo
+            echo "---"
+            echo "Opened by \`freeze-propose.yml\` run $RUN with the job-scoped GITHUB_TOKEN: the commit is GitHub-signed and authored by github-actions[bot] (not in \`supply-chain/allowed_signers\`). **Required checks do not run on a GITHUB_TOKEN-opened PR — close and reopen it to arm them.** Merge is a maintainer click; nothing is blessed by this PR."
+          } > body.md
+          title="freeze-propose: $tools"
+          pr=$(gh pr list --head "$branch" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$pr" ]; then
+            gh pr edit "$pr" --title "$title" --body-file body.md
+            echo "refreshed PR #$pr"
+          else
+            gh pr create --head "$branch" --base main --title "$title" --body-file body.md
+          fi
