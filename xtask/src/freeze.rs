@@ -178,6 +178,128 @@ pub fn lock_package_versions(text: &str) -> BTreeMap<String, Vec<String>> {
     out
 }
 
+/// One `[[package]]` entry's provenance fields.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct LockEntry {
+    pub source: Option<String>,
+    pub checksum: Option<String>,
+}
+
+/// `(name, version) -> {source, checksum}` of a Cargo.lock.
+pub fn lock_entries(text: &str) -> BTreeMap<(String, String), LockEntry> {
+    let mut out: BTreeMap<(String, String), LockEntry> = BTreeMap::new();
+    let mut in_pkg = false;
+    let (mut name, mut version): (Option<String>, Option<String>) = (None, None);
+    let mut cur = LockEntry::default();
+    let flush = |out: &mut BTreeMap<(String, String), LockEntry>,
+                 name: &mut Option<String>,
+                 version: &mut Option<String>,
+                 cur: &mut LockEntry| {
+        if let (Some(n), Some(v)) = (name.take(), version.take()) {
+            out.insert((n, v), std::mem::take(cur));
+        }
+        *cur = LockEntry::default();
+    };
+    for line in text.lines() {
+        let l = line.trim();
+        if l == "[[package]]" {
+            flush(&mut out, &mut name, &mut version, &mut cur);
+            in_pkg = true;
+            continue;
+        }
+        if l.starts_with('[') {
+            flush(&mut out, &mut name, &mut version, &mut cur);
+            in_pkg = false;
+            continue;
+        }
+        if !in_pkg {
+            continue;
+        }
+        let field = |k: &str| {
+            l.strip_prefix(k)
+                .and_then(|r| r.split('"').next())
+                .map(str::to_string)
+        };
+        if let Some(v) = field("name = \"") {
+            name = Some(v);
+        } else if let Some(v) = field("version = \"") {
+            version = Some(v);
+        } else if let Some(v) = field("source = \"") {
+            cur.source = Some(v);
+        } else if let Some(v) = field("checksum = \"") {
+            cur.checksum = Some(v);
+        }
+    }
+    flush(&mut out, &mut name, &mut version, &mut cur);
+    out
+}
+
+/// The crates.io registry source string every fleet dependency must carry.
+pub const CRATES_IO_SOURCE: &str = "registry+https://github.com/rust-lang/crates.io-index";
+
+/// Identical (name, version) on both sides whose recorded checksums DIFFER: the registry served
+/// different bytes for a version we already vetted. Never acceptable; no flag.
+pub fn checksum_mismatches(
+    after: &BTreeMap<(String, String), LockEntry>,
+    prior: &BTreeMap<(String, String), LockEntry>,
+) -> Vec<(String, String, String, String)> {
+    let mut out = Vec::new();
+    for (k, pe) in prior {
+        if let (Some(ae), Some(pc)) = (after.get(k), &pe.checksum)
+            && let Some(ac) = &ae.checksum
+            && ac != pc
+        {
+            out.push((k.0.clone(), k.1.clone(), pc.clone(), ac.clone()));
+        }
+    }
+    out
+}
+
+/// Entries whose source is not the crates.io index (git, path, another registry) and that the
+/// prior blessed lock did not already carry with that same source. The root package has no
+/// source and is skipped.
+pub fn foreign_sources(
+    after: &BTreeMap<(String, String), LockEntry>,
+    prior: &BTreeMap<(String, String), LockEntry>,
+) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for (k, ae) in after {
+        let Some(src) = &ae.source else { continue };
+        if src == CRATES_IO_SOURCE {
+            continue;
+        }
+        let known = prior
+            .iter()
+            .any(|(pk, pe)| pk.0 == k.0 && pe.source.as_deref() == Some(src.as_str()));
+        if !known {
+            out.push((k.0.clone(), k.1.clone(), src.clone()));
+        }
+    }
+    out
+}
+
+/// crates.io login of the account that published `pkg@version` (None when the API omits it).
+pub fn published_by(pkg: &str, version: &str) -> Result<Option<String>, String> {
+    let url = format!("https://crates.io/api/v1/crates/{pkg}/{version}");
+    let out = Command::new("curl")
+        .args(["-sSfL", "-H", "User-Agent: hp-thermal-freeze", &url])
+        .output()
+        .map_err(|e| format!("curl: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("{pkg} {version} not found on crates.io"));
+    }
+    let v: serde_json::Value =
+        serde_json::from_slice(&out.stdout).map_err(|e| format!("crates.io JSON: {e}"))?;
+    Ok(v.pointer("/version/published_by/login")
+        .and_then(|l| l.as_str())
+        .map(str::to_string))
+}
+
+/// Which directive an advisory instance traces to: the one naming its package, else transitive.
+pub fn attribute<'a>(inst_package: &str, directives: &'a [Directive]) -> Option<&'a Directive> {
+    directives.iter().find(|d| d.package == inst_package)
+}
+
 /// Highest resident version by canonical semver (`parse_ver`); unparseable versions sort last.
 fn max_version(vs: &[String]) -> Option<&String> {
     vs.iter().max_by_key(|v| parse_ver(v))
@@ -513,6 +635,10 @@ pub fn run(args: &[String]) -> i32 {
     let mut prior_lock: Option<PathBuf> = None;
     let mut carry_forward = false;
     let mut allow_downgrade: Vec<String> = Vec::new();
+    // --allow-publisher-change <pkg>: an explicit target published by a different crates.io
+    // account than the version we ship is the maintainer-takeover shape; refused unless named
+    // after review.
+    let mut allow_publisher_change: Vec<String> = Vec::new();
     let mut soak_overridden = false;
     let mut now_overridden = false;
     let mut it = args.iter().skip(1);
@@ -565,6 +691,11 @@ pub fn run(args: &[String]) -> i32 {
             "--allow-downgrade" => {
                 if let Some(v) = it.next() {
                     allow_downgrade.push(v.clone());
+                }
+            }
+            "--allow-publisher-change" => {
+                if let Some(v) = it.next() {
+                    allow_publisher_change.push(v.clone());
                 }
             }
             other => {
@@ -765,6 +896,59 @@ pub fn run(args: &[String]) -> i32 {
             }
         },
     };
+    // 2d. Publisher continuity (per explicit directive): the account that published the target
+    // must be the one that published the version we ship, unless the change was reviewed.
+    {
+        let start_v = std::fs::read_to_string(&lock)
+            .map(|t| lock_package_versions(&t))
+            .unwrap_or_default();
+        for d in &parsed {
+            let cur = d.at.clone().or_else(|| {
+                let target_line = parse_ver(&d.version).map(line_of);
+                start_v.get(&d.package).and_then(|vs| {
+                    vs.iter()
+                        .find(|v| parse_ver(v).map(line_of) == target_line)
+                        .cloned()
+                })
+            });
+            let Some(cur) = cur else { continue };
+            if cur == d.version {
+                continue;
+            }
+            match (
+                published_by(&d.package, &cur),
+                published_by(&d.package, &d.version),
+            ) {
+                (Ok(Some(a)), Ok(Some(b))) if a != b => {
+                    if allow_publisher_change.contains(&d.package) {
+                        println!(
+                            "  publisher change allowed by flag: {} {cur} ({a}) -> {} ({b})",
+                            d.package, d.version
+                        );
+                    } else {
+                        eprintln!(
+                            "  REFUSED: {} {cur} was published by `{a}`, {} by `{b}` -- a new \
+                             publisher on a crate we ship is reviewed before it is adopted \
+                             (--allow-publisher-change {} after review)",
+                            d.package, d.version, d.package
+                        );
+                        let _ = std::fs::remove_dir_all(&work);
+                        return 1;
+                    }
+                }
+                (Ok(_), Ok(_)) => {}
+                (Err(e), _) | (_, Err(e)) => {
+                    eprintln!(
+                        "  REFUSED: publisher continuity for {} is UNKNOWN ({e}) -- not read as unchanged",
+                        d.package
+                    );
+                    let _ = std::fs::remove_dir_all(&work);
+                    return 1;
+                }
+            }
+        }
+    }
+
     let mut carried_directives: Vec<Directive> = Vec::new();
     if carry_forward {
         let Some(prior) = &prior else {
@@ -1006,6 +1190,47 @@ pub fn run(args: &[String]) -> i32 {
                 return 1;
             }
         };
+        // Same version, different bytes: tampering or registry corruption, never acceptable.
+        let (after_e, prior_e) = (
+            std::fs::read_to_string(&lock)
+                .map(|t| lock_entries(&t))
+                .unwrap_or_default(),
+            prior_lock
+                .as_ref()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .map(|t| lock_entries(&t))
+                .unwrap_or_default(),
+        );
+        let bad_sums = checksum_mismatches(&after_e, &prior_e);
+        if !bad_sums.is_empty() {
+            eprintln!(
+                "  REFUSED: {} identical package version(s) carry a DIFFERENT checksum than the prior \
+                 blessed lock -- the registry served other bytes for a version we vetted: {}",
+                bad_sums.len(),
+                bad_sums
+                    .iter()
+                    .map(|(n, v, p, a)| format!("{n} {v} prior {}.. now {}..", &p[..12], &a[..12]))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+        let foreign = foreign_sources(&after_e, &prior_e);
+        if !foreign.is_empty() {
+            eprintln!(
+                "  REFUSED: {} package(s) resolve from a source other than crates.io that the prior \
+                 lock did not carry: {}",
+                foreign.len(),
+                foreign
+                    .iter()
+                    .map(|(n, v, src)| format!("{n} {v} <- {src}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
         let regressed = downgrades(&after_v, prior);
         let dropped = dropped_lines(&after_v, prior);
         if !dropped.is_empty() {
@@ -1094,6 +1319,17 @@ pub fn run(args: &[String]) -> i32 {
             i.id, i.package, i.version
         );
     }
+    let via = |pkg: &str| -> String {
+        let all: Vec<Directive> = parsed
+            .iter()
+            .chain(carried_directives.iter())
+            .cloned()
+            .collect();
+        match attribute(pkg, &all) {
+            Some(d) => format!("via directive {}={}", d.package, d.version),
+            None => "transitive".to_string(),
+        }
+    };
     // #357: the instances that remain ARE the human queue; name them, do not just count them.
     for i in carried_instances(&before, &after) {
         println!(
@@ -1103,8 +1339,11 @@ pub fn run(args: &[String]) -> i32 {
     }
     for i in &genuine {
         println!(
-            "  + {} {} {}  <-- GENUINELY ADDED",
-            i.id, i.package, i.version
+            "  + {} {} {}  <-- GENUINELY ADDED ({})",
+            i.id,
+            i.package,
+            i.version,
+            via(&i.package)
         );
     }
     if !genuine.is_empty() && !allow_added {
@@ -1430,6 +1669,57 @@ mod tests {
         );
         let text = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"a\"\nversion = \"2.0.0\"\n\n[metadata]\nk = \"v\"\n";
         assert_eq!(lock_package_versions(text)["a"], ["1.0.0", "2.0.0"]);
+    }
+
+    #[test]
+    fn lock_entries_checksum_continuity_and_foreign_sources() {
+        let prior = lock_entries(concat!(
+            "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"aaaa000000000000\"\n\n",
+            "[[package]]\nname = \"g\"\nversion = \"0.1.0\"\nsource = \"git+https://example.org/g#abc\"\n\n",
+            "[[package]]\nname = \"root\"\nversion = \"0.1.0\"\n"
+        ));
+        assert_eq!(
+            prior[&("a".to_string(), "1.0.0".to_string())]
+                .checksum
+                .as_deref(),
+            Some("aaaa000000000000")
+        );
+        assert_eq!(
+            prior[&("root".to_string(), "0.1.0".to_string())],
+            LockEntry::default()
+        );
+        let after = lock_entries(concat!(
+            "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"bbbb000000000000\"\n\n",
+            "[[package]]\nname = \"g\"\nversion = \"0.2.0\"\nsource = \"git+https://example.org/g#def\"\n\n",
+            "[[package]]\nname = \"p\"\nversion = \"1.0.0\"\nsource = \"path+file:///tmp/p\"\n\n",
+            "[[package]]\nname = \"root\"\nversion = \"0.1.0\"\n"
+        ));
+        let m = checksum_mismatches(&after, &prior);
+        assert_eq!(m.len(), 1);
+        assert_eq!(
+            (m[0].0.as_str(), m[0].1.as_str()),
+            ("a", "1.0.0"),
+            "same version, different bytes"
+        );
+        let f = foreign_sources(&after, &prior);
+        assert_eq!(
+            f.len(),
+            2,
+            "a git source whose pinned rev moved is a new source (new bytes); a path source is new"
+        );
+        assert_eq!(f[0].0, "g");
+        assert_eq!(f[1].0, "p");
+        assert!(foreign_sources(&prior, &prior).is_empty());
+        let d = [Directive {
+            package: "a".into(),
+            version: "1.0.0".into(),
+            at: None,
+        }];
+        assert_eq!(
+            attribute("a", &d).map(|x| x.version.as_str()),
+            Some("1.0.0")
+        );
+        assert!(attribute("zzz", &d).is_none());
     }
 
     #[test]
