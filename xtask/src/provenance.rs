@@ -50,7 +50,9 @@ fn find(hay: &[u8], needle: &[u8]) -> Option<usize> {
 /// Lowercase hex only: rustc emits lowercase, and accepting mixed case would let two spellings
 /// of one hash compare unequal.
 fn is_commit(b: &[u8]) -> bool {
-    b.len() == 40 && b.iter().all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(c))
+    b.len() == 40
+        && b.iter()
+            .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(c))
 }
 
 /// Every distinct rustc commit hash referenced by the image.
@@ -85,7 +87,10 @@ pub fn scan_toolchain_dirs(bytes: &[u8]) -> BTreeSet<String> {
             // some unrelated path and must not be read as provenance.
             if name.len() >= 3
                 && name.contains('-')
-                && name.chars().next().is_some_and(|c| c.is_ascii_alphanumeric())
+                && name
+                    .chars()
+                    .next()
+                    .is_some_and(|c| c.is_ascii_alphanumeric())
             {
                 out.insert(name);
             }
@@ -171,10 +176,10 @@ fn declared_channel() -> Result<String, String> {
         };
         for line in text.lines() {
             let mut f = line.split_whitespace();
-            if f.next() == Some("channel") {
-                if let Some(c) = f.next() {
-                    return Ok(c.to_string());
-                }
+            if f.next() == Some("channel")
+                && let Some(c) = f.next()
+            {
+                return Ok(c.to_string());
             }
         }
         return Err(format!("{p} has no 'channel' field"));
@@ -367,6 +372,9 @@ mod tests {
     fn commits_win_over_toolchain_dirs_when_both_are_present() {
         // A normally-built binary may reference a toolchain path incidentally. The commit is
         // the stronger signal and must decide.
-        assert_eq!(classify(&set(&[PIN]), PIN, &set(&[DIR]), CHAN), Verdict::Match);
+        assert_eq!(
+            classify(&set(&[PIN]), PIN, &set(&[DIR]), CHAN),
+            Verdict::Match
+        );
     }
 }
