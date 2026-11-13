@@ -136,7 +136,7 @@ runs:
         # IDENTITY CHECK. The installed rustc must be the commit the digest-verified manifest
         # names. rustup already checks component hashes against that manifest; this closes the
         # last gap, a toolchain of the right NAME that is not the reviewed CONTENT.
-        got_commit=$(rustup run "$channel" rustc -vV | awk '$1=="commit-hash:"{print $2; exit}')
+        got_commit=$(rustup run "$channel" rustc -vV | awk '$1=="commit-hash:"{print $2}')
         if [ "$got_commit" != "$want_commit" ]; then
           echo "::error::rustc commit $got_commit is not the manifest's $want_commit for $channel (fail-closed)"
           exit 1
@@ -163,7 +163,7 @@ runs:
         # negative control for the defect above: it fails loudly on any future change that
         # leaves the pin installed-but-inactive, which is precisely the state that produced
         # green checks over an unpinned compiler.
-        active=$(rustup show active-toolchain 2>/dev/null | head -1)
+        active=$(rustup show active-toolchain 2>/dev/null | awk 'NR==1')
         case "$active" in
           "$channel"*) echo "active toolchain: $active" ;;
           *)
