@@ -458,6 +458,11 @@ jobs:
     # the two approvals independently revocable and independently recorded, so provenance can
     # answer which decision was made, not merely that someone approved something.
     environment: release-publish
+    # The `release-publish` environment admits only `v*` tags (required reviewer, no admin bypass),
+    # so a dry-run must never REQUEST that deployment: the job itself is skipped unless this is a
+    # real tag release. Dry-runs still exercise attestation and its verification inside the
+    # reusable pipeline (`attest` job); only the publish step has no rehearsal, by design.
+    if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
     needs: [verify, binskim-release, attest-sarif]
     runs-on: windows-2025
     permissions:
