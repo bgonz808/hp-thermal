@@ -122,3 +122,13 @@ and what is missing. Each stage refuses to run without its precondition and comm
 - `cargo-audit` caps axis is UNEVALUATED (instrument-poison follow-up, #50).
 - The vuln baselines were text-mode scans; raw JSON not retained. `--json` mode + release-store
   retention begins with the `candidate-eval` workflow.
+
+## Products
+
+The store holds one directory per **product** named by the digest of the bytes it describes.
+Products are the build tools (one per `TOOLS.lock` name) and `hp-thermal` itself: a release's
+shipped `hp-thermal.exe` digest (from the Release's SHA256SUMS) gets the same `vuln.jsonl`
+(app lock vantage, written by `record-vuln`) and `mal.jsonl` (VirusTotal panel, recorded from
+the monitor's `release:hp-thermal.exe` lookup) as a tool, under the same floors and acks
+semantics. Capabilities for the app are measured by `verify-caps`/BinSkim on the exe, not by
+cackle (Windows-only crate tree), so there is no `caps.toml` for `hp-thermal`.
