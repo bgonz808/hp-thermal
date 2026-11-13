@@ -3,7 +3,7 @@
 //! rustc commit, the MSVC toolset, the Windows SDK and the runner image from the SBOM itself.
 //!
 //! Two kinds of fact meet here and the record keeps them apart:
-//! * DECLARED by the build step (`build-env.json`, schema `hp-thermal/build-env/v1`): what was
+//! * DECLARED by the build step (`build-env.json`, schema `hp-thermal/build-env/v2`): what was
 //!   installed and what rustc's MSVC detection resolves (toolset from
 //!   `Microsoft.VCToolsVersion.default.txt`, SDK = newest `lib/<ver>` holding kernel32.lib;
 //!   rust-lang/cc-rs find-msvc-tools `vs15plus_vc_read_version`, `get_sdk10_dir`).
@@ -18,7 +18,7 @@
 use serde_json::{Map, Value, json};
 use std::path::Path;
 
-pub(crate) const ENV_SCHEMA: &str = "hp-thermal/build-env/v1";
+pub(crate) const ENV_SCHEMA: &str = "hp-thermal/build-env/v2";
 /// Rich header product id of the MSVC 14.x linker. Confirmed against link.exe's FileVersion on
 /// toolset 14.44.35207 (link.exe 14.44.35229 -> Rich build 35229).
 const RICH_LINKER: u16 = 0x0102;
@@ -82,6 +82,8 @@ pub(crate) struct BuildEnv {
     pub vs_version: String,
     pub toolset: String,
     pub link_file_version: String,
+    /// SHA-256 of the link.exe that the pinned toolset resolves to.
+    pub link_sha256: String,
     pub sdk_version: String,
     pub image_os: String,
     pub image_version: String,
@@ -130,6 +132,13 @@ pub(crate) fn parse_env(text: &str) -> Result<BuildEnv, String> {
         vs_version: req(&v, "/msvc/product_version")?.to_string(),
         toolset: req(&v, "/msvc/toolset")?.to_string(),
         link_file_version: req(&v, "/msvc/link_file_version")?.to_string(),
+        link_sha256: {
+            let h = req(&v, "/msvc/link_sha256")?;
+            if h.len() != 64 || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err("build-env/msvc/link_sha256: not a 64-hex sha256".into());
+            }
+            h.to_ascii_lowercase()
+        },
         sdk_version: req(&v, "/windows_sdk/version")?.to_string(),
         image_os: req(&v, "/runner/image_os")?.to_string(),
         image_version: req(&v, "/runner/image_version")?.to_string(),
@@ -186,13 +195,50 @@ pub(crate) fn formula(
             env.toolset, env.link_file_version
         ));
     }
+    // Structured fields only. What used to be sentences here has a home in the schema: the
+    // product -> toolset -> link.exe containment is component nesting; how each version was
+    // established is `evidence.identity` (field, concluded value, technique); link.exe is pinned
+    // by content hash so anyone can re-check the Rich-header binding.
+    let pinned_by = |var: &str| {
+        json!({"technique": "manifest-analysis", "confidence": 1.0,
+               "value": format!(".cargo/config.toml [env] {var}")})
+    };
+    let link = json!({
+        "type": "application",
+        "bom-ref": "build-env:link-exe",
+        "supplier": {"name": "Microsoft"},
+        "name": "link.exe",
+        "version": env.link_file_version,
+        "hashes": [{"alg": "SHA-256", "content": env.link_sha256}],
+        "evidence": {"identity": [{
+            "field": "version",
+            "confidence": 1.0,
+            "concludedValue": env.link_file_version,
+            "methods": [{
+                "technique": "binary-analysis",
+                "confidence": 1.0,
+                "value": format!("Rich header of the build output: prodid 0x0102 build {linker_build}")
+            }]
+        }]}
+    });
+    let toolset = json!({
+        "type": "application",
+        "bom-ref": "build-env:msvc-toolset",
+        "supplier": {"name": "Microsoft"},
+        "name": "MSVC Build Tools",
+        "version": env.toolset,
+        "evidence": {"identity": [{
+            "field": "version", "confidence": 1.0, "concludedValue": env.toolset,
+            "methods": [pinned_by("VCToolsVersion")]
+        }]},
+        "components": [link]
+    });
     let mut components = vec![
         json!({
             "type": "application",
             "bom-ref": "build-env:rustc",
             "name": "rustc",
             "version": env.rustc_version,
-            "description": format!("{}; channel {} (tools/TOOLCHAIN.lock); host {}", env.rustc_line, env.channel, env.rustc_host),
             "purl": format!("pkg:github/rust-lang/rust@{}", env.rustc_commit),
             "externalReferences": [{
                 "type": "vcs",
@@ -201,14 +247,11 @@ pub(crate) fn formula(
         }),
         json!({
             "type": "application",
-            "bom-ref": "build-env:msvc-toolset",
+            "bom-ref": "build-env:visual-studio",
             "supplier": {"name": "Microsoft"},
-            "name": "MSVC v14 toolset",
-            "version": env.toolset,
-            "description": format!(
-                "{} {}; selected by .cargo/config.toml [env] VCToolsVersion; link.exe FileVersion {}; measured: the exe's Rich header linker build is {linker_build} (match)",
-                env.vs_product, env.vs_version, env.link_file_version
-            )
+            "name": env.vs_product,
+            "version": env.vs_version,
+            "components": [toolset]
         }),
         json!({
             "type": "library",
@@ -216,7 +259,10 @@ pub(crate) fn formula(
             "supplier": {"name": "Microsoft"},
             "name": "Windows SDK",
             "version": env.sdk_version,
-            "description": "resolved as rustc's MSVC detection resolves it (find-msvc-tools get_sdk10_dir): newest lib/<version> holding um/x64/kernel32.lib"
+            "evidence": {"identity": [{
+                "field": "version", "confidence": 1.0, "concludedValue": env.sdk_version,
+                "methods": [pinned_by("WindowsSDKVersion")]
+            }]}
         }),
         json!({
             "type": "operating-system",
@@ -402,9 +448,9 @@ mod tests {
         assert!(rich_linker_build(&none).unwrap_err().contains("no linker"));
     }
 
-    const ENV: &str = r#"{"schema":"hp-thermal/build-env/v1",
+    const ENV: &str = r#"{"schema":"hp-thermal/build-env/v2",
       "rustc":{"version":"rustc 1.101.0-nightly (a30aa9064 2026-10-08)","commit":"a30aa9064df6a504b6a323c6884a2f4cfbfff666","host":"x86_64-pc-windows-msvc","channel":"nightly-2026-10-09"},
-      "msvc":{"product":"Visual Studio Enterprise 2022","product_version":"17.14.1","toolset":"14.51.36231","link_file_version":"14.51.36260.0"},
+      "msvc":{"product":"Visual Studio Enterprise 2022","product_version":"17.14.1","toolset":"14.51.36231","link_file_version":"14.51.36260.0","link_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
       "windows_sdk":{"version":"10.0.26100.0"},
       "runner":{"image_os":"win25","image_version":"20261105.1.0","os_version":"10.0.26100"}}"#;
 
@@ -442,7 +488,12 @@ mod tests {
                 .unwrap_err()
                 .contains("40-hex")
         );
-        assert!(parse_env(&ENV.replace("build-env/v1", "build-env/v2")).is_err());
+        assert!(parse_env(&ENV.replace("build-env/v2", "build-env/v1")).is_err());
+        assert!(
+            parse_env(&ENV.replace(&"a".repeat(64), "abc"))
+                .unwrap_err()
+                .contains("link_sha256")
+        );
     }
 
     #[test]
@@ -459,13 +510,34 @@ mod tests {
             names,
             [
                 "rustc",
-                "MSVC v14 toolset",
+                "Visual Studio Enterprise 2022",
                 "Windows SDK",
                 "Microsoft Windows",
                 "GitHub Actions runner image win25"
             ]
         );
-        assert_eq!(f["components"][1]["version"], "14.51.36231");
+        // product -> toolset -> link.exe is nesting; versions are established by evidence.
+        let toolset = &f["components"][1]["components"][0];
+        assert_eq!(toolset["version"], "14.51.36231");
+        assert_eq!(
+            toolset["evidence"]["identity"][0]["methods"][0]["technique"],
+            "manifest-analysis"
+        );
+        let link = &toolset["components"][0];
+        assert_eq!(link["version"], "14.51.36260.0");
+        assert_eq!(link["hashes"][0]["alg"], "SHA-256");
+        assert_eq!(
+            link["evidence"]["identity"][0]["methods"][0]["technique"],
+            "binary-analysis"
+        );
+        assert!(
+            f["components"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|c| c.get("description").is_none()),
+            "no prose descriptions in the formula"
+        );
         assert_eq!(f["workflows"][0]["outputs"][0]["resource"]["ref"], "app");
         assert!(
             f["components"][4]["externalReferences"][0]["url"]

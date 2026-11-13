@@ -470,6 +470,12 @@
       "version": "0.62.2"
     }
   ],
+  "externalReferences": [
+    {
+      "type": "bom",
+      "url": "urn:cdx:2a67a31e-7e1b-4744-862b-917e05dbc6a0/1"
+    }
+  ],
   "metadata": {
     "component": {
       "authors": [
@@ -568,6 +574,6 @@
   },
   "serialNumber": "urn:uuid:c6710851-05dc-49d9-bbf5-aedaa46ba2c2",
   "specVersion": "1.6",
-  "version": 1,
+  "version": 2,
   "vulnerabilities": []
 }

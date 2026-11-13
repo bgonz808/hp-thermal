@@ -202,11 +202,12 @@ jobs:
           $link = "$($inst.installationPath)\VC\Tools\MSVC\$toolset\bin\Hostx64\x64\link.exe"
           if (-not (Test-Path $link)) { throw "pinned toolset $toolset is not installed on this image (default is $default): bump the pin in a reviewed PR or wait for the image" }
           $linkver = (Get-Item $link).VersionInfo.FileVersion
+          $linksha = (Get-FileHash $link -Algorithm SHA256).Hash.ToLower()
           if (-not (Test-Path "$sdkDir\Lib\$sdk\um\x64\kernel32.lib")) { throw "pinned Windows SDK $sdk is not installed under $sdkDir" }
           $out = [ordered]@{
-            schema = 'hp-thermal/build-env/v1'
+            schema = 'hp-thermal/build-env/v2'
             rustc = [ordered]@{ version = $ver; commit = $commit; host = $hostTriple; channel = $channel }
-            msvc = [ordered]@{ product = $inst.displayName; product_version = $inst.installationVersion; toolset = $toolset; link_file_version = $linkver }
+            msvc = [ordered]@{ product = $inst.displayName; product_version = $inst.installationVersion; toolset = $toolset; link_file_version = $linkver; link_sha256 = $linksha }
             windows_sdk = [ordered]@{ version = $sdk }
             runner = [ordered]@{ image_os = "$env:ImageOS"; image_version = "$env:ImageVersion"; os_version = [System.Environment]::OSVersion.Version.ToString() }
           }
@@ -378,8 +379,9 @@ jobs:
         run: |
           set -euo pipefail
           cur=builds/dist-unsigned-a/hp-thermal.cdx.json
-          field() { jq -r --arg ref "$2" '.formulation[0].components[]? | select(."bom-ref"==$ref) | .version // empty' "$1"; }
-          name_of() { jq -r --arg ref "$2" '.formulation[0].components[]? | select(."bom-ref"==$ref) | .name // empty' "$1"; }
+          # Components may be nested (product -> toolset -> link.exe), so search the whole formula.
+          field() { jq -r --arg ref "$2" '[.formulation[0].components[]? | .. | objects | select(."bom-ref"? == $ref) | .version] | first // empty' "$1"; }
+          name_of() { jq -r --arg ref "$2" '[.formulation[0].components[]? | .. | objects | select(."bom-ref"? == $ref) | .name] | first // empty' "$1"; }
           tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
           {
             echo "## Build environment vs previous release (${tag:-none})"
@@ -411,7 +413,7 @@ jobs:
             if ! jq -e '.formulation | length > 0' prev/hp-thermal.cdx.json > /dev/null; then
               echo "| all | $tag has no formulation | | no prior record (predates the build-environment declaration) |" >> env-summary.md
             else
-              for ref in build-env:rustc build-env:msvc-toolset build-env:windows-sdk build-env:os; do
+              for ref in build-env:rustc build-env:visual-studio build-env:msvc-toolset build-env:link-exe build-env:windows-sdk build-env:os; do
                 p=$(field prev/hp-thermal.cdx.json "$ref"); c=$(field "$cur" "$ref")
                 if [ "$p" = "$c" ]; then st=unchanged; else st=changed; echo "::notice::$ref: '$p' -> '$c'"; fi
                 echo "| $ref | $p | $c | $st |" >> env-summary.md
