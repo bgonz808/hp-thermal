@@ -91,6 +91,17 @@ header names this lock, commit), `mal` (VT lookup first, submit only if absent, 
 `summary [--pr N]` (title and body generated from this directory). `status` shows what is recorded
 and what is missing. Each stage refuses to run without its precondition and commits what it wrote.
 
+## VDR — `cargo xtask vdr emit|check` (#396)
+
+Each product digest's measurement record can be emitted as a CycloneDX 1.6 Vulnerability
+Disclosure Report (`vdr.cdx.json`, pre-build lifecycle): components from the frozen lock (or the
+release SBOM for the app), every RustSec finding from the custody-verified raw payload as a
+`vulnerabilities[]` entry (RustSec source, alias references, CVSS or `severity: info` ratings,
+`affects` by component bom-ref), the instruments in `metadata.tools.components` with hashes.
+`analysis` is filled only from an ack's native `cyclonedx` ruling (state, justification,
+response), never mapped from OpenVEX fields; acks without one are reported as burn-down. The
+document is deterministic for the same inputs, so `vdr check` can regenerate and compare.
+
 ## Rules
 
 1. **Acks bind to instances, not classes** — a new digest, engine, advisory instance, inventory
