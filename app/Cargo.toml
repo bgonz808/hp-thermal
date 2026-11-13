@@ -1,4 +1,4 @@
-cargo-features = ["panic-immediate-abort"]
+cargo-features = ["panic-immediate-abort", "trim-paths"]
 
 [package]
 name = "hp-thermal"
@@ -80,6 +80,10 @@ panic = "immediate-abort"
 # info into the .pdb by default, and `split-debuginfo="packed"` + `lto="fat"` is a
 # known-broken combo that silently drops the PDB (rust-lang/rust#104042).
 debug = "line-tables-only"
+# Reproducibility / path independence (RFC 3127): remap every build path (workspace, registry,
+# sysroot) to a deterministic form in objects and debug info, so neither the exe nor the pdb
+# depends on where the build ran. The release pipeline asserts the exe embeds no runner paths.
+trim-paths = "all"
 
 [build-dependencies]
 find-msvc-tools = "0.1"
