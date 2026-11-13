@@ -3147,6 +3147,12 @@
           ]
         }
       ],
+      "analysis": {
+        "detail": "Not in the shipped binary. MEASURED 2026-11-13: absent from the cargo-auditable dependency list (.dep-v0 section, runtime and build kinds, 73 packages) embedded in cargo-acl (linux-x86_64) sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7.",
+        "firstIssued": "2026-11-13",
+        "justification": "code_not_present",
+        "state": "not_affected"
+      },
       "bom-ref": "vuln:RUSTSEC-2026-0253@lru@0.16.4",
       "description": "Potential use-after-free due to lack of panic safety in `LruCache::pop()`",
       "detail": "`LruCache::pop()` in `lru` was not panic-safe. If the `Drop` implementation of a stored key panics during `pop()`, `self.detach()` is never called, leaving dangling pointers in the internal doubly-linked list.\n\nA subsequent cache operation that triggers eviction can then dereference these dangling pointers:\n- The node is freed from the map, but remains linked in the LRU list due to the skipped `detach()` call\n- When a new insertion causes eviction, the LRU traversal encounters the dangling pointer\n- This results in a write to already-freed memory during the eviction process\n\n## Impact\n\n- **CWE-416 (Use-After-Free):** memory corruption when subsequent cache operations access freed node pointers in the linked list\n- **CWE-415 (Double Free):** potential heap corruption when the same memory is freed multiple times\n\nBoth types of undefined behavior can be invoked in safe Rust, but only if unwinding panics are enabled and `std::panic::catch_unwind` is used with key types that have potentially-panicking `Drop` implementations.\n\n## Fix\n\nFixed in `lru` 0.18.2 by detaching the node from the linked list before freeing it and dropping the key ([lru-rs#238](https://github.com/jeromefroe/lru-rs/pull/238)).",
