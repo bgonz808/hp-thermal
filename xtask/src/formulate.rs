@@ -3,7 +3,7 @@
 //! rustc commit, the MSVC toolset, the Windows SDK and the runner image from the SBOM itself.
 //!
 //! Two kinds of fact meet here and the record keeps them apart:
-//! * DECLARED by the build step (`build-env.json`, schema `hp-thermal/build-env/v2`): what was
+//! * DECLARED by the build step (`build-env.json`, schema `hp-thermal/build-env/v3`): what was
 //!   installed and what rustc's MSVC detection resolves (toolset from
 //!   `Microsoft.VCToolsVersion.default.txt`, SDK = newest `lib/<ver>` holding kernel32.lib;
 //!   rust-lang/cc-rs find-msvc-tools `vs15plus_vc_read_version`, `get_sdk10_dir`).
@@ -18,7 +18,7 @@
 use serde_json::{Map, Value, json};
 use std::path::Path;
 
-pub(crate) const ENV_SCHEMA: &str = "hp-thermal/build-env/v2";
+pub(crate) const ENV_SCHEMA: &str = "hp-thermal/build-env/v3";
 /// Rich header product id of the MSVC 14.x linker. Confirmed against link.exe's FileVersion on
 /// toolset 14.44.35207 (link.exe 14.44.35229 -> Rich build 35229).
 const RICH_LINKER: u16 = 0x0102;
@@ -88,6 +88,56 @@ pub(crate) struct BuildEnv {
     pub image_os: String,
     pub image_version: String,
     pub os_version: String,
+    /// The pinned fleet tools the build job executed, measured from the files it ran.
+    pub tools: Vec<Tool>,
+}
+
+/// One fleet tool as the build job ran it: TOOLS.lock source and the SHA-256 of the executed file.
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) struct Tool {
+    pub name: String,
+    pub repo: String,
+    pub rev: String,
+    pub sha256: String,
+}
+
+fn hex_of_len(s: &str, n: usize) -> bool {
+    s.len() == n && s.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+fn tools_from(v: &Value) -> Result<Vec<Tool>, String> {
+    let list = v["tools"]
+        .as_array()
+        .filter(|a| !a.is_empty())
+        .ok_or("build-env/tools: missing or empty (the fleet tools the job ran)")?;
+    let mut out = Vec::new();
+    for t in list {
+        let f = |k: &str| {
+            t[k].as_str()
+                .filter(|x| !x.trim().is_empty())
+                .map(str::to_string)
+                .ok_or_else(|| format!("build-env/tools[].{k}: missing or empty"))
+        };
+        let (name, repo, rev, sha256) = (f("name")?, f("repo")?, f("rev")?, f("sha256")?);
+        if !hex_of_len(&rev, 40) {
+            return Err(format!(
+                "build-env/tools {name}: rev is not a 40-hex commit"
+            ));
+        }
+        if !hex_of_len(&sha256, 64) {
+            return Err(format!("build-env/tools {name}: sha256 is not 64-hex"));
+        }
+        if repo.matches('/').count() != 1 || repo.contains("..") || repo.contains(' ') {
+            return Err(format!("build-env/tools {name}: repo is not owner/name"));
+        }
+        out.push(Tool {
+            name,
+            repo,
+            rev,
+            sha256: sha256.to_ascii_lowercase(),
+        });
+    }
+    Ok(out)
 }
 
 fn req<'a>(v: &'a Value, path: &str) -> Result<&'a str, String> {
@@ -143,6 +193,7 @@ pub(crate) fn parse_env(text: &str) -> Result<BuildEnv, String> {
         image_os: req(&v, "/runner/image_os")?.to_string(),
         image_version: req(&v, "/runner/image_version")?.to_string(),
         os_version: req(&v, "/runner/os_version")?.to_string(),
+        tools: tools_from(&v)?,
     })
 }
 
@@ -285,6 +336,26 @@ pub(crate) fn formula(
         }]);
     }
     components.push(image);
+    // The fleet tools the job executed: source (repo at rev) and the hash measured from the file
+    // that ran, which the collector also checked against the TOOLS.lock pin before recording.
+    for t in &env.tools {
+        components.push(json!({
+            "type": "application",
+            "bom-ref": format!("build-env:tool:{}", t.name),
+            "name": t.name,
+            "purl": format!("pkg:github/{}@{}", t.repo, t.rev),
+            "hashes": [{"alg": "SHA-256", "content": t.sha256}],
+            "externalReferences": [{
+                "type": "vcs",
+                "url": format!("https://github.com/{}/tree/{}", t.repo, t.rev)
+            }],
+            "evidence": {"identity": [{
+                "field": "hash", "confidence": 1.0, "concludedValue": t.sha256,
+                "methods": [{"technique": "hash-comparison", "confidence": 1.0,
+                             "value": "executed file hashed by the build job; equals the tools/TOOLS.lock pin"}]
+            }]}
+        }));
+    }
 
     let mut workflow = json!({
         "bom-ref": "build-env:workflow",
@@ -448,11 +519,12 @@ mod tests {
         assert!(rich_linker_build(&none).unwrap_err().contains("no linker"));
     }
 
-    const ENV: &str = r#"{"schema":"hp-thermal/build-env/v2",
+    const ENV: &str = r#"{"schema":"hp-thermal/build-env/v3",
       "rustc":{"version":"rustc 1.101.0-nightly (a30aa9064 2026-10-08)","commit":"a30aa9064df6a504b6a323c6884a2f4cfbfff666","host":"x86_64-pc-windows-msvc","channel":"nightly-2026-10-09"},
       "msvc":{"product":"Visual Studio Enterprise 2022","product_version":"17.14.1","toolset":"14.51.36231","link_file_version":"14.51.36260.0","link_sha256":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
       "windows_sdk":{"version":"10.0.26100.0"},
-      "runner":{"image_os":"win25","image_version":"20261105.1.0","os_version":"10.0.26100"}}"#;
+      "runner":{"image_os":"win25","image_version":"20261105.1.0","os_version":"10.0.26100"},
+      "tools":[{"name":"cargo-auditable","repo":"rust-secure-code/cargo-auditable","rev":"3d3bb574f97dc09a264cfc666ec5d40790f6b3ba","sha256":"053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48"}]}"#;
 
     fn run() -> Run<'static> {
         Run {
@@ -488,7 +560,17 @@ mod tests {
                 .unwrap_err()
                 .contains("40-hex")
         );
-        assert!(parse_env(&ENV.replace("build-env/v2", "build-env/v1")).is_err());
+        assert!(parse_env(&ENV.replace("build-env/v3", "build-env/v2")).is_err());
+        assert!(
+            parse_env(&ENV.replace("3d3bb574f97dc09a264cfc666ec5d40790f6b3ba", "abc"))
+                .unwrap_err()
+                .contains("40-hex")
+        );
+        assert!(
+            parse_env(&ENV.replace("rust-secure-code/cargo-auditable", "x"))
+                .unwrap_err()
+                .contains("owner/name")
+        );
         assert!(
             parse_env(&ENV.replace(&"a".repeat(64), "abc"))
                 .unwrap_err()
@@ -513,8 +595,22 @@ mod tests {
                 "Visual Studio Enterprise 2022",
                 "Windows SDK",
                 "Microsoft Windows",
-                "GitHub Actions runner image win25"
+                "GitHub Actions runner image win25",
+                "cargo-auditable"
             ]
+        );
+        let tool = &f["components"][5];
+        assert_eq!(
+            tool["purl"],
+            "pkg:github/rust-secure-code/cargo-auditable@3d3bb574f97dc09a264cfc666ec5d40790f6b3ba"
+        );
+        assert_eq!(
+            tool["hashes"][0]["content"],
+            "053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48"
+        );
+        assert_eq!(
+            tool["evidence"]["identity"][0]["methods"][0]["technique"],
+            "hash-comparison"
         );
         // product -> toolset -> link.exe is nesting; versions are established by evidence.
         let toolset = &f["components"][1]["components"][0];
