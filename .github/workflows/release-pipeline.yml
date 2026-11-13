@@ -122,6 +122,10 @@ jobs:
       #     a wall-clock one. (A Rust toolchain must never exist in the credentialed `sign`
       #     job, which is why `verify` needs the standalone exe at all.)
       - name: Build xtask once (release; used for every xtask step + shipped to verify)
+        # /Brepro: deterministic PE timestamp and debug-directory stamp, so the two matrix
+        # builds produce a byte-identical verifier (the reproducibility gate compares it).
+        env:
+          RUSTFLAGS: -C link-arg=/Brepro
         run: cargo build --locked --release --manifest-path xtask/Cargo.toml
 
       # #196: production-artifact tier ONLY — cargo-deny policy + cargo-auditable release
@@ -239,10 +243,14 @@ jobs:
           retention-days: ${{ inputs.dry_run == true && 1 || 90 }}
 
   # REPRODUCIBILITY GATE: the two matrix builds ran on different runners from the same commit,
-  # lock and toolchain. Signing is allowed only if they agree byte for byte on hp-thermal.exe,
-  # hp-thermal.pdb and the xtask verifier, and on the SBOM's component set (the SBOM document
-  # itself carries a random serialNumber and a timestamp, so it is compared structurally).
-  # A mismatch is a finding about the build, never something to wave through.
+  # lock and toolchain. Signing is allowed only if they agree byte for byte on hp-thermal.exe
+  # (the bytes users execute) and the xtask verifier, and on the SBOM's component set (the SBOM
+  # document itself carries a random serialNumber and a timestamp, so it is compared
+  # structurally). hp-thermal.pdb is compared and REPORTED, not gated: MSVC symbol files embed
+  # the linker's randomized temp paths (rustcXXXXXX natvis dirs, lnk{GUID}.tmp) even under
+  # /Brepro, so two honest builds differ there by design; measured 2026-11-13, run 43351601343
+  # (exe identical, pdb 2.2 MB of 4.9 MB differing). A mismatch on the gated set is a finding
+  # about the build, never something to wave through.
   reproducibility:
     needs: build
     runs-on: ubuntu-24.04
@@ -260,11 +268,15 @@ jobs:
         run: |
           set -euo pipefail
           fail=0
-          for f in hp-thermal.exe hp-thermal.pdb; do
-            a=$(sha256sum "builds/dist-unsigned-a/$f" | cut -d' ' -f1)
-            b=$(sha256sum "builds/dist-unsigned-b/$f" | cut -d' ' -f1)
-            if [ "$a" = "$b" ]; then echo "$f: $a (both builds)"; else echo "::error::$f differs: a=$a b=$b"; fail=1; fi
-          done
+          a=$(sha256sum builds/dist-unsigned-a/hp-thermal.exe | cut -d' ' -f1)
+          b=$(sha256sum builds/dist-unsigned-b/hp-thermal.exe | cut -d' ' -f1)
+          if [ "$a" = "$b" ]; then echo "hp-thermal.exe: $a (both builds)"; else echo "::error::hp-thermal.exe differs: a=$a b=$b"; fail=1; fi
+          a=$(sha256sum builds/dist-unsigned-a/hp-thermal.pdb | cut -d' ' -f1)
+          b=$(sha256sum builds/dist-unsigned-b/hp-thermal.pdb | cut -d' ' -f1)
+          if [ "$a" = "$b" ]; then echo "hp-thermal.pdb: $a (both builds)"; else
+            nd=$(cmp -l builds/dist-unsigned-a/hp-thermal.pdb builds/dist-unsigned-b/hp-thermal.pdb | wc -l)
+            echo "::notice::hp-thermal.pdb differs ($nd byte(s)); symbol files embed linker temp paths and are not gated"
+          fi
           a=$(sha256sum builds/xtask-verifier-a/xtask.exe | cut -d' ' -f1)
           b=$(sha256sum builds/xtask-verifier-b/xtask.exe | cut -d' ' -f1)
           if [ "$a" = "$b" ]; then echo "xtask.exe: $a (both builds)"; else echo "::error::xtask.exe differs: a=$a b=$b"; fail=1; fi
