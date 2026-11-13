@@ -4,6 +4,38 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-13
+
+Patch release. No runtime logic changed; `app/src` is unchanged. The shipped bytes change
+because build paths are now trimmed. This is the first release built, signed and attested by
+the reusable release pipeline.
+
+### Verification
+- Provenance and SBOM are signed by `release-pipeline.yml`, a reusable workflow the calling
+  job cannot inject steps into (SLSA v1.2 Build L3). Verify with
+  `--signer-workflow bgonz808/hp-thermal/.github/workflows/release-pipeline.yml`. (#437, #446)
+- A Verification Summary Attestation records that the release workflow verified both
+  attestations against this repository's policy. It is self-issued. (#454)
+- Two independent builds, the second under another time zone and locale, must agree byte for
+  byte before signing. The exe embeds no build paths. (#441, #447, #452)
+- The SBOM's `formulation` names the build environment: rustc commit, Visual Studio, the MSVC
+  toolset and its link.exe by hash, Windows SDK, runner image. The toolset is pinned in
+  `.cargo/config.toml` and checked against the linker build in the exe's Rich header.
+  (#457, #458, #459, #471)
+- A CycloneDX vulnerability disclosure report is attached after release and attested by
+  `release-vdr.yml`. (#453, #461, #463, #468)
+
+### Build-tool fleet
+- The producer is a reusable workflow, and tool fetches pin its signer identity. (#438, #445)
+- Each tool's report records which locked packages are compiled into the binary, read from
+  the binary itself. (#469, #471)
+
+### Gate and evidence
+- xtask is vetted at safe-to-deploy, dev dependencies included. (#439)
+- Hardening flags and time bounds are policy files: `hardening.json`, `cadence.json`. (#444, #455)
+- The app's post-release evidence runs as `cargo xtask release-advance` stages; release exes
+  are looked up on VirusTotal before any upload. (#442, #451)
+
 ## [0.3.2] - 2026-11-12
 
 Patch release. No runtime logic changed; the diff of `app/src` outside `#[cfg(test)]`
@@ -249,7 +281,9 @@ First tagged release.
 - **Reproducible**: build timestamp derives from the commit (`SOURCE_DATE_EPOCH`), so the
   same tag rebuilds to the same bytes.
 
-[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/bgonz808/hp-thermal/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/bgonz808/hp-thermal/compare/v0.3.2...v0.3.3
+[0.3.2]: https://github.com/bgonz808/hp-thermal/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/bgonz808/hp-thermal/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/bgonz808/hp-thermal/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/bgonz808/hp-thermal/compare/v0.2.1...v0.2.2
