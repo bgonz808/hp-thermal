@@ -274,7 +274,8 @@ jobs:
           a=$(sha256sum builds/dist-unsigned-a/hp-thermal.pdb | cut -d' ' -f1)
           b=$(sha256sum builds/dist-unsigned-b/hp-thermal.pdb | cut -d' ' -f1)
           if [ "$a" = "$b" ]; then echo "hp-thermal.pdb: $a (both builds)"; else
-            nd=$(cmp -l builds/dist-unsigned-a/hp-thermal.pdb builds/dist-unsigned-b/hp-thermal.pdb | wc -l)
+            # cmp exits 1 on a difference; under pipefail that would abort the step, so neutralize it.
+            nd=$( (cmp -l builds/dist-unsigned-a/hp-thermal.pdb builds/dist-unsigned-b/hp-thermal.pdb || true) | wc -l )
             echo "::notice::hp-thermal.pdb differs ($nd byte(s)); symbol files embed linker temp paths and are not gated"
           fi
           a=$(sha256sum builds/xtask-verifier-a/xtask.exe | cut -d' ' -f1)
