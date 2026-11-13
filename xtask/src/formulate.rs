@@ -145,15 +145,22 @@ pub(crate) fn file_version_build(fv: &str) -> Result<u16, String> {
         .ok_or_else(|| format!("file version '{fv}' has no numeric build component"))
 }
 
-/// runner-images release tag prefix for an ImageOS value, when known.
-fn image_tag_prefix(image_os: &str) -> Option<&'static str> {
-    match image_os {
-        "win25" | "windows2025" => Some("win25"),
-        "win22" | "windows2022" => Some("win22"),
-        "ubuntu24" => Some("ubuntu24"),
-        "ubuntu26" => Some("ubuntu26"),
-        _ => None,
-    }
+/// actions/runner-images release tag for a hosted runner, from its `ImageOS` / `ImageVersion`
+/// environment. Observed 2026-11-13 against the releases list: the tag prefix is the `ImageOS`
+/// value itself (`win25`, `win25-vs2026`, `ubuntu24`) and the tag carries `ImageVersion` without
+/// its last component (`20261103.298.1` -> `win25-vs2026/20261103.298`). `None` when the
+/// version does not have that shape; a link is a convenience, never a guess.
+fn image_release_tag(image_os: &str, image_version: &str) -> Option<String> {
+    let parts: Vec<&str> = image_version.split('.').collect();
+    let shaped = parts.len() == 3
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()));
+    let os_ok = !image_os.is_empty()
+        && image_os
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'-');
+    (shaped && os_ok).then(|| format!("{image_os}/{}.{}", parts[0], parts[1]))
 }
 
 /// Identity of the run, for the workflow resource references.
@@ -225,10 +232,10 @@ pub(crate) fn formula(
         "name": format!("GitHub Actions runner image {}", env.image_os),
         "version": env.image_version
     });
-    if let Some(prefix) = image_tag_prefix(&env.image_os) {
+    if let Some(tag) = image_release_tag(&env.image_os, &env.image_version) {
         image["externalReferences"] = json!([{
             "type": "release-notes",
-            "url": format!("https://github.com/actions/runner-images/releases/tag/{prefix}%2F{}", env.image_version)
+            "url": format!("https://github.com/actions/runner-images/releases/tag/{}", tag.replace('/', "%2F"))
         }]);
     }
     components.push(image);
@@ -464,15 +471,30 @@ mod tests {
             f["components"][4]["externalReferences"][0]["url"]
                 .as_str()
                 .unwrap()
-                .ends_with("win25%2F20261105.1.0")
+                .ends_with("win25%2F20261105.1")
         );
         let err = formula(&e, 36231, &run(), None).unwrap_err();
         assert!(err.contains("did not link this exe"), "{err}");
     }
 
     #[test]
-    fn unknown_image_os_gets_no_release_link() {
-        let e = parse_env(&ENV.replace(r#""image_os":"win25""#, r#""image_os":"custom""#)).unwrap();
+    fn runner_image_tag_follows_the_observed_shape_or_is_absent() {
+        assert_eq!(
+            image_release_tag("win25-vs2026", "20261103.298.1").unwrap(),
+            "win25-vs2026/20261103.298"
+        );
+        assert_eq!(
+            image_release_tag("ubuntu24", "20261111.1.0").unwrap(),
+            "ubuntu24/20261111.1"
+        );
+        assert!(image_release_tag("win25", "20261103").is_none());
+        assert!(image_release_tag("", "20261103.298.1").is_none());
+        assert!(image_release_tag("win 25", "20261103.298.1").is_none());
+        let e = parse_env(&ENV.replace(
+            r#""image_version":"20261105.1.0""#,
+            r#""image_version":"custom""#,
+        ))
+        .unwrap();
         let f = formula(&e, 36260, &run(), None).unwrap();
         assert!(f["components"][4].get("externalReferences").is_none());
         assert!(f["workflows"][0].get("outputs").is_none());
