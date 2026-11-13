@@ -79,12 +79,14 @@ winget install -e --id Microsoft.VisualStudio.BuildTools -v <release> \
   --override "--passive --wait --norestart --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre --add Microsoft.VisualStudio.Component.Windows11SDK.26100"
 ```
 
-To add a component to an existing instance, use the installer's own `modify` (it elevates):
+To add a component to an existing instance, use the installer's own `modify`. With `--passive`
+it must start elevated (otherwise it exits 5007 without doing anything), so launch it as
+administrator from pwsh:
 
-```sh
-"/c/Program Files (x86)/Microsoft Visual Studio/Installer/setup.exe" modify \
-  --installPath "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools" \
-  --add Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre --passive --norestart
+```powershell
+Start-Process -Verb RunAs -Wait -FilePath "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\setup.exe" `
+  -ArgumentList 'modify','--installPath','"C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools"',
+                '--add','Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre','--passive','--norestart'
 ```
 
 It installs per machine, side by side with any Visual Studio 2022, and rustc then prefers the

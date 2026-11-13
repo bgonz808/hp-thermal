@@ -260,11 +260,16 @@ fn print_install(pin: &Pin, only_component_missing: Option<&Path>) {
     eprintln!();
     if let Some(inst) = only_component_missing {
         eprintln!(
-            "The toolset is installed; add the missing component to that instance (the installer elevates):"
+            "The toolset is installed; add the missing component to that instance. `--passive` must start ELEVATED (exit 5007 otherwise), so from pwsh:"
         );
         eprintln!(
-            "  \"%ProgramFiles(x86)%\\Microsoft Visual Studio\\Installer\\setup.exe\" modify --installPath \"{}\" {COMPONENTS} --add Microsoft.VisualStudio.Component.Windows11SDK.{sdk} --passive --norestart",
-            inst.display()
+            "  Start-Process -Verb RunAs -Wait -FilePath \"${{env:ProgramFiles(x86)}}\\Microsoft Visual Studio\\Installer\\setup.exe\" -ArgumentList 'modify','--installPath','\"{}\"',{},'--add','Microsoft.VisualStudio.Component.Windows11SDK.{sdk}','--passive','--norestart'",
+            inst.display(),
+            COMPONENTS
+                .split(' ')
+                .map(|t| format!("'{t}'"))
+                .collect::<Vec<_>>()
+                .join(",")
         );
     } else {
         eprintln!(
