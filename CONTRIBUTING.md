@@ -58,6 +58,39 @@ cargo build --release --features noise-adapt   # with the mic-based Noise Adapt 
 - `cargo install hp-thermal` will **not** work — the `build-std` + custom-target setup
   requires building from the repo.
 
+### Build environment pin (MSVC toolset and Windows SDK)
+
+Releases are rebuilt on two runners and must agree byte for byte, so the linker is pinned too.
+`.cargo/config.toml` at the repo root sets `VCToolsVersion`, `WindowsSdkDir` and
+`WindowsSDKVersion` for every rustc cargo spawns; rustc's MSVC detection honors them, and a
+machine without that exact toolset fails to link instead of using another one. Check yours:
+
+```sh
+cargo xtask verify-build-env
+```
+
+It prints the pinned versus installed toolset, Spectre-mitigated CRT (build.rs links against it,
+#385) and SDK and, on a mismatch, the install command. The toolset ships inside Visual Studio
+2026 Build Tools; the point build follows the Visual Studio servicing release, so match the
+release rather than hunting for a component:
+
+```sh
+winget install -e --id Microsoft.VisualStudio.BuildTools -v <release> \
+  --override "--passive --wait --norestart --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre --add Microsoft.VisualStudio.Component.Windows11SDK.26100"
+```
+
+To add a component to an existing instance, use the installer's own `modify` (it elevates):
+
+```sh
+"/c/Program Files (x86)/Microsoft Visual Studio/Installer/setup.exe" modify \
+  --installPath "C:\Program Files (x86)\Microsoft Visual Studio\18\BuildTools" \
+  --add Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre --passive --norestart
+```
+
+It installs per machine, side by side with any Visual Studio 2022, and rustc then prefers the
+newest instance for every Rust MSVC build on the machine. When the pin moves (a reviewed change
+to `.cargo/config.toml`), `verify-build-env` names what to install.
+
 ## Dev tooling
 
 Cross-platform Rust tooling lives in `xtask/`:

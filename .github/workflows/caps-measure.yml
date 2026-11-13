@@ -46,8 +46,6 @@ jobs:
 
       - name: Install pinned toolchain (producer parity)
         uses: ./.github/actions/install-toolchain
-        with:
-          components: "rust-src"
 
       # bubblewrap confines every build script, proc macro and rustc cackle runs: no network,
       # filesystem per the config. From the runner image's apt mirror: a MEASUREMENT-step input,

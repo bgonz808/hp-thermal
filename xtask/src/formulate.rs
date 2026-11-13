@@ -199,7 +199,7 @@ pub(crate) fn formula(
             "name": "MSVC v14 toolset",
             "version": env.toolset,
             "description": format!(
-                "{} {}; link.exe FileVersion {}; measured: the exe's Rich header linker build is {linker_build} (match)",
+                "{} {}; selected by .cargo/config.toml [env] VCToolsVersion; link.exe FileVersion {}; measured: the exe's Rich header linker build is {linker_build} (match)",
                 env.vs_product, env.vs_version, env.link_file_version
             )
         }),

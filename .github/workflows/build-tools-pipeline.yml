@@ -46,8 +46,6 @@ jobs:
 
       - name: Install pinned toolchain
         uses: ./.github/actions/install-toolchain
-        with:
-          components: "rust-src"
 
       # cyclonedx-rust-cargo's deep test-snapshot paths exceed Windows MAX_PATH during the
       # `cargo install --git` checkout. Ephemeral runner, destroyed after the job.
@@ -407,8 +405,6 @@ jobs:
 
       - name: Install pinned toolchain
         uses: ./.github/actions/install-toolchain
-        with:
-          components: "rust-src"
 
       # #386 step 3: build through the PRIOR-blessed linux cargo-auditable when one exists. The
       # first build of that member is the bootstrap: no blessed linux cargo-auditable yet, so the

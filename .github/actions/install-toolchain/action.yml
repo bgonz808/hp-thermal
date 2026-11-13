@@ -3,12 +3,6 @@ description: >
   Reads tools/TOOLCHAIN.lock, verifies the channel manifest against the committed sha256,
   then installs. Fails closed on any mismatch.
 
-inputs:
-  components:
-    description: Extra rustup components, space-separated (e.g. "rust-src clippy rustfmt").
-    required: false
-    default: ""
-
 outputs:
   channel:
     description: The channel that was installed, read from the lock.
@@ -23,13 +17,8 @@ runs:
     - name: Verify + install the pinned toolchain
       id: pin
       shell: bash
-      # Inputs reach the shell through the ENVIRONMENT, never through ${{ }} expansion into
-      # the script body. Expanding a template directly into `run:` splices caller-controlled
-      # text into the command before bash ever parses it, so a crafted input becomes shell
-      # code rather than a value -- template injection. Caught here by zizmor, in this very
-      # file, which is a fair argument for keeping that scanner blocking.
-      env:
-        COMPONENTS: ${{ inputs.components }}
+      # No inputs: the component list is read from app/rust-toolchain.toml, the file rustup
+      # itself obeys, so CI and a local checkout install the same set from one declaration.
       # Rationale for the suppression below is at the GITHUB_ENV write near the end of
       # this script. The directive has to be TRAILING on `run:`: zizmor anchors a
       # whole-script finding to the block header and matches ignore comments on that
@@ -113,19 +102,22 @@ runs:
           echo "::error::Either upstream re-published the manifest (verify and update the lock in a reviewed PR) or the fetch was tampered with. Refusing to install."
           exit 1
         fi
+        # The rustc this manifest describes, kept for the identity check after install: the
+        # manifest is the reviewed content, so the compiler that answers must be the one it names.
+        want_commit=$(awk '/^\[pkg\.rustc\]/{f=1;next} /^\[/{f=0} f && $1=="git_commit_hash"{gsub(/"/,"",$3); print $3; exit}' channel-manifest.toml)
+        case "$want_commit" in
+          [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*) : ;;
+          *) echo "::error::manifest has no [pkg.rustc] git_commit_hash (fail-closed)"; exit 1 ;;
+        esac
         rm -f channel-manifest.toml
 
-        # Routing the input through the environment stopped it becoming shell SYNTAX, which
-        # was the injection. It did not stop it becoming unintended ARGUMENTS: an unquoted
-        # expansion still word-splits and globs, so a component of `--force` or `*` would have
-        # been handed to rustup as a flag or a filename list. Neither is code execution, but
-        # neither is what the caller asked for.
-        #
-        # So: split explicitly, validate each token against a component-name charset, and
-        # build an ARRAY so nothing is ever re-split on the command line. A token that is not
-        # a plain component name is refused rather than sanitised -- we cannot know what a
-        # caller meant by `--force`, only that it is not a component.
-        read -ra _comps <<< "${COMPONENTS:-}"
+        # COMPONENTS come from app/rust-toolchain.toml, the one declaration rustup reads
+        # locally. Parsed as a TOML string array on one line; validated token by token against
+        # a component-name charset and built as an ARRAY so nothing is re-split on the command
+        # line. A token that is not a plain component name is refused rather than sanitised.
+        comps_line=$(awk -F'=' '/^components/{print $2; exit}' app/rust-toolchain.toml | tr -d '[]" ')
+        [ -n "$comps_line" ] || { echo "::error::app/rust-toolchain.toml declares no components (rust-src is required for build-std)"; exit 1; }
+        IFS=',' read -ra _comps <<< "$comps_line"
         args=()
         for c in ${_comps[@]+"${_comps[@]}"}; do
           [ -n "$c" ] || continue
@@ -138,8 +130,18 @@ runs:
           esac
           args+=(-c "$c")
         done
-        rustup toolchain install "$channel" ${args[@]+"${args[@]}"}
-        echo "installed $channel (manifest digest verified)"
+        rustup toolchain install "$channel" --profile minimal ${args[@]+"${args[@]}"}
+        echo "installed $channel (manifest digest verified; components: $comps_line)"
+
+        # IDENTITY CHECK. The installed rustc must be the commit the digest-verified manifest
+        # names. rustup already checks component hashes against that manifest; this closes the
+        # last gap, a toolchain of the right NAME that is not the reviewed CONTENT.
+        got_commit=$(rustup run "$channel" rustc -vV | awk '$1=="commit-hash:"{print $2; exit}')
+        if [ "$got_commit" != "$want_commit" ]; then
+          echo "::error::rustc commit $got_commit is not the manifest's $want_commit for $channel (fail-closed)"
+          exit 1
+        fi
+        echo "rustc commit $got_commit matches the pinned manifest"
 
         # ACTIVATE IT. `rustup toolchain install` INSTALLS; it does not SELECT. Everything
         # above -- the digest verification, the soak gate, the drift check -- described a

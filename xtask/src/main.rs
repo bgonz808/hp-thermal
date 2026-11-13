@@ -54,6 +54,7 @@ mod propose;
 // #396: the in-repo writer of vuln.jsonl — hashes the auditor it runs, refuses an unblessed one.
 /// `candidate-advance`: the bless cycle as idempotent stages (digest, vuln, caps, mal, summary).
 mod advance;
+mod build_env;
 mod cadence;
 mod formulate;
 mod record_vuln;
@@ -112,6 +113,7 @@ fn main() {
         Some("monitor-vuln") => monitor::run(&args),
         Some("eox-check") => eox::run(&args),
         Some("cadence-check") => cadence::run(&args),
+        Some("verify-build-env") => build_env::run(&args),
         Some("sbom-formulate") => formulate::run(&args),
         Some("freeze") => freeze::run(&args),
         Some("freeze-propose") => propose::run(&args),
@@ -176,6 +178,9 @@ fn main() {
             );
             eprintln!(
                 "  cadence-check            validate supply-chain/policy/cadence.json (time bounds the scheduled checks read)"
+            );
+            eprintln!(
+                "  verify-build-env         check this machine against the MSVC toolset / Windows SDK pin in .cargo/config.toml; prints what to install"
             );
             eprintln!(
                 "  sbom-formulate --sbom F --exe E --env build-env.json [--out F]  declare the build environment as CycloneDX formulation; toolset bound to the exe's Rich header"

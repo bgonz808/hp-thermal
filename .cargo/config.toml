@@ -1,7 +1,27 @@
-# Root config: enables `cargo xtask <cmd>` from the repo root.
+# Root config, read by every cargo invocation whose working directory is inside this repo:
+# app/ (merged under app/.cargo/config.toml), xtask/, experiments/, and the tool builds that
+# build-tools-pipeline.yml runs from the repo root.
 #
-# Deliberately ALIAS-ONLY — no [build]/[unstable] here. app/'s build-std + custom
-# target live in app/.cargo/config.toml so they stay scoped to app/ and never leak
-# onto the stable experiments/ and xtask/ crates.
+# No [build]/[unstable] here. app/'s build-std + custom target live in app/.cargo/config.toml so
+# they stay scoped to app/ and never leak onto the stable experiments/ and xtask/ crates.
 [alias]
 xtask = "run --manifest-path xtask/Cargo.toml --"
+
+# BUILD ENVIRONMENT PIN. rustc finds the MSVC linker and the Windows SDK through
+# find-msvc-tools, which honors these variables before any discovery (VCToolsVersion selects
+# the toolset directory; WindowsSdkDir + WindowsSDKVersion select the SDK). Cargo sets them for
+# every rustc it spawns, so the selection is made by the tool itself, not by a script of ours.
+# Fail-closed by construction: a machine or runner image without this exact toolset has no
+# link.exe at that path, and the build dies instead of silently using another linker.
+# `force = true` so a shell that already has these set (a Developer Command Prompt) cannot
+# override the pin.
+#
+# The values are what the release runner carries and what the SBOM formulation records; the
+# exe's Rich header must agree (release-pipeline.yml, sbom-formulate). Point builds follow
+# Visual Studio servicing, so a bump is a reviewed change here, and `cargo xtask
+# verify-build-env` tells a developer what to install. There is no per-point-build installer
+# component: matching means the same Visual Studio servicing release (CONTRIBUTING.md).
+[env]
+VCToolsVersion = { value = "14.51.36231", force = true }
+WindowsSdkDir = { value = 'C:\Program Files (x86)\Windows Kits\10\', force = true }
+WindowsSDKVersion = { value = '10.0.26100.0\', force = true }

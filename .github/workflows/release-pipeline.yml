@@ -70,8 +70,6 @@ jobs:
 
       - name: Install pinned toolchain + components
         uses: ./.github/actions/install-toolchain
-        with:
-          components: "rust-src clippy rustfmt"
 
       # Enforce dependency locking: fails if Cargo.lock is stale / would change. Nothing
       # gets built or published against an unpinned dependency graph.
@@ -186,17 +184,25 @@ jobs:
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $inst = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json | Select-Object -First 1
           if (-not $inst) { throw 'no Visual Studio instance with the VC tools' }
-          $toolset = if ($env:VCToolsVersion) { $env:VCToolsVersion } else { (Get-Content "$($inst.installationPath)\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim() }
-          $link = "$($inst.installationPath)\VC\Tools\MSVC\$toolset\bin\Hostx64\x64\link.exe"
-          if (-not (Test-Path $link)) { throw "link.exe not found for toolset $toolset" }
-          $linkver = (Get-Item $link).VersionInfo.FileVersion
-          if ($env:WindowsSdkDir -and $env:WindowsSDKVersion) {
-            $sdk = $env:WindowsSDKVersion.TrimEnd('\')
-          } else {
-            $root = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\Windows\v10.0').InstallationFolder
-            $sdk = Get-ChildItem "$root\lib" -Directory | Sort-Object Name | Where-Object { Test-Path "$($_.FullName)\um\x64\kernel32.lib" } | Select-Object -Last 1 -ExpandProperty Name
+          # The pin cargo applies to every rustc it spawns (.cargo/config.toml [env], force = true).
+          # This step is not under cargo, so it reads the same file; what it declares is what the
+          # build selected, and sbom-formulate then binds it to the exe's Rich header.
+          $cfg = Get-Content ../.cargo/config.toml
+          function Pin($name) {
+            $line = $cfg | Where-Object { $_ -match "^\s*$name\s*=" } | Select-Object -First 1
+            if (-not $line) { throw ".cargo/config.toml pins no $name" }
+            if ($line -notmatch "value\s*=\s*(?:'([^']*)'|`"([^`"]*)`")") { throw ".cargo/config.toml: cannot read $name value" }
+            if ($Matches[1]) { $Matches[1] } else { $Matches[2] }
           }
-          if (-not $sdk) { throw 'no Windows 10 SDK with um/x64/kernel32.lib' }
+          $toolset = Pin 'VCToolsVersion'
+          $sdkDir = Pin 'WindowsSdkDir'
+          $sdk = (Pin 'WindowsSDKVersion').TrimEnd('\')
+          $default = (Get-Content "$($inst.installationPath)\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim()
+          Write-Host "toolset pinned $toolset (image default $default)"
+          $link = "$($inst.installationPath)\VC\Tools\MSVC\$toolset\bin\Hostx64\x64\link.exe"
+          if (-not (Test-Path $link)) { throw "pinned toolset $toolset is not installed on this image (default is $default): bump the pin in a reviewed PR or wait for the image" }
+          $linkver = (Get-Item $link).VersionInfo.FileVersion
+          if (-not (Test-Path "$sdkDir\Lib\$sdk\um\x64\kernel32.lib")) { throw "pinned Windows SDK $sdk is not installed under $sdkDir" }
           $out = [ordered]@{
             schema = 'hp-thermal/build-env/v1'
             rustc = [ordered]@{ version = $ver; commit = $commit; host = $hostTriple; channel = $channel }
@@ -358,6 +364,74 @@ jobs:
           fi
           [ "$fail" -eq 0 ] || { echo "Reproducibility gate FAILED: the two builds do not agree; nothing will be signed."; exit 1; }
           echo "Reproducibility gate PASSED: two independent builds agree byte for byte."
+
+      # Build-environment drift against the previous release's attested SBOM (its formulation).
+      # The runner image cannot be pinned, so its check is monotonic: the same family must not go
+      # backwards. A family change, toolset / SDK / rustc changes, and "no prior record" are
+      # written to the run summary the release-publish approver reads; only a rollback fails.
+      # The prior record is admitted only after its attestation verifies against this repo's two
+      # documented signer identities.
+      - name: Compare build environment with the previous release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cur=builds/dist-unsigned-a/hp-thermal.cdx.json
+          field() { jq -r --arg ref "$2" '.formulation[0].components[]? | select(."bom-ref"==$ref) | .version // empty' "$1"; }
+          name_of() { jq -r --arg ref "$2" '.formulation[0].components[]? | select(."bom-ref"==$ref) | .name // empty' "$1"; }
+          tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
+          {
+            echo "## Build environment vs previous release (${tag:-none})"
+            echo
+            echo "| component | previous | this build | status |"
+            echo "|---|---|---|---|"
+          } > env-summary.md
+          status=0
+          if [ -z "$tag" ]; then
+            echo "| all | no release | | nothing to compare |" >> env-summary.md
+          else
+            mkdir -p prev
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir prev \
+              --pattern hp-thermal.cdx.json --pattern hp-thermal.sbom.sigstore.jsonl
+            verified=0
+            for w in release-pipeline.yml release.yml; do
+              if gh attestation verify prev/hp-thermal.cdx.json --bundle prev/hp-thermal.sbom.sigstore.jsonl \
+                   --repo "$GITHUB_REPOSITORY" --predicate-type https://cyclonedx.org/bom \
+                   --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/$w" > /dev/null 2>&1; then verified=1; break; fi
+            done
+            [ "$verified" = 1 ] || { echo "::error::previous release $tag: SBOM attestation did not verify; refusing to compare against an unverified record"; exit 1; }
+            if ! jq -e '.formulation | length > 0' prev/hp-thermal.cdx.json > /dev/null; then
+              echo "| all | $tag has no formulation | | no prior record (predates the build-environment declaration) |" >> env-summary.md
+            else
+              for ref in build-env:rustc build-env:msvc-toolset build-env:windows-sdk build-env:os; do
+                p=$(field prev/hp-thermal.cdx.json "$ref"); c=$(field "$cur" "$ref")
+                if [ "$p" = "$c" ]; then st=unchanged; else st=changed; echo "::notice::$ref: '$p' -> '$c'"; fi
+                echo "| $ref | $p | $c | $st |" >> env-summary.md
+              done
+              pn=$(name_of prev/hp-thermal.cdx.json build-env:runner-image); cn=$(name_of "$cur" build-env:runner-image)
+              pv=$(field prev/hp-thermal.cdx.json build-env:runner-image);   cv=$(field "$cur" build-env:runner-image)
+              if [ "$pn" != "$cn" ]; then
+                st="family changed"; echo "::notice::runner image family changed: '$pn' -> '$cn'"
+              elif [[ "$pv" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && "$cv" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                # Numeric, component-wise; only the observed three-part shape is compared.
+                cmp=$(jq -rn --arg a "$pv" --arg b "$cv" '($a|split(".")|map(tonumber)) as $x | ($b|split(".")|map(tonumber)) as $y
+                        | if $x == $y then "equal" elif $x < $y then "newer" else "older" end')
+                case "$cmp" in
+                  equal) st=unchanged ;;
+                  newer) st=advanced; echo "::notice::runner image advanced: $pv -> $cv" ;;
+                  older) st="ROLLBACK"; status=1
+                         echo "::error::runner image $cv is OLDER than the previous release's $pv: a rolled-back image is not a routine update" ;;
+                esac
+              else
+                st="not compared (version shape)"; echo "::warning::runner image versions '$pv' / '$cv' are not three numeric components; not compared"
+              fi
+              echo "| $cn | $pv | $cv | $st |" >> env-summary.md
+            fi
+          fi
+          cat env-summary.md >> "$GITHUB_STEP_SUMMARY"
+          cat env-summary.md
+          exit "$status"
 
       - name: Publish canonical unsigned artifacts (build a, proven equal to b)
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # actions/upload-artifact v7.0.2
