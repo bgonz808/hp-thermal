@@ -128,7 +128,7 @@ runs:
             # is refused even though its digest matched.
             gh attestation verify "$dest/$local_name" --repo "$GITHUB_REPOSITORY" \
                 --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/build-tools-pipeline.yml" \
-              || { echo "::error::no valid provenance attestation from build-tools.yml for '$local_name' (fail-closed)" >&2; exit 1; }
+              || { echo "::error::no valid provenance attestation from build-tools-pipeline.yml for '$local_name' (fail-closed)" >&2; exit 1; }
           done < "$dest/ASSETS"
         fi
         # Only now — post-verification — is the directory handed back, as an OUTPUT. Nothing
