@@ -1,0 +1,51 @@
+{
+  "schema": "hp-thermal/hardening-policy/v1",
+  "_about": "Compiler/linker hardening flags, as policy. `cargo xtask verify-hardening-flags` fails closed unless every `common` flag appears (outside comments) in every registered build path, and every path's `extra` flags appear in that path. RUSTFLAGS does not merge with .cargo/config.toml and the tool builds never read the app's config, so the two declaration sites are checked against this one list. Adding a build path means adding it here; an unregistered site fails rather than being ignored.",
+  "common": [
+    {
+      "flag": "control-flow-guard=checks",
+      "why": "forward-edge CFI: constrains indirect calls"
+    },
+    {
+      "flag": "link-arg=/DEPENDENTLOADFLAG:0x800",
+      "why": "resolve static imports from System32 only; matters more for tools, which run from writable CI directories"
+    },
+    {
+      "flag": "link-arg=/CETCOMPAT",
+      "why": "backward-edge CFI: opts into the hardware shadow stack, the ROP defense CFG does not provide"
+    }
+  ],
+  "paths": [
+    {
+      "path": "app/.cargo/config.toml",
+      "what": "hp-thermal.exe",
+      "extra": [
+        {
+          "flag": "target-feature=+crt-static",
+          "why": "self-contained CRT by choice; accepts not inheriting CRT patches (tools get them from the runner image instead)"
+        },
+        {
+          "flag": "stack-protector=strong",
+          "why": "stack canaries; requires build-std, which the app uses and the tools do not"
+        },
+        {
+          "flag": "deny-partial-mitigations=stack-protector,control-flow-guard",
+          "why": "a std built without the mitigations is a build failure, not a silent downgrade"
+        },
+        {
+          "flag": "link-args=/STACK:262144",
+          "why": "explicit main-thread stack reservation"
+        },
+        {
+          "flag": "link-arg=/Brepro",
+          "why": "reproducible link (deterministic PE timestamp/GUID), stamped afterwards to the commit epoch"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/build-tools-pipeline.yml",
+      "what": "the five PE build tools (per-tool RUSTFLAGS from tools/rustflags/<name> are appended by the producer and cross-checked there)",
+      "extra": []
+    }
+  ]
+}
