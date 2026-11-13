@@ -16,8 +16,12 @@ name: Release VDR attestation
 # re-checked against SHA256SUMS; the committed VDR is regenerated from the evidence before it is
 # signed. One VDR per release: an existing asset is a refusal, not an overwrite.
 #
-# JUDGMENT GATE: the `release-publish` environment (maintainer approval, no admin bypass). Nothing
-# here commits to git; the only writes are the attestation and two release assets.
+# JUDGMENT GATE: the `release-attest` environment (maintainer approval, no admin bypass, deployable
+# from `main` only). Deliberately not `release-publish`: that environment admits only `v*` tag refs,
+# which is what makes "publish" mean "a tagged release", and this stage runs from `main` because
+# the evidence it attests lives there, after the release. A distinct environment keeps the two
+# approvals independently recorded. Nothing here commits to git; the only writes are the
+# attestation and two release assets.
 
 on:
   workflow_dispatch:
@@ -32,7 +36,7 @@ permissions:
 
 jobs:
   attest-vdr:
-    environment: release-publish
+    environment: release-attest
     runs-on: ubuntu-24.04
     permissions:
       contents: write        # release asset upload only; no git write path exists in this job
