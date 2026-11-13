@@ -57,6 +57,8 @@ mod advance;
 mod record_vuln;
 /// `release-advance`: the app's post-release evidence (vuln baseline, VT panel) as stages.
 mod release_advance;
+/// `vdr`: CycloneDX 1.6 Vulnerability Disclosure Report for a measured product (#396).
+mod vdr;
 /// `xtask ci` step: cargo-vet exemptions for xtask stay off every lane's build graph.
 mod vet_guard;
 
@@ -110,6 +112,7 @@ fn main() {
         Some("record-vuln") => record_vuln::run(&args),
         Some("candidate-advance") => advance::run(&args),
         Some("release-advance") => release_advance::run(&args),
+        Some("vdr") => vdr::run(&args),
         Some("vet-guard") => {
             if vet_guard::check() {
                 0
