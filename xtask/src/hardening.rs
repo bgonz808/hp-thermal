@@ -3,7 +3,8 @@
 //! THE PROBLEM. Hardening flags are declared in TWO places, and cargo does not merge them:
 //!
 //!   * `app/.cargo/config.toml` -> builds `hp-thermal.exe`
-//!   * the `RUSTFLAGS` env in `.github/workflows/build-tools.yml` -> builds the five PE tools
+//!   * the `RUSTFLAGS` env in `.github/workflows/build-tools-pipeline.yml` -> builds the five PE tools
+//!     (the reusable producer; build-tools.yml only dispatches it)
 //!
 //! The `RUSTFLAGS` environment variable REPLACES `.cargo/config.toml` rustflags outright, and
 //! the tool builds run outside `app/` so they never read that file at all. There is no
@@ -51,7 +52,7 @@ const COMMON_HARDENING: &[(&str, &str)] = &[
 const SOURCES: &[(&str, &str)] = &[
     ("app/.cargo/config.toml", "hp-thermal.exe"),
     (
-        ".github/workflows/build-tools.yml",
+        ".github/workflows/build-tools-pipeline.yml",
         "the five PE build tools",
     ),
 ];
