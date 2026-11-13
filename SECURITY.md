@@ -14,7 +14,9 @@ the bounded-impact ceiling described below — those are prioritized.
 
 Every release is built by a public GitHub Actions workflow and carries a **[SLSA](https://slsa.dev) build
 provenance** attestation and an **SBOM** attestation (CycloneDX 1.6), so you can prove the `.exe`
-was built from this repo's source by that workflow and was not altered in transit.
+was built from this repo's source by that workflow and was not altered in transit. The SBOM's
+`formulation` declares the build environment for rebuilders: rustc commit, MSVC toolset (checked
+against the linker build recorded in the exe's Rich header), Windows SDK and runner image.
 
 **SLSA v1.2 Build Level 3.** Build, Authenticode signing and attestation run in a reusable
 workflow (`release-pipeline.yml`) that the calling release job cannot inject steps into, on
