@@ -17,7 +17,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -31,7 +31,6 @@
       ],
       "name": "adler2",
       "purl": "pkg:cargo/adler2@2.0.1",
-      "scope": "required",
       "type": "library",
       "version": "2.0.1"
     },
@@ -149,7 +148,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -157,7 +156,6 @@
       },
       "name": "auditable-serde",
       "purl": "pkg:cargo/auditable-serde@0.9.0",
-      "scope": "required",
       "type": "library",
       "version": "0.9.0"
     },
@@ -374,7 +372,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -388,7 +386,6 @@
       ],
       "name": "byteorder",
       "purl": "pkg:cargo/byteorder@0.5.3",
-      "scope": "required",
       "type": "library",
       "version": "0.5.3"
     },
@@ -408,7 +405,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -422,7 +419,6 @@
       ],
       "name": "camino",
       "purl": "pkg:cargo/camino@1.2.1",
-      "scope": "required",
       "type": "library",
       "version": "1.2.1"
     },
@@ -442,7 +438,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -450,7 +446,6 @@
       },
       "name": "cargo-auditable",
       "purl": "pkg:cargo/cargo-auditable@0.7.7",
-      "scope": "required",
       "type": "library",
       "version": "0.7.7"
     },
@@ -470,7 +465,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -484,7 +479,6 @@
       ],
       "name": "cargo-platform",
       "purl": "pkg:cargo/cargo-platform@0.3.1",
-      "scope": "required",
       "type": "library",
       "version": "0.3.1"
     },
@@ -504,7 +498,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -518,7 +512,6 @@
       ],
       "name": "cargo_metadata",
       "purl": "pkg:cargo/cargo_metadata@0.23.0",
-      "scope": "required",
       "type": "library",
       "version": "0.23.0"
     },
@@ -538,7 +531,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -552,7 +545,6 @@
       ],
       "name": "cfg-if",
       "purl": "pkg:cargo/cfg-if@1.0.4",
-      "scope": "required",
       "type": "library",
       "version": "1.0.4"
     },
@@ -572,7 +564,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -586,7 +578,6 @@
       ],
       "name": "crc32fast",
       "purl": "pkg:cargo/crc32fast@1.5.0",
-      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -751,7 +742,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -765,7 +756,6 @@
       ],
       "name": "equivalent",
       "purl": "pkg:cargo/equivalent@1.0.2",
-      "scope": "required",
       "type": "library",
       "version": "1.0.2"
     },
@@ -843,7 +833,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -857,7 +847,6 @@
       ],
       "name": "foldhash",
       "purl": "pkg:cargo/foldhash@0.1.5",
-      "scope": "required",
       "type": "library",
       "version": "0.1.5"
     },
@@ -906,7 +895,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -920,7 +909,6 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.15.5",
-      "scope": "required",
       "type": "library",
       "version": "0.15.5"
     },
@@ -940,7 +928,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -954,7 +942,6 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.16.0",
-      "scope": "required",
       "type": "library",
       "version": "0.16.0"
     },
@@ -1032,7 +1019,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1046,7 +1033,6 @@
       ],
       "name": "indexmap",
       "purl": "pkg:cargo/indexmap@2.12.0",
-      "scope": "required",
       "type": "library",
       "version": "2.12.0"
     },
@@ -1066,7 +1052,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1080,7 +1066,6 @@
       ],
       "name": "itoa",
       "purl": "pkg:cargo/itoa@1.0.15",
-      "scope": "required",
       "type": "library",
       "version": "1.0.15"
     },
@@ -1129,7 +1114,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1143,7 +1128,6 @@
       ],
       "name": "leb128",
       "purl": "pkg:cargo/leb128@0.2.5",
-      "scope": "required",
       "type": "library",
       "version": "0.2.5"
     },
@@ -1221,7 +1205,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1235,7 +1219,6 @@
       ],
       "name": "memchr",
       "purl": "pkg:cargo/memchr@2.7.6",
-      "scope": "required",
       "type": "library",
       "version": "2.7.6"
     },
@@ -1255,7 +1238,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1269,7 +1252,6 @@
       ],
       "name": "miniz_oxide",
       "purl": "pkg:cargo/miniz_oxide@0.9.1",
-      "scope": "required",
       "type": "library",
       "version": "0.9.1"
     },
@@ -1347,7 +1329,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1361,7 +1343,6 @@
       ],
       "name": "object",
       "purl": "pkg:cargo/object@0.37.3",
-      "scope": "required",
       "type": "library",
       "version": "0.37.3"
     },
@@ -1468,7 +1449,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1482,7 +1463,6 @@
       ],
       "name": "pico-args",
       "purl": "pkg:cargo/pico-args@0.5.0",
-      "scope": "required",
       "type": "library",
       "version": "0.5.0"
     },
@@ -1531,7 +1511,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1545,7 +1525,6 @@
       ],
       "name": "proc-macro2",
       "purl": "pkg:cargo/proc-macro2@1.0.103",
-      "scope": "required",
       "type": "library",
       "version": "1.0.103"
     },
@@ -1594,7 +1573,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1608,7 +1587,6 @@
       ],
       "name": "quote",
       "purl": "pkg:cargo/quote@1.0.42",
-      "scope": "required",
       "type": "library",
       "version": "1.0.42"
     },
@@ -1825,7 +1803,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1839,7 +1817,6 @@
       ],
       "name": "ryu",
       "purl": "pkg:cargo/ryu@1.0.20",
-      "scope": "required",
       "type": "library",
       "version": "1.0.20"
     },
@@ -1917,7 +1894,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1931,7 +1908,6 @@
       ],
       "name": "semver",
       "purl": "pkg:cargo/semver@1.0.27",
-      "scope": "required",
       "type": "library",
       "version": "1.0.27"
     },
@@ -1951,7 +1927,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1965,7 +1941,6 @@
       ],
       "name": "serde",
       "purl": "pkg:cargo/serde@1.0.228",
-      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
@@ -1985,7 +1960,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1999,7 +1974,6 @@
       ],
       "name": "serde_core",
       "purl": "pkg:cargo/serde_core@1.0.228",
-      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
@@ -2019,7 +1993,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2033,7 +2007,6 @@
       ],
       "name": "serde_derive",
       "purl": "pkg:cargo/serde_derive@1.0.228",
-      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
@@ -2082,7 +2055,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2096,7 +2069,6 @@
       ],
       "name": "serde_json",
       "purl": "pkg:cargo/serde_json@1.0.145",
-      "scope": "required",
       "type": "library",
       "version": "1.0.145"
     },
@@ -2261,7 +2233,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2275,7 +2247,6 @@
       ],
       "name": "syn",
       "purl": "pkg:cargo/syn@2.0.109",
-      "scope": "required",
       "type": "library",
       "version": "2.0.109"
     },
@@ -2324,7 +2295,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2338,7 +2309,6 @@
       ],
       "name": "thiserror",
       "purl": "pkg:cargo/thiserror@2.0.17",
-      "scope": "required",
       "type": "library",
       "version": "2.0.17"
     },
@@ -2387,7 +2357,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2401,7 +2371,6 @@
       ],
       "name": "thiserror-impl",
       "purl": "pkg:cargo/thiserror-impl@2.0.17",
-      "scope": "required",
       "type": "library",
       "version": "2.0.17"
     },
@@ -2595,7 +2564,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2609,7 +2578,6 @@
       ],
       "name": "topological-sort",
       "purl": "pkg:cargo/topological-sort@0.2.2",
-      "scope": "required",
       "type": "library",
       "version": "0.2.2"
     },
@@ -2629,7 +2597,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2643,7 +2611,6 @@
       ],
       "name": "unicode-ident",
       "purl": "pkg:cargo/unicode-ident@1.0.22",
-      "scope": "required",
       "type": "library",
       "version": "1.0.22"
     },
@@ -2837,7 +2804,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48)"
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-053cf694c466.exe (sha256 053cf694c466ab144b788e1e50d93c5898550d3070313f6ecbb5bd5a56796d48); resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2851,7 +2818,6 @@
       ],
       "name": "wasm-gen",
       "purl": "pkg:cargo/wasm-gen@0.1.4",
-      "scope": "required",
       "type": "library",
       "version": "0.1.4"
     },
@@ -3364,6 +3330,6 @@
   },
   "serialNumber": "urn:uuid:94a40e70-eeec-4349-91aa-38ed2801eee7",
   "specVersion": "1.6",
-  "version": 2,
+  "version": 3,
   "vulnerabilities": []
 }

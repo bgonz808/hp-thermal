@@ -31,8 +31,8 @@ check, and more verifiable records.
 ### Build-tool fleet
 - The producer moves into a reusable workflow, and tool fetches pin its signer identity.
   (#438, #445)
-- Each tool's report records which locked packages are compiled into the binary, read from
-  the binary itself. (#469, #471)
+- Each tool's report marks locked packages absent from the binary's own dependency record as
+  excluded, measured from the binary itself. (#469, #471)
 
 ### Gate and evidence
 - xtask is vetted at safe-to-deploy, dev dependencies included. (#439)
