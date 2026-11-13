@@ -3,6 +3,8 @@ target/
 
 # Generated SBOM / audit artifacts
 *.cdx.json
+# Committed VDRs (supply-chain/evidence/README.md, VDR): derived, but reviewed and CI-checked.
+!supply-chain/evidence/**/vdr.cdx.json
 bom.json
 
 # Logs / scratch

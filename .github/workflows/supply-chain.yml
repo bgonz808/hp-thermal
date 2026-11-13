@@ -141,3 +141,41 @@ jobs:
       - name: vet guard (exempted xtask crates are never compiled, or carry live debt)
         shell: bash
         run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- vet-guard
+
+      # Committed VDRs (#396) are derived documents: each one must regenerate byte for byte from
+      # the evidence it sits beside, the custody-verified raw payload and the acks. The app's VDR
+      # takes its component list from the release SBOM, which is fetched and admitted only after
+      # its provenance attestation verifies against this repository.
+      - name: VDR check (committed reports regenerate from the evidence)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cargo build --release --locked --quiet --manifest-path xtask/Cargo.toml
+          X=xtask/target/release/xtask.exe
+          n=0; fail=0
+          for f in supply-chain/evidence/*/*/vdr.cdx.json; do
+            [ -f "$f" ] || continue
+            n=$((n+1))
+            dir=${f%/vdr.cdx.json}; digest=${dir##*/}; product=${dir%/*}; product=${product##*/}
+            args=(vdr check --product "$product" --digest "$digest")
+            if [ "$product" = "hp-thermal" ]; then
+              # Find the release whose exe is this digest, then the SBOM shipped beside it.
+              tag=""
+              for t in $(gh release list --repo "$GITHUB_REPOSITORY" --json tagName --jq '.[].tagName'); do
+                if gh release download "$t" --repo "$GITHUB_REPOSITORY" --pattern SHA256SUMS -O "sums-$t.txt" --clobber 2>/dev/null \
+                   && grep -q "^$digest  hp-thermal.exe$" "sums-$t.txt"; then tag=$t; break; fi
+              done
+              [ -n "$tag" ] || { echo "::error::$f: no release carries exe digest $digest"; fail=1; continue; }
+              mkdir -p "rel-$tag"
+              gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern hp-thermal.cdx.json --dir "rel-$tag" --clobber
+              gh attestation verify "rel-$tag/hp-thermal.cdx.json" --repo "$GITHUB_REPOSITORY" > /dev/null \
+                || { echo "::error::$f: release $tag SBOM provenance did not verify; not admitted"; fail=1; continue; }
+              args+=(--sbom "rel-$tag/hp-thermal.cdx.json")
+            fi
+            if ! "$X" "${args[@]}"; then echo "::error::$f: differs from what the evidence regenerates"; fail=1; fi
+          done
+          echo "VDR check: $n report(s)"
+          [ "$n" -gt 0 ] || { echo "::error::no committed VDRs found (fail-closed)"; exit 1; }
+          exit "$fail"
