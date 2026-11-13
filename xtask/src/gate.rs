@@ -439,7 +439,10 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
 
 /// The exact line a maintainer commits to sign off — printed by the failing gate.
 /// status_notes is deliberately empty: the quality bar refuses it until a human writes the
-/// reason (no rubber-stamp path). Caps acks use `reviewed`: a caps ack signs an inventory, not a
+/// reason (no rubber-stamp path). The ack carries the RULING: the OpenVEX status and the native
+/// CycloneDX `state` / `justification` / `response` the VDR copies. It starts at `in_triage`, the
+/// one state that claims nothing. Measured facts (binary presence, version ranges, digests,
+/// dependency paths) live in the VDR's own fields and are not restated in the notes. Caps acks use `reviewed`: a caps ack signs an inventory, not a
 /// vulnerability status, so the OpenVEX statuses do not apply there. The gate reads `status` for
 /// exactly one thing: a vuln statement whose status is `fixed` withdraws coverage (#251).
 pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
@@ -449,6 +452,7 @@ pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
         "vulnerability": {"name": inst.id},
         "product": {"name": tool, "package": inst.package, "version": inst.version},
         "status": "affected",
+        "cyclonedx": {"state": "in_triage"},
         "status_notes": "",
         "author": "",
         "timestamp": "",

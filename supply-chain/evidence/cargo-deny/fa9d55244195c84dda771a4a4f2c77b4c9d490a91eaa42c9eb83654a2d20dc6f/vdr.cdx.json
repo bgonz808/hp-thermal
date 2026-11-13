@@ -6870,6 +6870,987 @@
       "version": "2.1.2+zstd.1.5.7"
     }
   ],
+  "dependencies": [
+    {
+      "dependsOn": [
+        "pkg:cargo/memchr@2.8.0"
+      ],
+      "ref": "pkg:cargo/aho-corasick@1.1.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/allocator-api2@0.2.21"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstyle-parse@1.0.0",
+        "pkg:cargo/anstyle-query@1.1.5",
+        "pkg:cargo/anstyle-wincon@3.0.11",
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/colorchoice@1.0.5",
+        "pkg:cargo/is_terminal_polyfill@1.70.2",
+        "pkg:cargo/utf8parse@0.2.2"
+      ],
+      "ref": "pkg:cargo/anstream@1.0.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/utf8parse@0.2.2"
+      ],
+      "ref": "pkg:cargo/anstyle-parse@1.0.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows-sys@0.61.2"
+      ],
+      "ref": "pkg:cargo/anstyle-query@1.1.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/once_cell_polyfill@1.70.2",
+        "pkg:cargo/windows-sys@0.61.2"
+      ],
+      "ref": "pkg:cargo/anstyle-wincon@3.0.11"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/anstyle@1.0.14"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/anyhow@1.0.103"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/funty@2.0.0",
+        "pkg:cargo/radium@0.7.0",
+        "pkg:cargo/tap@1.0.1",
+        "pkg:cargo/wyz@0.5.1"
+      ],
+      "ref": "pkg:cargo/bitvec@1.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/generic-array@0.14.7"
+      ],
+      "ref": "pkg:cargo/block-buffer@0.10.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/bytes@1.11.1",
+        "pkg:cargo/cfg_aliases@0.2.1"
+      ],
+      "ref": "pkg:cargo/borsh@1.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/serde@1.0.228"
+      ],
+      "ref": "pkg:cargo/bstr@1.12.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/bytes@1.11.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/camino@1.2.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anyhow@1.0.103",
+        "pkg:cargo/bitvec@1.0.1",
+        "pkg:cargo/camino@1.2.2",
+        "pkg:cargo/cfg-expr@0.20.7",
+        "pkg:cargo/clap@4.6.1",
+        "pkg:cargo/codespan-reporting@0.13.1",
+        "pkg:cargo/codespan@0.13.1",
+        "pkg:cargo/crossbeam@0.8.4",
+        "pkg:cargo/fern@0.7.1",
+        "pkg:cargo/globset@0.4.18",
+        "pkg:cargo/goblin@0.10.5",
+        "pkg:cargo/jiff@0.2.24",
+        "pkg:cargo/krates@0.21.2",
+        "pkg:cargo/log@0.4.29",
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/memmap2@0.9.11",
+        "pkg:cargo/nu-ansi-term@0.50.3",
+        "pkg:cargo/parking_lot@0.12.5",
+        "pkg:cargo/rayon@1.12.0",
+        "pkg:cargo/regex@1.12.3",
+        "pkg:cargo/ring@0.17.14",
+        "pkg:cargo/semver@1.0.28",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/spdx@0.13.4",
+        "pkg:cargo/strum@0.28.0",
+        "pkg:cargo/tame-index@0.26.3",
+        "pkg:cargo/toml-span@0.7.1",
+        "pkg:cargo/twox-hash@2.1.2",
+        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/walkdir@2.5.0"
+      ],
+      "ref": "pkg:cargo/cargo-deny@0.20.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/find-msvc-tools@0.1.9",
+        "pkg:cargo/jobserver@0.1.34",
+        "pkg:cargo/shlex@1.3.0"
+      ],
+      "ref": "pkg:cargo/cc@1.2.62"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/target-lexicon@0.13.3"
+      ],
+      "ref": "pkg:cargo/cfg-expr@0.20.7"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/cfg-if@1.0.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/cfg_aliases@0.2.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/clap_builder@4.6.0"
+      ],
+      "ref": "pkg:cargo/clap@4.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstream@1.0.0",
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/clap_lex@1.1.0",
+        "pkg:cargo/strsim@0.11.1"
+      ],
+      "ref": "pkg:cargo/clap_builder@4.6.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/clap_lex@1.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/termcolor@1.4.1",
+        "pkg:cargo/unicode-width@0.2.2"
+      ],
+      "ref": "pkg:cargo/codespan-reporting@0.13.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/codespan-reporting@0.13.1",
+        "pkg:cargo/serde@1.0.228"
+      ],
+      "ref": "pkg:cargo/codespan@0.13.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/colorchoice@1.0.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/cpufeatures@0.2.17"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/crossbeam-utils@0.8.21"
+      ],
+      "ref": "pkg:cargo/crossbeam-channel@0.5.15"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/crossbeam-epoch@0.9.20",
+        "pkg:cargo/crossbeam-utils@0.8.21"
+      ],
+      "ref": "pkg:cargo/crossbeam-deque@0.8.6"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/crossbeam-utils@0.8.21"
+      ],
+      "ref": "pkg:cargo/crossbeam-epoch@0.9.20"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/crossbeam-utils@0.8.21"
+      ],
+      "ref": "pkg:cargo/crossbeam-queue@0.3.12"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/crossbeam-utils@0.8.21"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/crossbeam-channel@0.5.15",
+        "pkg:cargo/crossbeam-deque@0.8.6",
+        "pkg:cargo/crossbeam-epoch@0.9.20",
+        "pkg:cargo/crossbeam-queue@0.3.12",
+        "pkg:cargo/crossbeam-utils@0.8.21"
+      ],
+      "ref": "pkg:cargo/crossbeam@0.8.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/generic-array@0.14.7",
+        "pkg:cargo/typenum@1.20.0"
+      ],
+      "ref": "pkg:cargo/crypto-common@0.1.7"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/block-buffer@0.10.4",
+        "pkg:cargo/crypto-common@0.1.7"
+      ],
+      "ref": "pkg:cargo/digest@0.10.7"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/displaydoc@0.2.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/either@1.16.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/equivalent@1.0.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.29"
+      ],
+      "ref": "pkg:cargo/fern@0.7.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/find-msvc-tools@0.1.9"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/fixedbitset@0.5.7"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/foldhash@0.1.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/percent-encoding@2.3.2"
+      ],
+      "ref": "pkg:cargo/form_urlencoded@1.2.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/funty@2.0.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/typenum@1.20.0",
+        "pkg:cargo/version_check@0.9.5"
+      ],
+      "ref": "pkg:cargo/generic-array@0.14.7"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4"
+      ],
+      "ref": "pkg:cargo/getrandom@0.2.17"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4"
+      ],
+      "ref": "pkg:cargo/getrandom@0.3.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/aho-corasick@1.1.4",
+        "pkg:cargo/bstr@1.12.1",
+        "pkg:cargo/log@0.4.29",
+        "pkg:cargo/regex-automata@0.4.14",
+        "pkg:cargo/regex-syntax@0.8.10"
+      ],
+      "ref": "pkg:cargo/globset@0.4.18"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.29",
+        "pkg:cargo/plain@0.2.3",
+        "pkg:cargo/scroll@0.13.0"
+      ],
+      "ref": "pkg:cargo/goblin@0.10.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/allocator-api2@0.2.21",
+        "pkg:cargo/equivalent@1.0.2",
+        "pkg:cargo/foldhash@0.1.5"
+      ],
+      "ref": "pkg:cargo/hashbrown@0.15.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/hashbrown@0.17.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/heck@0.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/bytes@1.11.1",
+        "pkg:cargo/itoa@1.0.18"
+      ],
+      "ref": "pkg:cargo/http@1.4.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/potential_utf@0.1.5",
+        "pkg:cargo/utf8_iter@1.0.4",
+        "pkg:cargo/yoke@0.8.2",
+        "pkg:cargo/zerofrom@0.1.8",
+        "pkg:cargo/zerovec@0.11.6"
+      ],
+      "ref": "pkg:cargo/icu_collections@2.2.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/litemap@0.8.2",
+        "pkg:cargo/tinystr@0.8.3",
+        "pkg:cargo/writeable@0.6.3",
+        "pkg:cargo/zerovec@0.11.6"
+      ],
+      "ref": "pkg:cargo/icu_locale_core@2.2.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/icu_collections@2.2.0",
+        "pkg:cargo/icu_normalizer_data@2.2.0",
+        "pkg:cargo/icu_properties@2.2.0",
+        "pkg:cargo/icu_provider@2.2.0",
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/zerovec@0.11.6"
+      ],
+      "ref": "pkg:cargo/icu_normalizer@2.2.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/icu_normalizer_data@2.2.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/icu_collections@2.2.0",
+        "pkg:cargo/icu_locale_core@2.2.0",
+        "pkg:cargo/icu_properties_data@2.2.0",
+        "pkg:cargo/icu_provider@2.2.0",
+        "pkg:cargo/zerotrie@0.2.4",
+        "pkg:cargo/zerovec@0.11.6"
+      ],
+      "ref": "pkg:cargo/icu_properties@2.2.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/icu_properties_data@2.2.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/icu_locale_core@2.2.0",
+        "pkg:cargo/writeable@0.6.3",
+        "pkg:cargo/yoke@0.8.2",
+        "pkg:cargo/zerofrom@0.1.8",
+        "pkg:cargo/zerotrie@0.2.4",
+        "pkg:cargo/zerovec@0.11.6"
+      ],
+      "ref": "pkg:cargo/icu_provider@2.2.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/idna_adapter@1.2.2",
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/utf8_iter@1.0.4"
+      ],
+      "ref": "pkg:cargo/idna@1.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/icu_normalizer@2.2.0",
+        "pkg:cargo/icu_properties@2.2.0"
+      ],
+      "ref": "pkg:cargo/idna_adapter@1.2.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/equivalent@1.0.2",
+        "pkg:cargo/hashbrown@0.17.1",
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/indexmap@2.14.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/is_terminal_polyfill@1.70.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/itoa@1.0.18"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.29",
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/jiff@0.2.24"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/getrandom@0.3.4"
+      ],
+      "ref": "pkg:cargo/jobserver@0.1.34"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/camino@1.2.2",
+        "pkg:cargo/cfg-expr@0.20.7",
+        "pkg:cargo/petgraph@0.8.1",
+        "pkg:cargo/semver@1.0.28",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.150"
+      ],
+      "ref": "pkg:cargo/krates@0.21.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/litemap@0.8.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/scopeguard@1.2.0"
+      ],
+      "ref": "pkg:cargo/lock_api@0.4.14"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/log@0.4.29"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/memchr@2.8.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/memmap2@0.9.11"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows-sys@0.61.2"
+      ],
+      "ref": "pkg:cargo/nu-ansi-term@0.50.3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/once_cell_polyfill@1.70.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/lock_api@0.4.14",
+        "pkg:cargo/parking_lot_core@0.9.12"
+      ],
+      "ref": "pkg:cargo/parking_lot@0.12.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/windows-link@0.2.1"
+      ],
+      "ref": "pkg:cargo/parking_lot_core@0.9.12"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/percent-encoding@2.3.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/fixedbitset@0.5.7",
+        "pkg:cargo/hashbrown@0.15.5",
+        "pkg:cargo/indexmap@2.14.0"
+      ],
+      "ref": "pkg:cargo/petgraph@0.8.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/pkg-config@0.3.33"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/plain@0.2.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/zerovec@0.11.6"
+      ],
+      "ref": "pkg:cargo/potential_utf@0.1.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/unicode-ident@1.0.24"
+      ],
+      "ref": "pkg:cargo/proc-macro2@1.0.106"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106"
+      ],
+      "ref": "pkg:cargo/quote@1.0.45"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/radium@0.7.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/crossbeam-deque@0.8.6",
+        "pkg:cargo/crossbeam-utils@0.8.21"
+      ],
+      "ref": "pkg:cargo/rayon-core@1.13.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/either@1.16.0",
+        "pkg:cargo/rayon-core@1.13.0"
+      ],
+      "ref": "pkg:cargo/rayon@1.12.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/aho-corasick@1.1.4",
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/regex-syntax@0.8.10"
+      ],
+      "ref": "pkg:cargo/regex-automata@0.4.14"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/regex-syntax@0.8.10"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/aho-corasick@1.1.4",
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/regex-automata@0.4.14",
+        "pkg:cargo/regex-syntax@0.8.10"
+      ],
+      "ref": "pkg:cargo/regex@1.12.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cc@1.2.62",
+        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/getrandom@0.2.17",
+        "pkg:cargo/untrusted@0.9.0"
+      ],
+      "ref": "pkg:cargo/ring@0.17.14"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/rustc-stable-hash@0.1.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/winapi-util@0.1.11"
+      ],
+      "ref": "pkg:cargo/same-file@1.0.6"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/scopeguard@1.2.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/scroll_derive@0.13.1"
+      ],
+      "ref": "pkg:cargo/scroll@0.13.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/scroll_derive@0.13.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/semver@1.0.28"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde_derive@1.0.228"
+      ],
+      "ref": "pkg:cargo/serde@1.0.228"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/serde_core@1.0.228"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/serde_derive@1.0.228"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/itoa@1.0.18",
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/zmij@1.0.21"
+      ],
+      "ref": "pkg:cargo/serde_json@1.0.150"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/cpufeatures@0.2.17",
+        "pkg:cargo/digest@0.10.7"
+      ],
+      "ref": "pkg:cargo/sha2@0.10.9"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/shlex@1.3.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/smallvec@1.15.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/borsh@1.6.1",
+        "pkg:cargo/serde@1.0.228"
+      ],
+      "ref": "pkg:cargo/smol_str@0.3.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/rayon@1.12.0",
+        "pkg:cargo/regex@1.12.3",
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/unicode-normalization@0.1.25",
+        "pkg:cargo/zstd@0.13.4"
+      ],
+      "ref": "pkg:cargo/spdx@0.13.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/stable_deref_trait@1.2.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/strsim@0.11.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/strum_macros@0.28.0"
+      ],
+      "ref": "pkg:cargo/strum@0.28.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/heck@0.5.0",
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/strum_macros@0.28.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/unicode-ident@1.0.24"
+      ],
+      "ref": "pkg:cargo/syn@2.0.117"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/synstructure@0.13.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/bytes@1.11.1",
+        "pkg:cargo/camino@1.2.2",
+        "pkg:cargo/http@1.4.0",
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/rustc-stable-hash@0.1.2",
+        "pkg:cargo/semver@1.0.28",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.150",
+        "pkg:cargo/sha2@0.10.9",
+        "pkg:cargo/smol_str@0.3.2",
+        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/toml-span@0.7.1",
+        "pkg:cargo/twox-hash@2.1.2"
+      ],
+      "ref": "pkg:cargo/tame-index@0.26.3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/tap@1.0.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/target-lexicon@0.13.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/winapi-util@0.1.11"
+      ],
+      "ref": "pkg:cargo/termcolor@1.4.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/thiserror-impl@2.0.18"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/thiserror-impl@2.0.18"
+      ],
+      "ref": "pkg:cargo/thiserror@2.0.18"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/zerovec@0.11.6"
+      ],
+      "ref": "pkg:cargo/tinystr@0.8.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/tinyvec_macros@0.1.1"
+      ],
+      "ref": "pkg:cargo/tinyvec@1.11.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/tinyvec_macros@0.1.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/codespan-reporting@0.13.1",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/smallvec@1.15.1"
+      ],
+      "ref": "pkg:cargo/toml-span@0.7.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/twox-hash@2.1.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/typenum@1.20.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/unicode-ident@1.0.24"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/tinyvec@1.11.0"
+      ],
+      "ref": "pkg:cargo/unicode-normalization@0.1.25"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/unicode-width@0.2.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/untrusted@0.9.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/form_urlencoded@1.2.2",
+        "pkg:cargo/idna@1.1.0",
+        "pkg:cargo/percent-encoding@2.3.2",
+        "pkg:cargo/serde@1.0.228"
+      ],
+      "ref": "pkg:cargo/url@2.5.8"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/utf8_iter@1.0.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/utf8parse@0.2.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/version_check@0.9.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/same-file@1.0.6",
+        "pkg:cargo/winapi-util@0.1.11"
+      ],
+      "ref": "pkg:cargo/walkdir@2.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows-sys@0.52.0"
+      ],
+      "ref": "pkg:cargo/winapi-util@0.1.11"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/windows-link@0.2.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows-targets@0.52.6"
+      ],
+      "ref": "pkg:cargo/windows-sys@0.52.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows-link@0.2.1"
+      ],
+      "ref": "pkg:cargo/windows-sys@0.61.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows_x86_64_msvc@0.52.6"
+      ],
+      "ref": "pkg:cargo/windows-targets@0.52.6"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/windows_x86_64_msvc@0.52.6"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/writeable@0.6.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/tap@1.0.1"
+      ],
+      "ref": "pkg:cargo/wyz@0.5.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117",
+        "pkg:cargo/synstructure@0.13.2"
+      ],
+      "ref": "pkg:cargo/yoke-derive@0.8.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/stable_deref_trait@1.2.1",
+        "pkg:cargo/yoke-derive@0.8.2",
+        "pkg:cargo/zerofrom@0.1.8"
+      ],
+      "ref": "pkg:cargo/yoke@0.8.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117",
+        "pkg:cargo/synstructure@0.13.2"
+      ],
+      "ref": "pkg:cargo/zerofrom-derive@0.1.7"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/zerofrom-derive@0.1.7"
+      ],
+      "ref": "pkg:cargo/zerofrom@0.1.8"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/yoke@0.8.2",
+        "pkg:cargo/zerofrom@0.1.8"
+      ],
+      "ref": "pkg:cargo/zerotrie@0.2.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/zerovec-derive@0.11.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/yoke@0.8.2",
+        "pkg:cargo/zerofrom@0.1.8",
+        "pkg:cargo/zerovec-derive@0.11.3"
+      ],
+      "ref": "pkg:cargo/zerovec@0.11.6"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/zmij@1.0.21"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/zstd-sys@2.1.2+zstd.1.5.7"
+      ],
+      "ref": "pkg:cargo/zstd-safe@7.4.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cc@1.2.62",
+        "pkg:cargo/pkg-config@0.3.33"
+      ],
+      "ref": "pkg:cargo/zstd-sys@2.1.2+zstd.1.5.7"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/zstd-safe@7.4.0"
+      ],
+      "ref": "pkg:cargo/zstd@0.13.4"
+    }
+  ],
   "metadata": {
     "component": {
       "hashes": [
@@ -6884,6 +7865,9 @@
     "lifecycles": [
       {
         "phase": "pre-build"
+      },
+      {
+        "phase": "post-build"
       }
     ],
     "timestamp": "2026-11-11T00:00:00Z",
@@ -6933,6 +7917,6 @@
   },
   "serialNumber": "urn:uuid:613c1f63-373a-4a56-a208-2689a28e66fd",
   "specVersion": "1.6",
-  "version": 1,
+  "version": 2,
   "vulnerabilities": []
 }

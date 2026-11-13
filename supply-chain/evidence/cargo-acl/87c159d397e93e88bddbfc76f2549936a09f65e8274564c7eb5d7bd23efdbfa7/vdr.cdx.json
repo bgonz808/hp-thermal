@@ -7205,6 +7205,449 @@
       "version": "1.0.21"
     }
   ],
+  "dependencies": [
+    {
+      "dependsOn": [
+        "pkg:cargo/gimli@0.33.0"
+      ],
+      "ref": "pkg:cargo/addr2line@0.26.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/adler2@2.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstyle-parse@1.0.0",
+        "pkg:cargo/anstyle-query@1.1.5",
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/colorchoice@1.0.5",
+        "pkg:cargo/is_terminal_polyfill@1.70.2",
+        "pkg:cargo/utf8parse@0.2.2"
+      ],
+      "ref": "pkg:cargo/anstream@1.0.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/utf8parse@0.2.2"
+      ],
+      "ref": "pkg:cargo/anstyle-parse@1.0.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/anstyle-query@1.1.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/anstyle@1.0.14"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/anyhow@1.0.104"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/ar@0.9.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/bitflags@2.11.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/camino@1.2.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/addr2line@0.26.1",
+        "pkg:cargo/anyhow@1.0.104",
+        "pkg:cargo/ar@0.9.0",
+        "pkg:cargo/cargo_metadata@0.23.1",
+        "pkg:cargo/clap@4.6.1",
+        "pkg:cargo/colored@3.1.1",
+        "pkg:cargo/gimli@0.33.0",
+        "pkg:cargo/indoc@2.0.7",
+        "pkg:cargo/is-terminal@0.4.17",
+        "pkg:cargo/log@0.4.29",
+        "pkg:cargo/object@0.40.0",
+        "pkg:cargo/once_cell@1.21.4",
+        "pkg:cargo/ra-ap-rustc_lexer@0.163.0",
+        "pkg:cargo/rustc-demangle@0.1.27",
+        "pkg:cargo/rustc-hash@2.1.2",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/tempfile@3.27.0",
+        "pkg:cargo/toml@1.1.2+spec-1.1.0",
+        "pkg:cargo/toml_edit@0.25.11+spec-1.1.0"
+      ],
+      "ref": "pkg:cargo/cargo-acl@0.9.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/cargo-platform@0.3.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/camino@1.2.2",
+        "pkg:cargo/cargo-platform@0.3.3",
+        "pkg:cargo/semver@1.0.28",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.149",
+        "pkg:cargo/thiserror@2.0.18"
+      ],
+      "ref": "pkg:cargo/cargo_metadata@0.23.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/cfg-if@1.0.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/clap_builder@4.6.0",
+        "pkg:cargo/clap_derive@4.6.1"
+      ],
+      "ref": "pkg:cargo/clap@4.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstream@1.0.0",
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/clap_lex@1.1.0",
+        "pkg:cargo/strsim@0.11.1"
+      ],
+      "ref": "pkg:cargo/clap_builder@4.6.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/heck@0.5.0",
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/clap_derive@4.6.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/clap_lex@1.1.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/colorchoice@1.0.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/colored@3.1.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4"
+      ],
+      "ref": "pkg:cargo/crc32fast@1.5.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/equivalent@1.0.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/libc@0.2.186"
+      ],
+      "ref": "pkg:cargo/errno@0.3.14"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/fastrand@2.4.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/crc32fast@1.5.0",
+        "pkg:cargo/miniz_oxide@0.8.9"
+      ],
+      "ref": "pkg:cargo/flate2@1.1.9"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4",
+        "pkg:cargo/libc@0.2.186"
+      ],
+      "ref": "pkg:cargo/getrandom@0.4.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/stable_deref_trait@1.2.1"
+      ],
+      "ref": "pkg:cargo/gimli@0.33.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/hashbrown@0.17.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/heck@0.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/equivalent@1.0.2",
+        "pkg:cargo/hashbrown@0.17.0",
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/indexmap@2.14.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/rustversion@1.0.22"
+      ],
+      "ref": "pkg:cargo/indoc@2.0.7"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/libc@0.2.186"
+      ],
+      "ref": "pkg:cargo/is-terminal@0.4.17"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/is_terminal_polyfill@1.70.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/itoa@1.0.18"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/libc@0.2.186"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/linux-raw-sys@0.12.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/log@0.4.29"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/memchr@2.8.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/adler2@2.0.1",
+        "pkg:cargo/simd-adler32@0.3.9"
+      ],
+      "ref": "pkg:cargo/miniz_oxide@0.8.9"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/flate2@1.1.9",
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/ruzstd@0.9.1"
+      ],
+      "ref": "pkg:cargo/object@0.40.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/once_cell@1.21.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/unicode-ident@1.0.24"
+      ],
+      "ref": "pkg:cargo/proc-macro2@1.0.106"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106"
+      ],
+      "ref": "pkg:cargo/quote@1.0.45"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/unicode-ident@1.0.24",
+        "pkg:cargo/unicode-properties@0.1.4"
+      ],
+      "ref": "pkg:cargo/ra-ap-rustc_lexer@0.163.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/rustc-demangle@0.1.27"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/rustc-hash@2.1.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/bitflags@2.11.1",
+        "pkg:cargo/errno@0.3.14",
+        "pkg:cargo/libc@0.2.186",
+        "pkg:cargo/linux-raw-sys@0.12.1"
+      ],
+      "ref": "pkg:cargo/rustix@1.1.6"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/rustversion@1.0.22"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/twox-hash@2.1.2"
+      ],
+      "ref": "pkg:cargo/ruzstd@0.9.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/semver@1.0.28"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde_derive@1.0.228"
+      ],
+      "ref": "pkg:cargo/serde@1.0.228"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/serde_core@1.0.228"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/serde_derive@1.0.228"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/itoa@1.0.18",
+        "pkg:cargo/memchr@2.8.0",
+        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/zmij@1.0.21"
+      ],
+      "ref": "pkg:cargo/serde_json@1.0.149"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/serde_spanned@1.1.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/simd-adler32@0.3.9"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/stable_deref_trait@1.2.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/strsim@0.11.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/unicode-ident@1.0.24"
+      ],
+      "ref": "pkg:cargo/syn@2.0.117"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/fastrand@2.4.1",
+        "pkg:cargo/getrandom@0.4.2",
+        "pkg:cargo/once_cell@1.21.4",
+        "pkg:cargo/rustix@1.1.6"
+      ],
+      "ref": "pkg:cargo/tempfile@3.27.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.106",
+        "pkg:cargo/quote@1.0.45",
+        "pkg:cargo/syn@2.0.117"
+      ],
+      "ref": "pkg:cargo/thiserror-impl@2.0.18"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/thiserror-impl@2.0.18"
+      ],
+      "ref": "pkg:cargo/thiserror@2.0.18"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/indexmap@2.14.0",
+        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde_spanned@1.1.1",
+        "pkg:cargo/toml_datetime@1.1.1+spec-1.1.0",
+        "pkg:cargo/toml_parser@1.1.2+spec-1.1.0",
+        "pkg:cargo/toml_writer@1.1.1+spec-1.1.0",
+        "pkg:cargo/winnow@1.0.2"
+      ],
+      "ref": "pkg:cargo/toml@1.1.2+spec-1.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/toml_datetime@1.1.1+spec-1.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/indexmap@2.14.0",
+        "pkg:cargo/toml_datetime@1.1.1+spec-1.1.0",
+        "pkg:cargo/toml_parser@1.1.2+spec-1.1.0",
+        "pkg:cargo/toml_writer@1.1.1+spec-1.1.0",
+        "pkg:cargo/winnow@1.0.2"
+      ],
+      "ref": "pkg:cargo/toml_edit@0.25.11+spec-1.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/winnow@1.0.2"
+      ],
+      "ref": "pkg:cargo/toml_parser@1.1.2+spec-1.1.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/toml_writer@1.1.1+spec-1.1.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/twox-hash@2.1.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/unicode-ident@1.0.24"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/unicode-properties@0.1.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/utf8parse@0.2.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/memchr@2.8.0"
+      ],
+      "ref": "pkg:cargo/winnow@1.0.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/zmij@1.0.21"
+    }
+  ],
   "metadata": {
     "component": {
       "hashes": [
@@ -7219,6 +7662,9 @@
     "lifecycles": [
       {
         "phase": "pre-build"
+      },
+      {
+        "phase": "post-build"
       }
     ],
     "timestamp": "2026-11-11T00:00:00Z",
@@ -7268,7 +7714,7 @@
   },
   "serialNumber": "urn:uuid:95ac68f4-c3bd-455f-8709-4507732c062c",
   "specVersion": "1.6",
-  "version": 1,
+  "version": 2,
   "vulnerabilities": [
     {
       "advisories": [
@@ -7284,14 +7730,19 @@
             {
               "status": "affected",
               "version": "0.16.4"
+            },
+            {
+              "range": "vers:cargo/>=0.18.2",
+              "status": "unaffected"
             }
           ]
         }
       ],
       "analysis": {
         "detail": "Not in the shipped binary. MEASURED 2026-11-13: absent from the cargo-auditable dependency list (.dep-v0 section, runtime and build kinds, 73 packages) embedded in cargo-acl (linux-x86_64) sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7.",
-        "firstIssued": "2026-11-13",
+        "firstIssued": "2026-08-30T00:00:00Z",
         "justification": "code_not_present",
+        "lastUpdated": "2026-11-13T00:00:00Z",
         "state": "not_affected"
       },
       "bom-ref": "vuln:RUSTSEC-2026-0253@lru@0.16.4",

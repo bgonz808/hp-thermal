@@ -3088,6 +3088,216 @@
       "version": "0.8.28"
     }
   ],
+  "dependencies": [
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/adler2@2.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/semver@1.0.27",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.145",
+        "pkg:cargo/topological-sort@0.2.2"
+      ],
+      "ref": "pkg:cargo/auditable-serde@0.9.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/byteorder@0.5.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/camino@1.2.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/auditable-serde@0.9.0",
+        "pkg:cargo/cargo_metadata@0.23.0",
+        "pkg:cargo/miniz_oxide@0.9.1",
+        "pkg:cargo/object@0.37.3",
+        "pkg:cargo/pico-args@0.5.0",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.145",
+        "pkg:cargo/wasm-gen@0.1.4"
+      ],
+      "ref": "pkg:cargo/cargo-auditable@0.7.7"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde@1.0.228"
+      ],
+      "ref": "pkg:cargo/cargo-platform@0.3.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/camino@1.2.1",
+        "pkg:cargo/cargo-platform@0.3.1",
+        "pkg:cargo/semver@1.0.27",
+        "pkg:cargo/serde@1.0.228",
+        "pkg:cargo/serde_json@1.0.145",
+        "pkg:cargo/thiserror@2.0.17"
+      ],
+      "ref": "pkg:cargo/cargo_metadata@0.23.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/cfg-if@1.0.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.4"
+      ],
+      "ref": "pkg:cargo/crc32fast@1.5.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/equivalent@1.0.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/foldhash@0.1.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/foldhash@0.1.5"
+      ],
+      "ref": "pkg:cargo/hashbrown@0.15.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/hashbrown@0.16.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/equivalent@1.0.2",
+        "pkg:cargo/hashbrown@0.16.0"
+      ],
+      "ref": "pkg:cargo/indexmap@2.12.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/itoa@1.0.15"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/leb128@0.2.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/memchr@2.7.6"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/adler2@2.0.1",
+        "pkg:cargo/serde@1.0.228"
+      ],
+      "ref": "pkg:cargo/miniz_oxide@0.9.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/crc32fast@1.5.0",
+        "pkg:cargo/hashbrown@0.15.5",
+        "pkg:cargo/indexmap@2.12.0",
+        "pkg:cargo/memchr@2.7.6"
+      ],
+      "ref": "pkg:cargo/object@0.37.3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/pico-args@0.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/unicode-ident@1.0.22"
+      ],
+      "ref": "pkg:cargo/proc-macro2@1.0.103"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103"
+      ],
+      "ref": "pkg:cargo/quote@1.0.42"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/ryu@1.0.20"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/semver@1.0.27"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.228",
+        "pkg:cargo/serde_derive@1.0.228"
+      ],
+      "ref": "pkg:cargo/serde@1.0.228"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/serde_core@1.0.228"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.42",
+        "pkg:cargo/syn@2.0.109"
+      ],
+      "ref": "pkg:cargo/serde_derive@1.0.228"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/indexmap@2.12.0",
+        "pkg:cargo/itoa@1.0.15",
+        "pkg:cargo/memchr@2.7.6",
+        "pkg:cargo/ryu@1.0.20",
+        "pkg:cargo/serde_core@1.0.228"
+      ],
+      "ref": "pkg:cargo/serde_json@1.0.145"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.42",
+        "pkg:cargo/unicode-ident@1.0.22"
+      ],
+      "ref": "pkg:cargo/syn@2.0.109"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.42",
+        "pkg:cargo/syn@2.0.109"
+      ],
+      "ref": "pkg:cargo/thiserror-impl@2.0.17"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/thiserror-impl@2.0.17"
+      ],
+      "ref": "pkg:cargo/thiserror@2.0.17"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/topological-sort@0.2.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/unicode-ident@1.0.22"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/byteorder@0.5.3",
+        "pkg:cargo/leb128@0.2.5"
+      ],
+      "ref": "pkg:cargo/wasm-gen@0.1.4"
+    }
+  ],
   "metadata": {
     "component": {
       "hashes": [
@@ -3102,6 +3312,9 @@
     "lifecycles": [
       {
         "phase": "pre-build"
+      },
+      {
+        "phase": "post-build"
       }
     ],
     "timestamp": "2026-11-12T00:00:00Z",
@@ -3151,6 +3364,6 @@
   },
   "serialNumber": "urn:uuid:94a40e70-eeec-4349-91aa-38ed2801eee7",
   "specVersion": "1.6",
-  "version": 1,
+  "version": 2,
   "vulnerabilities": []
 }

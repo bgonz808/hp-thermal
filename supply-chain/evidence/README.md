@@ -44,6 +44,8 @@ parseable. The schema borrows established vocabularies rather than inventing one
   "vulnerabilities"; the vuln subset is cleanly exportable to conformant OpenVEX.
   Caps acks therefore carry `status: reviewed` (an inventory is signed, not a vulnerability status);
   mal acks keep `not_affected` for false positives, which is a real OpenVEX meaning.
+  A vuln ack carries the ruling, OpenVEX status and the native `cyclonedx` object, with a
+  one-line `status_notes`; measured facts live in the product's VDR fields, not in the notes.
   **An ack names what it signs (#380).** A caps ack carries `evidence_sha256`, the sha256 of the
   exact `caps.toml` bytes reviewed; it covers that content and nothing else, so a rewritten
   inventory under a blessed digest is RAISE-uncovered until signed again (the gate prints the
@@ -102,7 +104,11 @@ release SBOM for the app), every RustSec finding from the custody-verified raw p
 `vulnerabilities[]` entry (RustSec source, alias references, CVSS or `severity: info` ratings,
 `affects` by component bom-ref), the instruments in `metadata.tools.components` with hashes.
 `analysis` is filled only from an ack's native `cyclonedx` ruling (state, justification,
-response), never mapped from OpenVEX fields; acks without one are reported as burn-down. The
+response), never mapped from OpenVEX fields; acks without one are reported as burn-down.
+`firstIssued` / `lastUpdated` are the earliest and latest ack for the instance. Each finding's
+`affects[].versions` lists the measured version as `affected` and every patched or unaffected
+requirement from the advisory as an `unaffected` Package URL `vers` range. Facts go in fields,
+not prose: `analysis.detail` is a one-line summary, never a second copy of what the fields say. The
 document is deterministic for the same inputs, so `vdr check` can regenerate and compare.
 For a tool, each component's `scope` comes from the pinned binary itself: the emitter downloads
 the content-addressed asset, checks it is the digest, reads the cargo-auditable `.dep-v0` list
@@ -110,6 +116,13 @@ the content-addressed asset, checks it is the digest, reads the cargo-auditable 
 `excluded` when only the lock does (optional, feature-gated, dev or proc-macro-only entries).
 `evidence.identity` states the method per component: manifest analysis always, binary analysis
 when present. "Code not present" is therefore measured in the report, not asserted in an ack.
+Tool reports also carry the compiled graph from the same section as `dependencies[]`, and a
+package in the binary that the frozen lock does not list fails the emitter; both phases appear
+in `metadata.lifecycles` (pre-build lock, post-build binary). The app's report links its release
+SBOM by BOM-Link (`externalReferences` type `bom`, `urn:cdx:<serial>/<version>`) instead of
+copying its graph. `serialNumber` is fixed per subject and `version` is the revision: identical
+content keeps the committed version, changed content takes the next, so a published version
+never changes meaning.
 A `vdr.cdx.json` is committed beside the evidence of every live-frontier digest (each
 `TOOLS.lock` pin and the latest release); the supply-chain workflow regenerates each one and
 fails on any difference, admitting the app's release SBOM only after its provenance verifies.

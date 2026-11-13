@@ -8405,6 +8405,871 @@
       "version": "0.10.3"
     }
   ],
+  "dependencies": [
+    {
+      "dependsOn": [
+        "pkg:cargo/memchr@2.6.4"
+      ],
+      "ref": "pkg:cargo/aho-corasick@1.1.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstyle-parse@0.2.2",
+        "pkg:cargo/anstyle-query@1.0.0",
+        "pkg:cargo/anstyle-wincon@3.0.10",
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/colorchoice@1.0.0",
+        "pkg:cargo/is_terminal_polyfill@1.70.1",
+        "pkg:cargo/utf8parse@0.2.1"
+      ],
+      "ref": "pkg:cargo/anstream@0.6.20"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/utf8parse@0.2.1"
+      ],
+      "ref": "pkg:cargo/anstyle-parse@0.2.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows-sys@0.48.0"
+      ],
+      "ref": "pkg:cargo/anstyle-query@1.0.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/once_cell_polyfill@1.70.1",
+        "pkg:cargo/windows-sys@0.60.2"
+      ],
+      "ref": "pkg:cargo/anstyle-wincon@3.0.10"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/anstyle@1.0.14"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/anyhow@1.0.104"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/autocfg@1.1.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/base64@0.22.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/borrow-or-share@0.2.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.229"
+      ],
+      "ref": "pkg:cargo/camino@1.2.6"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anyhow@1.0.104",
+        "pkg:cargo/cargo-lock@11.0.1",
+        "pkg:cargo/cargo_metadata@0.23.1",
+        "pkg:cargo/clap@4.4.11",
+        "pkg:cargo/cyclonedx-bom@0.9.0",
+        "pkg:cargo/env_logger@0.11.2",
+        "pkg:cargo/log@0.4.20",
+        "pkg:cargo/once_cell@1.21.4",
+        "pkg:cargo/pathdiff@0.2.1",
+        "pkg:cargo/percent-encoding@2.3.1",
+        "pkg:cargo/purl@0.1.3",
+        "pkg:cargo/regex@1.10.2",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/time@0.3.55",
+        "pkg:cargo/validator@0.20.0"
+      ],
+      "ref": "pkg:cargo/cargo-cyclonedx@0.5.10"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/semver@1.0.28",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/toml@0.9.12+spec-1.1.0",
+        "pkg:cargo/url@2.5.4"
+      ],
+      "ref": "pkg:cargo/cargo-lock@11.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde@1.0.229"
+      ],
+      "ref": "pkg:cargo/cargo-platform@0.3.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/camino@1.2.6",
+        "pkg:cargo/cargo-platform@0.3.1",
+        "pkg:cargo/semver@1.0.28",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.143",
+        "pkg:cargo/thiserror@2.0.18"
+      ],
+      "ref": "pkg:cargo/cargo_metadata@0.23.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/cfg-if@1.0.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/clap_builder@4.4.11",
+        "pkg:cargo/clap_derive@4.4.7"
+      ],
+      "ref": "pkg:cargo/clap@4.4.11"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstream@0.6.20",
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/clap_lex@0.6.0",
+        "pkg:cargo/strsim@0.10.0"
+      ],
+      "ref": "pkg:cargo/clap_builder@4.4.11"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/heck@0.4.1",
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/clap_derive@4.4.7"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/clap_lex@0.6.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/colorchoice@1.0.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/cyclonedx-bom-macros@0.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/base64@0.22.1",
+        "pkg:cargo/cyclonedx-bom-macros@0.1.0",
+        "pkg:cargo/fluent-uri@0.4.1",
+        "pkg:cargo/indexmap@2.13.0",
+        "pkg:cargo/once_cell@1.21.4",
+        "pkg:cargo/ordered-float@5.1.0",
+        "pkg:cargo/purl@0.1.3",
+        "pkg:cargo/regex@1.10.2",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_json@1.0.143",
+        "pkg:cargo/spdx@0.13.2",
+        "pkg:cargo/strum@0.28.0",
+        "pkg:cargo/thiserror@2.0.18",
+        "pkg:cargo/time@0.3.55",
+        "pkg:cargo/uuid@1.6.1",
+        "pkg:cargo/xml-rs@0.8.29"
+      ],
+      "ref": "pkg:cargo/cyclonedx-bom@0.9.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/deranged@0.5.9"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/displaydoc@0.2.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/log@0.4.20",
+        "pkg:cargo/regex@1.10.2"
+      ],
+      "ref": "pkg:cargo/env_filter@0.1.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/anstream@0.6.20",
+        "pkg:cargo/anstyle@1.0.14",
+        "pkg:cargo/env_filter@0.1.4",
+        "pkg:cargo/humantime@2.1.0",
+        "pkg:cargo/log@0.4.20"
+      ],
+      "ref": "pkg:cargo/env_logger@0.11.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/equivalent@1.0.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/borrow-or-share@0.2.4",
+        "pkg:cargo/ref-cast@1.0.25",
+        "pkg:cargo/serde@1.0.229"
+      ],
+      "ref": "pkg:cargo/fluent-uri@0.4.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/percent-encoding@2.3.1"
+      ],
+      "ref": "pkg:cargo/form_urlencoded@1.2.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/cfg-if@1.0.0"
+      ],
+      "ref": "pkg:cargo/getrandom@0.2.11"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/hashbrown@0.16.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/heck@0.4.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/heck@0.5.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/hex@0.4.3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/humantime@2.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/yoke@0.7.5",
+        "pkg:cargo/zerofrom@0.1.5",
+        "pkg:cargo/zerovec@0.10.4"
+      ],
+      "ref": "pkg:cargo/icu_collections@1.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/litemap@0.7.4",
+        "pkg:cargo/tinystr@0.7.6",
+        "pkg:cargo/writeable@0.5.5",
+        "pkg:cargo/zerovec@0.10.4"
+      ],
+      "ref": "pkg:cargo/icu_locid@1.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/icu_locid@1.5.0",
+        "pkg:cargo/icu_locid_transform_data@1.5.0",
+        "pkg:cargo/icu_provider@1.5.0",
+        "pkg:cargo/tinystr@0.7.6",
+        "pkg:cargo/zerovec@0.10.4"
+      ],
+      "ref": "pkg:cargo/icu_locid_transform@1.5.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/icu_locid_transform_data@1.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/icu_collections@1.5.0",
+        "pkg:cargo/icu_normalizer_data@1.5.0",
+        "pkg:cargo/icu_properties@1.5.1",
+        "pkg:cargo/icu_provider@1.5.0",
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/utf16_iter@1.0.5",
+        "pkg:cargo/utf8_iter@1.0.4",
+        "pkg:cargo/write16@1.0.0",
+        "pkg:cargo/zerovec@0.10.4"
+      ],
+      "ref": "pkg:cargo/icu_normalizer@1.5.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/icu_normalizer_data@1.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/icu_collections@1.5.0",
+        "pkg:cargo/icu_locid_transform@1.5.0",
+        "pkg:cargo/icu_properties_data@1.5.0",
+        "pkg:cargo/icu_provider@1.5.0",
+        "pkg:cargo/tinystr@0.7.6",
+        "pkg:cargo/zerovec@0.10.4"
+      ],
+      "ref": "pkg:cargo/icu_properties@1.5.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/icu_properties_data@1.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/icu_locid@1.5.0",
+        "pkg:cargo/icu_provider_macros@1.5.0",
+        "pkg:cargo/stable_deref_trait@1.2.0",
+        "pkg:cargo/tinystr@0.7.6",
+        "pkg:cargo/writeable@0.5.5",
+        "pkg:cargo/yoke@0.7.5",
+        "pkg:cargo/zerofrom@0.1.5",
+        "pkg:cargo/zerovec@0.10.4"
+      ],
+      "ref": "pkg:cargo/icu_provider@1.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/icu_provider_macros@1.5.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/idna_adapter@1.2.0",
+        "pkg:cargo/smallvec@1.15.1",
+        "pkg:cargo/utf8_iter@1.0.4"
+      ],
+      "ref": "pkg:cargo/idna@1.0.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/icu_normalizer@1.5.0",
+        "pkg:cargo/icu_properties@1.5.1"
+      ],
+      "ref": "pkg:cargo/idna_adapter@1.2.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/equivalent@1.0.1",
+        "pkg:cargo/hashbrown@0.16.1"
+      ],
+      "ref": "pkg:cargo/indexmap@2.13.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/is_terminal_polyfill@1.70.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/itoa@1.0.9"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/litemap@0.7.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/log@0.4.20"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/memchr@2.6.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/num-conv@0.2.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/autocfg@1.1.0"
+      ],
+      "ref": "pkg:cargo/num-traits@0.2.19"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/once_cell@1.21.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/once_cell_polyfill@1.70.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/num-traits@0.2.19"
+      ],
+      "ref": "pkg:cargo/ordered-float@5.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/camino@1.2.6"
+      ],
+      "ref": "pkg:cargo/pathdiff@0.2.1"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/percent-encoding@2.3.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/phf_macros@0.11.2",
+        "pkg:cargo/phf_shared@0.11.2"
+      ],
+      "ref": "pkg:cargo/phf@0.11.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/phf_shared@0.11.2",
+        "pkg:cargo/rand@0.8.7"
+      ],
+      "ref": "pkg:cargo/phf_generator@0.11.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/phf_generator@0.11.2",
+        "pkg:cargo/phf_shared@0.11.2",
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111",
+        "pkg:cargo/unicase@2.7.0"
+      ],
+      "ref": "pkg:cargo/phf_macros@0.11.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/siphasher@0.3.11",
+        "pkg:cargo/unicase@2.7.0"
+      ],
+      "ref": "pkg:cargo/phf_shared@0.11.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/powerfmt@0.2.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/unicode-ident@1.0.12"
+      ],
+      "ref": "pkg:cargo/proc-macro2@1.0.103"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/hex@0.4.3",
+        "pkg:cargo/percent-encoding@2.3.1",
+        "pkg:cargo/phf@0.11.2",
+        "pkg:cargo/thiserror@1.0.69",
+        "pkg:cargo/unicase@2.7.0"
+      ],
+      "ref": "pkg:cargo/purl@0.1.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103"
+      ],
+      "ref": "pkg:cargo/quote@1.0.35"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/rand_core@0.6.4"
+      ],
+      "ref": "pkg:cargo/rand@0.8.7"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/rand_core@0.6.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/ref-cast-impl@1.0.25"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/ref-cast-impl@1.0.25"
+      ],
+      "ref": "pkg:cargo/ref-cast@1.0.25"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/aho-corasick@1.1.2",
+        "pkg:cargo/memchr@2.6.4",
+        "pkg:cargo/regex-syntax@0.8.2"
+      ],
+      "ref": "pkg:cargo/regex-automata@0.4.3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/regex-syntax@0.8.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/aho-corasick@1.1.2",
+        "pkg:cargo/memchr@2.6.4",
+        "pkg:cargo/regex-automata@0.4.3",
+        "pkg:cargo/regex-syntax@0.8.2"
+      ],
+      "ref": "pkg:cargo/regex@1.10.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/ryu@1.0.15"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.229"
+      ],
+      "ref": "pkg:cargo/semver@1.0.28"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.229",
+        "pkg:cargo/serde_derive@1.0.229"
+      ],
+      "ref": "pkg:cargo/serde@1.0.229"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/serde_core@1.0.229"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@3.0.10"
+      ],
+      "ref": "pkg:cargo/serde_derive@1.0.229"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/itoa@1.0.9",
+        "pkg:cargo/memchr@2.6.4",
+        "pkg:cargo/ryu@1.0.15",
+        "pkg:cargo/serde@1.0.229"
+      ],
+      "ref": "pkg:cargo/serde_json@1.0.143"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.229"
+      ],
+      "ref": "pkg:cargo/serde_spanned@1.1.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/siphasher@0.3.11"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/smallvec@1.15.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/smallvec@1.15.1"
+      ],
+      "ref": "pkg:cargo/spdx@0.13.2"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/stable_deref_trait@1.2.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/strsim@0.10.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/strum_macros@0.28.0"
+      ],
+      "ref": "pkg:cargo/strum@0.28.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/heck@0.5.0",
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/strum_macros@0.28.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/unicode-ident@1.0.12"
+      ],
+      "ref": "pkg:cargo/syn@2.0.111"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/unicode-ident@1.0.12"
+      ],
+      "ref": "pkg:cargo/syn@3.0.10"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/synstructure@0.13.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/thiserror-impl@1.0.69"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/thiserror-impl@2.0.18"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/thiserror-impl@1.0.69"
+      ],
+      "ref": "pkg:cargo/thiserror@1.0.69"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/thiserror-impl@2.0.18"
+      ],
+      "ref": "pkg:cargo/thiserror@2.0.18"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/time-core@0.1.9"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/num-conv@0.2.2",
+        "pkg:cargo/time-core@0.1.9"
+      ],
+      "ref": "pkg:cargo/time-macros@0.2.32"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/deranged@0.5.9",
+        "pkg:cargo/num-conv@0.2.2",
+        "pkg:cargo/powerfmt@0.2.0",
+        "pkg:cargo/serde_core@1.0.229",
+        "pkg:cargo/time-core@0.1.9",
+        "pkg:cargo/time-macros@0.2.32"
+      ],
+      "ref": "pkg:cargo/time@0.3.55"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/displaydoc@0.2.5",
+        "pkg:cargo/zerovec@0.10.4"
+      ],
+      "ref": "pkg:cargo/tinystr@0.7.6"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/indexmap@2.13.0",
+        "pkg:cargo/serde_core@1.0.229",
+        "pkg:cargo/serde_spanned@1.1.0",
+        "pkg:cargo/toml_datetime@0.7.5+spec-1.1.0",
+        "pkg:cargo/toml_parser@1.1.0+spec-1.1.0",
+        "pkg:cargo/toml_writer@1.1.0+spec-1.1.0",
+        "pkg:cargo/winnow@0.7.15"
+      ],
+      "ref": "pkg:cargo/toml@0.9.12+spec-1.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde_core@1.0.229"
+      ],
+      "ref": "pkg:cargo/toml_datetime@0.7.5+spec-1.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/winnow@1.0.0"
+      ],
+      "ref": "pkg:cargo/toml_parser@1.1.0+spec-1.1.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/toml_writer@1.1.0+spec-1.1.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/version_check@0.9.4"
+      ],
+      "ref": "pkg:cargo/unicase@2.7.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/unicode-ident@1.0.12"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/form_urlencoded@1.2.1",
+        "pkg:cargo/idna@1.0.3",
+        "pkg:cargo/percent-encoding@2.3.1"
+      ],
+      "ref": "pkg:cargo/url@2.5.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/utf16_iter@1.0.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/utf8_iter@1.0.4"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/utf8parse@0.2.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/getrandom@0.2.11"
+      ],
+      "ref": "pkg:cargo/uuid@1.6.1"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/idna@1.0.3",
+        "pkg:cargo/once_cell@1.21.4",
+        "pkg:cargo/regex@1.10.2",
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/serde_derive@1.0.229",
+        "pkg:cargo/serde_json@1.0.143",
+        "pkg:cargo/url@2.5.4"
+      ],
+      "ref": "pkg:cargo/validator@0.20.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/version_check@0.9.4"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows-targets@0.48.5"
+      ],
+      "ref": "pkg:cargo/windows-sys@0.48.0"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows-targets@0.53.3"
+      ],
+      "ref": "pkg:cargo/windows-sys@0.60.2"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows_x86_64_msvc@0.48.5"
+      ],
+      "ref": "pkg:cargo/windows-targets@0.48.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/windows_x86_64_msvc@0.53.0"
+      ],
+      "ref": "pkg:cargo/windows-targets@0.53.3"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/windows_x86_64_msvc@0.48.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/windows_x86_64_msvc@0.53.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/winnow@0.7.15"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/winnow@1.0.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/write16@1.0.0"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/writeable@0.5.5"
+    },
+    {
+      "dependsOn": [],
+      "ref": "pkg:cargo/xml-rs@0.8.29"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111",
+        "pkg:cargo/synstructure@0.13.1"
+      ],
+      "ref": "pkg:cargo/yoke-derive@0.7.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/serde@1.0.229",
+        "pkg:cargo/stable_deref_trait@1.2.0",
+        "pkg:cargo/yoke-derive@0.7.5",
+        "pkg:cargo/zerofrom@0.1.5"
+      ],
+      "ref": "pkg:cargo/yoke@0.7.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111",
+        "pkg:cargo/synstructure@0.13.1"
+      ],
+      "ref": "pkg:cargo/zerofrom-derive@0.1.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/zerofrom-derive@0.1.5"
+      ],
+      "ref": "pkg:cargo/zerofrom@0.1.5"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/proc-macro2@1.0.103",
+        "pkg:cargo/quote@1.0.35",
+        "pkg:cargo/syn@2.0.111"
+      ],
+      "ref": "pkg:cargo/zerovec-derive@0.10.3"
+    },
+    {
+      "dependsOn": [
+        "pkg:cargo/yoke@0.7.5",
+        "pkg:cargo/zerofrom@0.1.5",
+        "pkg:cargo/zerovec-derive@0.10.3"
+      ],
+      "ref": "pkg:cargo/zerovec@0.10.4"
+    }
+  ],
   "metadata": {
     "component": {
       "hashes": [
@@ -8419,6 +9284,9 @@
     "lifecycles": [
       {
         "phase": "pre-build"
+      },
+      {
+        "phase": "post-build"
       }
     ],
     "timestamp": "2026-11-12T00:00:00Z",
@@ -8468,6 +9336,6 @@
   },
   "serialNumber": "urn:uuid:e3f4f6fe-6be5-4535-867c-16b5c1874e9f",
   "specVersion": "1.6",
-  "version": 1,
+  "version": 2,
   "vulnerabilities": []
 }

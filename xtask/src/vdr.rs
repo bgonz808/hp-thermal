@@ -152,12 +152,16 @@ pub(crate) fn analysis_from_acks(
     package: &str,
     version: &str,
 ) -> Option<Value> {
-    let ack = acks.iter().rev().find(|a| {
-        s(a, &["axis"]) == "vuln"
-            && s(a, &["vulnerability", "name"]) == id
-            && s(a, &["product", "package"]) == package
-            && s(a, &["product", "version"]) == version
-    })?;
+    let matching: Vec<&Value> = acks
+        .iter()
+        .filter(|a| {
+            s(a, &["axis"]) == "vuln"
+                && s(a, &["vulnerability", "name"]) == id
+                && s(a, &["product", "package"]) == package
+                && s(a, &["product", "version"]) == version
+        })
+        .collect();
+    let ack = *matching.last()?;
     let cdx = &ack["cyclonedx"];
     let state = cdx["state"].as_str()?;
     // The native ruling's own `detail` when it has one; the OpenVEX notes otherwise.
@@ -165,7 +169,22 @@ pub(crate) fn analysis_from_acks(
         .as_str()
         .map(str::to_string)
         .unwrap_or_else(|| s(ack, &["status_notes"]));
-    let mut an = json!({"state": state, "firstIssued": s(ack, &["timestamp"]), "detail": detail});
+    // firstIssued / lastUpdated are date-times in the schema; acks record dates.
+    let first = matching
+        .iter()
+        .map(|a| s(a, &["timestamp"]))
+        .min()
+        .unwrap_or_default();
+    let last = matching
+        .iter()
+        .map(|a| s(a, &["timestamp"]))
+        .max()
+        .unwrap_or_default();
+    let mut an =
+        json!({"state": state, "firstIssued": date_time(&first), "lastUpdated": date_time(&last)});
+    if !detail.is_empty() {
+        an["detail"] = Value::String(detail);
+    }
     if let Some(j) = cdx["justification"].as_str() {
         an["justification"] = Value::String(j.to_string());
     }
@@ -175,24 +194,72 @@ pub(crate) fn analysis_from_acks(
     Some(an)
 }
 
-/// All findings of a cargo-audit report as (kind, advisory, package) triples.
-fn findings(raw: &Value) -> Vec<(String, Value, Value)> {
+/// All findings of a cargo-audit report as (kind, entry); the entry carries `advisory`,
+/// `package`, `versions` (patched / unaffected requirements) and `affected` (arch / os / functions).
+fn findings(raw: &Value) -> Vec<(String, Value)> {
     let mut out = Vec::new();
     for v in raw["vulnerabilities"]["list"]
         .as_array()
         .into_iter()
         .flatten()
     {
-        out.push((
-            "vulnerability".to_string(),
-            v["advisory"].clone(),
-            v["package"].clone(),
-        ));
+        out.push(("vulnerability".to_string(), v.clone()));
     }
     if let Some(w) = raw["warnings"].as_object() {
         for (kind, list) in w {
             for e in list.as_array().into_iter().flatten() {
-                out.push((kind.clone(), e["advisory"].clone(), e["package"].clone()));
+                out.push((kind.clone(), e.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// `2026-11-13` -> `2026-11-13T00:00:00Z`; a value that already carries a time is kept.
+fn date_time(d: &str) -> String {
+    if d.len() == 10 && d.as_bytes()[4] == b'-' && d.as_bytes()[7] == b'-' {
+        format!("{d}T00:00:00Z")
+    } else {
+        d.to_string()
+    }
+}
+
+/// A RustSec/semver requirement (`>=0.3.0, <0.10.1`) as a Package URL `vers` range
+/// (`vers:cargo/>=0.3.0|<0.10.1`). Only plain comparators over release versions map exactly;
+/// anything else (caret, tilde, wildcard, pre-release) returns None and is left to the advisory.
+pub(crate) fn req_to_vers(req: &str) -> Option<String> {
+    let mut parts: Vec<(Vec<u64>, String)> = Vec::new();
+    for c in req.split(',').map(str::trim).filter(|c| !c.is_empty()) {
+        let (op, ver) = ["<=", ">=", "<", ">", "="]
+            .iter()
+            .find_map(|op| c.strip_prefix(op).map(|v| (*op, v.trim())))?;
+        let nums: Vec<u64> = ver
+            .split('.')
+            .map(|n| n.parse().ok())
+            .collect::<Option<_>>()?;
+        if nums.is_empty() || nums.len() > 3 {
+            return None;
+        }
+        parts.push((nums, format!("{op}{ver}")));
+    }
+    if parts.is_empty() {
+        return None;
+    }
+    parts.sort_by(|a, b| a.0.cmp(&b.0));
+    Some(format!(
+        "vers:cargo/{}",
+        parts.into_iter().map(|p| p.1).collect::<Vec<_>>().join("|")
+    ))
+}
+
+/// `affects[].versions`: the measured version as affected, and every patched / unaffected
+/// requirement from the advisory as an unaffected `vers` range.
+fn affected_versions(pver: &str, versions: &Value) -> Vec<Value> {
+    let mut out = vec![json!({"version": pver, "status": "affected"})];
+    for key in ["patched", "unaffected"] {
+        for r in versions[key].as_array().into_iter().flatten() {
+            if let Some(v) = r.as_str().and_then(req_to_vers) {
+                out.push(json!({"range": v, "status": "unaffected"}));
             }
         }
     }
@@ -235,7 +302,8 @@ pub(crate) fn build(
 ) -> Result<(Value, Vec<String>), String> {
     let mut burn_down = Vec::new();
     let mut vulns = Vec::new();
-    for (kind, adv, pkg) in findings(raw) {
+    for (kind, entry) in findings(raw) {
+        let (adv, pkg) = (entry["advisory"].clone(), entry["package"].clone());
         let id = s(&adv, &["id"]);
         let (pname, pver) = (s(&pkg, &["name"]), s(&pkg, &["version"]));
         let bom_ref = bom_ref_for(&components, &pname, &pver).ok_or_else(|| {
@@ -260,7 +328,7 @@ pub(crate) fn build(
             "description": s(&adv, &["title"]),
             "detail": s(&adv, &["description"]),
             "advisories": [{"title": s(&adv, &["title"]), "url": url}],
-            "affects": [{"ref": bom_ref, "versions": [{"version": pver, "status": "affected"}]}],
+            "affects": [{"ref": bom_ref, "versions": affected_versions(&pver, &entry["versions"])}],
         });
         if let Some(d) = adv["date"].as_str() {
             v["published"] = Value::String(format!("{d}T00:00:00Z"));
@@ -322,6 +390,86 @@ pub(crate) fn packages_from_dep_v0(section: &[u8]) -> Result<BTreeSet<(String, S
         return Err(".dep-v0: empty package list".into());
     }
     Ok(out)
+}
+
+/// The compiled dependency graph recorded in a `.dep-v0` section: each package with the
+/// packages it depends on (runtime and build edges, as cargo-auditable records them).
+pub(crate) type DepGraph = Vec<((String, String), Vec<(String, String)>)>;
+
+pub(crate) fn graph_from_dep_v0(section: &[u8]) -> Result<DepGraph, String> {
+    let bytes = miniz_oxide::inflate::decompress_to_vec_zlib(section)
+        .map_err(|e| format!(".dep-v0: zlib inflate failed: {e:?}"))?;
+    let v: Value = serde_json::from_slice(&bytes).map_err(|e| format!(".dep-v0: {e}"))?;
+    let pk = v["packages"]
+        .as_array()
+        .ok_or(".dep-v0: no packages array")?;
+    let key = |p: &Value| -> Option<(String, String)> {
+        Some((
+            p["name"].as_str()?.to_string(),
+            p["version"].as_str()?.to_string(),
+        ))
+    };
+    let mut out = Vec::new();
+    for p in pk {
+        let k = key(p).ok_or(".dep-v0: package without name/version")?;
+        let mut deps = Vec::new();
+        for i in p["dependencies"].as_array().into_iter().flatten() {
+            let idx = i.as_u64().ok_or(".dep-v0: non-integer dependency index")? as usize;
+            let d = pk
+                .get(idx)
+                .and_then(key)
+                .ok_or(".dep-v0: dependency index out of range")?;
+            deps.push(d);
+        }
+        deps.sort();
+        deps.dedup();
+        out.push((k, deps));
+    }
+    Ok(out)
+}
+
+/// CycloneDX `dependencies[]` for the compiled graph, keyed by the components' bom-refs. A
+/// package in the binary that the frozen lock does not list is an error, never skipped: the
+/// binary would then contain code the measured lock does not account for.
+pub(crate) fn dependencies_from_graph(
+    components: &[Value],
+    graph: &DepGraph,
+) -> Result<Vec<Value>, String> {
+    let r = |(n, v): &(String, String)| {
+        bom_ref_for(components, n, v)
+            .ok_or_else(|| format!("binary contains {n} {v}, which the frozen lock does not list"))
+    };
+    let mut out = Vec::new();
+    for (pkg, deps) in graph {
+        let mut on: Vec<String> = deps.iter().map(r).collect::<Result<_, _>>()?;
+        on.sort();
+        on.dedup();
+        out.push(json!({"ref": r(pkg)?, "dependsOn": on}));
+    }
+    out.sort_by(|a, b| a["ref"].as_str().cmp(&b["ref"].as_str()));
+    Ok(out)
+}
+
+/// The version a freshly built report takes, given the committed one: the same content under
+/// the same serial keeps the committed version; anything else is the next version. A committed
+/// report for a different serial (another subject) is not this report's history.
+pub(crate) fn settle_version(mut doc: Value, existing: Option<&Value>) -> Value {
+    let Some(ex) = existing.filter(|e| e["serialNumber"] == doc["serialNumber"]) else {
+        doc["version"] = json!(1);
+        return doc;
+    };
+    let v = ex["version"].as_u64().filter(|v| *v >= 1).unwrap_or(1);
+    doc["version"] = json!(v);
+    if &doc != ex {
+        doc["version"] = json!(v + 1);
+    }
+    doc
+}
+
+/// BOM-Link to another CycloneDX document: `urn:cdx:<serial uuid>/<version>`.
+pub(crate) fn bom_link(serial: &str, version: u64) -> Option<String> {
+    let uuid = serial.strip_prefix("urn:uuid:")?;
+    (uuid.len() == 36 && version >= 1).then(|| format!("urn:cdx:{uuid}/{version}"))
 }
 
 /// The packages compiled into a binary, read from its own `.dep-v0` section (PE or ELF).
@@ -475,6 +623,8 @@ pub fn run(args: &[String]) -> i32 {
     let dir = evidence_dir(&product, &digest);
     let out = out.unwrap_or_else(|| dir.join("vdr.cdx.json"));
     let res = (|| -> Result<(Value, Vec<String>), String> {
+        let mut graph: Option<DepGraph> = None;
+        let mut sbom_link: Option<String> = None;
         let rows = read_jsonl(&dir.join("vuln.jsonl"));
         let header = rows
             .first()
@@ -491,6 +641,13 @@ pub fn run(args: &[String]) -> i32 {
                     .as_array()
                     .cloned()
                     .ok_or("SBOM has no components")?;
+                sbom_link = Some(
+                    bom_link(
+                        b["serialNumber"].as_str().unwrap_or_default(),
+                        b["version"].as_u64().unwrap_or(0),
+                    )
+                    .ok_or("SBOM has no CycloneDX serialNumber/version to link to")?,
+                );
                 let mut subj = b["metadata"]["component"].clone();
                 if subj.is_null() {
                     subj = json!({"type": "application", "name": product});
@@ -506,6 +663,13 @@ pub fn run(args: &[String]) -> i32 {
                 // list says which lock packages were compiled into it (runtime and build kinds).
                 let (asset, bin) = fetch_tool_binary(&product, &digest)?;
                 let present = auditable_packages(&bin).map_err(|e| format!("{asset}: {e}"))?;
+                graph = Some(
+                    graph_from_dep_v0(
+                        crate::auditable::dep_v0_section(&bin)
+                            .map_err(|e| format!("{asset}: {e}"))?,
+                    )
+                    .map_err(|e| format!("{asset}: {e}"))?,
+                );
                 apply_scope(
                     &mut comps,
                     &present,
@@ -520,7 +684,21 @@ pub fn run(args: &[String]) -> i32 {
                 .join("acks.jsonl")
                 .as_path(),
         );
-        build(&product, &digest, &header, &raw, components, subject, &acks)
+        let deps = match &graph {
+            Some(g) => Some(dependencies_from_graph(&components, g)?),
+            None => None,
+        };
+        let (mut doc, burn) = build(&product, &digest, &header, &raw, components, subject, &acks)?;
+        if let Some(d) = deps {
+            // The scope and the edges were measured from the built binary: post-build too.
+            doc["dependencies"] = Value::Array(d);
+            doc["metadata"]["lifecycles"] =
+                json!([{"phase": "pre-build"}, {"phase": "post-build"}]);
+        }
+        if let Some(l) = sbom_link {
+            doc["externalReferences"] = json!([{"type": "bom", "url": l}]);
+        }
+        Ok((doc, burn))
     })();
     let (doc, burn_down) = match res {
         Ok(x) => x,
@@ -529,6 +707,13 @@ pub fn run(args: &[String]) -> i32 {
             return 1;
         }
     };
+    // CycloneDX versioning: one serialNumber per subject, and `version` names the revision. The
+    // committed report is the ledger: identical content keeps its version, changed content takes
+    // the next one, so a version once published (attested on a release) never changes meaning.
+    let existing: Option<Value> = std::fs::read_to_string(&out)
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok());
+    let doc = settle_version(doc, existing.as_ref());
     let text = serde_json::to_string_pretty(&doc).unwrap() + "\n";
     for b in &burn_down {
         eprintln!("vdr: no native CycloneDX ruling in acks for {b} — analysis omitted (burn-down)");
@@ -555,8 +740,9 @@ pub fn run(args: &[String]) -> i32 {
             }
             Ok(_) => {
                 eprintln!(
-                    "vdr: {} differs from what the evidence regenerates — re-run `vdr emit`",
-                    out.display()
+                    "vdr: {} differs from what the evidence regenerates — re-run `vdr emit` (it becomes version {})",
+                    out.display(),
+                    doc["version"]
                 );
                 1
             }
@@ -630,6 +816,70 @@ mod tests {
     }
 
     #[test]
+    fn vers_ranges_map_plain_comparators_and_refuse_the_rest() {
+        assert_eq!(req_to_vers(">=0.10.1").unwrap(), "vers:cargo/>=0.10.1");
+        assert_eq!(
+            req_to_vers("<0.6.0, >= 0.5.16").unwrap(),
+            "vers:cargo/>=0.5.16|<0.6.0"
+        );
+        assert!(req_to_vers("^1.2").is_none());
+        assert!(req_to_vers(">=1.0.0-rc.1").is_none());
+        assert!(req_to_vers("").is_none());
+        let v = affected_versions(
+            "0.10.0",
+            &json!({"patched": [">=0.10.1"], "unaffected": ["<0.3.0"]}),
+        );
+        assert_eq!(v.len(), 3);
+        assert_eq!(v[1]["range"], "vers:cargo/>=0.10.1");
+        assert_eq!(v[2]["status"], "unaffected");
+    }
+
+    #[test]
+    fn dep_v0_graph_becomes_dependencies_and_refuses_unlisted_packages() {
+        let doc = br#"{"packages":[{"name":"a","version":"1.0.0","root":true,"dependencies":[1]},{"name":"b","version":"2.0.0","kind":"build"}]}"#;
+        let z = miniz_oxide::deflate::compress_to_vec_zlib(doc, 6);
+        let g = graph_from_dep_v0(&z).unwrap();
+        let comps = components_from_lock(LOCK);
+        let d = dependencies_from_graph(&comps, &g).unwrap();
+        assert_eq!(d[0]["ref"], "pkg:cargo/a@1.0.0");
+        assert_eq!(d[0]["dependsOn"][0], "pkg:cargo/b@2.0.0");
+        let stray = br#"{"packages":[{"name":"z","version":"9.9.9","dependencies":[]}]}"#;
+        let g2 = graph_from_dep_v0(&miniz_oxide::deflate::compress_to_vec_zlib(stray, 6)).unwrap();
+        assert!(
+            dependencies_from_graph(&comps, &g2)
+                .unwrap_err()
+                .contains("does not list")
+        );
+        let bad = br#"{"packages":[{"name":"a","version":"1.0.0","dependencies":[7]}]}"#;
+        assert!(graph_from_dep_v0(&miniz_oxide::deflate::compress_to_vec_zlib(bad, 6)).is_err());
+    }
+
+    #[test]
+    fn versions_advance_only_when_content_changes() {
+        let a = json!({"serialNumber": "urn:uuid:x", "version": 1, "k": 1});
+        assert_eq!(settle_version(a.clone(), None)["version"], 1);
+        assert_eq!(settle_version(a.clone(), Some(&a))["version"], 1);
+        let changed = json!({"serialNumber": "urn:uuid:x", "version": 1, "k": 2});
+        assert_eq!(settle_version(changed.clone(), Some(&a))["version"], 2);
+        let v2 = settle_version(changed.clone(), Some(&a));
+        assert_eq!(settle_version(changed.clone(), Some(&v2))["version"], 2);
+        let other = json!({"serialNumber": "urn:uuid:y", "version": 7, "k": 2});
+        assert_eq!(settle_version(changed, Some(&other))["version"], 1);
+    }
+
+    #[test]
+    fn bom_link_and_date_time_shapes() {
+        assert_eq!(
+            bom_link("urn:uuid:2a67a31e-7e1b-4744-862b-917e05dbc6a0", 1).unwrap(),
+            "urn:cdx:2a67a31e-7e1b-4744-862b-917e05dbc6a0/1"
+        );
+        assert!(bom_link("2a67a31e", 1).is_none());
+        assert!(bom_link("urn:uuid:2a67a31e-7e1b-4744-862b-917e05dbc6a0", 0).is_none());
+        assert_eq!(date_time("2026-11-13"), "2026-11-13T00:00:00Z");
+        assert_eq!(date_time("2026-11-13T05:00:00Z"), "2026-11-13T05:00:00Z");
+    }
+
+    #[test]
     fn components_from_lock_carry_purl_and_hash() {
         let c = components_from_lock(LOCK);
         assert_eq!(c.len(), 2);
@@ -671,7 +921,23 @@ mod tests {
         assert_eq!(an["state"], "not_affected");
         assert_eq!(an["justification"], "code_not_present");
         assert_eq!(an["response"][0], "will_not_fix");
-        assert_eq!(an["firstIssued"], "2026-11-12");
+        assert_eq!(an["firstIssued"], "2026-11-12T00:00:00Z");
+        assert_eq!(an["lastUpdated"], "2026-11-12T00:00:00Z");
+        // A later ack moves lastUpdated; the earliest one keeps firstIssued.
+        let mut later = an_source_with_time("2026-11-20");
+        later["cyclonedx"] = json!({"state":"not_affected","justification":"code_not_present"});
+        let first = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"package":"a","version":"1.0.0"},"timestamp":"2026-11-01"});
+        let an2 = analysis_from_acks(&[first, later], "RUSTSEC-1", "a", "1.0.0").unwrap();
+        assert_eq!(an2["firstIssued"], "2026-11-01T00:00:00Z");
+        assert_eq!(an2["lastUpdated"], "2026-11-20T00:00:00Z");
+        assert!(
+            an2.get("detail").is_none(),
+            "no detail when neither the ruling nor notes carry one"
+        );
+    }
+
+    fn an_source_with_time(t: &str) -> Value {
+        json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"package":"a","version":"1.0.0"},"timestamp":t})
     }
 
     #[test]
