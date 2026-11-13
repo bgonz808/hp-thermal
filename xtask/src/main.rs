@@ -59,6 +59,8 @@ mod record_vuln;
 mod release_advance;
 /// `vdr`: CycloneDX 1.6 Vulnerability Disclosure Report for a measured product (#396).
 mod vdr;
+/// `slsa-vsa`: SLSA Verification Summary predicate for a verified release (#419 phase 4).
+mod slsa_vsa;
 /// `xtask ci` step: cargo-vet exemptions for xtask stay off every lane's build graph.
 mod vet_guard;
 
@@ -113,6 +115,7 @@ fn main() {
         Some("candidate-advance") => advance::run(&args),
         Some("release-advance") => release_advance::run(&args),
         Some("vdr") => vdr::run(&args),
+        Some("slsa-vsa") => slsa_vsa::run(&args),
         Some("vet-guard") => {
             if vet_guard::check() {
                 0
