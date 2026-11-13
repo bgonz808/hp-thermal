@@ -13,17 +13,27 @@ the bounded-impact ceiling described below — those are prioritized.
 ## Verifying a release
 
 Every release is built by a public GitHub Actions workflow and carries a **[SLSA](https://slsa.dev) build
-provenance** attestation and an **SBOM** attestation, so you can prove the `.exe` was built
-from this repo's source by that workflow and was not altered in transit.
+provenance** attestation and an **SBOM** attestation (CycloneDX 1.6), so you can prove the `.exe`
+was built from this repo's source by that workflow and was not altered in transit.
 
-With the [GitHub CLI](https://cli.github.com), pinning the signer to this repo's release
-workflow (the identity check is what makes verification meaningful):
+**SLSA v1.2 Build Level 3.** Build, Authenticode signing and attestation run in a reusable
+workflow (`release-pipeline.yml`) that the calling release job cannot inject steps into, on
+GitHub-hosted ephemeral runners with OIDC-only signing and no caches; provenance is signed by
+that workflow's identity and verified before publish. The Source track has no formal level on
+GitHub today (GitHub issues no Source VSA); `main` enforces signed commits from a committed key
+roster, required checks, linear history and no force-push, and `v*` tags are immutable.
+
+With the [GitHub CLI](https://cli.github.com), pinning the signer to the reusable pipeline (the
+identity check is what makes verification meaningful):
 
 ```sh
 gh attestation verify hp-thermal.exe \
   --repo bgonz808/hp-thermal \
-  --signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml
+  --signer-workflow bgonz808/hp-thermal/.github/workflows/release-pipeline.yml
 ```
+
+Releases v0.3.0 through v0.3.2 predate the reusable pipeline: verify those with
+`--signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml`.
 
 The attestation is the real integrity anchor. `SHA256SUMS` is attached as a convenience, but
 a bare checksum only proves a file matches itself; the attestation proves it came from this
@@ -299,10 +309,16 @@ the job's environment (token, secrets, source). We treat the runner as hostile-a
   that would be a separate, elevated job — kept apart from the read-only build/attest job.
 
 **Honest limit:** there is no self-verifiable digest pin for `cargo install` today, and
-building any tool from source executes its build scripts in the runner. `--locked --version`
-(an immutable crates.io version) and `--git --rev` (an immutable commit) reduce *what* runs,
-but neither is a digest we independently verify. The real defense is therefore not perfect
-verification but **bounded reward**: least privilege + no secrets + minimal in-runner code.
+**Build tools are pinned by digest, not installed.** Every `cargo-*` tool CI executes is a
+prebuilt binary named by sha256 in `tools/TOOLS.lock`, built by `build-tools-pipeline.yml`
+(the same reusable-workflow shape as the release, so the fleet is SLSA Build L3 too) from a
+pinned upstream commit and a frozen lockfile, and fetched only after the digest matches and its
+provenance attestation verifies against that workflow's identity. No job runs `cargo install`.
+A tool enters or changes only through a three-axis gate (advisories, measured capabilities,
+malware panel) with content-bound sign-offs, and every producer run reproduces all digests byte
+for byte before they are trusted. The remaining honest limit is upstream source integrity at the
+pinned commit, addressed by review at each rev bump and by capability measurement of what the
+built tool can actually do.
 
 ## Memory-safety discipline
 
