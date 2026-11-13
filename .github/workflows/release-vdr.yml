@@ -36,6 +36,12 @@ permissions:
 
 jobs:
   attest-vdr:
+    # Two independent gates: the environment's own rules (required reviewer, no admin bypass,
+    # deployable from main only) AND this ref check. If the environment were ever missing, GitHub
+    # would auto-create it WITHOUT protection on first use; the ref check keeps a dispatch from any
+    # other ref out regardless, and the environment's existence with its rules is verified before
+    # this workflow is merged (gh api repos/{owner}/{repo}/environments/release-attest).
+    if: github.ref == 'refs/heads/main'
     environment: release-attest
     runs-on: ubuntu-24.04
     permissions:
