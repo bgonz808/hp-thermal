@@ -392,15 +392,22 @@ jobs:
             echo "| all | no release | | nothing to compare |" >> env-summary.md
           else
             mkdir -p prev
+            # The SBOM attestation's SUBJECT is the exe; the SBOM is its predicate. Verify the exe
+            # against the bundle and read the formulation from the VERIFIED statement, not from the
+            # loose cdx.json asset.
             gh release download "$tag" --repo "$GITHUB_REPOSITORY" --dir prev \
-              --pattern hp-thermal.cdx.json --pattern hp-thermal.sbom.sigstore.jsonl
+              --pattern hp-thermal.exe --pattern hp-thermal.sbom.sigstore.jsonl
             verified=0
             for w in release-pipeline.yml release.yml; do
-              if gh attestation verify prev/hp-thermal.cdx.json --bundle prev/hp-thermal.sbom.sigstore.jsonl \
+              if gh attestation verify prev/hp-thermal.exe --bundle prev/hp-thermal.sbom.sigstore.jsonl \
                    --repo "$GITHUB_REPOSITORY" --predicate-type https://cyclonedx.org/bom \
-                   --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/$w" > /dev/null 2>&1; then verified=1; break; fi
+                   --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/$w" --format json > prev/verify.json 2> prev/verify.err; then
+                verified=1; echo "previous release $tag: SBOM attestation verified (signer $w)"; break
+              fi
             done
-            [ "$verified" = 1 ] || { echo "::error::previous release $tag: SBOM attestation did not verify; refusing to compare against an unverified record"; exit 1; }
+            [ "$verified" = 1 ] || { echo "::error::previous release $tag: SBOM attestation did not verify; refusing to compare against an unverified record"; cat prev/verify.err; exit 1; }
+            jq -e '.[0].verificationResult.statement.predicate | .bomFormat == "CycloneDX"' prev/verify.json > /dev/null               || { echo "::error::previous release $tag: verified statement carries no CycloneDX predicate"; exit 1; }
+            jq '.[0].verificationResult.statement.predicate' prev/verify.json > prev/hp-thermal.cdx.json
             if ! jq -e '.formulation | length > 0' prev/hp-thermal.cdx.json > /dev/null; then
               echo "| all | $tag has no formulation | | no prior record (predates the build-environment declaration) |" >> env-summary.md
             else
