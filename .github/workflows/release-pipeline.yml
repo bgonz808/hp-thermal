@@ -44,6 +44,12 @@ jobs:
       matrix:
         attempt: [a, b]
     runs-on: windows-2025
+    # Variation leg (reproducible-builds practice): attempt b builds under a different timezone
+    # and locale, so agreement with a also proves the build does not depend on them.
+    env:
+      TZ: ${{ matrix.attempt == 'b' && 'Asia/Tokyo' || 'UTC' }}
+      LANG: ${{ matrix.attempt == 'b' && 'de_DE.UTF-8' || 'C.UTF-8' }}
+      LC_ALL: ${{ matrix.attempt == 'b' && 'de_DE.UTF-8' || 'C.UTF-8' }}
     permissions:
       contents: read
     # Digest chain (#42/#130): publish the PRE-SIGN bytes' SHA-256 as job outputs — an
@@ -281,6 +287,9 @@ jobs:
           a=$(sha256sum builds/xtask-verifier-a/xtask.exe | cut -d' ' -f1)
           b=$(sha256sum builds/xtask-verifier-b/xtask.exe | cut -d' ' -f1)
           if [ "$a" = "$b" ]; then echo "xtask.exe: $a (both builds)"; else echo "::error::xtask.exe differs: a=$a b=$b"; fail=1; fi
+          # Path independence: the shipped exe must embed no build-machine paths (trim-paths = "all").
+          leaks=$( (strings -n 8 builds/dist-unsigned-a/hp-thermal.exe || true) | grep -ciE 'D:\\a\\|\.cargo\\registry|\.rustup|/rustc/' || true)
+          if [ "${leaks:-0}" -eq 0 ]; then echo "hp-thermal.exe: no build paths embedded"; else echo "::error::hp-thermal.exe embeds $leaks build-path string(s)"; fail=1; fi
           ca=$(jq -S '[.components[]|{purl,hashes}]|sort_by(.purl)' builds/dist-unsigned-a/hp-thermal.cdx.json | sha256sum | cut -d' ' -f1)
           cb=$(jq -S '[.components[]|{purl,hashes}]|sort_by(.purl)' builds/dist-unsigned-b/hp-thermal.cdx.json | sha256sum | cut -d' ' -f1)
           if [ "$ca" = "$cb" ]; then echo "SBOM component set: identical"; else echo "::error::SBOM component sets differ"; fail=1; fi
