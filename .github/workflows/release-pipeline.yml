@@ -24,9 +24,9 @@ on:
       pdb_sha256:
         value: ${{ jobs.sign.outputs.pdb_sha256 }}
       exe_unsigned_sha256:
-        value: ${{ jobs.build.outputs.exe_unsigned_sha256 }}
+        value: ${{ jobs.reproducibility.outputs.exe_unsigned_sha256 }}
       xtask_sha256:
-        value: ${{ jobs.build.outputs.xtask_sha256 }}
+        value: ${{ jobs.reproducibility.outputs.xtask_sha256 }}
 
 permissions:
   contents: read
@@ -52,15 +52,12 @@ jobs:
       LC_ALL: ${{ matrix.attempt == 'b' && 'de_DE.UTF-8' || 'C.UTF-8' }}
     permissions:
       contents: read
-    # Digest chain (#42/#130): publish the PRE-SIGN bytes' SHA-256 as job outputs — an
-    # OUT-OF-BAND channel (GitHub job metadata). The `sign` job asserts the artifact it
-    # downloads matches this before signing, closing the build->sign custody hop; it then
-    # republishes the POST-SIGN digests, which `verify` asserts against SHA256SUMS. Chain:
-    # build digest -> asserted at sign -> signed digest -> asserted at verify -> attested.
-    outputs:
-      exe_unsigned_sha256: ${{ steps.stage.outputs.exe_unsigned_sha256 }}
-      pdb_sha256: ${{ steps.stage.outputs.pdb_sha256 }}
-      xtask_sha256: ${{ steps.seal_xtask.outputs.xtask_sha256 }}
+    # Digest chain (#42/#130): the PRE-SIGN bytes' SHA-256 travel as job outputs, an
+    # OUT-OF-BAND channel (GitHub job metadata). Because this job is a matrix, its own outputs
+    # are last-leg-wins and are not read downstream: `reproducibility` publishes build a's set
+    # and its digests, `sign` asserts the artifact it downloads against those before signing,
+    # then republishes the POST-SIGN digests, which `verify` asserts against SHA256SUMS. Chain:
+    # canonical digest -> asserted at sign -> signed digest -> asserted at verify -> attested.
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
@@ -323,6 +320,14 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+    # The CANONICAL digests: the set this job publishes is build a's. A matrix job's outputs come
+    # from whichever leg finished last, so `needs.build.outputs` may describe build b; the exe and
+    # verifier are proven identical, but the pdb is not, and custody checks against b's pdb fail
+    # whenever b finishes last. Downstream custody reads these, never the matrix outputs.
+    outputs:
+      exe_unsigned_sha256: ${{ steps.compare.outputs.exe_unsigned_sha256 }}
+      pdb_sha256: ${{ steps.compare.outputs.pdb_sha256 }}
+      xtask_sha256: ${{ steps.compare.outputs.xtask_sha256 }}
     steps:
       - name: Download both builds
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # actions/download-artifact v8.0.2
@@ -331,6 +336,7 @@ jobs:
           path: builds
 
       - name: Compare
+        id: compare
         shell: bash
         run: |
           set -euo pipefail
@@ -365,6 +371,11 @@ jobs:
           fi
           [ "$fail" -eq 0 ] || { echo "Reproducibility gate FAILED: the two builds do not agree; nothing will be signed."; exit 1; }
           echo "Reproducibility gate PASSED: two independent builds agree byte for byte."
+          {
+            echo "exe_unsigned_sha256=$(sha256sum builds/dist-unsigned-a/hp-thermal.exe | cut -d' ' -f1)"
+            echo "pdb_sha256=$(sha256sum builds/dist-unsigned-a/hp-thermal.pdb | cut -d' ' -f1)"
+            echo "xtask_sha256=$(sha256sum builds/xtask-verifier-a/xtask.exe | cut -d' ' -f1)"
+          } >> "$GITHUB_OUTPUT"
 
       # Build-environment drift against the previous release's attested SBOM (its formulation).
       # The runner image cannot be pinned, so its check is monotonic: the same family must not go
@@ -531,8 +542,8 @@ jobs:
       - name: Assert incoming bytes match build output
         shell: pwsh
         env:
-          EXPECT_EXE: ${{ needs.build.outputs.exe_unsigned_sha256 }}
-          EXPECT_PDB: ${{ needs.build.outputs.pdb_sha256 }}
+          EXPECT_EXE: ${{ needs.reproducibility.outputs.exe_unsigned_sha256 }}
+          EXPECT_PDB: ${{ needs.reproducibility.outputs.pdb_sha256 }}
         run: |
           $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
           $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
