@@ -104,6 +104,9 @@ release SBOM for the app), every RustSec finding from the custody-verified raw p
 `analysis` is filled only from an ack's native `cyclonedx` ruling (state, justification,
 response), never mapped from OpenVEX fields; acks without one are reported as burn-down. The
 document is deterministic for the same inputs, so `vdr check` can regenerate and compare.
+A `vdr.cdx.json` is committed beside the evidence of every live-frontier digest (each
+`TOOLS.lock` pin and the latest release); the supply-chain workflow regenerates each one and
+fails on any difference, admitting the app's release SBOM only after its provenance verifies.
 
 ## Rules
 
