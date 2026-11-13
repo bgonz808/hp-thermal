@@ -112,11 +112,13 @@ not prose: `analysis.detail` is a one-line summary, never a second copy of what 
 document is deterministic for the same inputs, so `vdr check` can regenerate and compare.
 For a tool, each component's `scope` comes from the pinned binary itself: the emitter downloads
 the content-addressed asset, checks it is the digest, reads the cargo-auditable `.dep-v0` list
-(runtime and build kinds) and marks lock packages `required` when the binary carries them and
-`excluded` when only the lock does (optional, feature-gated, dev or proc-macro-only entries).
-`evidence.identity` states the method per component: manifest analysis always, binary analysis
-when present. "Code not present" is therefore measured in the report, not asserted in an ack.
-Tool reports also carry the compiled graph from the same section as `dependencies[]`, and a
+(runtime and build kinds). That list is the RESOLVED graph, a superset of what was compiled:
+on cargo-audit 5e1bf935c84c, 23 of 329 listed packages (defmt, quinn, ...) appear in no compile
+line of the producer log. So only absence is decisive: a lock package missing from the list was
+not built and is marked `excluded`; a listed one gets no scope. `evidence.identity` states the
+method per component: manifest analysis always, the binary's list when it names the package.
+"Code not present" is therefore measured in the report, not asserted in an ack; "code present"
+is not claimed. Tool reports also carry the same resolved graph as `dependencies[]`, and a
 package in the binary that the frozen lock does not list fails the emitter; both phases appear
 in `metadata.lifecycles` (pre-build lock, post-build binary). The app's report links its release
 SBOM by BOM-Link (`externalReferences` type `bom`, `urn:cdx:<serial>/<version>`) instead of

@@ -477,10 +477,12 @@ pub(crate) fn auditable_packages(bin: &[u8]) -> Result<BTreeSet<(String, String)
     packages_from_dep_v0(crate::auditable::dep_v0_section(bin)?)
 }
 
-/// CycloneDX `scope` per component from the binary's package set: `required` when the lock
-/// package is in the binary, `excluded` when the lock carries it but the binary does not (an
-/// optional, feature-gated, dev or proc-macro-only entry). Each component also states how its
-/// identity was established (`evidence.identity`): the frozen lock always, the binary when present.
+/// CycloneDX `scope` per component from the binary's package set. cargo-auditable records the
+/// RESOLVED graph, a superset of what was compiled: measured on cargo-audit 5e1bf935c84c, 23 of
+/// its 329 listed packages (defmt, quinn, ...) appear in no compile line of the producer log.
+/// So only absence is decisive: a lock package missing from the record was not built, and is
+/// `excluded`. Presence asserts no scope. Each component states how its identity was
+/// established (`evidence.identity`): the frozen lock always, the binary's record when listed.
 pub(crate) fn apply_scope(
     components: &mut [Value],
     present: &BTreeSet<(String, String)>,
@@ -492,7 +494,9 @@ pub(crate) fn apply_scope(
             c["version"].as_str().unwrap_or_default().to_string(),
         );
         let in_binary = present.contains(&key);
-        c["scope"] = json!(if in_binary { "required" } else { "excluded" });
+        if !in_binary {
+            c["scope"] = json!("excluded");
+        }
         let mut methods = vec![json!({
             "technique": "manifest-analysis",
             "confidence": 1.0,
@@ -502,7 +506,7 @@ pub(crate) fn apply_scope(
             methods.push(json!({
                 "technique": "binary-analysis",
                 "confidence": 1.0,
-                "value": binary_desc
+                "value": format!("{binary_desc}; resolved graph, a superset of compiled crates")
             }));
         }
         c["evidence"] =
@@ -770,7 +774,10 @@ mod tests {
         let mut present = BTreeSet::new();
         present.insert(("a".to_string(), "1.0.0".to_string()));
         apply_scope(&mut comps, &present, "x.exe (sha256 d)");
-        assert_eq!(comps[0]["scope"], "required");
+        assert!(
+            comps[0].get("scope").is_none(),
+            "listing in the record proves no scope"
+        );
         assert_eq!(
             comps[0]["evidence"]["identity"][0]["methods"][1]["technique"],
             "binary-analysis"
