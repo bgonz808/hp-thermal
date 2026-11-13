@@ -60,8 +60,6 @@ jobs:
 
       - name: Install pinned toolchain + rust-src
         uses: ./.github/actions/install-toolchain
-        with:
-          components: "rust-src"
 
       # Build the SAME hardened binary users get: app/.cargo/config.toml applies the mitigation
       # rustflags (CFG, stack-protector, crt-static, DEPENDENTLOADFLAG) + build-std, and the

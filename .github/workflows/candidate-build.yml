@@ -76,8 +76,6 @@ jobs:
       - name: Install pinned toolchain (producer parity)
         id: toolchain
         uses: ./.github/actions/install-toolchain
-        with:
-          components: "rust-src"
 
       # #368: cackle's fixtures sandbox with Bubblewrap and strip the cargo env, so the test
       # suite needs `bwrap` on the runner and the pinned channel as rustup's DEFAULT (the

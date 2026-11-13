@@ -452,6 +452,61 @@ jobs:
           ref: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') && !contains(github.ref, '-')) && 'refs/heads/main' || github.ref }}
           sha: ${{ github.sha }}
 
+  # Dry-run rehearsal of the VSA mint, which otherwise runs only in `publish` on a real tag: the
+  # same sealed verifier, the same digest check, the same predicate command and the same field
+  # assertions, UNSIGNED. Nothing enters the attestation store for bytes that were never
+  # released; the `actions/attest` signing and `gh attestation verify` calls are proven only by
+  # a real tag, where a failure there fails publish before any release exists.
+  vsa-rehearsal:
+    if: inputs.dry_run == true
+    needs: [pipeline, verify]
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    steps:
+      - name: Download xtask verifier
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # actions/download-artifact v8.0.2
+        with:
+          name: xtask-verifier
+          path: verifier
+      - name: Download attestation bundles
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # actions/download-artifact v8.0.2
+        with:
+          name: attestation-bundles
+          path: bundles
+      - name: Write and check the VSA predicate (unsigned)
+        shell: bash
+        env:
+          EXPECT_XTASK: ${{ needs.pipeline.outputs.xtask_sha256 }}
+        run: |
+          set -euo pipefail
+          got=$(sha256sum verifier/xtask.exe | cut -d' ' -f1)
+          [ "$got" = "$EXPECT_XTASK" ] || { echo "::error::xtask verifier digest $got != pipeline record $EXPECT_XTASK"; exit 1; }
+          base="https://github.com/${GITHUB_REPOSITORY}"
+          ./verifier/xtask.exe slsa-vsa \
+            --verifier "$base/.github/workflows/release.yml" \
+            --resource "$base/releases/download/${GITHUB_REF_NAME}/hp-thermal.exe" \
+            --policy-uri "git+$base@${GITHUB_SHA}#supply-chain/policy" --policy-commit "$GITHUB_SHA" \
+            --input "$base/releases/download/${GITHUB_REF_NAME}/hp-thermal.provenance.sigstore.jsonl=bundles/hp-thermal.provenance.sigstore.jsonl" \
+            --input "$base/releases/download/${GITHUB_REF_NAME}/hp-thermal.sbom.sigstore.jsonl=bundles/hp-thermal.sbom.sigstore.jsonl" \
+            --result PASSED --level SLSA_BUILD_LEVEL_3 --slsa-version 1.2 --out vsa.json
+          jq -e '(.verifier.id | endswith("/.github/workflows/release.yml"))
+                 and .verificationResult == "PASSED"
+                 and (.verifiedLevels | index("SLSA_BUILD_LEVEL_3") != null)
+                 and .slsaVersion == "1.2"
+                 and (.policy.digest.gitCommit | length == 40)
+                 and (.inputAttestations | length == 2)
+                 and (.inputAttestations | all(.digest.sha256 | test("^[0-9a-f]{64}$")))' vsa.json > /dev/null \
+            || { echo "::error::VSA predicate failed shape assertions"; cat vsa.json; exit 1; }
+          echo "VSA rehearsal: predicate well-formed (unsigned)"
+          cat vsa.json
+      - name: Upload rehearsal predicate (1 day)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # actions/upload-artifact v7.0.2
+        with:
+          name: vsa-rehearsal
+          path: vsa.json
+          retention-days: 1
+
   publish:
     # JUDGMENT GATE (#261) -- deliberately a DISTINCT environment from `sign`. Signing attests
     # "these bytes are ours"; publishing attests "these bytes go to users". Separating them keeps
