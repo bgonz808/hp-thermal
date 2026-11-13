@@ -23,7 +23,9 @@ workflow (`release-pipeline.yml`) that the calling release job cannot inject ste
 GitHub-hosted ephemeral runners with OIDC-only signing and no caches; provenance is signed by
 that workflow's identity and verified before publish. The Source track has no formal level on
 GitHub today (GitHub issues no Source VSA); `main` enforces signed commits from a committed key
-roster, required checks, linear history and no force-push, and `v*` tags are immutable.
+roster, required checks, linear history and no force-push. `v*` tags and the `tools` store tag
+cannot be updated or deleted by anyone, administrators included; creating a `v*` tag requires a
+repository administrator and a commit that passed the required checks.
 
 With the [GitHub CLI](https://cli.github.com), pinning the signer to the reusable pipeline (the
 identity check is what makes verification meaningful):
