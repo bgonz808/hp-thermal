@@ -180,7 +180,7 @@ fn main() {
                 "  cadence-check            validate supply-chain/policy/cadence.json (time bounds the scheduled checks read)"
             );
             eprintln!(
-                "  verify-build-env         check this machine against the MSVC toolset / Windows SDK pin in .cargo/config.toml; prints what to install"
+                "  verify-build-env [--exe PATH]  check this machine against the MSVC toolset / Windows SDK pin in .cargo/config.toml; prints what to install; with --exe, prove that build used the pinned linker (Rich header vs link.exe version)"
             );
             eprintln!(
                 "  sbom-formulate --sbom F --exe E --env build-env.json [--out F]  declare the build environment as CycloneDX formulation; toolset bound to the exe's Rich header"
