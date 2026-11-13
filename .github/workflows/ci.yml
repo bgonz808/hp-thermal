@@ -108,11 +108,18 @@ jobs:
       - name: actionlint (workflow lint)
         uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca  # v1.7.12
 
+      # supply-chain/evidence holds committed CycloneDX VDRs (*.cdx.json), which osv-scanner
+      # would otherwise ingest as SBOMs: a VDR is the REPORT of the findings already ruled on in
+      # acks.jsonl, not a dependency manifest, so scanning it double-counts the tool fleet's
+      # informational advisories against this repository. `--x-exclude` takes an exact directory
+      # name (v2.7.0, scan/source/command.go); no lockfile lives under that directory.
       - name: osv-scanner (RustSec-complete Rust deps)
         uses: google/osv-scanner-action/osv-scanner-action@b1d267aea5211fa648d9d442fa64b90dbdcbdd36  # v2.7.0
         with:
           scan-args: |-
             --recursive
+            --x-exclude
+            evidence
             ./
 
       - name: trivy (secrets / misconfig / license / OS)
