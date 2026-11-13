@@ -20,6 +20,11 @@ on:
       # what this workflow runs, so it must re-run to prove itself (#221 follow-up).
       - tools/TOOLS.lock
       - .github/actions/fetch-tools/**
+      # The VDR check regenerates every committed report from the evidence beside it, the frozen
+      # lock it names and the emitter in xtask: a change to any of them must re-prove the reports.
+      - tools/locks/**
+      - supply-chain/evidence/**
+      - xtask/**
   workflow_dispatch: {}
 
 permissions:
