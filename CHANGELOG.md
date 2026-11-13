@@ -13,8 +13,9 @@ check, and more verifiable records.
 ### Verification
 - Build, signing, and attestation now run in a reusable workflow, `release-pipeline.yml`,
   that the calling job cannot inject steps into; provenance and SBOM are signed by its
-  identity (SLSA v1.2 Build L3). Verify with
-  `--signer-workflow bgonz808/hp-thermal/.github/workflows/release-pipeline.yml`. (#437, #446)
+  identity (SLSA v1.2 Build L3). Verify with `gh attestation verify hp-thermal.exe --repo
+  bgonz808/hp-thermal --signer-workflow
+  bgonz808/hp-thermal/.github/workflows/release-pipeline.yml`. (#437, #446)
 - Two independent builds, the second under another time zone and locale, must agree byte for
   byte before signing, and signing checks that it received the compared bytes. The exe embeds
   no build paths. (#441, #447, #452, #474)
