@@ -13,9 +13,11 @@ name: vt-submit (lookup-first upsert, dispatch-only)
 # entries are redistributed onward (MWDB, VirusShare, Triage). So this workflow is built to
 # be INCAPABLE of submitting arbitrary bytes. It can only submit a file that clears all
 # three, fail-closed:
-#   1. named by digest in the committed TOOLS.lock of the dispatched ref;
-#   2. fetched from this repo's public `tools` release (already-public bytes -- a VT
-#      submission of a public release asset publishes nothing new);
+#   1. named by digest in the committed TOOLS.lock of the dispatched ref -- or, for
+#      `only=release[:<tag>]`, named in that GitHub Release's own SHA256SUMS (the signed
+#      manifest attested alongside the exe);
+#   2. fetched from this repo's public `tools` release, or from that public GitHub Release
+#      (already-public bytes -- a VT submission of a public release asset publishes nothing new);
 #   3. sha256-verified against the committed digest after download, before upload.
 # A compromised or mis-dispatched run therefore cannot leak anything that was not already
 # public, and cannot submit bytes the repo has not blessed by digest.
@@ -32,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       only:
-        description: "Submit a single tool by name (default: every TOOLS.lock entry)"
+        description: "Submit a single tool by name (default: every TOOLS.lock entry); `release` or `release:<tag>` submits that GitHub Release's hp-thermal.exe (latest release when no tag is given)."
         required: false
         default: ""
 
@@ -67,7 +69,36 @@ jobs:
           fail=0
           uploaded=()
           matched=0
-          while read -r name _repo _rev target sha; do
+          if [[ "$ONLY" == release* ]]; then
+            # The shipped app, seeded into the corpus the moment it is public (#45): same three
+            # locks as a tool -- digest from the Release's own SHA256SUMS, bytes from that public
+            # Release, sha256 re-verified before any upload.
+            tag="${ONLY#release}"; tag="${tag#:}"
+            [ -n "$tag" ] || tag=$(gh release view --repo "$REPO" --json tagName --jq .tagName)
+            gh release download "$tag" --repo "$REPO" --pattern SHA256SUMS -O sums.txt --clobber
+            sha=$(awk '$2=="hp-thermal.exe"{print $1}' sums.txt | head -1)
+            [[ "$sha" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::release $tag: SHA256SUMS has no 64-hex entry for hp-thermal.exe"; exit 1; }
+            name="release:$tag"
+            sleep 16
+            code=$(curl -sS -o resp.json -w "%{http_code}" -H "x-apikey: $VT_API_KEY"               "https://www.virustotal.com/api/v3/files/$sha")
+            case "$code" in
+              200)
+                stats=$(jq -r '.data.attributes.last_analysis_stats | "malicious=\(.malicious) suspicious=\(.suspicious) undetected=\(.undetected)"' resp.json)
+                echo "$name hp-thermal.exe ($sha): already in corpus -- $stats (no upload)";;
+              404)
+                gh release download "$tag" --repo "$REPO" --pattern hp-thermal.exe -O hp-thermal.exe --clobber
+                got=$(sha256sum hp-thermal.exe | cut -d' ' -f1)
+                [ "$got" = "$sha" ] || { echo "::error::$name: downloaded hp-thermal.exe sha256 $got != SHA256SUMS $sha -- refusing to upload"; exit 1; }
+                up=$(curl -sS -o upload.json -w "%{http_code}" -H "x-apikey: $VT_API_KEY"                   -F "file=@hp-thermal.exe" "https://www.virustotal.com/api/v3/files")
+                [ "$up" = "200" ] || { echo "::error::$name: upload HTTP $up: $(head -c 200 upload.json)"; exit 1; }
+                an=$(jq -er '.data.id' upload.json) || { echo "::error::$name: upload accepted but no analysis id"; exit 1; }
+                echo "$name hp-thermal.exe ($sha): SUBMITTED (analysis $an)  https://www.virustotal.com/gui/file/$sha"
+                uploaded+=("$name:$sha");;
+              *) echo "::error::$name: lookup HTTP $code"; exit 1;;
+            esac
+            matched=1
+          fi
+          [[ "$ONLY" == release* ]] || while read -r name _repo _rev target sha; do
             if [ -n "$ONLY" ] && [ "$ONLY" != "$name" ]; then continue; fi
             matched=$((matched+1))
             case "$sha" in
