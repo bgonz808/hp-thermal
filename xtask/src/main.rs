@@ -55,6 +55,7 @@ mod propose;
 /// `candidate-advance`: the bless cycle as idempotent stages (digest, vuln, caps, mal, summary).
 mod advance;
 mod cadence;
+mod formulate;
 mod record_vuln;
 /// `release-advance`: the app's post-release evidence (vuln baseline, VT panel) as stages.
 mod release_advance;
@@ -111,6 +112,7 @@ fn main() {
         Some("monitor-vuln") => monitor::run(&args),
         Some("eox-check") => eox::run(&args),
         Some("cadence-check") => cadence::run(&args),
+        Some("sbom-formulate") => formulate::run(&args),
         Some("freeze") => freeze::run(&args),
         Some("freeze-propose") => propose::run(&args),
         Some("record-vuln") => record_vuln::run(&args),
@@ -174,6 +176,9 @@ fn main() {
             );
             eprintln!(
                 "  cadence-check            validate supply-chain/policy/cadence.json (time bounds the scheduled checks read)"
+            );
+            eprintln!(
+                "  sbom-formulate --sbom F --exe E --env build-env.json [--out F]  declare the build environment as CycloneDX formulation; toolset bound to the exe's Rich header"
             );
             eprintln!(
                 "  mal-acks --tool <t> --digest <sha256>  acked engines from the evidence lattice (#278)"
