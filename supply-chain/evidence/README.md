@@ -132,3 +132,6 @@ shipped `hp-thermal.exe` digest (from the Release's SHA256SUMS) gets the same `v
 the monitor's `release:hp-thermal.exe` lookup) as a tool, under the same floors and acks
 semantics. Capabilities for the app are measured by `verify-caps`/BinSkim on the exe, not by
 cackle (Windows-only crate tree), so there is no `caps.toml` for `hp-thermal`.
+The app's records are written by `cargo xtask release-advance <status|vuln|mal> --tag vX.Y.Z` on an
+`evidence/*` branch (digest from the Release's SHA256SUMS; lock from the tag; VT lookup first,
+submit only if absent), the counterpart of `candidate-advance` for tools.
