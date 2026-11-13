@@ -463,10 +463,12 @@ jobs:
     # real tag release. Dry-runs still exercise attestation and its verification inside the
     # reusable pipeline (`attest` job); only the publish step has no rehearsal, by design.
     if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
-    needs: [verify, binskim-release, attest-sarif]
+    needs: [pipeline, verify, binskim-release, attest-sarif]
     runs-on: windows-2025
     permissions:
       contents: write        # create the Release + upload assets
+      id-token: write        # OIDC -> Sigstore: this job signs the VSA (its own verification verdict)
+      attestations: write    # record the VSA
     steps:
       - name: Download build artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # actions/download-artifact v8.0.2
@@ -507,6 +509,43 @@ jobs:
           echo "::endgroup::"
           cp bundles/hp-thermal.provenance.sigstore.jsonl dist/hp-thermal.provenance.sigstore.jsonl
           cp bundles/hp-thermal.sbom.sigstore.jsonl       dist/hp-thermal.sbom.sigstore.jsonl
+
+      # SLSA Verification Summary Attestation (#419 phase 4): this job has just re-verified the
+      # provenance and SBOM attestations identity-pinned to release-pipeline.yml and checked the
+      # manifest; it is the verifier, and the VSA is its signed verdict. Self-issued, scoped to the
+      # Build track; the policy is this repository's supply-chain/policy at the released commit.
+      - name: Download xtask verifier (digest-checked against the pipeline's record)
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # actions/download-artifact v8.0.2
+        with:
+          name: xtask-verifier
+          path: verifier
+      - name: Write the VSA predicate
+        shell: bash
+        env:
+          EXPECT_XTASK: ${{ needs.pipeline.outputs.xtask_sha256 }}
+        run: |
+          set -euo pipefail
+          got=$(sha256sum verifier/xtask.exe | cut -d' ' -f1)
+          [ "$got" = "$EXPECT_XTASK" ] || { echo "::error::xtask verifier digest $got != pipeline record $EXPECT_XTASK"; exit 1; }
+          base="https://github.com/${GITHUB_REPOSITORY}"
+          ./verifier/xtask.exe slsa-vsa             --verifier "$base/.github/workflows/release.yml"             --resource "$base/releases/download/${GITHUB_REF_NAME}/hp-thermal.exe"             --policy-uri "git+$base@${GITHUB_SHA}#supply-chain/policy" --policy-commit "$GITHUB_SHA"             --input "$base/releases/download/${GITHUB_REF_NAME}/hp-thermal.provenance.sigstore.jsonl=dist/hp-thermal.provenance.sigstore.jsonl"             --input "$base/releases/download/${GITHUB_REF_NAME}/hp-thermal.sbom.sigstore.jsonl=dist/hp-thermal.sbom.sigstore.jsonl"             --result PASSED --level SLSA_BUILD_LEVEL_3 --slsa-version 1.2 --out vsa.json
+          cat vsa.json
+      - name: Attest the VSA
+        id: vsa
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # actions/attest v4.2.2
+        with:
+          subject-path: dist/hp-thermal.exe
+          predicate-type: https://slsa.dev/verification_summary/v1
+          predicate-path: vsa.json
+      - name: Verify the VSA (identity-pinned to this workflow) and stage its bundle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VSA_BUNDLE: ${{ steps.vsa.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          gh attestation verify dist/hp-thermal.exe --bundle "$VSA_BUNDLE" --repo "${GITHUB_REPOSITORY}"             --predicate-type https://slsa.dev/verification_summary/v1             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          cp "$VSA_BUNDLE" dist/hp-thermal.vsa.sigstore.jsonl
 
       - name: Publish GitHub Release
         if: startsWith(github.ref, 'refs/tags/v') && inputs.dry_run != true
@@ -555,7 +594,7 @@ jobs:
           } > notes.md
           gh release create "${GITHUB_REF_NAME}" \
             dist/hp-thermal.exe dist/hp-thermal.pdb dist/hp-thermal.cdx.json dist/SHA256SUMS \
-            dist/hp-thermal.provenance.sigstore.jsonl dist/hp-thermal.sbom.sigstore.jsonl \
+            dist/hp-thermal.provenance.sigstore.jsonl dist/hp-thermal.sbom.sigstore.jsonl             dist/hp-thermal.vsa.sigstore.jsonl \
             --repo "${GITHUB_REPOSITORY}" \
             --title "hp-thermal ${GITHUB_REF_NAME}" \
             --notes-file notes.md \
