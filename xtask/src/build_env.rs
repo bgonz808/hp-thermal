@@ -141,7 +141,12 @@ fn version_key(v: &str) -> Vec<u64> {
     v.split('.').map(|p| p.parse().unwrap_or(0)).collect()
 }
 
-pub fn run(_args: &[String]) -> i32 {
+pub fn run(args: &[String]) -> i32 {
+    let exe = args
+        .iter()
+        .position(|a| a == "--exe")
+        .and_then(|i| args.get(i + 1))
+        .map(String::as_str);
     let text = match std::fs::read_to_string(CONFIG) {
         Ok(t) => t,
         Err(e) => {
@@ -159,11 +164,11 @@ pub fn run(_args: &[String]) -> i32 {
     println!("pinned ({CONFIG} [env]):");
     println!("  MSVC toolset   {}", pin.toolset);
     println!("  Windows SDK    {} under {}", pin.sdk_version, pin.sdk_dir);
-    check(&pin)
+    check(&pin, exe)
 }
 
 #[cfg(not(windows))]
-fn check(_pin: &Pin) -> i32 {
+fn check(_pin: &Pin, _exe: Option<&str>) -> i32 {
     println!(
         "not Windows: the pin applies to x86_64-pc-windows-msvc builds only; nothing to check here"
     );
@@ -171,7 +176,7 @@ fn check(_pin: &Pin) -> i32 {
 }
 
 #[cfg(windows)]
-fn check(pin: &Pin) -> i32 {
+fn check(pin: &Pin, exe: Option<&str>) -> i32 {
     let list = match instances() {
         Ok(l) => l,
         Err(e) => {
@@ -235,6 +240,21 @@ fn check(pin: &Pin) -> i32 {
             pin.sdk_version, pin.sdk_dir
         );
     }
+    // --exe: the same binding the pipeline makes. The Rich header of a produced exe names the
+    // build of the link.exe that wrote it; the pinned toolset's link.exe carries that build in
+    // its version resource. Equal means this build used the pinned linker.
+    if let Some(exe_path) = exe {
+        match linked_by_pinned(Path::new(exe_path), &link) {
+            Ok((rich, lv)) => println!(
+                "OK  {exe_path}: Rich header linker build {rich} = link.exe {}.{}.{}.{} of toolset {}",
+                lv.0, lv.1, lv.2, lv.3, pin.toolset
+            ),
+            Err(e) => {
+                ok = false;
+                eprintln!("MISMATCH  {exe_path}: {e}");
+            }
+        }
+    }
     if ok {
         0
     } else {
@@ -289,6 +309,56 @@ fn print_install(pin: &Pin, only_component_missing: Option<&Path>) {
     );
 }
 
+/// `Major.Minor.Build.Revision` from a PE's VS_FIXEDFILEINFO (dwFileVersionMS/LS). The
+/// structure is located by its signature and strucVersion rather than by walking the resource
+/// directory; every occurrence must agree, so a stray match cannot pick a different number.
+/// `Major.Minor.Build.Revision`.
+pub(crate) type FileVersion = (u16, u16, u16, u16);
+
+pub(crate) fn file_version(pe: &[u8]) -> Result<FileVersion, String> {
+    const SIGNATURE: [u8; 8] = [0xBD, 0x04, 0xEF, 0xFE, 0x00, 0x00, 0x01, 0x00];
+    let mut found: Option<FileVersion> = None;
+    let mut at = 0;
+    while at + 16 <= pe.len() {
+        if pe[at..at + 8] == SIGNATURE {
+            let ms = u32::from_le_bytes([pe[at + 8], pe[at + 9], pe[at + 10], pe[at + 11]]);
+            let ls = u32::from_le_bytes([pe[at + 12], pe[at + 13], pe[at + 14], pe[at + 15]]);
+            let v = (
+                (ms >> 16) as u16,
+                (ms & 0xffff) as u16,
+                (ls >> 16) as u16,
+                (ls & 0xffff) as u16,
+            );
+            match found {
+                Some(prev) if prev != v => {
+                    return Err(format!(
+                        "two VS_FIXEDFILEINFO blocks disagree ({prev:?} vs {v:?})"
+                    ));
+                }
+                _ => found = Some(v),
+            }
+        }
+        at += 4;
+    }
+    found.ok_or_else(|| "no VS_FIXEDFILEINFO (version resource) found".to_string())
+}
+
+/// Rich header linker build of `exe` against the file version of `link`; Ok carries both.
+pub(crate) fn linked_by_pinned(exe: &Path, link: &Path) -> Result<(u16, FileVersion), String> {
+    let pe = std::fs::read(exe).map_err(|e| format!("{}: {e}", exe.display()))?;
+    let rich =
+        crate::formulate::rich_linker_build(&pe).map_err(|e| format!("{}: {e}", exe.display()))?;
+    let lb = std::fs::read(link).map_err(|e| format!("{}: {e}", link.display()))?;
+    let lv = file_version(&lb).map_err(|e| format!("{}: {e}", link.display()))?;
+    if lv.2 != rich {
+        return Err(format!(
+            "Rich header linker build {rich} but the pinned toolset's link.exe is {}.{}.{}.{}: this exe was not linked by the pinned toolset",
+            lv.0, lv.1, lv.2, lv.3
+        ));
+    }
+    Ok((rich, lv))
+}
+
 /// `10.0.26100.0` -> `26100`, the component id suffix.
 pub(crate) fn sdk_component(sdk_version: &str) -> &str {
     sdk_version.split('.').nth(2).unwrap_or(sdk_version)
@@ -341,6 +411,33 @@ WindowsSDKVersion = { value = '10.0.26100.0\', force = true }
         assert!(spectre.to_string_lossy().contains("spectre"));
         assert!(spectre.to_string_lossy().ends_with("libcmt.lib"));
         assert!(k32.to_string_lossy().contains("10.0.26100.0"));
+    }
+
+    fn fixed_file_info(ms: u32, ls: u32) -> Vec<u8> {
+        let mut b = vec![0u8; 64];
+        b.extend_from_slice(&[0xBD, 0x04, 0xEF, 0xFE, 0x00, 0x00, 0x01, 0x00]);
+        b.extend_from_slice(&ms.to_le_bytes());
+        b.extend_from_slice(&ls.to_le_bytes());
+        b.extend_from_slice(&[0u8; 40]);
+        b
+    }
+
+    #[test]
+    fn file_version_is_read_from_the_fixed_file_info() {
+        // 14.51.36260.0
+        let b = fixed_file_info((14 << 16) | 51, 36260 << 16);
+        assert_eq!(file_version(&b).unwrap(), (14, 51, 36260, 0));
+        assert!(
+            file_version(&[0u8; 32])
+                .unwrap_err()
+                .contains("no VS_FIXEDFILEINFO")
+        );
+        let mut two = fixed_file_info((14 << 16) | 51, 36260 << 16);
+        two.extend(fixed_file_info((14 << 16) | 44, 35229 << 16));
+        assert!(file_version(&two).unwrap_err().contains("disagree"));
+        let mut same = fixed_file_info((14 << 16) | 51, 36260 << 16);
+        same.extend(fixed_file_info((14 << 16) | 51, 36260 << 16));
+        assert_eq!(file_version(&same).unwrap().2, 36260);
     }
 
     #[test]
