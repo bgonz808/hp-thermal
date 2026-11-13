@@ -27,7 +27,8 @@ name: supply-chain monitor (static-pin posture)
 #                     digest + the latest release exe. New detections on old bytes fail the
 #                     job -> scheduled-failure notification.
 #   vuln-monitor    — same bytes, newer advisory DB: has anything appeared since bless?
-#   pin-staleness   — rust-toolchain nightly age; newer runner families (windows-2026 etc.).
+#   pin-staleness   — rust-toolchain nightly age against supply-chain/policy/cadence.json; newer
+#                     runner families (windows-2026 etc.).
 #   eox-check       — lifecycle (EoX) windows for every runs-on image + the pinned channel (#376):
 #                     OpenEoX Core records vs a digest-pinned schema, cross-checked against
 #                     endoflife.date; a newer schema stage upstream is a warning to review.
@@ -88,6 +89,12 @@ jobs:
             exe_sha=$(awk '$2=="hp-thermal.exe"{print $1}' sums.txt | head -1)
             [ -n "$exe_sha" ] && HASHES["release:hp-thermal.exe"]="$exe_sha"
           fi
+          # #347 bounded recheck (supply-chain/policy/cadence.json, sandbox_not_ready_days): how long
+          # after first submission NOT READY still means "pending". Read once, fail-closed.
+          jq -e '.sandbox_not_ready_days | has("warn") and has("fail")' supply-chain/policy/cadence.json > /dev/null \
+            || { echo "::error::cadence policy has no sandbox_not_ready_days.warn/fail"; exit 1; }
+          nr_warn=$(jq -r '.sandbox_not_ready_days.warn' supply-chain/policy/cadence.json)
+          nr_fail=$(jq -r '.sandbox_not_ready_days.fail // empty' supply-chain/policy/cadence.json)
           fail=0
           for key in "${!HASHES[@]}"; do
             sleep 16   # free-tier pacing
@@ -201,6 +208,20 @@ jobs:
             first_iso="?"; [ -n "$first" ] && first_iso=$(date -u -d "@$first" +%FT%TZ)
             sb_state="NOT READY"; [ "$sb_n" -gt 0 ] && sb_state="ANALYZED"
             echo "      sandbox: $sb_state — $sb_n verdict(s); first submitted $first_iso"
+            # Past the cadence bound NOT READY is no longer a result still coming: VT sandboxes most
+            # PE files within hours and some files never. The gate's vocabulary is unchanged (the
+            # record still states NOT READY); this says when waiting stops being the answer, and
+            # what replaces it: resubmit through vt-submit, or record by ack that the digest ships
+            # unsandboxed. `first` is VT's epoch seconds.
+            if [ "$sb_state" = "NOT READY" ] && [ -n "$first" ]; then
+              nr_days=$(( ( $(date -u +%s) - first ) / 86400 ))
+              if [ -n "$nr_fail" ] && [ "$nr_days" -ge "$nr_fail" ]; then
+                echo "::error::$key: sandbox NOT READY ${nr_days}d after first submission — at or past the ${nr_fail}d cadence fail bound"
+                fail=1
+              elif [ "$nr_days" -ge "$nr_warn" ]; then
+                echo "::warning::$key: sandbox NOT READY ${nr_days}d after first submission — at or past the ${nr_warn}d cadence warn bound; not pending any more: resubmit via vt-submit or ack the digest as unsandboxed"
+              fi
+            fi
             jq -r '.[] | "        \(.name): \(.category) (confidence \(.confidence // "-"))\(if (.classification | length) > 0 then " " + (.classification | join(",")) else "" end)"' <<<"$sb"
             # Absolute floor (floors.json hard_stop_on_sandbox_malicious): a sandbox verdict of
             # malicious is not a false-positive profile. Never ackable.
@@ -327,12 +348,22 @@ jobs:
           set -euo pipefail
           # Pinned nightly age (staleness notice only; std/rustc advisory DIFFING is a #226
           # follow-up — cargo-audit structurally cannot see std, so age is the v1 proxy).
+          # Bounds come from supply-chain/policy/cadence.json (toolchain_age_days); the soak FLOOR
+          # stays in tools/TOOLCHAIN.lock. Fail-closed on a missing field.
+          jq -e '.toolchain_age_days | has("warn") and has("fail")' supply-chain/policy/cadence.json > /dev/null \
+            || { echo "::error::cadence policy has no toolchain_age_days.warn/fail"; exit 1; }
+          age_warn=$(jq -r '.toolchain_age_days.warn' supply-chain/policy/cadence.json)
+          age_fail=$(jq -r '.toolchain_age_days.fail // empty' supply-chain/policy/cadence.json)
+          fail=0
           chan=$(sed -n 's/^channel *= *"\(.*\)"/\1/p' app/rust-toolchain.toml | head -1)
           d=${chan#nightly-}
           age_days=$(( ( $(date +%s) - $(date -d "$d" +%s) ) / 86400 ))
-          echo "pinned toolchain: $chan (age ${age_days}d)"
-          if [ "$age_days" -gt 75 ]; then
-            echo "::warning::pinned nightly is ${age_days} days old - consider a reviewed toolchain bump (std fixes ride toolchain updates)"
+          echo "pinned toolchain: $chan (age ${age_days}d; cadence warn ${age_warn}d, fail ${age_fail:--})"
+          if [ -n "$age_fail" ] && [ "$age_days" -ge "$age_fail" ]; then
+            echo "::error::pinned nightly is ${age_days} days old - at or past the ${age_fail}d cadence fail bound; a reviewed toolchain bump is due"
+            fail=1
+          elif [ "$age_days" -ge "$age_warn" ]; then
+            echo "::warning::pinned nightly is ${age_days} days old - at or past the ${age_warn}d cadence warn bound; consider a reviewed toolchain bump (std fixes ride toolchain updates)"
           fi
           # Newer runner families (runs-on labels are invisible to Dependabot): probe the
           # runner-images README for families beyond our pins. Preview-aware: a family whose
@@ -350,6 +381,7 @@ jobs:
               echo "::warning::runner family '$fam' is GA upstream - evaluate migrating pinned families (#226)"
             fi
           done
+          exit "$fail"
 
   eox-check:
     # #376: lifecycle (EoX) posture of every environment the workflows run on. The records

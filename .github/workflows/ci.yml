@@ -45,6 +45,12 @@ jobs:
       - name: EoX records + runner-image lifecycle windows
         run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- eox-check
 
+      # Time bounds the scheduled checks read (tool release lag, toolchain age, sandbox NOT READY)
+      # parse as one policy: fail below warn, warn under the soak floor, or drift from the
+      # constants compiled into explore fails here, not on the next Monday.
+      - name: Cadence policy
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- cadence-check
+
       - name: Checks (fmt / clippy / test, both feature configs)
         run: cargo run --locked --manifest-path xtask/Cargo.toml -- ci --fast
 

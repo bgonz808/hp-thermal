@@ -46,7 +46,17 @@ jobs:
             esac
           }
 
-          rows=""; behind=0
+          # Cadence (supply-chain/policy/cadence.json, tool_release_lag_days): how long an unadopted
+          # upstream release may sit before this check escalates. Lag is measured from the release
+          # commit's date, so a tool that fell behind last Monday and one that has been behind for a
+          # quarter no longer look the same. Fail-closed: a missing field fails this step.
+          jq -e '.tool_release_lag_days | has("warn") and has("fail")' supply-chain/policy/cadence.json > /dev/null \
+            || { echo "::error::cadence policy has no tool_release_lag_days.warn/fail"; exit 1; }
+          lag_warn=$(jq -r '.tool_release_lag_days.warn' supply-chain/policy/cadence.json)
+          lag_fail=$(jq -r '.tool_release_lag_days.fail // empty' supply-chain/policy/cadence.json)
+          now_s=$(date -u +%s)
+
+          rows=""; behind=0; overdue=0
           while read -r name repo rev _target _sha; do
             [ -n "${name:-}" ] || continue
             # Newest TAG matching this tool (not release objects: tags are the superset —
@@ -58,20 +68,39 @@ jobs:
             latest_tag=$(gh api "repos/$repo/tags?per_page=100" --paginate --jq '.[].name' 2>/dev/null \
                           | grep -E "$(tag_filter "$name")" | head -1 || true)
             if [ -z "$latest_tag" ]; then
-              rows+="| $name | \`${rev:0:12}\` | ⚠️ could not resolve latest — check manually | |\n"
+              rows+="| $name | \`${rev:0:12}\` | ⚠️ could not resolve latest — check manually | | |\n"
               continue
             fi
-            latest_sha=$(gh api "repos/$repo/commits/$latest_tag" --jq '.sha' 2>/dev/null || echo "")
+            latest_meta=$(gh api "repos/$repo/commits/$latest_tag" --jq '[.sha, .commit.committer.date] | @tsv' 2>/dev/null || echo "")
+            latest_sha=${latest_meta%%$'\t'*}; latest_date=${latest_meta#*$'\t'}
             if [ -n "$latest_sha" ] && [ "$latest_sha" != "$rev" ]; then
               behind=$((behind+1))
-              rows+="| $name | \`${rev:0:12}\` | **$latest_tag** | \`${latest_sha:0:12}\` |\n"
+              if latest_s=$(date -u -d "$latest_date" +%s 2>/dev/null); then
+                lag_days=$(( (now_s - latest_s) / 86400 ))
+                lag="lag ${lag_days}d"
+                if [ -n "$lag_fail" ] && [ "$lag_days" -ge "$lag_fail" ]; then
+                  echo "::error::$name: ${lag_days}d behind $latest_tag — at or past the ${lag_fail}d cadence fail bound"
+                  overdue=$((overdue+1)); lag="**lag ${lag_days}d — past ${lag_fail}d fail bound**"
+                elif [ "$lag_days" -ge "$lag_warn" ]; then
+                  echo "::warning::$name: ${lag_days}d behind $latest_tag — at or past the ${lag_warn}d cadence warn bound"
+                  lag="lag ${lag_days}d — past ${lag_warn}d warn bound"
+                fi
+              else
+                # An unparseable date is not "no lag": count it as overdue so it cannot hide.
+                echo "::error::$name: cannot parse commit date '$latest_date' for $latest_tag (counted as overdue)"
+                overdue=$((overdue+1)); lag="**date unreadable**"
+              fi
+              rows+="| $name | \`${rev:0:12}\` | **$latest_tag** | \`${latest_sha:0:12}\` | $lag |\n"
             else
-              rows+="| $name | \`${rev:0:12}\` | up to date ($latest_tag) | |\n"
+              rows+="| $name | \`${rev:0:12}\` | up to date ($latest_tag) | | |\n"
             fi
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
 
           {
             echo "behind=$behind"
+            echo "overdue=$overdue"
+            echo "lag_warn=$lag_warn"
+            echo "lag_fail=${lag_fail:--}"
             echo "rows<<EOF"
             printf "%b" "$rows"
             echo "EOF"
@@ -85,13 +114,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ROWS: ${{ steps.check.outputs.rows }}
           BEHIND: ${{ steps.check.outputs.behind }}
+          LAG_WARN: ${{ steps.check.outputs.lag_warn }}
+          LAG_FAIL: ${{ steps.check.outputs.lag_fail }}
         run: |
           set -euo pipefail
           title="Tool update check: $BEHIND prebuilt tool(s) behind upstream"
           body=$(printf '%s\n\n%s\n\n%s\n' \
-            "The scheduled tool-update check found newer upstream releases than the pins in \`tools/TOOLS.lock\`." \
-            "| tool | pinned rev | latest release | latest commit |
-          |---|---|---|---|
+            "The scheduled tool-update check found newer upstream releases than the pins in \`tools/TOOLS.lock\`. Lag is days since the newest unadopted release's commit; cadence bounds (\`supply-chain/policy/cadence.json\`): warn ${LAG_WARN}d, fail ${LAG_FAIL}d." \
+            "| tool | pinned rev | latest release | latest commit | lag |
+          |---|---|---|---|---|
           ${ROWS}" \
             "To adopt one: bump its \`rev\` in \`tools/TOOLS.lock\`, run **build-tools.yml**, then commit the printed digest (see \`tools/README.md\`). Detection is automated; the bump + rebuild stay a reviewed change.")
           # Update the existing open tracking issue if present, else create it.
@@ -101,3 +132,12 @@ jobs:
           else
             gh issue create --title "$title" --body "$body" --label dependencies
           fi
+
+      - name: Cadence bound
+        if: steps.check.outputs.overdue != '0'
+        shell: bash
+        env:
+          OVERDUE: ${{ steps.check.outputs.overdue }}
+        run: |
+          echo "::error::$OVERDUE tool(s) at or past the tool_release_lag_days fail bound (supply-chain/policy/cadence.json); adopt through the bless cycle or revise the policy in a reviewed PR"
+          exit 1
