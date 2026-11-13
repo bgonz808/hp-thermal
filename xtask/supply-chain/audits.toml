@@ -1,0 +1,20 @@
+
+# cargo-vet audits file
+
+[[audits.itoa]]
+who = "Robert J Gonzales <bgonz808@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.15 -> 1.0.18"
+notes = "Reviewed full diff plus an independent adversarial review with a bit-exact model (exhaustive u8/u16, millions of wider inputs). All unchecked writes replaced by bounds-checked MaybeUninit writes. Remaining unsafe is table reads and one from_utf8_unchecked whose soundness now depends on four constants (divmod100 SIG/EXP; div_rem_1e16 M_HIGH/SH_POST), verified analytically and numerically; constants checked by eye. No build script, no I/O, no new runtime deps, no_std retained. Gap noted: shipped tests lack a 17-32 digit u128 case; covered by our differential suite against core::fmt under Miri (default and strict-provenance/alignment passes, 7/7 clean, 2026-11-12, nightly-2026-10-09)."
+
+[[audits.serde_core]]
+who = "Robert J Gonzales <bgonz808@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.228 -> 1.0.229"
+notes = "Reviewed full diff: reborrow refactor of visit_seq (self instead of mut self; &mut *self.0), clippy lint rename, build.rs raises the rustc floor for enabling serde_derive from 1.61 to 1.71 (emits no_serde_derive below it); no unsafe, no new deps, no capability change. Base 1.0.228 is covered by the ISRG import."
+
+[[audits.zmij]]
+who = "Robert J Gonzales <bgonz808@gmail.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.21 -> 1.0.23"
+notes = "Reviewed full diff plus an independent adversarial review: Schubfach fallback removed for a single round_up/round_down/last_digit path; new f32 SIMD exponent writer (SSE4.1/NEON) gated by compile-time cfg only (no runtime detection, no #[target_feature]); every asm! is an empty optimizer-barrier comment; every transmute a same-size integer-vector move; all table indices re-derived for every reachable exponent incl. NaN/inf via format_finite; POW10_FIXUPS verified as the old table re-indexed; build.rs adds only an OPT_LEVEL-derived cfg; no new library deps (num-bigint 0.4->0.5 is dev-only). Soundness now rests on the invariant sig>=1 (integral in [0.1*2^52, 2^53)), which nothing asserts; a zero digit count would underflow the new length computation into an unbounded ptr::copy. Differential against core::fmt {:e} (half-even vs core's half-up on exact midpoints, both shortest round-trip; every output parses back bit-identical): 7/7 on release SSE2, +sse4.1, opt-level=s, debug; 70M-value f32 strided sweep; Miri 6/6 on scalar paths (2026-11-12, nightly-2026-10-09)."
