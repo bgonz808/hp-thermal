@@ -159,7 +159,12 @@ pub(crate) fn analysis_from_acks(
     })?;
     let cdx = &ack["cyclonedx"];
     let state = cdx["state"].as_str()?;
-    let mut an = json!({"state": state, "firstIssued": s(ack, &["timestamp"]), "detail": s(ack, &["status_notes"])});
+    // The native ruling's own `detail` when it has one; the OpenVEX notes otherwise.
+    let detail = cdx["detail"]
+        .as_str()
+        .map(str::to_string)
+        .unwrap_or_else(|| s(ack, &["status_notes"]));
+    let mut an = json!({"state": state, "firstIssued": s(ack, &["timestamp"]), "detail": detail});
     if let Some(j) = cdx["justification"].as_str() {
         an["justification"] = Value::String(j.to_string());
     }

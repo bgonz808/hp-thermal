@@ -5777,6 +5777,12 @@
           ]
         }
       ],
+      "analysis": {
+        "detail": "Not in the shipped binary: reached only through the proc-macro askama_derive in the frozen lock, and neither is recorded in the binary. MEASURED 2026-11-13: absent from the cargo-auditable dependency list (.dep-v0 section, runtime and build kinds, 312 packages) embedded in cargo-audit.exe sha256 b16c10e3c7d43570ad0a0a1d319694e8763b08cc2f9c5a7bcf212e3e135b5fbb.",
+        "firstIssued": "2026-11-13",
+        "justification": "code_not_present",
+        "state": "not_affected"
+      },
       "bom-ref": "vuln:RUSTSEC-2026-0374@basic-toml@0.1.10",
       "description": "`basic-toml` is unmaintained",
       "detail": "The last release was on March 3, 2025, the day after the repository was archived and marked as unmaintained.\n\n## Possible alternatives\n\n- [toml](https://crates.io/crates/toml)",
@@ -5816,6 +5822,12 @@
           ]
         }
       ],
+      "analysis": {
+        "detail": "Not in the shipped binary. MEASURED 2026-11-13: absent from the cargo-auditable dependency list (.dep-v0 section, runtime and build kinds, 312 packages) embedded in cargo-audit.exe sha256 b16c10e3c7d43570ad0a0a1d319694e8763b08cc2f9c5a7bcf212e3e135b5fbb. Optional dependency of cargo-lock behind its `cli` feature, which cargo-audit does not enable.",
+        "firstIssued": "2026-11-13",
+        "justification": "code_not_present",
+        "state": "not_affected"
+      },
       "bom-ref": "vuln:RUSTSEC-2026-0214@gumdrop@0.8.1",
       "description": "gumdrop is unmaintained",
       "detail": "The gumdrop crate is unmaintained, and all versions are affected.\n\nRecommended alternatives:\n\n- [clap](https://crates.io/crates/clap) is the most popular by far\n- [bpaf](https://crates.io/crates/bpaf) is a more lightweight alternative",
@@ -5855,6 +5867,11 @@
           ]
         }
       ],
+      "analysis": {
+        "detail": "Present in the shipped binary (cargo-audit.exe sha256 b16c10e3c7d43570ad0a0a1d319694e8763b08cc2f9c5a7bcf212e3e135b5fbb). Fixed upstream in 0.10.1 by bounding the AVX2 read in hex_decode_unchecked; 0.10.1 adds defmt as an optional dependency behind feature defmt-03 that no dependent enables. Decision open: adopt 0.10.1 under a lock-shape statement, or carry with a reachability analysis of hex_decode_unchecked via gix-hash and gix-packetline.",
+        "firstIssued": "2026-11-13",
+        "state": "in_triage"
+      },
       "bom-ref": "vuln:RUSTSEC-2026-0306@faster-hex@0.10.0",
       "description": "`hex_decode_unchecked` AVX2 path reads past `src`",
       "detail": "`faster_hex::hex_decode_unchecked` is a safe function. On x86 and x86_64, when AVX2 is enabled, `hex_decode_avx2` keeps decoding while `dst.len() >= 32` and then loads 32 bytes from `src` and 32 bytes from `src[32..]`. Nothing in that loop requires `src` to contain 64 bytes.\n\nA safe caller can pass a short `src` and a `dst` of at least 32 bytes. The AVX2 load then reads outside `src`.\n\nThe function has had this shape since 0.3.0. 0.10.0 is the last release with the unbounded AVX2 read. The maintainer agreed to this advisory and shipped the backport in 0.10.1 (pull request 74): the AVX2 loop now requires `src.len() >= 64` before those loads. 1.0.0 rewrites `hex_decode_unchecked` so the decoded length is `min(src.len() / 2, dst.len())`. Both are covered by `>= 0.10.1`. Other architectures take the scalar fallback and are outside this advisory.",
