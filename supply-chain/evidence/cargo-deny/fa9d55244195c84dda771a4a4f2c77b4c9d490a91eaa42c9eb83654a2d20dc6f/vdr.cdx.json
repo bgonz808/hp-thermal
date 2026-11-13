@@ -3,6 +3,21 @@
   "components": [
     {
       "bom-ref": "pkg:cargo/adler2@2.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -11,11 +26,32 @@
       ],
       "name": "adler2",
       "purl": "pkg:cargo/adler2@2.0.1",
+      "scope": "excluded",
       "type": "library",
       "version": "2.0.1"
     },
     {
       "bom-ref": "pkg:cargo/aho-corasick@1.1.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -24,11 +60,32 @@
       ],
       "name": "aho-corasick",
       "purl": "pkg:cargo/aho-corasick@1.1.4",
+      "scope": "required",
       "type": "library",
       "version": "1.1.4"
     },
     {
       "bom-ref": "pkg:cargo/allocator-api2@0.2.21",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -37,11 +94,32 @@
       ],
       "name": "allocator-api2",
       "purl": "pkg:cargo/allocator-api2@0.2.21",
+      "scope": "required",
       "type": "library",
       "version": "0.2.21"
     },
     {
       "bom-ref": "pkg:cargo/anstream@1.0.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -50,11 +128,32 @@
       ],
       "name": "anstream",
       "purl": "pkg:cargo/anstream@1.0.0",
+      "scope": "required",
       "type": "library",
       "version": "1.0.0"
     },
     {
       "bom-ref": "pkg:cargo/anstyle@1.0.14",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -63,11 +162,32 @@
       ],
       "name": "anstyle",
       "purl": "pkg:cargo/anstyle@1.0.14",
+      "scope": "required",
       "type": "library",
       "version": "1.0.14"
     },
     {
       "bom-ref": "pkg:cargo/anstyle-parse@1.0.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -76,11 +196,32 @@
       ],
       "name": "anstyle-parse",
       "purl": "pkg:cargo/anstyle-parse@1.0.0",
+      "scope": "required",
       "type": "library",
       "version": "1.0.0"
     },
     {
       "bom-ref": "pkg:cargo/anstyle-query@1.1.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -89,11 +230,32 @@
       ],
       "name": "anstyle-query",
       "purl": "pkg:cargo/anstyle-query@1.1.5",
+      "scope": "required",
       "type": "library",
       "version": "1.1.5"
     },
     {
       "bom-ref": "pkg:cargo/anstyle-wincon@3.0.11",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -102,11 +264,32 @@
       ],
       "name": "anstyle-wincon",
       "purl": "pkg:cargo/anstyle-wincon@3.0.11",
+      "scope": "required",
       "type": "library",
       "version": "3.0.11"
     },
     {
       "bom-ref": "pkg:cargo/anyhow@1.0.103",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -115,11 +298,27 @@
       ],
       "name": "anyhow",
       "purl": "pkg:cargo/anyhow@1.0.103",
+      "scope": "required",
       "type": "library",
       "version": "1.0.103"
     },
     {
       "bom-ref": "pkg:cargo/base64@0.22.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -128,11 +327,27 @@
       ],
       "name": "base64",
       "purl": "pkg:cargo/base64@0.22.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.22.1"
     },
     {
       "bom-ref": "pkg:cargo/bitflags@2.11.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -141,11 +356,32 @@
       ],
       "name": "bitflags",
       "purl": "pkg:cargo/bitflags@2.11.1",
+      "scope": "excluded",
       "type": "library",
       "version": "2.11.1"
     },
     {
       "bom-ref": "pkg:cargo/bitvec@1.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -154,11 +390,32 @@
       ],
       "name": "bitvec",
       "purl": "pkg:cargo/bitvec@1.0.1",
+      "scope": "required",
       "type": "library",
       "version": "1.0.1"
     },
     {
       "bom-ref": "pkg:cargo/block-buffer@0.10.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -167,11 +424,32 @@
       ],
       "name": "block-buffer",
       "purl": "pkg:cargo/block-buffer@0.10.4",
+      "scope": "required",
       "type": "library",
       "version": "0.10.4"
     },
     {
       "bom-ref": "pkg:cargo/borsh@1.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -180,11 +458,32 @@
       ],
       "name": "borsh",
       "purl": "pkg:cargo/borsh@1.6.1",
+      "scope": "required",
       "type": "library",
       "version": "1.6.1"
     },
     {
       "bom-ref": "pkg:cargo/bstr@1.12.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -193,11 +492,32 @@
       ],
       "name": "bstr",
       "purl": "pkg:cargo/bstr@1.12.1",
+      "scope": "required",
       "type": "library",
       "version": "1.12.1"
     },
     {
       "bom-ref": "pkg:cargo/bytes@1.11.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -206,11 +526,32 @@
       ],
       "name": "bytes",
       "purl": "pkg:cargo/bytes@1.11.1",
+      "scope": "required",
       "type": "library",
       "version": "1.11.1"
     },
     {
       "bom-ref": "pkg:cargo/camino@1.2.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -219,18 +560,60 @@
       ],
       "name": "camino",
       "purl": "pkg:cargo/camino@1.2.2",
+      "scope": "required",
       "type": "library",
       "version": "1.2.2"
     },
     {
       "bom-ref": "pkg:cargo/cargo-deny@0.20.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "name": "cargo-deny",
       "purl": "pkg:cargo/cargo-deny@0.20.2",
+      "scope": "required",
       "type": "library",
       "version": "0.20.2"
     },
     {
       "bom-ref": "pkg:cargo/cc@1.2.62",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -239,11 +622,32 @@
       ],
       "name": "cc",
       "purl": "pkg:cargo/cc@1.2.62",
+      "scope": "required",
       "type": "library",
       "version": "1.2.62"
     },
     {
       "bom-ref": "pkg:cargo/cfg-expr@0.20.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -252,11 +656,32 @@
       ],
       "name": "cfg-expr",
       "purl": "pkg:cargo/cfg-expr@0.20.7",
+      "scope": "required",
       "type": "library",
       "version": "0.20.7"
     },
     {
       "bom-ref": "pkg:cargo/cfg-if@1.0.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -265,11 +690,32 @@
       ],
       "name": "cfg-if",
       "purl": "pkg:cargo/cfg-if@1.0.4",
+      "scope": "required",
       "type": "library",
       "version": "1.0.4"
     },
     {
       "bom-ref": "pkg:cargo/cfg_aliases@0.2.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -278,11 +724,32 @@
       ],
       "name": "cfg_aliases",
       "purl": "pkg:cargo/cfg_aliases@0.2.1",
+      "scope": "required",
       "type": "library",
       "version": "0.2.1"
     },
     {
       "bom-ref": "pkg:cargo/clap@4.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -291,11 +758,32 @@
       ],
       "name": "clap",
       "purl": "pkg:cargo/clap@4.6.1",
+      "scope": "required",
       "type": "library",
       "version": "4.6.1"
     },
     {
       "bom-ref": "pkg:cargo/clap_builder@4.6.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -304,11 +792,32 @@
       ],
       "name": "clap_builder",
       "purl": "pkg:cargo/clap_builder@4.6.0",
+      "scope": "required",
       "type": "library",
       "version": "4.6.0"
     },
     {
       "bom-ref": "pkg:cargo/clap_lex@1.1.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -317,11 +826,32 @@
       ],
       "name": "clap_lex",
       "purl": "pkg:cargo/clap_lex@1.1.0",
+      "scope": "required",
       "type": "library",
       "version": "1.1.0"
     },
     {
       "bom-ref": "pkg:cargo/codespan@0.13.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -330,11 +860,32 @@
       ],
       "name": "codespan",
       "purl": "pkg:cargo/codespan@0.13.1",
+      "scope": "required",
       "type": "library",
       "version": "0.13.1"
     },
     {
       "bom-ref": "pkg:cargo/codespan-reporting@0.13.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -343,11 +894,32 @@
       ],
       "name": "codespan-reporting",
       "purl": "pkg:cargo/codespan-reporting@0.13.1",
+      "scope": "required",
       "type": "library",
       "version": "0.13.1"
     },
     {
       "bom-ref": "pkg:cargo/colorchoice@1.0.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -356,11 +928,27 @@
       ],
       "name": "colorchoice",
       "purl": "pkg:cargo/colorchoice@1.0.5",
+      "scope": "required",
       "type": "library",
       "version": "1.0.5"
     },
     {
       "bom-ref": "pkg:cargo/console@0.16.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -369,11 +957,32 @@
       ],
       "name": "console",
       "purl": "pkg:cargo/console@0.16.3",
+      "scope": "excluded",
       "type": "library",
       "version": "0.16.3"
     },
     {
       "bom-ref": "pkg:cargo/cpufeatures@0.2.17",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -382,11 +991,27 @@
       ],
       "name": "cpufeatures",
       "purl": "pkg:cargo/cpufeatures@0.2.17",
+      "scope": "required",
       "type": "library",
       "version": "0.2.17"
     },
     {
       "bom-ref": "pkg:cargo/crc32fast@1.5.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -395,11 +1020,32 @@
       ],
       "name": "crc32fast",
       "purl": "pkg:cargo/crc32fast@1.5.0",
+      "scope": "excluded",
       "type": "library",
       "version": "1.5.0"
     },
     {
       "bom-ref": "pkg:cargo/crossbeam@0.8.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -408,11 +1054,32 @@
       ],
       "name": "crossbeam",
       "purl": "pkg:cargo/crossbeam@0.8.4",
+      "scope": "required",
       "type": "library",
       "version": "0.8.4"
     },
     {
       "bom-ref": "pkg:cargo/crossbeam-channel@0.5.15",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -421,11 +1088,32 @@
       ],
       "name": "crossbeam-channel",
       "purl": "pkg:cargo/crossbeam-channel@0.5.15",
+      "scope": "required",
       "type": "library",
       "version": "0.5.15"
     },
     {
       "bom-ref": "pkg:cargo/crossbeam-deque@0.8.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -434,11 +1122,32 @@
       ],
       "name": "crossbeam-deque",
       "purl": "pkg:cargo/crossbeam-deque@0.8.6",
+      "scope": "required",
       "type": "library",
       "version": "0.8.6"
     },
     {
       "bom-ref": "pkg:cargo/crossbeam-epoch@0.9.20",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -447,11 +1156,32 @@
       ],
       "name": "crossbeam-epoch",
       "purl": "pkg:cargo/crossbeam-epoch@0.9.20",
+      "scope": "required",
       "type": "library",
       "version": "0.9.20"
     },
     {
       "bom-ref": "pkg:cargo/crossbeam-queue@0.3.12",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -460,11 +1190,32 @@
       ],
       "name": "crossbeam-queue",
       "purl": "pkg:cargo/crossbeam-queue@0.3.12",
+      "scope": "required",
       "type": "library",
       "version": "0.3.12"
     },
     {
       "bom-ref": "pkg:cargo/crossbeam-utils@0.8.21",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -473,11 +1224,32 @@
       ],
       "name": "crossbeam-utils",
       "purl": "pkg:cargo/crossbeam-utils@0.8.21",
+      "scope": "required",
       "type": "library",
       "version": "0.8.21"
     },
     {
       "bom-ref": "pkg:cargo/crypto-common@0.1.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -486,11 +1258,32 @@
       ],
       "name": "crypto-common",
       "purl": "pkg:cargo/crypto-common@0.1.7",
+      "scope": "required",
       "type": "library",
       "version": "0.1.7"
     },
     {
       "bom-ref": "pkg:cargo/digest@0.10.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -499,11 +1292,32 @@
       ],
       "name": "digest",
       "purl": "pkg:cargo/digest@0.10.7",
+      "scope": "required",
       "type": "library",
       "version": "0.10.7"
     },
     {
       "bom-ref": "pkg:cargo/displaydoc@0.2.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -512,11 +1326,32 @@
       ],
       "name": "displaydoc",
       "purl": "pkg:cargo/displaydoc@0.2.5",
+      "scope": "required",
       "type": "library",
       "version": "0.2.5"
     },
     {
       "bom-ref": "pkg:cargo/either@1.16.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -525,11 +1360,27 @@
       ],
       "name": "either",
       "purl": "pkg:cargo/either@1.16.0",
+      "scope": "required",
       "type": "library",
       "version": "1.16.0"
     },
     {
       "bom-ref": "pkg:cargo/encode_unicode@1.0.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -538,11 +1389,32 @@
       ],
       "name": "encode_unicode",
       "purl": "pkg:cargo/encode_unicode@1.0.0",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.0"
     },
     {
       "bom-ref": "pkg:cargo/equivalent@1.0.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -551,11 +1423,27 @@
       ],
       "name": "equivalent",
       "purl": "pkg:cargo/equivalent@1.0.2",
+      "scope": "required",
       "type": "library",
       "version": "1.0.2"
     },
     {
       "bom-ref": "pkg:cargo/errno@0.3.14",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -564,11 +1452,27 @@
       ],
       "name": "errno",
       "purl": "pkg:cargo/errno@0.3.14",
+      "scope": "excluded",
       "type": "library",
       "version": "0.3.14"
     },
     {
       "bom-ref": "pkg:cargo/fastrand@2.4.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -577,11 +1481,32 @@
       ],
       "name": "fastrand",
       "purl": "pkg:cargo/fastrand@2.4.1",
+      "scope": "excluded",
       "type": "library",
       "version": "2.4.1"
     },
     {
       "bom-ref": "pkg:cargo/fern@0.7.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -590,11 +1515,32 @@
       ],
       "name": "fern",
       "purl": "pkg:cargo/fern@0.7.1",
+      "scope": "required",
       "type": "library",
       "version": "0.7.1"
     },
     {
       "bom-ref": "pkg:cargo/find-msvc-tools@0.1.9",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -603,11 +1549,32 @@
       ],
       "name": "find-msvc-tools",
       "purl": "pkg:cargo/find-msvc-tools@0.1.9",
+      "scope": "required",
       "type": "library",
       "version": "0.1.9"
     },
     {
       "bom-ref": "pkg:cargo/fixedbitset@0.5.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -616,11 +1583,27 @@
       ],
       "name": "fixedbitset",
       "purl": "pkg:cargo/fixedbitset@0.5.7",
+      "scope": "required",
       "type": "library",
       "version": "0.5.7"
     },
     {
       "bom-ref": "pkg:cargo/flate2@1.1.9",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -629,11 +1612,32 @@
       ],
       "name": "flate2",
       "purl": "pkg:cargo/flate2@1.1.9",
+      "scope": "excluded",
       "type": "library",
       "version": "1.1.9"
     },
     {
       "bom-ref": "pkg:cargo/foldhash@0.1.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -642,11 +1646,32 @@
       ],
       "name": "foldhash",
       "purl": "pkg:cargo/foldhash@0.1.5",
+      "scope": "required",
       "type": "library",
       "version": "0.1.5"
     },
     {
       "bom-ref": "pkg:cargo/form_urlencoded@1.2.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -655,11 +1680,27 @@
       ],
       "name": "form_urlencoded",
       "purl": "pkg:cargo/form_urlencoded@1.2.2",
+      "scope": "required",
       "type": "library",
       "version": "1.2.2"
     },
     {
       "bom-ref": "pkg:cargo/fs_extra@1.3.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -668,11 +1709,32 @@
       ],
       "name": "fs_extra",
       "purl": "pkg:cargo/fs_extra@1.3.0",
+      "scope": "excluded",
       "type": "library",
       "version": "1.3.0"
     },
     {
       "bom-ref": "pkg:cargo/funty@2.0.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -681,11 +1743,32 @@
       ],
       "name": "funty",
       "purl": "pkg:cargo/funty@2.0.0",
+      "scope": "required",
       "type": "library",
       "version": "2.0.0"
     },
     {
       "bom-ref": "pkg:cargo/generic-array@0.14.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -694,11 +1777,32 @@
       ],
       "name": "generic-array",
       "purl": "pkg:cargo/generic-array@0.14.7",
+      "scope": "required",
       "type": "library",
       "version": "0.14.7"
     },
     {
       "bom-ref": "pkg:cargo/getrandom@0.2.17",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -707,11 +1811,32 @@
       ],
       "name": "getrandom",
       "purl": "pkg:cargo/getrandom@0.2.17",
+      "scope": "required",
       "type": "library",
       "version": "0.2.17"
     },
     {
       "bom-ref": "pkg:cargo/getrandom@0.3.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -720,11 +1845,27 @@
       ],
       "name": "getrandom",
       "purl": "pkg:cargo/getrandom@0.3.4",
+      "scope": "required",
       "type": "library",
       "version": "0.3.4"
     },
     {
       "bom-ref": "pkg:cargo/getrandom@0.4.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -733,11 +1874,32 @@
       ],
       "name": "getrandom",
       "purl": "pkg:cargo/getrandom@0.4.2",
+      "scope": "excluded",
       "type": "library",
       "version": "0.4.2"
     },
     {
       "bom-ref": "pkg:cargo/globset@0.4.18",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -746,11 +1908,32 @@
       ],
       "name": "globset",
       "purl": "pkg:cargo/globset@0.4.18",
+      "scope": "required",
       "type": "library",
       "version": "0.4.18"
     },
     {
       "bom-ref": "pkg:cargo/goblin@0.10.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -759,11 +1942,32 @@
       ],
       "name": "goblin",
       "purl": "pkg:cargo/goblin@0.10.5",
+      "scope": "required",
       "type": "library",
       "version": "0.10.5"
     },
     {
       "bom-ref": "pkg:cargo/hashbrown@0.15.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -772,11 +1976,32 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.15.5",
+      "scope": "required",
       "type": "library",
       "version": "0.15.5"
     },
     {
       "bom-ref": "pkg:cargo/hashbrown@0.17.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -785,11 +2010,32 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.17.1",
+      "scope": "required",
       "type": "library",
       "version": "0.17.1"
     },
     {
       "bom-ref": "pkg:cargo/heck@0.5.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -798,11 +2044,32 @@
       ],
       "name": "heck",
       "purl": "pkg:cargo/heck@0.5.0",
+      "scope": "required",
       "type": "library",
       "version": "0.5.0"
     },
     {
       "bom-ref": "pkg:cargo/http@1.4.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -811,11 +2078,27 @@
       ],
       "name": "http",
       "purl": "pkg:cargo/http@1.4.0",
+      "scope": "required",
       "type": "library",
       "version": "1.4.0"
     },
     {
       "bom-ref": "pkg:cargo/httparse@1.10.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -824,11 +2107,32 @@
       ],
       "name": "httparse",
       "purl": "pkg:cargo/httparse@1.10.1",
+      "scope": "excluded",
       "type": "library",
       "version": "1.10.1"
     },
     {
       "bom-ref": "pkg:cargo/icu_collections@2.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -837,11 +2141,32 @@
       ],
       "name": "icu_collections",
       "purl": "pkg:cargo/icu_collections@2.2.0",
+      "scope": "required",
       "type": "library",
       "version": "2.2.0"
     },
     {
       "bom-ref": "pkg:cargo/icu_locale_core@2.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -850,11 +2175,32 @@
       ],
       "name": "icu_locale_core",
       "purl": "pkg:cargo/icu_locale_core@2.2.0",
+      "scope": "required",
       "type": "library",
       "version": "2.2.0"
     },
     {
       "bom-ref": "pkg:cargo/icu_normalizer@2.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -863,11 +2209,32 @@
       ],
       "name": "icu_normalizer",
       "purl": "pkg:cargo/icu_normalizer@2.2.0",
+      "scope": "required",
       "type": "library",
       "version": "2.2.0"
     },
     {
       "bom-ref": "pkg:cargo/icu_normalizer_data@2.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -876,11 +2243,32 @@
       ],
       "name": "icu_normalizer_data",
       "purl": "pkg:cargo/icu_normalizer_data@2.2.0",
+      "scope": "required",
       "type": "library",
       "version": "2.2.0"
     },
     {
       "bom-ref": "pkg:cargo/icu_properties@2.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -889,11 +2277,32 @@
       ],
       "name": "icu_properties",
       "purl": "pkg:cargo/icu_properties@2.2.0",
+      "scope": "required",
       "type": "library",
       "version": "2.2.0"
     },
     {
       "bom-ref": "pkg:cargo/icu_properties_data@2.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -902,11 +2311,32 @@
       ],
       "name": "icu_properties_data",
       "purl": "pkg:cargo/icu_properties_data@2.2.0",
+      "scope": "required",
       "type": "library",
       "version": "2.2.0"
     },
     {
       "bom-ref": "pkg:cargo/icu_provider@2.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -915,11 +2345,27 @@
       ],
       "name": "icu_provider",
       "purl": "pkg:cargo/icu_provider@2.2.0",
+      "scope": "required",
       "type": "library",
       "version": "2.2.0"
     },
     {
       "bom-ref": "pkg:cargo/id-arena@2.3.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -928,11 +2374,32 @@
       ],
       "name": "id-arena",
       "purl": "pkg:cargo/id-arena@2.3.0",
+      "scope": "excluded",
       "type": "library",
       "version": "2.3.0"
     },
     {
       "bom-ref": "pkg:cargo/idna@1.1.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -941,11 +2408,32 @@
       ],
       "name": "idna",
       "purl": "pkg:cargo/idna@1.1.0",
+      "scope": "required",
       "type": "library",
       "version": "1.1.0"
     },
     {
       "bom-ref": "pkg:cargo/idna_adapter@1.2.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -954,11 +2442,32 @@
       ],
       "name": "idna_adapter",
       "purl": "pkg:cargo/idna_adapter@1.2.2",
+      "scope": "required",
       "type": "library",
       "version": "1.2.2"
     },
     {
       "bom-ref": "pkg:cargo/indexmap@2.14.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -967,11 +2476,27 @@
       ],
       "name": "indexmap",
       "purl": "pkg:cargo/indexmap@2.14.0",
+      "scope": "required",
       "type": "library",
       "version": "2.14.0"
     },
     {
       "bom-ref": "pkg:cargo/insta@1.47.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -980,11 +2505,32 @@
       ],
       "name": "insta",
       "purl": "pkg:cargo/insta@1.47.2",
+      "scope": "excluded",
       "type": "library",
       "version": "1.47.2"
     },
     {
       "bom-ref": "pkg:cargo/is_terminal_polyfill@1.70.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -993,11 +2539,32 @@
       ],
       "name": "is_terminal_polyfill",
       "purl": "pkg:cargo/is_terminal_polyfill@1.70.2",
+      "scope": "required",
       "type": "library",
       "version": "1.70.2"
     },
     {
       "bom-ref": "pkg:cargo/itoa@1.0.18",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1006,11 +2573,32 @@
       ],
       "name": "itoa",
       "purl": "pkg:cargo/itoa@1.0.18",
+      "scope": "required",
       "type": "library",
       "version": "1.0.18"
     },
     {
       "bom-ref": "pkg:cargo/jiff@0.2.24",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1019,11 +2607,27 @@
       ],
       "name": "jiff",
       "purl": "pkg:cargo/jiff@0.2.24",
+      "scope": "required",
       "type": "library",
       "version": "0.2.24"
     },
     {
       "bom-ref": "pkg:cargo/jiff-static@0.2.24",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1032,11 +2636,32 @@
       ],
       "name": "jiff-static",
       "purl": "pkg:cargo/jiff-static@0.2.24",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.24"
     },
     {
       "bom-ref": "pkg:cargo/jobserver@0.1.34",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1045,11 +2670,32 @@
       ],
       "name": "jobserver",
       "purl": "pkg:cargo/jobserver@0.1.34",
+      "scope": "required",
       "type": "library",
       "version": "0.1.34"
     },
     {
       "bom-ref": "pkg:cargo/krates@0.21.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1058,11 +2704,27 @@
       ],
       "name": "krates",
       "purl": "pkg:cargo/krates@0.21.2",
+      "scope": "required",
       "type": "library",
       "version": "0.21.2"
     },
     {
       "bom-ref": "pkg:cargo/leb128fmt@0.1.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1071,11 +2733,27 @@
       ],
       "name": "leb128fmt",
       "purl": "pkg:cargo/leb128fmt@0.1.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.0"
     },
     {
       "bom-ref": "pkg:cargo/libc@0.2.186",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1084,11 +2762,27 @@
       ],
       "name": "libc",
       "purl": "pkg:cargo/libc@0.2.186",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.186"
     },
     {
       "bom-ref": "pkg:cargo/linux-raw-sys@0.12.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1097,11 +2791,32 @@
       ],
       "name": "linux-raw-sys",
       "purl": "pkg:cargo/linux-raw-sys@0.12.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.12.1"
     },
     {
       "bom-ref": "pkg:cargo/litemap@0.8.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1110,11 +2825,32 @@
       ],
       "name": "litemap",
       "purl": "pkg:cargo/litemap@0.8.2",
+      "scope": "required",
       "type": "library",
       "version": "0.8.2"
     },
     {
       "bom-ref": "pkg:cargo/lock_api@0.4.14",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1123,11 +2859,32 @@
       ],
       "name": "lock_api",
       "purl": "pkg:cargo/lock_api@0.4.14",
+      "scope": "required",
       "type": "library",
       "version": "0.4.14"
     },
     {
       "bom-ref": "pkg:cargo/log@0.4.29",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1136,11 +2893,32 @@
       ],
       "name": "log",
       "purl": "pkg:cargo/log@0.4.29",
+      "scope": "required",
       "type": "library",
       "version": "0.4.29"
     },
     {
       "bom-ref": "pkg:cargo/memchr@2.8.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1149,11 +2927,32 @@
       ],
       "name": "memchr",
       "purl": "pkg:cargo/memchr@2.8.0",
+      "scope": "required",
       "type": "library",
       "version": "2.8.0"
     },
     {
       "bom-ref": "pkg:cargo/memmap2@0.9.11",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1162,11 +2961,27 @@
       ],
       "name": "memmap2",
       "purl": "pkg:cargo/memmap2@0.9.11",
+      "scope": "required",
       "type": "library",
       "version": "0.9.11"
     },
     {
       "bom-ref": "pkg:cargo/miniz_oxide@0.8.9",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1175,11 +2990,32 @@
       ],
       "name": "miniz_oxide",
       "purl": "pkg:cargo/miniz_oxide@0.8.9",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.9"
     },
     {
       "bom-ref": "pkg:cargo/nu-ansi-term@0.50.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1188,11 +3024,27 @@
       ],
       "name": "nu-ansi-term",
       "purl": "pkg:cargo/nu-ansi-term@0.50.3",
+      "scope": "required",
       "type": "library",
       "version": "0.50.3"
     },
     {
       "bom-ref": "pkg:cargo/once_cell@1.21.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1201,11 +3053,32 @@
       ],
       "name": "once_cell",
       "purl": "pkg:cargo/once_cell@1.21.4",
+      "scope": "excluded",
       "type": "library",
       "version": "1.21.4"
     },
     {
       "bom-ref": "pkg:cargo/once_cell_polyfill@1.70.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1214,11 +3087,32 @@
       ],
       "name": "once_cell_polyfill",
       "purl": "pkg:cargo/once_cell_polyfill@1.70.2",
+      "scope": "required",
       "type": "library",
       "version": "1.70.2"
     },
     {
       "bom-ref": "pkg:cargo/parking_lot@0.12.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1227,11 +3121,32 @@
       ],
       "name": "parking_lot",
       "purl": "pkg:cargo/parking_lot@0.12.5",
+      "scope": "required",
       "type": "library",
       "version": "0.12.5"
     },
     {
       "bom-ref": "pkg:cargo/parking_lot_core@0.9.12",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1240,11 +3155,32 @@
       ],
       "name": "parking_lot_core",
       "purl": "pkg:cargo/parking_lot_core@0.9.12",
+      "scope": "required",
       "type": "library",
       "version": "0.9.12"
     },
     {
       "bom-ref": "pkg:cargo/percent-encoding@2.3.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1253,11 +3189,32 @@
       ],
       "name": "percent-encoding",
       "purl": "pkg:cargo/percent-encoding@2.3.2",
+      "scope": "required",
       "type": "library",
       "version": "2.3.2"
     },
     {
       "bom-ref": "pkg:cargo/petgraph@0.8.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1266,11 +3223,32 @@
       ],
       "name": "petgraph",
       "purl": "pkg:cargo/petgraph@0.8.1",
+      "scope": "required",
       "type": "library",
       "version": "0.8.1"
     },
     {
       "bom-ref": "pkg:cargo/pkg-config@0.3.33",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1279,11 +3257,32 @@
       ],
       "name": "pkg-config",
       "purl": "pkg:cargo/pkg-config@0.3.33",
+      "scope": "required",
       "type": "library",
       "version": "0.3.33"
     },
     {
       "bom-ref": "pkg:cargo/plain@0.2.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1292,11 +3291,27 @@
       ],
       "name": "plain",
       "purl": "pkg:cargo/plain@0.2.3",
+      "scope": "required",
       "type": "library",
       "version": "0.2.3"
     },
     {
       "bom-ref": "pkg:cargo/portable-atomic@1.13.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1305,11 +3320,27 @@
       ],
       "name": "portable-atomic",
       "purl": "pkg:cargo/portable-atomic@1.13.1",
+      "scope": "excluded",
       "type": "library",
       "version": "1.13.1"
     },
     {
       "bom-ref": "pkg:cargo/portable-atomic-util@0.2.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1318,11 +3349,32 @@
       ],
       "name": "portable-atomic-util",
       "purl": "pkg:cargo/portable-atomic-util@0.2.7",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.7"
     },
     {
       "bom-ref": "pkg:cargo/potential_utf@0.1.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1331,11 +3383,27 @@
       ],
       "name": "potential_utf",
       "purl": "pkg:cargo/potential_utf@0.1.5",
+      "scope": "required",
       "type": "library",
       "version": "0.1.5"
     },
     {
       "bom-ref": "pkg:cargo/prettyplease@0.2.37",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1344,11 +3412,32 @@
       ],
       "name": "prettyplease",
       "purl": "pkg:cargo/prettyplease@0.2.37",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.37"
     },
     {
       "bom-ref": "pkg:cargo/proc-macro2@1.0.106",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1357,11 +3446,32 @@
       ],
       "name": "proc-macro2",
       "purl": "pkg:cargo/proc-macro2@1.0.106",
+      "scope": "required",
       "type": "library",
       "version": "1.0.106"
     },
     {
       "bom-ref": "pkg:cargo/quote@1.0.45",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1370,11 +3480,27 @@
       ],
       "name": "quote",
       "purl": "pkg:cargo/quote@1.0.45",
+      "scope": "required",
       "type": "library",
       "version": "1.0.45"
     },
     {
       "bom-ref": "pkg:cargo/r-efi@5.3.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1383,11 +3509,27 @@
       ],
       "name": "r-efi",
       "purl": "pkg:cargo/r-efi@5.3.0",
+      "scope": "excluded",
       "type": "library",
       "version": "5.3.0"
     },
     {
       "bom-ref": "pkg:cargo/r-efi@6.0.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1396,11 +3538,32 @@
       ],
       "name": "r-efi",
       "purl": "pkg:cargo/r-efi@6.0.0",
+      "scope": "excluded",
       "type": "library",
       "version": "6.0.0"
     },
     {
       "bom-ref": "pkg:cargo/radium@0.7.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1409,11 +3572,32 @@
       ],
       "name": "radium",
       "purl": "pkg:cargo/radium@0.7.0",
+      "scope": "required",
       "type": "library",
       "version": "0.7.0"
     },
     {
       "bom-ref": "pkg:cargo/rayon@1.12.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1422,11 +3606,32 @@
       ],
       "name": "rayon",
       "purl": "pkg:cargo/rayon@1.12.0",
+      "scope": "required",
       "type": "library",
       "version": "1.12.0"
     },
     {
       "bom-ref": "pkg:cargo/rayon-core@1.13.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1435,11 +3640,27 @@
       ],
       "name": "rayon-core",
       "purl": "pkg:cargo/rayon-core@1.13.0",
+      "scope": "required",
       "type": "library",
       "version": "1.13.0"
     },
     {
       "bom-ref": "pkg:cargo/redox_syscall@0.5.18",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1448,11 +3669,32 @@
       ],
       "name": "redox_syscall",
       "purl": "pkg:cargo/redox_syscall@0.5.18",
+      "scope": "excluded",
       "type": "library",
       "version": "0.5.18"
     },
     {
       "bom-ref": "pkg:cargo/regex@1.12.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1461,11 +3703,32 @@
       ],
       "name": "regex",
       "purl": "pkg:cargo/regex@1.12.3",
+      "scope": "required",
       "type": "library",
       "version": "1.12.3"
     },
     {
       "bom-ref": "pkg:cargo/regex-automata@0.4.14",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1474,11 +3737,32 @@
       ],
       "name": "regex-automata",
       "purl": "pkg:cargo/regex-automata@0.4.14",
+      "scope": "required",
       "type": "library",
       "version": "0.4.14"
     },
     {
       "bom-ref": "pkg:cargo/regex-syntax@0.8.10",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1487,11 +3771,32 @@
       ],
       "name": "regex-syntax",
       "purl": "pkg:cargo/regex-syntax@0.8.10",
+      "scope": "required",
       "type": "library",
       "version": "0.8.10"
     },
     {
       "bom-ref": "pkg:cargo/ring@0.17.14",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1500,11 +3805,32 @@
       ],
       "name": "ring",
       "purl": "pkg:cargo/ring@0.17.14",
+      "scope": "required",
       "type": "library",
       "version": "0.17.14"
     },
     {
       "bom-ref": "pkg:cargo/rustc-stable-hash@0.1.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1513,11 +3839,27 @@
       ],
       "name": "rustc-stable-hash",
       "purl": "pkg:cargo/rustc-stable-hash@0.1.2",
+      "scope": "required",
       "type": "library",
       "version": "0.1.2"
     },
     {
       "bom-ref": "pkg:cargo/rustix@1.1.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1526,11 +3868,27 @@
       ],
       "name": "rustix",
       "purl": "pkg:cargo/rustix@1.1.6",
+      "scope": "excluded",
       "type": "library",
       "version": "1.1.6"
     },
     {
       "bom-ref": "pkg:cargo/rustls@0.23.46",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1539,11 +3897,27 @@
       ],
       "name": "rustls",
       "purl": "pkg:cargo/rustls@0.23.46",
+      "scope": "excluded",
       "type": "library",
       "version": "0.23.46"
     },
     {
       "bom-ref": "pkg:cargo/rustls-pki-types@1.14.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1552,11 +3926,27 @@
       ],
       "name": "rustls-pki-types",
       "purl": "pkg:cargo/rustls-pki-types@1.14.1",
+      "scope": "excluded",
       "type": "library",
       "version": "1.14.1"
     },
     {
       "bom-ref": "pkg:cargo/rustls-webpki@0.103.16",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1565,11 +3955,32 @@
       ],
       "name": "rustls-webpki",
       "purl": "pkg:cargo/rustls-webpki@0.103.16",
+      "scope": "excluded",
       "type": "library",
       "version": "0.103.16"
     },
     {
       "bom-ref": "pkg:cargo/same-file@1.0.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1578,11 +3989,32 @@
       ],
       "name": "same-file",
       "purl": "pkg:cargo/same-file@1.0.6",
+      "scope": "required",
       "type": "library",
       "version": "1.0.6"
     },
     {
       "bom-ref": "pkg:cargo/scopeguard@1.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1591,11 +4023,32 @@
       ],
       "name": "scopeguard",
       "purl": "pkg:cargo/scopeguard@1.2.0",
+      "scope": "required",
       "type": "library",
       "version": "1.2.0"
     },
     {
       "bom-ref": "pkg:cargo/scroll@0.13.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1604,11 +4057,32 @@
       ],
       "name": "scroll",
       "purl": "pkg:cargo/scroll@0.13.0",
+      "scope": "required",
       "type": "library",
       "version": "0.13.0"
     },
     {
       "bom-ref": "pkg:cargo/scroll_derive@0.13.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1617,11 +4091,32 @@
       ],
       "name": "scroll_derive",
       "purl": "pkg:cargo/scroll_derive@0.13.1",
+      "scope": "required",
       "type": "library",
       "version": "0.13.1"
     },
     {
       "bom-ref": "pkg:cargo/semver@1.0.28",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1630,11 +4125,32 @@
       ],
       "name": "semver",
       "purl": "pkg:cargo/semver@1.0.28",
+      "scope": "required",
       "type": "library",
       "version": "1.0.28"
     },
     {
       "bom-ref": "pkg:cargo/serde@1.0.228",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1643,11 +4159,32 @@
       ],
       "name": "serde",
       "purl": "pkg:cargo/serde@1.0.228",
+      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
     {
       "bom-ref": "pkg:cargo/serde_core@1.0.228",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1656,11 +4193,32 @@
       ],
       "name": "serde_core",
       "purl": "pkg:cargo/serde_core@1.0.228",
+      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
     {
       "bom-ref": "pkg:cargo/serde_derive@1.0.228",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1669,11 +4227,32 @@
       ],
       "name": "serde_derive",
       "purl": "pkg:cargo/serde_derive@1.0.228",
+      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
     {
       "bom-ref": "pkg:cargo/serde_json@1.0.150",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1682,11 +4261,32 @@
       ],
       "name": "serde_json",
       "purl": "pkg:cargo/serde_json@1.0.150",
+      "scope": "required",
       "type": "library",
       "version": "1.0.150"
     },
     {
       "bom-ref": "pkg:cargo/sha2@0.10.9",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1695,11 +4295,32 @@
       ],
       "name": "sha2",
       "purl": "pkg:cargo/sha2@0.10.9",
+      "scope": "required",
       "type": "library",
       "version": "0.10.9"
     },
     {
       "bom-ref": "pkg:cargo/shlex@1.3.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1708,11 +4329,27 @@
       ],
       "name": "shlex",
       "purl": "pkg:cargo/shlex@1.3.0",
+      "scope": "required",
       "type": "library",
       "version": "1.3.0"
     },
     {
       "bom-ref": "pkg:cargo/simd-adler32@0.3.9",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1721,11 +4358,27 @@
       ],
       "name": "simd-adler32",
       "purl": "pkg:cargo/simd-adler32@0.3.9",
+      "scope": "excluded",
       "type": "library",
       "version": "0.3.9"
     },
     {
       "bom-ref": "pkg:cargo/similar@2.7.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1734,11 +4387,32 @@
       ],
       "name": "similar",
       "purl": "pkg:cargo/similar@2.7.0",
+      "scope": "excluded",
       "type": "library",
       "version": "2.7.0"
     },
     {
       "bom-ref": "pkg:cargo/smallvec@1.15.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1747,11 +4421,32 @@
       ],
       "name": "smallvec",
       "purl": "pkg:cargo/smallvec@1.15.1",
+      "scope": "required",
       "type": "library",
       "version": "1.15.1"
     },
     {
       "bom-ref": "pkg:cargo/smol_str@0.3.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1760,11 +4455,32 @@
       ],
       "name": "smol_str",
       "purl": "pkg:cargo/smol_str@0.3.2",
+      "scope": "required",
       "type": "library",
       "version": "0.3.2"
     },
     {
       "bom-ref": "pkg:cargo/spdx@0.13.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1773,11 +4489,32 @@
       ],
       "name": "spdx",
       "purl": "pkg:cargo/spdx@0.13.4",
+      "scope": "required",
       "type": "library",
       "version": "0.13.4"
     },
     {
       "bom-ref": "pkg:cargo/stable_deref_trait@1.2.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1786,11 +4523,32 @@
       ],
       "name": "stable_deref_trait",
       "purl": "pkg:cargo/stable_deref_trait@1.2.1",
+      "scope": "required",
       "type": "library",
       "version": "1.2.1"
     },
     {
       "bom-ref": "pkg:cargo/strsim@0.11.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1799,11 +4557,32 @@
       ],
       "name": "strsim",
       "purl": "pkg:cargo/strsim@0.11.1",
+      "scope": "required",
       "type": "library",
       "version": "0.11.1"
     },
     {
       "bom-ref": "pkg:cargo/strum@0.28.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1812,11 +4591,32 @@
       ],
       "name": "strum",
       "purl": "pkg:cargo/strum@0.28.0",
+      "scope": "required",
       "type": "library",
       "version": "0.28.0"
     },
     {
       "bom-ref": "pkg:cargo/strum_macros@0.28.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1825,11 +4625,27 @@
       ],
       "name": "strum_macros",
       "purl": "pkg:cargo/strum_macros@0.28.0",
+      "scope": "required",
       "type": "library",
       "version": "0.28.0"
     },
     {
       "bom-ref": "pkg:cargo/subtle@2.6.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1838,11 +4654,32 @@
       ],
       "name": "subtle",
       "purl": "pkg:cargo/subtle@2.6.1",
+      "scope": "excluded",
       "type": "library",
       "version": "2.6.1"
     },
     {
       "bom-ref": "pkg:cargo/syn@2.0.117",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1851,11 +4688,32 @@
       ],
       "name": "syn",
       "purl": "pkg:cargo/syn@2.0.117",
+      "scope": "required",
       "type": "library",
       "version": "2.0.117"
     },
     {
       "bom-ref": "pkg:cargo/synstructure@0.13.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1864,11 +4722,32 @@
       ],
       "name": "synstructure",
       "purl": "pkg:cargo/synstructure@0.13.2",
+      "scope": "required",
       "type": "library",
       "version": "0.13.2"
     },
     {
       "bom-ref": "pkg:cargo/tame-index@0.26.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1877,11 +4756,32 @@
       ],
       "name": "tame-index",
       "purl": "pkg:cargo/tame-index@0.26.3",
+      "scope": "required",
       "type": "library",
       "version": "0.26.3"
     },
     {
       "bom-ref": "pkg:cargo/tap@1.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1890,11 +4790,32 @@
       ],
       "name": "tap",
       "purl": "pkg:cargo/tap@1.0.1",
+      "scope": "required",
       "type": "library",
       "version": "1.0.1"
     },
     {
       "bom-ref": "pkg:cargo/target-lexicon@0.13.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1903,11 +4824,27 @@
       ],
       "name": "target-lexicon",
       "purl": "pkg:cargo/target-lexicon@0.13.3",
+      "scope": "required",
       "type": "library",
       "version": "0.13.3"
     },
     {
       "bom-ref": "pkg:cargo/tempfile@3.27.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1916,11 +4853,32 @@
       ],
       "name": "tempfile",
       "purl": "pkg:cargo/tempfile@3.27.0",
+      "scope": "excluded",
       "type": "library",
       "version": "3.27.0"
     },
     {
       "bom-ref": "pkg:cargo/termcolor@1.4.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1929,11 +4887,32 @@
       ],
       "name": "termcolor",
       "purl": "pkg:cargo/termcolor@1.4.1",
+      "scope": "required",
       "type": "library",
       "version": "1.4.1"
     },
     {
       "bom-ref": "pkg:cargo/thiserror@2.0.18",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1942,11 +4921,32 @@
       ],
       "name": "thiserror",
       "purl": "pkg:cargo/thiserror@2.0.18",
+      "scope": "required",
       "type": "library",
       "version": "2.0.18"
     },
     {
       "bom-ref": "pkg:cargo/thiserror-impl@2.0.18",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1955,11 +4955,32 @@
       ],
       "name": "thiserror-impl",
       "purl": "pkg:cargo/thiserror-impl@2.0.18",
+      "scope": "required",
       "type": "library",
       "version": "2.0.18"
     },
     {
       "bom-ref": "pkg:cargo/tinystr@0.8.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1968,11 +4989,32 @@
       ],
       "name": "tinystr",
       "purl": "pkg:cargo/tinystr@0.8.3",
+      "scope": "required",
       "type": "library",
       "version": "0.8.3"
     },
     {
       "bom-ref": "pkg:cargo/tinyvec@1.11.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1981,11 +5023,32 @@
       ],
       "name": "tinyvec",
       "purl": "pkg:cargo/tinyvec@1.11.0",
+      "scope": "required",
       "type": "library",
       "version": "1.11.0"
     },
     {
       "bom-ref": "pkg:cargo/tinyvec_macros@0.1.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1994,11 +5057,32 @@
       ],
       "name": "tinyvec_macros",
       "purl": "pkg:cargo/tinyvec_macros@0.1.1",
+      "scope": "required",
       "type": "library",
       "version": "0.1.1"
     },
     {
       "bom-ref": "pkg:cargo/toml-span@0.7.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2007,11 +5091,32 @@
       ],
       "name": "toml-span",
       "purl": "pkg:cargo/toml-span@0.7.1",
+      "scope": "required",
       "type": "library",
       "version": "0.7.1"
     },
     {
       "bom-ref": "pkg:cargo/twox-hash@2.1.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2020,11 +5125,32 @@
       ],
       "name": "twox-hash",
       "purl": "pkg:cargo/twox-hash@2.1.2",
+      "scope": "required",
       "type": "library",
       "version": "2.1.2"
     },
     {
       "bom-ref": "pkg:cargo/typenum@1.20.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2033,11 +5159,32 @@
       ],
       "name": "typenum",
       "purl": "pkg:cargo/typenum@1.20.0",
+      "scope": "required",
       "type": "library",
       "version": "1.20.0"
     },
     {
       "bom-ref": "pkg:cargo/unicode-ident@1.0.24",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2046,11 +5193,32 @@
       ],
       "name": "unicode-ident",
       "purl": "pkg:cargo/unicode-ident@1.0.24",
+      "scope": "required",
       "type": "library",
       "version": "1.0.24"
     },
     {
       "bom-ref": "pkg:cargo/unicode-normalization@0.1.25",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2059,11 +5227,32 @@
       ],
       "name": "unicode-normalization",
       "purl": "pkg:cargo/unicode-normalization@0.1.25",
+      "scope": "required",
       "type": "library",
       "version": "0.1.25"
     },
     {
       "bom-ref": "pkg:cargo/unicode-width@0.2.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2072,11 +5261,27 @@
       ],
       "name": "unicode-width",
       "purl": "pkg:cargo/unicode-width@0.2.2",
+      "scope": "required",
       "type": "library",
       "version": "0.2.2"
     },
     {
       "bom-ref": "pkg:cargo/unicode-xid@0.2.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2085,11 +5290,32 @@
       ],
       "name": "unicode-xid",
       "purl": "pkg:cargo/unicode-xid@0.2.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.6"
     },
     {
       "bom-ref": "pkg:cargo/untrusted@0.9.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2098,11 +5324,27 @@
       ],
       "name": "untrusted",
       "purl": "pkg:cargo/untrusted@0.9.0",
+      "scope": "required",
       "type": "library",
       "version": "0.9.0"
     },
     {
       "bom-ref": "pkg:cargo/ureq@3.3.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2111,11 +5353,27 @@
       ],
       "name": "ureq",
       "purl": "pkg:cargo/ureq@3.3.0",
+      "scope": "excluded",
       "type": "library",
       "version": "3.3.0"
     },
     {
       "bom-ref": "pkg:cargo/ureq-proto@0.6.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2124,11 +5382,32 @@
       ],
       "name": "ureq-proto",
       "purl": "pkg:cargo/ureq-proto@0.6.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.6.0"
     },
     {
       "bom-ref": "pkg:cargo/url@2.5.8",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2137,11 +5416,27 @@
       ],
       "name": "url",
       "purl": "pkg:cargo/url@2.5.8",
+      "scope": "required",
       "type": "library",
       "version": "2.5.8"
     },
     {
       "bom-ref": "pkg:cargo/utf8-zero@0.8.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2150,11 +5445,32 @@
       ],
       "name": "utf8-zero",
       "purl": "pkg:cargo/utf8-zero@0.8.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.1"
     },
     {
       "bom-ref": "pkg:cargo/utf8_iter@1.0.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2163,11 +5479,32 @@
       ],
       "name": "utf8_iter",
       "purl": "pkg:cargo/utf8_iter@1.0.4",
+      "scope": "required",
       "type": "library",
       "version": "1.0.4"
     },
     {
       "bom-ref": "pkg:cargo/utf8parse@0.2.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2176,11 +5513,32 @@
       ],
       "name": "utf8parse",
       "purl": "pkg:cargo/utf8parse@0.2.2",
+      "scope": "required",
       "type": "library",
       "version": "0.2.2"
     },
     {
       "bom-ref": "pkg:cargo/version_check@0.9.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2189,11 +5547,32 @@
       ],
       "name": "version_check",
       "purl": "pkg:cargo/version_check@0.9.5",
+      "scope": "required",
       "type": "library",
       "version": "0.9.5"
     },
     {
       "bom-ref": "pkg:cargo/walkdir@2.5.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2202,11 +5581,27 @@
       ],
       "name": "walkdir",
       "purl": "pkg:cargo/walkdir@2.5.0",
+      "scope": "required",
       "type": "library",
       "version": "2.5.0"
     },
     {
       "bom-ref": "pkg:cargo/wasi@0.11.1+wasi-snapshot-preview1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2215,11 +5610,27 @@
       ],
       "name": "wasi",
       "purl": "pkg:cargo/wasi@0.11.1+wasi-snapshot-preview1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.11.1+wasi-snapshot-preview1"
     },
     {
       "bom-ref": "pkg:cargo/wasip2@1.0.3+wasi-0.2.9",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2228,11 +5639,27 @@
       ],
       "name": "wasip2",
       "purl": "pkg:cargo/wasip2@1.0.3+wasi-0.2.9",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.3+wasi-0.2.9"
     },
     {
       "bom-ref": "pkg:cargo/wasip3@0.4.0+wasi-0.3.0-rc-2026-01-06",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2241,11 +5668,27 @@
       ],
       "name": "wasip3",
       "purl": "pkg:cargo/wasip3@0.4.0+wasi-0.3.0-rc-2026-01-06",
+      "scope": "excluded",
       "type": "library",
       "version": "0.4.0+wasi-0.3.0-rc-2026-01-06"
     },
     {
       "bom-ref": "pkg:cargo/wasm-encoder@0.244.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2254,11 +5697,27 @@
       ],
       "name": "wasm-encoder",
       "purl": "pkg:cargo/wasm-encoder@0.244.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.244.0"
     },
     {
       "bom-ref": "pkg:cargo/wasm-metadata@0.244.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2267,11 +5726,27 @@
       ],
       "name": "wasm-metadata",
       "purl": "pkg:cargo/wasm-metadata@0.244.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.244.0"
     },
     {
       "bom-ref": "pkg:cargo/wasmparser@0.244.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2280,11 +5755,27 @@
       ],
       "name": "wasmparser",
       "purl": "pkg:cargo/wasmparser@0.244.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.244.0"
     },
     {
       "bom-ref": "pkg:cargo/webpki-roots@1.0.11",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2293,11 +5784,32 @@
       ],
       "name": "webpki-roots",
       "purl": "pkg:cargo/webpki-roots@1.0.11",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.11"
     },
     {
       "bom-ref": "pkg:cargo/winapi-util@0.1.11",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2306,11 +5818,32 @@
       ],
       "name": "winapi-util",
       "purl": "pkg:cargo/winapi-util@0.1.11",
+      "scope": "required",
       "type": "library",
       "version": "0.1.11"
     },
     {
       "bom-ref": "pkg:cargo/windows-link@0.2.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2319,11 +5852,32 @@
       ],
       "name": "windows-link",
       "purl": "pkg:cargo/windows-link@0.2.1",
+      "scope": "required",
       "type": "library",
       "version": "0.2.1"
     },
     {
       "bom-ref": "pkg:cargo/windows-sys@0.52.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2332,11 +5886,32 @@
       ],
       "name": "windows-sys",
       "purl": "pkg:cargo/windows-sys@0.52.0",
+      "scope": "required",
       "type": "library",
       "version": "0.52.0"
     },
     {
       "bom-ref": "pkg:cargo/windows-sys@0.61.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2345,11 +5920,32 @@
       ],
       "name": "windows-sys",
       "purl": "pkg:cargo/windows-sys@0.61.2",
+      "scope": "required",
       "type": "library",
       "version": "0.61.2"
     },
     {
       "bom-ref": "pkg:cargo/windows-targets@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2358,11 +5954,27 @@
       ],
       "name": "windows-targets",
       "purl": "pkg:cargo/windows-targets@0.52.6",
+      "scope": "required",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2371,11 +5983,27 @@
       ],
       "name": "windows_aarch64_gnullvm",
       "purl": "pkg:cargo/windows_aarch64_gnullvm@0.52.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/windows_aarch64_msvc@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2384,11 +6012,27 @@
       ],
       "name": "windows_aarch64_msvc",
       "purl": "pkg:cargo/windows_aarch64_msvc@0.52.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/windows_i686_gnu@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2397,11 +6041,27 @@
       ],
       "name": "windows_i686_gnu",
       "purl": "pkg:cargo/windows_i686_gnu@0.52.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/windows_i686_gnullvm@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2410,11 +6070,27 @@
       ],
       "name": "windows_i686_gnullvm",
       "purl": "pkg:cargo/windows_i686_gnullvm@0.52.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/windows_i686_msvc@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2423,11 +6099,27 @@
       ],
       "name": "windows_i686_msvc",
       "purl": "pkg:cargo/windows_i686_msvc@0.52.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/windows_x86_64_gnu@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2436,11 +6128,27 @@
       ],
       "name": "windows_x86_64_gnu",
       "purl": "pkg:cargo/windows_x86_64_gnu@0.52.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2449,11 +6157,32 @@
       ],
       "name": "windows_x86_64_gnullvm",
       "purl": "pkg:cargo/windows_x86_64_gnullvm@0.52.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/windows_x86_64_msvc@0.52.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2462,11 +6191,27 @@
       ],
       "name": "windows_x86_64_msvc",
       "purl": "pkg:cargo/windows_x86_64_msvc@0.52.6",
+      "scope": "required",
       "type": "library",
       "version": "0.52.6"
     },
     {
       "bom-ref": "pkg:cargo/wit-bindgen@0.51.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2475,11 +6220,27 @@
       ],
       "name": "wit-bindgen",
       "purl": "pkg:cargo/wit-bindgen@0.51.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.51.0"
     },
     {
       "bom-ref": "pkg:cargo/wit-bindgen@0.57.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2488,11 +6249,27 @@
       ],
       "name": "wit-bindgen",
       "purl": "pkg:cargo/wit-bindgen@0.57.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.57.1"
     },
     {
       "bom-ref": "pkg:cargo/wit-bindgen-core@0.51.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2501,11 +6278,27 @@
       ],
       "name": "wit-bindgen-core",
       "purl": "pkg:cargo/wit-bindgen-core@0.51.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.51.0"
     },
     {
       "bom-ref": "pkg:cargo/wit-bindgen-rust@0.51.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2514,11 +6307,27 @@
       ],
       "name": "wit-bindgen-rust",
       "purl": "pkg:cargo/wit-bindgen-rust@0.51.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.51.0"
     },
     {
       "bom-ref": "pkg:cargo/wit-bindgen-rust-macro@0.51.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2527,11 +6336,27 @@
       ],
       "name": "wit-bindgen-rust-macro",
       "purl": "pkg:cargo/wit-bindgen-rust-macro@0.51.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.51.0"
     },
     {
       "bom-ref": "pkg:cargo/wit-component@0.244.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2540,11 +6365,27 @@
       ],
       "name": "wit-component",
       "purl": "pkg:cargo/wit-component@0.244.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.244.0"
     },
     {
       "bom-ref": "pkg:cargo/wit-parser@0.244.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2553,11 +6394,32 @@
       ],
       "name": "wit-parser",
       "purl": "pkg:cargo/wit-parser@0.244.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.244.0"
     },
     {
       "bom-ref": "pkg:cargo/writeable@0.6.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2566,11 +6428,32 @@
       ],
       "name": "writeable",
       "purl": "pkg:cargo/writeable@0.6.3",
+      "scope": "required",
       "type": "library",
       "version": "0.6.3"
     },
     {
       "bom-ref": "pkg:cargo/wyz@0.5.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2579,11 +6462,32 @@
       ],
       "name": "wyz",
       "purl": "pkg:cargo/wyz@0.5.1",
+      "scope": "required",
       "type": "library",
       "version": "0.5.1"
     },
     {
       "bom-ref": "pkg:cargo/yoke@0.8.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2592,11 +6496,32 @@
       ],
       "name": "yoke",
       "purl": "pkg:cargo/yoke@0.8.2",
+      "scope": "required",
       "type": "library",
       "version": "0.8.2"
     },
     {
       "bom-ref": "pkg:cargo/yoke-derive@0.8.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2605,11 +6530,32 @@
       ],
       "name": "yoke-derive",
       "purl": "pkg:cargo/yoke-derive@0.8.2",
+      "scope": "required",
       "type": "library",
       "version": "0.8.2"
     },
     {
       "bom-ref": "pkg:cargo/zerofrom@0.1.8",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2618,11 +6564,32 @@
       ],
       "name": "zerofrom",
       "purl": "pkg:cargo/zerofrom@0.1.8",
+      "scope": "required",
       "type": "library",
       "version": "0.1.8"
     },
     {
       "bom-ref": "pkg:cargo/zerofrom-derive@0.1.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2631,11 +6598,27 @@
       ],
       "name": "zerofrom-derive",
       "purl": "pkg:cargo/zerofrom-derive@0.1.7",
+      "scope": "required",
       "type": "library",
       "version": "0.1.7"
     },
     {
       "bom-ref": "pkg:cargo/zeroize@1.8.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2644,11 +6627,32 @@
       ],
       "name": "zeroize",
       "purl": "pkg:cargo/zeroize@1.8.2",
+      "scope": "excluded",
       "type": "library",
       "version": "1.8.2"
     },
     {
       "bom-ref": "pkg:cargo/zerotrie@0.2.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2657,11 +6661,32 @@
       ],
       "name": "zerotrie",
       "purl": "pkg:cargo/zerotrie@0.2.4",
+      "scope": "required",
       "type": "library",
       "version": "0.2.4"
     },
     {
       "bom-ref": "pkg:cargo/zerovec@0.11.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2670,11 +6695,32 @@
       ],
       "name": "zerovec",
       "purl": "pkg:cargo/zerovec@0.11.6",
+      "scope": "required",
       "type": "library",
       "version": "0.11.6"
     },
     {
       "bom-ref": "pkg:cargo/zerovec-derive@0.11.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2683,11 +6729,32 @@
       ],
       "name": "zerovec-derive",
       "purl": "pkg:cargo/zerovec-derive@0.11.3",
+      "scope": "required",
       "type": "library",
       "version": "0.11.3"
     },
     {
       "bom-ref": "pkg:cargo/zmij@1.0.21",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2696,11 +6763,32 @@
       ],
       "name": "zmij",
       "purl": "pkg:cargo/zmij@1.0.21",
+      "scope": "required",
       "type": "library",
       "version": "1.0.21"
     },
     {
       "bom-ref": "pkg:cargo/zstd@0.13.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2709,11 +6797,32 @@
       ],
       "name": "zstd",
       "purl": "pkg:cargo/zstd@0.13.4",
+      "scope": "required",
       "type": "library",
       "version": "0.13.4"
     },
     {
       "bom-ref": "pkg:cargo/zstd-safe@7.4.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2722,11 +6831,32 @@
       ],
       "name": "zstd-safe",
       "purl": "pkg:cargo/zstd-safe@7.4.0",
+      "scope": "required",
       "type": "library",
       "version": "7.4.0"
     },
     {
       "bom-ref": "pkg:cargo/zstd-sys@2.1.2+zstd.1.5.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-deny-fa9d55244195.exe (sha256 fa9d55244195c84dda771a4a4f2c77b4c9d490a91eaa42c9eb83654a2d20dc6f)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -2735,6 +6865,7 @@
       ],
       "name": "zstd-sys",
       "purl": "pkg:cargo/zstd-sys@2.1.2+zstd.1.5.7",
+      "scope": "required",
       "type": "library",
       "version": "2.1.2+zstd.1.5.7"
     }

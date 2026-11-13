@@ -104,6 +104,12 @@ release SBOM for the app), every RustSec finding from the custody-verified raw p
 `analysis` is filled only from an ack's native `cyclonedx` ruling (state, justification,
 response), never mapped from OpenVEX fields; acks without one are reported as burn-down. The
 document is deterministic for the same inputs, so `vdr check` can regenerate and compare.
+For a tool, each component's `scope` comes from the pinned binary itself: the emitter downloads
+the content-addressed asset, checks it is the digest, reads the cargo-auditable `.dep-v0` list
+(runtime and build kinds) and marks lock packages `required` when the binary carries them and
+`excluded` when only the lock does (optional, feature-gated, dev or proc-macro-only entries).
+`evidence.identity` states the method per component: manifest analysis always, binary analysis
+when present. "Code not present" is therefore measured in the report, not asserted in an ack.
 A `vdr.cdx.json` is committed beside the evidence of every live-frontier digest (each
 `TOOLS.lock` pin and the latest release); the supply-chain workflow regenerates each one and
 fails on any difference, admitting the app's release SBOM only after its provenance verifies.

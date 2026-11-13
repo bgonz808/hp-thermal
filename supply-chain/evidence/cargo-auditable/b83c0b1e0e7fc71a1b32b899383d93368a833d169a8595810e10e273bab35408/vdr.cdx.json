@@ -3,6 +3,26 @@
   "components": [
     {
       "bom-ref": "pkg:cargo/adler2@2.0.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -11,11 +31,27 @@
       ],
       "name": "adler2",
       "purl": "pkg:cargo/adler2@2.0.1",
+      "scope": "required",
       "type": "library",
       "version": "2.0.1"
     },
     {
       "bom-ref": "pkg:cargo/aho-corasick@1.1.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -24,46 +60,147 @@
       ],
       "name": "aho-corasick",
       "purl": "pkg:cargo/aho-corasick@1.1.4",
+      "scope": "excluded",
       "type": "library",
       "version": "1.1.4"
     },
     {
       "bom-ref": "pkg:cargo/auditable-cyclonedx@0.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "name": "auditable-cyclonedx",
       "purl": "pkg:cargo/auditable-cyclonedx@0.2.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.0"
     },
     {
       "bom-ref": "pkg:cargo/auditable-extract@0.3.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "name": "auditable-extract",
       "purl": "pkg:cargo/auditable-extract@0.3.5",
+      "scope": "excluded",
       "type": "library",
       "version": "0.3.5"
     },
     {
       "bom-ref": "pkg:cargo/auditable-info@0.10.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "name": "auditable-info",
       "purl": "pkg:cargo/auditable-info@0.10.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.10.1"
     },
     {
       "bom-ref": "pkg:cargo/auditable-serde@0.9.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "name": "auditable-serde",
       "purl": "pkg:cargo/auditable-serde@0.9.0",
+      "scope": "required",
       "type": "library",
       "version": "0.9.0"
     },
     {
       "bom-ref": "pkg:cargo/auditable2cdx@0.1.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "name": "auditable2cdx",
       "purl": "pkg:cargo/auditable2cdx@0.1.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.1"
     },
     {
       "bom-ref": "pkg:cargo/autocfg@1.5.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -72,11 +209,27 @@
       ],
       "name": "autocfg",
       "purl": "pkg:cargo/autocfg@1.5.0",
+      "scope": "excluded",
       "type": "library",
       "version": "1.5.0"
     },
     {
       "bom-ref": "pkg:cargo/base64@0.21.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -85,11 +238,27 @@
       ],
       "name": "base64",
       "purl": "pkg:cargo/base64@0.21.7",
+      "scope": "excluded",
       "type": "library",
       "version": "0.21.7"
     },
     {
       "bom-ref": "pkg:cargo/binfarce@0.2.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -98,11 +267,27 @@
       ],
       "name": "binfarce",
       "purl": "pkg:cargo/binfarce@0.2.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.1"
     },
     {
       "bom-ref": "pkg:cargo/bitflags@1.3.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -111,11 +296,27 @@
       ],
       "name": "bitflags",
       "purl": "pkg:cargo/bitflags@1.3.2",
+      "scope": "excluded",
       "type": "library",
       "version": "1.3.2"
     },
     {
       "bom-ref": "pkg:cargo/bitflags@2.10.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -124,11 +325,27 @@
       ],
       "name": "bitflags",
       "purl": "pkg:cargo/bitflags@2.10.0",
+      "scope": "excluded",
       "type": "library",
       "version": "2.10.0"
     },
     {
       "bom-ref": "pkg:cargo/bumpalo@3.19.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -137,11 +354,32 @@
       ],
       "name": "bumpalo",
       "purl": "pkg:cargo/bumpalo@3.19.0",
+      "scope": "excluded",
       "type": "library",
       "version": "3.19.0"
     },
     {
       "bom-ref": "pkg:cargo/byteorder@0.5.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -150,11 +388,32 @@
       ],
       "name": "byteorder",
       "purl": "pkg:cargo/byteorder@0.5.3",
+      "scope": "required",
       "type": "library",
       "version": "0.5.3"
     },
     {
       "bom-ref": "pkg:cargo/camino@1.2.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -163,18 +422,60 @@
       ],
       "name": "camino",
       "purl": "pkg:cargo/camino@1.2.1",
+      "scope": "required",
       "type": "library",
       "version": "1.2.1"
     },
     {
       "bom-ref": "pkg:cargo/cargo-auditable@0.7.7",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "name": "cargo-auditable",
       "purl": "pkg:cargo/cargo-auditable@0.7.7",
+      "scope": "required",
       "type": "library",
       "version": "0.7.7"
     },
     {
       "bom-ref": "pkg:cargo/cargo-platform@0.3.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -183,11 +484,32 @@
       ],
       "name": "cargo-platform",
       "purl": "pkg:cargo/cargo-platform@0.3.1",
+      "scope": "required",
       "type": "library",
       "version": "0.3.1"
     },
     {
       "bom-ref": "pkg:cargo/cargo_metadata@0.23.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -196,11 +518,32 @@
       ],
       "name": "cargo_metadata",
       "purl": "pkg:cargo/cargo_metadata@0.23.0",
+      "scope": "required",
       "type": "library",
       "version": "0.23.0"
     },
     {
       "bom-ref": "pkg:cargo/cfg-if@1.0.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -209,11 +552,32 @@
       ],
       "name": "cfg-if",
       "purl": "pkg:cargo/cfg-if@1.0.4",
+      "scope": "required",
       "type": "library",
       "version": "1.0.4"
     },
     {
       "bom-ref": "pkg:cargo/crc32fast@1.5.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -222,11 +586,27 @@
       ],
       "name": "crc32fast",
       "purl": "pkg:cargo/crc32fast@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
     {
       "bom-ref": "pkg:cargo/cyclonedx-bom@0.8.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -235,11 +615,27 @@
       ],
       "name": "cyclonedx-bom",
       "purl": "pkg:cargo/cyclonedx-bom@0.8.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.0"
     },
     {
       "bom-ref": "pkg:cargo/cyclonedx-bom-macros@0.1.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -248,11 +644,27 @@
       ],
       "name": "cyclonedx-bom-macros",
       "purl": "pkg:cargo/cyclonedx-bom-macros@0.1.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.0"
     },
     {
       "bom-ref": "pkg:cargo/deranged@0.5.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -261,11 +673,27 @@
       ],
       "name": "deranged",
       "purl": "pkg:cargo/deranged@0.5.5",
+      "scope": "excluded",
       "type": "library",
       "version": "0.5.5"
     },
     {
       "bom-ref": "pkg:cargo/dyn-clone@1.0.20",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -274,11 +702,27 @@
       ],
       "name": "dyn-clone",
       "purl": "pkg:cargo/dyn-clone@1.0.20",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.20"
     },
     {
       "bom-ref": "pkg:cargo/env_home@0.1.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -287,11 +731,32 @@
       ],
       "name": "env_home",
       "purl": "pkg:cargo/env_home@0.1.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.0"
     },
     {
       "bom-ref": "pkg:cargo/equivalent@1.0.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -300,11 +765,27 @@
       ],
       "name": "equivalent",
       "purl": "pkg:cargo/equivalent@1.0.2",
+      "scope": "required",
       "type": "library",
       "version": "1.0.2"
     },
     {
       "bom-ref": "pkg:cargo/errno@0.3.14",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -313,11 +794,27 @@
       ],
       "name": "errno",
       "purl": "pkg:cargo/errno@0.3.14",
+      "scope": "excluded",
       "type": "library",
       "version": "0.3.14"
     },
     {
       "bom-ref": "pkg:cargo/fluent-uri@0.1.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -326,11 +823,32 @@
       ],
       "name": "fluent-uri",
       "purl": "pkg:cargo/fluent-uri@0.1.4",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.4"
     },
     {
       "bom-ref": "pkg:cargo/foldhash@0.1.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -339,11 +857,27 @@
       ],
       "name": "foldhash",
       "purl": "pkg:cargo/foldhash@0.1.5",
+      "scope": "required",
       "type": "library",
       "version": "0.1.5"
     },
     {
       "bom-ref": "pkg:cargo/getrandom@0.3.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -352,11 +886,32 @@
       ],
       "name": "getrandom",
       "purl": "pkg:cargo/getrandom@0.3.4",
+      "scope": "excluded",
       "type": "library",
       "version": "0.3.4"
     },
     {
       "bom-ref": "pkg:cargo/hashbrown@0.15.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -365,11 +920,32 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.15.5",
+      "scope": "required",
       "type": "library",
       "version": "0.15.5"
     },
     {
       "bom-ref": "pkg:cargo/hashbrown@0.16.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -378,11 +954,27 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.16.0",
+      "scope": "required",
       "type": "library",
       "version": "0.16.0"
     },
     {
       "bom-ref": "pkg:cargo/heck@0.5.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -391,11 +983,27 @@
       ],
       "name": "heck",
       "purl": "pkg:cargo/heck@0.5.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.5.0"
     },
     {
       "bom-ref": "pkg:cargo/hex@0.4.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -404,11 +1012,32 @@
       ],
       "name": "hex",
       "purl": "pkg:cargo/hex@0.4.3",
+      "scope": "excluded",
       "type": "library",
       "version": "0.4.3"
     },
     {
       "bom-ref": "pkg:cargo/indexmap@2.12.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -417,11 +1046,32 @@
       ],
       "name": "indexmap",
       "purl": "pkg:cargo/indexmap@2.12.0",
+      "scope": "required",
       "type": "library",
       "version": "2.12.0"
     },
     {
       "bom-ref": "pkg:cargo/itoa@1.0.15",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -430,11 +1080,27 @@
       ],
       "name": "itoa",
       "purl": "pkg:cargo/itoa@1.0.15",
+      "scope": "required",
       "type": "library",
       "version": "1.0.15"
     },
     {
       "bom-ref": "pkg:cargo/js-sys@0.3.82",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -443,11 +1109,32 @@
       ],
       "name": "js-sys",
       "purl": "pkg:cargo/js-sys@0.3.82",
+      "scope": "excluded",
       "type": "library",
       "version": "0.3.82"
     },
     {
       "bom-ref": "pkg:cargo/leb128@0.2.5",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -456,11 +1143,27 @@
       ],
       "name": "leb128",
       "purl": "pkg:cargo/leb128@0.2.5",
+      "scope": "required",
       "type": "library",
       "version": "0.2.5"
     },
     {
       "bom-ref": "pkg:cargo/libc@0.2.191",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -469,11 +1172,27 @@
       ],
       "name": "libc",
       "purl": "pkg:cargo/libc@0.2.191",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.191"
     },
     {
       "bom-ref": "pkg:cargo/linux-raw-sys@0.12.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -482,11 +1201,32 @@
       ],
       "name": "linux-raw-sys",
       "purl": "pkg:cargo/linux-raw-sys@0.12.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.12.1"
     },
     {
       "bom-ref": "pkg:cargo/memchr@2.7.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -495,11 +1235,32 @@
       ],
       "name": "memchr",
       "purl": "pkg:cargo/memchr@2.7.6",
+      "scope": "required",
       "type": "library",
       "version": "2.7.6"
     },
     {
       "bom-ref": "pkg:cargo/miniz_oxide@0.9.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -508,11 +1269,27 @@
       ],
       "name": "miniz_oxide",
       "purl": "pkg:cargo/miniz_oxide@0.9.1",
+      "scope": "required",
       "type": "library",
       "version": "0.9.1"
     },
     {
       "bom-ref": "pkg:cargo/num-conv@0.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -521,11 +1298,27 @@
       ],
       "name": "num-conv",
       "purl": "pkg:cargo/num-conv@0.2.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.0"
     },
     {
       "bom-ref": "pkg:cargo/num-traits@0.2.19",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -534,11 +1327,32 @@
       ],
       "name": "num-traits",
       "purl": "pkg:cargo/num-traits@0.2.19",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.19"
     },
     {
       "bom-ref": "pkg:cargo/object@0.37.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -547,11 +1361,27 @@
       ],
       "name": "object",
       "purl": "pkg:cargo/object@0.37.3",
+      "scope": "required",
       "type": "library",
       "version": "0.37.3"
     },
     {
       "bom-ref": "pkg:cargo/once_cell@1.21.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -560,11 +1390,27 @@
       ],
       "name": "once_cell",
       "purl": "pkg:cargo/once_cell@1.21.3",
+      "scope": "excluded",
       "type": "library",
       "version": "1.21.3"
     },
     {
       "bom-ref": "pkg:cargo/ordered-float@4.6.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -573,11 +1419,27 @@
       ],
       "name": "ordered-float",
       "purl": "pkg:cargo/ordered-float@4.6.0",
+      "scope": "excluded",
       "type": "library",
       "version": "4.6.0"
     },
     {
       "bom-ref": "pkg:cargo/percent-encoding@2.3.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -586,11 +1448,32 @@
       ],
       "name": "percent-encoding",
       "purl": "pkg:cargo/percent-encoding@2.3.2",
+      "scope": "excluded",
       "type": "library",
       "version": "2.3.2"
     },
     {
       "bom-ref": "pkg:cargo/pico-args@0.5.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -599,11 +1482,27 @@
       ],
       "name": "pico-args",
       "purl": "pkg:cargo/pico-args@0.5.0",
+      "scope": "required",
       "type": "library",
       "version": "0.5.0"
     },
     {
       "bom-ref": "pkg:cargo/powerfmt@0.2.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -612,11 +1511,32 @@
       ],
       "name": "powerfmt",
       "purl": "pkg:cargo/powerfmt@0.2.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.0"
     },
     {
       "bom-ref": "pkg:cargo/proc-macro2@1.0.103",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -625,11 +1545,27 @@
       ],
       "name": "proc-macro2",
       "purl": "pkg:cargo/proc-macro2@1.0.103",
+      "scope": "required",
       "type": "library",
       "version": "1.0.103"
     },
     {
       "bom-ref": "pkg:cargo/purl@0.1.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -638,11 +1574,32 @@
       ],
       "name": "purl",
       "purl": "pkg:cargo/purl@0.1.6",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.6"
     },
     {
       "bom-ref": "pkg:cargo/quote@1.0.42",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -651,11 +1608,27 @@
       ],
       "name": "quote",
       "purl": "pkg:cargo/quote@1.0.42",
+      "scope": "required",
       "type": "library",
       "version": "1.0.42"
     },
     {
       "bom-ref": "pkg:cargo/r-efi@5.3.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -664,11 +1637,27 @@
       ],
       "name": "r-efi",
       "purl": "pkg:cargo/r-efi@5.3.0",
+      "scope": "excluded",
       "type": "library",
       "version": "5.3.0"
     },
     {
       "bom-ref": "pkg:cargo/regex@1.12.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -677,11 +1666,27 @@
       ],
       "name": "regex",
       "purl": "pkg:cargo/regex@1.12.2",
+      "scope": "excluded",
       "type": "library",
       "version": "1.12.2"
     },
     {
       "bom-ref": "pkg:cargo/regex-automata@0.4.13",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -690,11 +1695,27 @@
       ],
       "name": "regex-automata",
       "purl": "pkg:cargo/regex-automata@0.4.13",
+      "scope": "excluded",
       "type": "library",
       "version": "0.4.13"
     },
     {
       "bom-ref": "pkg:cargo/regex-syntax@0.8.8",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -703,18 +1724,50 @@
       ],
       "name": "regex-syntax",
       "purl": "pkg:cargo/regex-syntax@0.8.8",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.8"
     },
     {
       "bom-ref": "pkg:cargo/resolverver@0.1.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "name": "resolverver",
       "purl": "pkg:cargo/resolverver@0.1.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.0"
     },
     {
       "bom-ref": "pkg:cargo/rustix@1.1.6",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -723,11 +1776,27 @@
       ],
       "name": "rustix",
       "purl": "pkg:cargo/rustix@1.1.6",
+      "scope": "excluded",
       "type": "library",
       "version": "1.1.6"
     },
     {
       "bom-ref": "pkg:cargo/rustversion@1.0.22",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -736,11 +1805,32 @@
       ],
       "name": "rustversion",
       "purl": "pkg:cargo/rustversion@1.0.22",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.22"
     },
     {
       "bom-ref": "pkg:cargo/ryu@1.0.20",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -749,11 +1839,27 @@
       ],
       "name": "ryu",
       "purl": "pkg:cargo/ryu@1.0.20",
+      "scope": "required",
       "type": "library",
       "version": "1.0.20"
     },
     {
       "bom-ref": "pkg:cargo/schemars@0.8.22",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -762,11 +1868,27 @@
       ],
       "name": "schemars",
       "purl": "pkg:cargo/schemars@0.8.22",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.22"
     },
     {
       "bom-ref": "pkg:cargo/schemars_derive@0.8.22",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -775,11 +1897,32 @@
       ],
       "name": "schemars_derive",
       "purl": "pkg:cargo/schemars_derive@0.8.22",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.22"
     },
     {
       "bom-ref": "pkg:cargo/semver@1.0.27",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -788,11 +1931,32 @@
       ],
       "name": "semver",
       "purl": "pkg:cargo/semver@1.0.27",
+      "scope": "required",
       "type": "library",
       "version": "1.0.27"
     },
     {
       "bom-ref": "pkg:cargo/serde@1.0.228",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -801,11 +1965,32 @@
       ],
       "name": "serde",
       "purl": "pkg:cargo/serde@1.0.228",
+      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
     {
       "bom-ref": "pkg:cargo/serde_core@1.0.228",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -814,11 +1999,32 @@
       ],
       "name": "serde_core",
       "purl": "pkg:cargo/serde_core@1.0.228",
+      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
     {
       "bom-ref": "pkg:cargo/serde_derive@1.0.228",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -827,11 +2033,27 @@
       ],
       "name": "serde_derive",
       "purl": "pkg:cargo/serde_derive@1.0.228",
+      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
     {
       "bom-ref": "pkg:cargo/serde_derive_internals@0.29.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -840,11 +2062,32 @@
       ],
       "name": "serde_derive_internals",
       "purl": "pkg:cargo/serde_derive_internals@0.29.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.29.1"
     },
     {
       "bom-ref": "pkg:cargo/serde_json@1.0.145",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -853,11 +2096,27 @@
       ],
       "name": "serde_json",
       "purl": "pkg:cargo/serde_json@1.0.145",
+      "scope": "required",
       "type": "library",
       "version": "1.0.145"
     },
     {
       "bom-ref": "pkg:cargo/serde_spanned@0.6.9",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -866,11 +2125,27 @@
       ],
       "name": "serde_spanned",
       "purl": "pkg:cargo/serde_spanned@0.6.9",
+      "scope": "excluded",
       "type": "library",
       "version": "0.6.9"
     },
     {
       "bom-ref": "pkg:cargo/smallvec@1.15.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -879,11 +2154,27 @@
       ],
       "name": "smallvec",
       "purl": "pkg:cargo/smallvec@1.15.1",
+      "scope": "excluded",
       "type": "library",
       "version": "1.15.1"
     },
     {
       "bom-ref": "pkg:cargo/spdx@0.10.9",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -892,11 +2183,27 @@
       ],
       "name": "spdx",
       "purl": "pkg:cargo/spdx@0.10.9",
+      "scope": "excluded",
       "type": "library",
       "version": "0.10.9"
     },
     {
       "bom-ref": "pkg:cargo/strum@0.26.3",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -905,11 +2212,27 @@
       ],
       "name": "strum",
       "purl": "pkg:cargo/strum@0.26.3",
+      "scope": "excluded",
       "type": "library",
       "version": "0.26.3"
     },
     {
       "bom-ref": "pkg:cargo/strum_macros@0.26.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -918,11 +2241,32 @@
       ],
       "name": "strum_macros",
       "purl": "pkg:cargo/strum_macros@0.26.4",
+      "scope": "excluded",
       "type": "library",
       "version": "0.26.4"
     },
     {
       "bom-ref": "pkg:cargo/syn@2.0.109",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -931,11 +2275,27 @@
       ],
       "name": "syn",
       "purl": "pkg:cargo/syn@2.0.109",
+      "scope": "required",
       "type": "library",
       "version": "2.0.109"
     },
     {
       "bom-ref": "pkg:cargo/thiserror@1.0.69",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -944,11 +2304,32 @@
       ],
       "name": "thiserror",
       "purl": "pkg:cargo/thiserror@1.0.69",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.69"
     },
     {
       "bom-ref": "pkg:cargo/thiserror@2.0.17",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -957,11 +2338,27 @@
       ],
       "name": "thiserror",
       "purl": "pkg:cargo/thiserror@2.0.17",
+      "scope": "required",
       "type": "library",
       "version": "2.0.17"
     },
     {
       "bom-ref": "pkg:cargo/thiserror-impl@1.0.69",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -970,11 +2367,32 @@
       ],
       "name": "thiserror-impl",
       "purl": "pkg:cargo/thiserror-impl@1.0.69",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.69"
     },
     {
       "bom-ref": "pkg:cargo/thiserror-impl@2.0.17",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -983,11 +2401,27 @@
       ],
       "name": "thiserror-impl",
       "purl": "pkg:cargo/thiserror-impl@2.0.17",
+      "scope": "required",
       "type": "library",
       "version": "2.0.17"
     },
     {
       "bom-ref": "pkg:cargo/time@0.3.47",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -996,11 +2430,27 @@
       ],
       "name": "time",
       "purl": "pkg:cargo/time@0.3.47",
+      "scope": "excluded",
       "type": "library",
       "version": "0.3.47"
     },
     {
       "bom-ref": "pkg:cargo/time-core@0.1.8",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1009,11 +2459,27 @@
       ],
       "name": "time-core",
       "purl": "pkg:cargo/time-core@0.1.8",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.8"
     },
     {
       "bom-ref": "pkg:cargo/time-macros@0.2.27",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1022,11 +2488,27 @@
       ],
       "name": "time-macros",
       "purl": "pkg:cargo/time-macros@0.2.27",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.27"
     },
     {
       "bom-ref": "pkg:cargo/toml@0.8.23",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1035,11 +2517,27 @@
       ],
       "name": "toml",
       "purl": "pkg:cargo/toml@0.8.23",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.23"
     },
     {
       "bom-ref": "pkg:cargo/toml_datetime@0.6.11",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1048,11 +2546,27 @@
       ],
       "name": "toml_datetime",
       "purl": "pkg:cargo/toml_datetime@0.6.11",
+      "scope": "excluded",
       "type": "library",
       "version": "0.6.11"
     },
     {
       "bom-ref": "pkg:cargo/toml_edit@0.22.27",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1061,11 +2575,32 @@
       ],
       "name": "toml_edit",
       "purl": "pkg:cargo/toml_edit@0.22.27",
+      "scope": "excluded",
       "type": "library",
       "version": "0.22.27"
     },
     {
       "bom-ref": "pkg:cargo/topological-sort@0.2.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1074,11 +2609,32 @@
       ],
       "name": "topological-sort",
       "purl": "pkg:cargo/topological-sort@0.2.2",
+      "scope": "required",
       "type": "library",
       "version": "0.2.2"
     },
     {
       "bom-ref": "pkg:cargo/unicode-ident@1.0.22",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1087,11 +2643,27 @@
       ],
       "name": "unicode-ident",
       "purl": "pkg:cargo/unicode-ident@1.0.22",
+      "scope": "required",
       "type": "library",
       "version": "1.0.22"
     },
     {
       "bom-ref": "pkg:cargo/uuid@1.18.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1100,11 +2672,27 @@
       ],
       "name": "uuid",
       "purl": "pkg:cargo/uuid@1.18.1",
+      "scope": "excluded",
       "type": "library",
       "version": "1.18.1"
     },
     {
       "bom-ref": "pkg:cargo/wasip2@1.0.1+wasi-0.2.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1113,11 +2701,27 @@
       ],
       "name": "wasip2",
       "purl": "pkg:cargo/wasip2@1.0.1+wasi-0.2.4",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.1+wasi-0.2.4"
     },
     {
       "bom-ref": "pkg:cargo/wasm-bindgen@0.2.105",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1126,11 +2730,27 @@
       ],
       "name": "wasm-bindgen",
       "purl": "pkg:cargo/wasm-bindgen@0.2.105",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.105"
     },
     {
       "bom-ref": "pkg:cargo/wasm-bindgen-macro@0.2.105",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1139,11 +2759,27 @@
       ],
       "name": "wasm-bindgen-macro",
       "purl": "pkg:cargo/wasm-bindgen-macro@0.2.105",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.105"
     },
     {
       "bom-ref": "pkg:cargo/wasm-bindgen-macro-support@0.2.105",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1152,11 +2788,27 @@
       ],
       "name": "wasm-bindgen-macro-support",
       "purl": "pkg:cargo/wasm-bindgen-macro-support@0.2.105",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.105"
     },
     {
       "bom-ref": "pkg:cargo/wasm-bindgen-shared@0.2.105",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1165,11 +2817,32 @@
       ],
       "name": "wasm-bindgen-shared",
       "purl": "pkg:cargo/wasm-bindgen-shared@0.2.105",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.105"
     },
     {
       "bom-ref": "pkg:cargo/wasm-gen@0.1.4",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "binary-analysis",
+                "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1178,11 +2851,27 @@
       ],
       "name": "wasm-gen",
       "purl": "pkg:cargo/wasm-gen@0.1.4",
+      "scope": "required",
       "type": "library",
       "version": "0.1.4"
     },
     {
       "bom-ref": "pkg:cargo/wasmparser@0.207.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1191,11 +2880,27 @@
       ],
       "name": "wasmparser",
       "purl": "pkg:cargo/wasmparser@0.207.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.207.0"
     },
     {
       "bom-ref": "pkg:cargo/which@8.0.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1204,11 +2909,27 @@
       ],
       "name": "which",
       "purl": "pkg:cargo/which@8.0.0",
+      "scope": "excluded",
       "type": "library",
       "version": "8.0.0"
     },
     {
       "bom-ref": "pkg:cargo/windows-link@0.2.1",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1217,11 +2938,27 @@
       ],
       "name": "windows-link",
       "purl": "pkg:cargo/windows-link@0.2.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.1"
     },
     {
       "bom-ref": "pkg:cargo/windows-sys@0.61.2",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1230,11 +2967,27 @@
       ],
       "name": "windows-sys",
       "purl": "pkg:cargo/windows-sys@0.61.2",
+      "scope": "excluded",
       "type": "library",
       "version": "0.61.2"
     },
     {
       "bom-ref": "pkg:cargo/winnow@0.7.13",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1243,11 +2996,27 @@
       ],
       "name": "winnow",
       "purl": "pkg:cargo/winnow@0.7.13",
+      "scope": "excluded",
       "type": "library",
       "version": "0.7.13"
     },
     {
       "bom-ref": "pkg:cargo/winsafe@0.0.19",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1256,11 +3025,27 @@
       ],
       "name": "winsafe",
       "purl": "pkg:cargo/winsafe@0.0.19",
+      "scope": "excluded",
       "type": "library",
       "version": "0.0.19"
     },
     {
       "bom-ref": "pkg:cargo/wit-bindgen@0.46.0",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1269,11 +3054,27 @@
       ],
       "name": "wit-bindgen",
       "purl": "pkg:cargo/wit-bindgen@0.46.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.46.0"
     },
     {
       "bom-ref": "pkg:cargo/xml-rs@0.8.28",
+      "evidence": {
+        "identity": [
+          {
+            "confidence": 1.0,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "frozen Cargo.lock (tools/locks)"
+              }
+            ]
+          }
+        ]
+      },
       "hashes": [
         {
           "alg": "SHA-256",
@@ -1282,6 +3083,7 @@
       ],
       "name": "xml-rs",
       "purl": "pkg:cargo/xml-rs@0.8.28",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.28"
     }

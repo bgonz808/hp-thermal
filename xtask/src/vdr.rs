@@ -25,6 +25,7 @@
 //! Determinism: `metadata.timestamp` is the scan date from the header, not wall-clock, and the
 //! serial number is derived from the subject digest, so `check` can regenerate and diff.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
@@ -299,6 +300,121 @@ pub(crate) fn build(
     Ok((doc, burn_down))
 }
 
+/// `(name, version)` of every package recorded in a cargo-auditable `.dep-v0` section (zlib-
+/// compressed JSON). Runtime and build kinds are both recorded by cargo-auditable; the root is too.
+pub(crate) fn packages_from_dep_v0(section: &[u8]) -> Result<BTreeSet<(String, String)>, String> {
+    let bytes = miniz_oxide::inflate::decompress_to_vec_zlib(section)
+        .map_err(|e| format!(".dep-v0: zlib inflate failed: {e:?}"))?;
+    let v: Value = serde_json::from_slice(&bytes).map_err(|e| format!(".dep-v0: {e}"))?;
+    let pk = v["packages"]
+        .as_array()
+        .ok_or(".dep-v0: no packages array")?;
+    let mut out = BTreeSet::new();
+    for p in pk {
+        match (p["name"].as_str(), p["version"].as_str()) {
+            (Some(n), Some(ver)) => {
+                out.insert((n.to_string(), ver.to_string()));
+            }
+            _ => return Err(".dep-v0: package without name/version".into()),
+        }
+    }
+    if out.is_empty() {
+        return Err(".dep-v0: empty package list".into());
+    }
+    Ok(out)
+}
+
+/// The packages compiled into a binary, read from its own `.dep-v0` section (PE or ELF).
+pub(crate) fn auditable_packages(bin: &[u8]) -> Result<BTreeSet<(String, String)>, String> {
+    packages_from_dep_v0(crate::auditable::dep_v0_section(bin)?)
+}
+
+/// CycloneDX `scope` per component from the binary's package set: `required` when the lock
+/// package is in the binary, `excluded` when the lock carries it but the binary does not (an
+/// optional, feature-gated, dev or proc-macro-only entry). Each component also states how its
+/// identity was established (`evidence.identity`): the frozen lock always, the binary when present.
+pub(crate) fn apply_scope(
+    components: &mut [Value],
+    present: &BTreeSet<(String, String)>,
+    binary_desc: &str,
+) {
+    for c in components.iter_mut() {
+        let key = (
+            c["name"].as_str().unwrap_or_default().to_string(),
+            c["version"].as_str().unwrap_or_default().to_string(),
+        );
+        let in_binary = present.contains(&key);
+        c["scope"] = json!(if in_binary { "required" } else { "excluded" });
+        let mut methods = vec![json!({
+            "technique": "manifest-analysis",
+            "confidence": 1.0,
+            "value": "frozen Cargo.lock (tools/locks)"
+        })];
+        if in_binary {
+            methods.push(json!({
+                "technique": "binary-analysis",
+                "confidence": 1.0,
+                "value": binary_desc
+            }));
+        }
+        c["evidence"] =
+            json!({"identity": [{"field": "purl", "confidence": 1.0, "methods": methods}]});
+    }
+}
+
+/// Content-addressed asset name in the `tools` release for a TOOLS.lock row.
+pub(crate) fn tool_asset_name(name: &str, target: &str, digest: &str) -> String {
+    let short = &digest[..12];
+    if target == "windows-x86_64" {
+        format!("{name}-{short}.exe")
+    } else {
+        format!("{name}-{short}-{target}")
+    }
+}
+
+/// The TOOLS.lock target whose row carries this digest.
+pub(crate) fn tools_lock_target(lock: &str, name: &str, digest: &str) -> Option<String> {
+    lock.lines()
+        .map(|l| l.split('#').next().unwrap_or("").trim())
+        .filter(|l| !l.is_empty())
+        .find_map(|l| {
+            let f: Vec<&str> = l.split_whitespace().collect();
+            (f.len() >= 5 && f[0] == name && f[4] == digest).then(|| f[3].to_string())
+        })
+}
+
+/// Download the pinned tool binary from the `tools` release and verify it IS the digest.
+fn fetch_tool_binary(product: &str, digest: &str) -> Result<(String, Vec<u8>), String> {
+    let lock = std::fs::read_to_string("tools/TOOLS.lock")
+        .map_err(|e| format!("tools/TOOLS.lock: {e}"))?;
+    let target = tools_lock_target(&lock, product, digest).ok_or_else(|| {
+        format!(
+            "tools/TOOLS.lock has no {product} row with digest {digest}: VDRs are emitted for pinned digests"
+        )
+    })?;
+    let asset = tool_asset_name(product, &target, digest);
+    let tmp = std::env::temp_dir().join(format!("vdr-bin-{asset}"));
+    let _ = std::fs::remove_file(&tmp);
+    gh(&[
+        "release",
+        "download",
+        "tools",
+        "--pattern",
+        &asset,
+        "-O",
+        &tmp.to_string_lossy(),
+        "--clobber",
+    ])?;
+    let bytes = std::fs::read(&tmp).map_err(|e| e.to_string())?;
+    let got = crate::sha256::sha256_hex(&bytes);
+    if got != digest {
+        return Err(format!(
+            "{asset}: sha256 {got} != pinned {digest} (custody failure)"
+        ));
+    }
+    Ok((asset, bytes))
+}
+
 fn fetch_raw(header: &Value) -> Result<Value, String> {
     let asset = s(header, &["rawPayload", "asset"]);
     let want = s(header, &["rawPayload", "sha256"]);
@@ -385,7 +501,17 @@ pub fn run(args: &[String]) -> i32 {
                 let lock = std::fs::read_to_string(format!("tools/locks/{product}.lock")).map_err(
                     |e| format!("tools/locks/{product}.lock: {e} (pass --sbom for the app)"),
                 )?;
-                (components_from_lock(&lock), None)
+                let mut comps = components_from_lock(&lock);
+                // Scope from the artifact, not the manifest: the pinned binary's cargo-auditable
+                // list says which lock packages were compiled into it (runtime and build kinds).
+                let (asset, bin) = fetch_tool_binary(&product, &digest)?;
+                let present = auditable_packages(&bin).map_err(|e| format!("{asset}: {e}"))?;
+                apply_scope(
+                    &mut comps,
+                    &present,
+                    &format!("cargo-auditable .dep-v0 section of {asset} (sha256 {digest})"),
+                );
+                (comps, None)
             }
         };
         let acks = read_jsonl(
@@ -451,6 +577,57 @@ mod tests {
     use super::*;
 
     const LOCK: &str = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"ab\"\n\n[[package]]\nname = \"b\"\nversion = \"2.0.0\"\n\n[metadata]\nk = \"v\"\n";
+
+    #[test]
+    fn scope_and_identity_evidence_follow_the_binary_package_set() {
+        let mut comps = components_from_lock(LOCK);
+        let mut present = BTreeSet::new();
+        present.insert(("a".to_string(), "1.0.0".to_string()));
+        apply_scope(&mut comps, &present, "x.exe (sha256 d)");
+        assert_eq!(comps[0]["scope"], "required");
+        assert_eq!(
+            comps[0]["evidence"]["identity"][0]["methods"][1]["technique"],
+            "binary-analysis"
+        );
+        assert_eq!(comps[1]["scope"], "excluded");
+        assert_eq!(
+            comps[1]["evidence"]["identity"][0]["methods"]
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+    }
+
+    #[test]
+    fn dep_v0_packages_inflate_and_refuse_malformed() {
+        let doc = br#"{"packages":[{"name":"a","version":"1.0.0","root":true},{"name":"b","version":"2.0.0","kind":"build"}]}"#;
+        let z = miniz_oxide::deflate::compress_to_vec_zlib(doc, 6);
+        let set = packages_from_dep_v0(&z).unwrap();
+        assert!(set.contains(&("b".to_string(), "2.0.0".to_string())));
+        assert_eq!(set.len(), 2);
+        assert!(packages_from_dep_v0(b"not zlib").is_err());
+        let empty = miniz_oxide::deflate::compress_to_vec_zlib(br#"{"packages":[]}"#, 6);
+        assert!(packages_from_dep_v0(&empty).unwrap_err().contains("empty"));
+    }
+
+    #[test]
+    fn tool_asset_names_and_lock_target_lookup() {
+        assert_eq!(
+            tool_asset_name("cargo-audit", "windows-x86_64", "b16c10e3c7d43570ab"),
+            "cargo-audit-b16c10e3c7d4.exe"
+        );
+        assert_eq!(
+            tool_asset_name("cargo-acl", "linux-x86_64", "87c159d397e93e88ff"),
+            "cargo-acl-87c159d397e9-linux-x86_64"
+        );
+        let lock = "# name repo rev target sha\ncargo-acl o/r deadbeef linux-x86_64 87c1 # note\ncargo-acl o/r deadbeef windows-x86_64 ffff\n";
+        assert_eq!(
+            tools_lock_target(lock, "cargo-acl", "87c1").unwrap(),
+            "linux-x86_64"
+        );
+        assert!(tools_lock_target(lock, "cargo-acl", "0000").is_none());
+    }
 
     #[test]
     fn components_from_lock_carry_purl_and_hash() {
