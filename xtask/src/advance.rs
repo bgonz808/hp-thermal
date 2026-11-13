@@ -53,20 +53,20 @@ fn run_capture(prog: &str, args: &[&str]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }
 
-fn git(args: &[&str]) -> Result<String, String> {
+pub(crate) fn git(args: &[&str]) -> Result<String, String> {
     run_capture("git", args)
 }
 
-fn gh(args: &[&str]) -> Result<String, String> {
+pub(crate) fn gh(args: &[&str]) -> Result<String, String> {
     run_capture("gh", args)
 }
 
-fn gh_json(args: &[&str]) -> Result<Value, String> {
+pub(crate) fn gh_json(args: &[&str]) -> Result<Value, String> {
     let s = gh(args)?;
     serde_json::from_str(&s).map_err(|e| format!("gh {}: unparseable JSON ({e})", args.join(" ")))
 }
 
-fn s(v: &Value, path: &[&str]) -> String {
+pub(crate) fn s(v: &Value, path: &[&str]) -> String {
     let mut cur = v;
     for p in path {
         cur = &cur[*p];
@@ -78,11 +78,11 @@ fn s(v: &Value, path: &[&str]) -> String {
     }
 }
 
-fn is_hex64(x: &str) -> bool {
+pub(crate) fn is_hex64(x: &str) -> bool {
     x.len() == 64 && x.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
-fn short(d: &str) -> &str {
+pub(crate) fn short(d: &str) -> &str {
     &d[..d.len().min(12)]
 }
 
@@ -328,7 +328,7 @@ pub(crate) fn mal_absent(log: &str, digest: &str) -> bool {
 
 // ---------- GitHub Actions ----------
 
-fn wait_run(id: &str, timeout: Duration) -> Result<String, String> {
+pub(crate) fn wait_run(id: &str, timeout: Duration) -> Result<String, String> {
     let start = Instant::now();
     loop {
         let v = gh_json(&["run", "view", id, "--json", "status,conclusion"])?;
@@ -349,7 +349,11 @@ fn wait_run(id: &str, timeout: Duration) -> Result<String, String> {
 /// Dispatch a workflow on the branch and return the id of the run it created: the newest run of
 /// that workflow on the branch created at or after the dispatch instant. A run that predates the
 /// dispatch is someone else's and is never adopted.
-fn dispatch(workflow: &str, branch: &str, inputs: &[(&str, &str)]) -> Result<String, String> {
+pub(crate) fn dispatch(
+    workflow: &str,
+    branch: &str,
+    inputs: &[(&str, &str)],
+) -> Result<String, String> {
     let before = gh_json(&[
         "run",
         "list",
@@ -404,11 +408,11 @@ fn dispatch(workflow: &str, branch: &str, inputs: &[(&str, &str)]) -> Result<Str
     }
 }
 
-fn run_log(id: &str) -> Result<String, String> {
+pub(crate) fn run_log(id: &str) -> Result<String, String> {
     gh(&["run", "view", id, "--log"])
 }
 
-fn download_artifact(id: &str, name: &str) -> Result<PathBuf, String> {
+pub(crate) fn download_artifact(id: &str, name: &str) -> Result<PathBuf, String> {
     let dir = std::env::temp_dir().join(format!("candidate-advance-{name}-{id}"));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -424,7 +428,7 @@ fn download_artifact(id: &str, name: &str) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
+pub(crate) fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
     let rd = std::fs::read_dir(dir).ok()?;
     for e in rd.flatten() {
         let p = e.path();
@@ -441,7 +445,7 @@ fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
 
 // ---------- evidence helpers ----------
 
-fn read_jsonl(path: &Path) -> Vec<Value> {
+pub(crate) fn read_jsonl(path: &Path) -> Vec<Value> {
     std::fs::read_to_string(path)
         .map(|t| {
             t.lines()

@@ -55,6 +55,8 @@ mod propose;
 /// `candidate-advance`: the bless cycle as idempotent stages (digest, vuln, caps, mal, summary).
 mod advance;
 mod record_vuln;
+/// `release-advance`: the app's post-release evidence (vuln baseline, VT panel) as stages.
+mod release_advance;
 /// `xtask ci` step: cargo-vet exemptions for xtask stay off every lane's build graph.
 mod vet_guard;
 
@@ -107,6 +109,7 @@ fn main() {
         Some("freeze-propose") => propose::run(&args),
         Some("record-vuln") => record_vuln::run(&args),
         Some("candidate-advance") => advance::run(&args),
+        Some("release-advance") => release_advance::run(&args),
         Some("vet-guard") => {
             if vet_guard::check() {
                 0
