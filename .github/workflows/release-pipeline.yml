@@ -168,6 +168,60 @@ jobs:
           jq -e '.bomFormat == "CycloneDX" and .specVersion == "1.6" and (.metadata.component.authors | length) > 0' "$f" > /dev/null             || { echo "::error::$f is not a CycloneDX 1.6 SBOM with structured authors"; jq '{bomFormat, specVersion}' "$f"; exit 1; }
           echo "sbom: $f specVersion $(jq -r .specVersion "$f"), $(jq '.components | length' "$f") components"
 
+      # Build environment, declared for rebuilders. Facts are resolved the way rustc's MSVC
+      # detection resolves them (rust-lang/cc-rs find-msvc-tools): toolset from VCToolsVersion or
+      # Microsoft.VCToolsVersion.default.txt, SDK = newest lib/<ver> holding um/x64/kernel32.lib,
+      # registry read through the 32-bit view. Runs in app/ so rust-toolchain.toml answers
+      # `rustc -vV`. The next step binds the declared toolset to the exe's Rich header.
+      - name: Collect build environment facts
+        working-directory: app
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $vv = rustc -vV
+          $ver = ($vv | Select-String '^rustc ').Line.Trim()
+          $commit = (($vv | Select-String '^commit-hash: ').Line -split ' ')[1]
+          $hostTriple = (($vv | Select-String '^host: ').Line -split ' ')[1]
+          $channel = ((Get-Content ../tools/TOOLCHAIN.lock) | Where-Object { $_ -match '^channel\s' }) -split '\s+' | Select-Object -Index 1
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $inst = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json | Select-Object -First 1
+          if (-not $inst) { throw 'no Visual Studio instance with the VC tools' }
+          $toolset = if ($env:VCToolsVersion) { $env:VCToolsVersion } else { (Get-Content "$($inst.installationPath)\VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt").Trim() }
+          $link = "$($inst.installationPath)\VC\Tools\MSVC\$toolset\bin\Hostx64\x64\link.exe"
+          if (-not (Test-Path $link)) { throw "link.exe not found for toolset $toolset" }
+          $linkver = (Get-Item $link).VersionInfo.FileVersion
+          if ($env:WindowsSdkDir -and $env:WindowsSDKVersion) {
+            $sdk = $env:WindowsSDKVersion.TrimEnd('\')
+          } else {
+            $root = (Get-ItemProperty 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Microsoft SDKs\Windows\v10.0').InstallationFolder
+            $sdk = Get-ChildItem "$root\lib" -Directory | Sort-Object Name | Where-Object { Test-Path "$($_.FullName)\um\x64\kernel32.lib" } | Select-Object -Last 1 -ExpandProperty Name
+          }
+          if (-not $sdk) { throw 'no Windows 10 SDK with um/x64/kernel32.lib' }
+          $out = [ordered]@{
+            schema = 'hp-thermal/build-env/v1'
+            rustc = [ordered]@{ version = $ver; commit = $commit; host = $hostTriple; channel = $channel }
+            msvc = [ordered]@{ product = $inst.displayName; product_version = $inst.installationVersion; toolset = $toolset; link_file_version = $linkver }
+            windows_sdk = [ordered]@{ version = $sdk }
+            runner = [ordered]@{ image_os = "$env:ImageOS"; image_version = "$env:ImageVersion"; os_version = [System.Environment]::OSVersion.Version.ToString() }
+          }
+          $out | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8NoBOM build-env.json
+          Get-Content build-env.json
+
+      # CycloneDX 1.6 `formulation` is the spec's carrier for how a component was manufactured.
+      # xtask admits the declared toolset only if its link.exe build equals the linker build in
+      # the exe's Rich header (measured, not declared), and refuses a SBOM that already has one.
+      - name: Declare build environment in SBOM (CycloneDX formulation)
+        shell: bash
+        run: |
+          set -euo pipefail
+          set -- app/*.cdx.json
+          f=$1
+          xtask/target/release/xtask.exe sbom-formulate --sbom "$f" \
+            --exe app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe --env app/build-env.json
+          jq -e '(.formulation | length) == 1 and (.formulation[0].components | length) == 5' "$f" > /dev/null \
+            || { echo "::error::$f: formulation not declared"; exit 1; }
+          rm app/build-env.json
+
       # #104: MUTATION before any seal. Patch the /Brepro hash timestamp (which decodes to an
       # implausible year and can trip timestomp heuristics) to the reproducible commit epoch —
       # plausible AND deterministic. link.exe has no /TIMESTAMP, so it's a post-link patch, and
@@ -293,6 +347,15 @@ jobs:
           ca=$(jq -S '[.components[]|{purl,hashes}]|sort_by(.purl)' builds/dist-unsigned-a/hp-thermal.cdx.json | sha256sum | cut -d' ' -f1)
           cb=$(jq -S '[.components[]|{purl,hashes}]|sort_by(.purl)' builds/dist-unsigned-b/hp-thermal.cdx.json | sha256sum | cut -d' ' -f1)
           if [ "$ca" = "$cb" ]; then echo "SBOM component set: identical"; else echo "::error::SBOM component sets differ"; fail=1; fi
+          # Build environment (formulation) is reported, not gated: identical bytes from two
+          # environments is the stronger result, and image rollouts can put a/b on different
+          # image versions mid-run.
+          fa=$(jq -S '.formulation' builds/dist-unsigned-a/hp-thermal.cdx.json | sha256sum | cut -d' ' -f1)
+          fb=$(jq -S '.formulation' builds/dist-unsigned-b/hp-thermal.cdx.json | sha256sum | cut -d' ' -f1)
+          if [ "$fa" = "$fb" ]; then echo "SBOM formulation (build environment): identical"; else
+            echo "::notice::SBOM formulation differs between builds (environment, not bytes):"
+            diff <(jq -S '.formulation' builds/dist-unsigned-a/hp-thermal.cdx.json) <(jq -S '.formulation' builds/dist-unsigned-b/hp-thermal.cdx.json) || true
+          fi
           [ "$fail" -eq 0 ] || { echo "Reproducibility gate FAILED: the two builds do not agree; nothing will be signed."; exit 1; }
           echo "Reproducibility gate PASSED: two independent builds agree byte for byte."
 
