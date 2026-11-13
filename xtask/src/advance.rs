@@ -712,8 +712,18 @@ fn stage_vuln(ctx: &Ctx, auditor: &Path, provenance: &str) -> Result<(), String>
     }
     let raw_dir = std::env::temp_dir().join(format!("candidate-advance-raw-{}", ctx.tool));
     let _ = std::fs::remove_dir_all(&raw_dir);
+    // The instrument must be the auditor blessed on MAIN, never the branch's own pin: for a
+    // cargo-audit candidate the branch's TOOLS.lock names the candidate itself, which would audit
+    // its own lock. record-vuln checks the auditor's digest against the lock it is given.
+    let main_lock =
+        std::env::temp_dir().join(format!("candidate-advance-main-tools-{}.lock", ctx.tool));
+    git(&["fetch", "--quiet", "origin", "main"])?;
+    let main_text = git(&["show", "origin/main:tools/TOOLS.lock"])?;
+    std::fs::write(&main_lock, main_text).map_err(|e| format!("{}: {e}", main_lock.display()))?;
     let args: Vec<String> = [
         "record-vuln",
+        "--tools-lock",
+        &main_lock.to_string_lossy(),
         "--tool",
         &ctx.tool,
         "--digest",
