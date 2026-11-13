@@ -1,0 +1,121 @@
+name: Release VDR attestation
+
+# Post-release stage (#396). A shipped exe's Vulnerability Disclosure Report can exist only after
+# `release-advance vuln` recorded the exe's evidence and `vdr emit` committed the report beside it
+# (supply-chain/evidence/hp-thermal/<digest>/vdr.cdx.json, regenerated and compared by CI). This
+# dispatch-only stage attests that committed report to the released exe and attaches both the
+# report and its Sigstore bundle to the release.
+#
+# CARRIER: a VDR is a CycloneDX BOM whose payload is `vulnerabilities[]`; CycloneDX defines no
+# VDR-specific in-toto predicate type, so the attestation uses https://cyclonedx.org/bom, the same
+# type as the SBOM. Consumers tell them apart by content (`vulnerabilities`, `metadata.lifecycles`)
+# and by signer: this workflow's identity, never the pipeline's.
+#
+# CUSTODY: the exe and SBOM are downloaded from the release and admitted only after their
+# provenance verifies against this repository's documented signer identities; the exe digest is
+# re-checked against SHA256SUMS; the committed VDR is regenerated from the evidence before it is
+# signed. One VDR per release: an existing asset is a refusal, not an overwrite.
+#
+# JUDGMENT GATE: the `release-publish` environment (maintainer approval, no admin bypass). Nothing
+# here commits to git; the only writes are the attestation and two release assets.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag whose exe the committed VDR describes (e.g. v0.3.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  attest-vdr:
+    environment: release-publish
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write        # release asset upload only; no git write path exists in this job
+      id-token: write        # Sigstore keyless signing
+      attestations: write
+    env:
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Checkout (evidence + policy at main)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned toolchain
+        uses: ./.github/actions/install-toolchain
+
+      - name: Build xtask (the emitter that regenerates the report)
+        run: cargo build --release --locked --quiet --manifest-path xtask/Cargo.toml
+
+      - name: Download the release's exe, SBOM and manifest; verify custody
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in v[0-9]*) : ;; *) echo "::error::tag '$TAG' is not a v* release tag"; exit 1 ;; esac
+          mkdir -p rel
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir rel \
+            --pattern hp-thermal.exe --pattern hp-thermal.cdx.json --pattern SHA256SUMS
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx 'hp-thermal.vdr.cdx.json'; then
+            echo "::error::release $TAG already carries hp-thermal.vdr.cdx.json; one VDR per release, refusing to overwrite"
+            exit 1
+          fi
+          digest=$(awk '$2=="hp-thermal.exe"{print $1}' rel/SHA256SUMS)
+          [ "${#digest}" = 64 ] || { echo "::error::SHA256SUMS has no hp-thermal.exe line"; exit 1; }
+          got=$(sha256sum rel/hp-thermal.exe | cut -d' ' -f1)
+          [ "$got" = "$digest" ] || { echo "::error::downloaded exe $got != SHA256SUMS $digest"; exit 1; }
+          for f in hp-thermal.exe hp-thermal.cdx.json; do
+            ok=0
+            for w in release-pipeline.yml release.yml; do
+              if gh attestation verify "rel/$f" --repo "$GITHUB_REPOSITORY" \
+                   --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/$w" > /dev/null 2>&1; then ok=1; echo "$f: provenance verified (signer $w)"; break; fi
+            done
+            [ "$ok" = 1 ] || { echo "::error::$f: provenance did not verify against either documented signer; not admitted"; exit 1; }
+          done
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+        id: rel
+
+      - name: Regenerate the committed VDR from the evidence (must match byte for byte)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.rel.outputs.digest }}
+        run: |
+          set -euo pipefail
+          vdr="supply-chain/evidence/hp-thermal/$DIGEST/vdr.cdx.json"
+          [ -f "$vdr" ] || { echo "::error::$vdr is not committed: run release-advance vuln, then vdr emit, and merge first"; exit 1; }
+          xtask/target/release/xtask vdr check --product hp-thermal --digest "$DIGEST" --sbom rel/hp-thermal.cdx.json
+          jq -e '.bomFormat == "CycloneDX" and .specVersion == "1.6" and has("vulnerabilities") and (.metadata.component.name == "hp-thermal")' "$vdr" > /dev/null \
+            || { echo "::error::$vdr: not a CycloneDX 1.6 VDR for hp-thermal"; exit 1; }
+          mkdir -p out && cp "$vdr" out/hp-thermal.vdr.cdx.json
+          echo "VDR: $(jq '.components | length' "$vdr") component(s), $(jq '.vulnerabilities | length' "$vdr") vulnerabilit(ies)"
+
+      - name: Attest the VDR to the released exe
+        id: attest
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6  # actions/attest v4.2.2
+        with:
+          subject-path: rel/hp-thermal.exe
+          predicate-type: https://cyclonedx.org/bom
+          predicate-path: out/hp-thermal.vdr.cdx.json
+
+      - name: Verify the VDR attestation (identity-pinned to this workflow) and attach it
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          gh attestation verify rel/hp-thermal.exe --bundle "$BUNDLE" --repo "$GITHUB_REPOSITORY" \
+            --predicate-type https://cyclonedx.org/bom \
+            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release-vdr.yml" --format json > verified.json
+          jq -e '.[0].verificationResult.statement.predicate | has("vulnerabilities") and (.metadata.component.name == "hp-thermal")' verified.json > /dev/null \
+            || { echo "::error::verified statement is not the VDR"; exit 1; }
+          cp "$BUNDLE" out/hp-thermal.vdr.sigstore.jsonl
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" out/hp-thermal.vdr.cdx.json out/hp-thermal.vdr.sigstore.jsonl
+          echo "attached hp-thermal.vdr.cdx.json + hp-thermal.vdr.sigstore.jsonl to $TAG"
