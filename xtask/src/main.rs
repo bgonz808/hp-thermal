@@ -54,6 +54,7 @@ mod propose;
 // #396: the in-repo writer of vuln.jsonl — hashes the auditor it runs, refuses an unblessed one.
 /// `candidate-advance`: the bless cycle as idempotent stages (digest, vuln, caps, mal, summary).
 mod advance;
+mod cadence;
 mod record_vuln;
 /// `release-advance`: the app's post-release evidence (vuln baseline, VT panel) as stages.
 mod release_advance;
@@ -109,6 +110,7 @@ fn main() {
         Some("explore") => explore::run(&args),
         Some("monitor-vuln") => monitor::run(&args),
         Some("eox-check") => eox::run(&args),
+        Some("cadence-check") => cadence::run(&args),
         Some("freeze") => freeze::run(&args),
         Some("freeze-propose") => propose::run(&args),
         Some("record-vuln") => record_vuln::run(&args),
@@ -169,6 +171,9 @@ fn main() {
             );
             eprintln!(
                 "  eox-check [--today D] [--crosscheck --endoflife <product>=<file>]...  OpenEoX lifecycle windows for every runs-on image + the pinned channel (#376)"
+            );
+            eprintln!(
+                "  cadence-check            validate supply-chain/policy/cadence.json (time bounds the scheduled checks read)"
             );
             eprintln!(
                 "  mal-acks --tool <t> --digest <sha256>  acked engines from the evidence lattice (#278)"

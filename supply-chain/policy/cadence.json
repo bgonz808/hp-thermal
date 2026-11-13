@@ -1,0 +1,24 @@
+{
+  "schema": "hp-thermal/cadence/v1",
+  "_about": "Time bounds on the pinned posture. Pins hold bytes still; these numbers say how long a pin may sit behind what the world has moved to before a scheduled check escalates. Each consumer reads its number from here and nowhere else: tool-updates.yml (tool_release_lag_days), supply-chain-monitor.yml pin-staleness (toolchain_age_days) and vt-monitor (sandbox_not_ready_days), xtask explore (crate_candidate, asserted equal by test). A missing or malformed field fails the consuming job; there is no default. `fail: null` means that threshold annotates but does not fail; replacing null with a number is the whole change.",
+  "tool_release_lag_days": {
+    "_doc": "Days between the commit date of the newest upstream release a TOOLS.lock tool has not adopted and today. warn annotates the weekly check; fail makes the check job fail until the rev is bumped through the bless cycle. warn must exceed the soak floor (tools/TOOLCHAIN.lock min-age-days, 30) so a release is never both too new to adopt and too old to be missing.",
+    "warn": 45,
+    "fail": 90
+  },
+  "toolchain_age_days": {
+    "_doc": "Age of the pinned nightly. The soak floor stays in tools/TOOLCHAIN.lock (min-age-days); this is the ceiling. std and rustc fixes ride toolchain bumps, and cargo-audit cannot see std, so age is the proxy until toolchain-advisories covers the rest.",
+    "warn": 75,
+    "fail": null
+  },
+  "sandbox_not_ready_days": {
+    "_doc": "#347 bounded recheck. Days since first submission a digest may sit at sandbox NOT READY before the monitor stops reading it as pending. VirusTotal sandboxes most PE files within hours but not every file ever; past this bound NOT READY is an absence of evidence to act on (resubmit through vt-submit, or record by ack that the digest ships unsandboxed), not a result still coming. The gate's state vocabulary is unchanged: this decides only when NOT READY stops meaning wait.",
+    "warn": 14,
+    "fail": null
+  },
+  "crate_candidate": {
+    "_doc": "xtask explore: a crate version younger than soak_days has not soaked (#241); the newly-soaked window is [soak_days, soak_days + cadence_days) so a fix crossing the line is surfaced in exactly one weekly report (#264). Declared here, compiled into explore.rs, and the xtask test suite fails if the two disagree.",
+    "soak_days": 7,
+    "cadence_days": 7
+  }
+}
