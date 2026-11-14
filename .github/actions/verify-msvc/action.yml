@@ -3,7 +3,9 @@ description: >-
   Runs before anything compiles. Every executable and DLL the build can run from the pinned MSVC
   toolset (.cargo/config.toml [env] VCToolsVersion, bin/Hostx64/x64), the pinned Windows SDK's
   rc.exe and rcdll.dll, and vswhere.exe must carry a valid Authenticode signature from Microsoft
-  Corporation that chains to one of Microsoft's pinned root certificates. Libraries and headers
+  Corporation that chains to one of the Microsoft roots in
+  supply-chain/policy/toolchain-trust.json, and must match none of its revoked files or
+  certificates. Libraries and headers
   cannot carry signatures; the one folder outside the toolset's own library path that a build
   script adds to the link search path (atlmfc/lib/x64, floors.json
   allow_pinned_toolset_link_search) must not shadow a library of the toolset or SDK, because
@@ -15,16 +17,20 @@ runs:
       shell: pwsh
       run: |
         $ErrorActionPreference = 'Stop'
-        # Microsoft root certificates, by SHA-1 thumbprint: Root Certificate Authority 2010 and
-        # 2011, and the 2001 Root Certificate Authority some toolset files still chain to.
-        $roots = @(
-          '3B1EFD3A66EA28B16697394703A72CA340A05BD5',
-          '8F43288AD272F3103B6FB1428485EA3014C0BCFE',
-          'CDD4EEAE6000AC7F40C3802C171E30148030C072'
-        )
+        # Trust anchors and explicit distrust: one reviewed policy file, also read by
+        # `cargo xtask verify-build-env`. Missing, malformed, or empty fails closed.
+        $trust = Get-Content -Raw -LiteralPath supply-chain/policy/toolchain-trust.json | ConvertFrom-Json
+        if ($trust.schema -ne 'hp-thermal/toolchain-trust/v1') { throw 'supply-chain/policy/toolchain-trust.json: unknown schema' }
+        $roots = @($trust.microsoft_roots | ForEach-Object { "$($_.sha1)".ToUpperInvariant() })
+        if ($roots.Count -eq 0) { throw 'toolchain-trust.json names no Microsoft root' }
+        $revokedFiles = @($trust.revoked.file_sha256 | ForEach-Object { "$($_.sha256)".ToLowerInvariant() })
+        $revokedCerts = @($trust.revoked.certificate_sha1 | ForEach-Object { "$($_.sha1)".ToUpperInvariant() })
         $failures = [System.Collections.Generic.List[string]]::new()
         $byRoot = @{}
         function Assert-Microsoft([string]$path) {
+          if ($revokedFiles -contains (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()) {
+            $failures.Add("revoked file (toolchain-trust.json): $path"); return
+          }
           $s = Get-AuthenticodeSignature -LiteralPath $path
           if ($s.Status -ne 'Valid') { $failures.Add("$($s.Status): $path"); return }
           if ($s.SignerCertificate.Subject -notmatch '(^|, )O=Microsoft Corporation(,|$)') {
@@ -33,7 +39,10 @@ runs:
           $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
           $chain.ChainPolicy.RevocationMode = 'NoCheck'
           [void]$chain.Build($s.SignerCertificate)
-          $root = $chain.ChainElements[$chain.ChainElements.Count - 1].Certificate.Thumbprint
+          $prints = @($chain.ChainElements | ForEach-Object { $_.Certificate.Thumbprint })
+          $hit = @($prints | Where-Object { $revokedCerts -contains $_ })
+          if ($hit.Count) { $failures.Add("chain holds a revoked certificate ($($hit -join ', ')): $path"); return }
+          $root = $prints[$prints.Count - 1]
           if ($roots -notcontains $root) { $failures.Add("chains to unpinned root $($root): $path"); return }
           $byRoot[$root] = 1 + [int]$byRoot[$root]
         }
