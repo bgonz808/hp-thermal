@@ -1,0 +1,23 @@
+{
+  "schema": "hp-thermal/toolchain-trust/v1",
+  "_doc": "Trust anchors for the MSVC toolchain, read by .github/actions/verify-msvc (before anything compiles in CI) and by cargo xtask verify-build-env (locally). Missing or malformed: both fail closed. An executable or DLL the build can run must carry a valid Authenticode signature from Microsoft Corporation whose chain ends at one of microsoft_roots, and must not match any revoked entry. Adding a root (Microsoft rotating to a new one fails builds closed until then): confirm its SHA-1 thumbprint from two independent sources, Microsoft's PKI repository and the root store of a machine you control holding a file signed under it, then add it here in a reviewed change; keep old roots until no verified file chains to them. Revoking: add the file's SHA-256 or the certificate's SHA-1 below; revocation wins over a valid signature and takes effect on the next job.",
+  "microsoft_roots": [
+    {
+      "sha1": "3B1EFD3A66EA28B16697394703A72CA340A05BD5",
+      "subject": "CN=Microsoft Root Certificate Authority 2010, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+    },
+    {
+      "sha1": "8F43288AD272F3103B6FB1428485EA3014C0BCFE",
+      "subject": "CN=Microsoft Root Certificate Authority 2011, O=Microsoft Corporation, L=Redmond, S=Washington, C=US"
+    },
+    {
+      "sha1": "CDD4EEAE6000AC7F40C3802C171E30148030C072",
+      "subject": "CN=Microsoft Root Certificate Authority, DC=microsoft, DC=com"
+    }
+  ],
+  "revoked": {
+    "_doc": "Explicit distrust. A toolchain file whose SHA-256 is listed fails even with a valid signature. A certificate whose SHA-1 thumbprint appears anywhere in a file's chain fails that file. Each entry carries why and when, so a reader can tell a response from a typo.",
+    "file_sha256": [],
+    "certificate_sha1": []
+  }
+}

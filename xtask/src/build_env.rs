@@ -170,20 +170,70 @@ pub fn run(args: &[String]) -> i32 {
     check(&pin, exe, against)
 }
 
-/// Microsoft root certificates (SHA-1 thumbprints) a toolchain signature must chain to: Root
-/// Certificate Authority 2010 and 2011, and the 2001 Root Certificate Authority. The CI action
-/// `.github/actions/verify-msvc` pins the same three.
-#[cfg(windows)]
-const MICROSOFT_ROOTS: [&str; 3] = [
-    "3B1EFD3A66EA28B16697394703A72CA340A05BD5",
-    "8F43288AD272F3103B6FB1428485EA3014C0BCFE",
-    "CDD4EEAE6000AC7F40C3802C171E30148030C072",
-];
+/// The toolchain trust policy, shared with `.github/actions/verify-msvc`.
+const TRUST: &str = "supply-chain/policy/toolchain-trust.json";
+
+/// Microsoft roots a toolchain signature must chain to, and explicit distrust.
+#[derive(Debug)]
+pub(crate) struct Trust {
+    pub roots: Vec<String>,
+    pub revoked_files: Vec<String>,
+    pub revoked_certs: Vec<String>,
+}
+
+/// Parse `toolchain-trust.json`. No roots, a malformed entry, or another schema fails.
+pub(crate) fn parse_trust(text: &str) -> Result<Trust, String> {
+    let v: serde_json::Value = serde_json::from_str(text).map_err(|e| format!("{TRUST}: {e}"))?;
+    if v["schema"] != "hp-thermal/toolchain-trust/v1" {
+        return Err(format!("{TRUST}: unknown schema"));
+    }
+    let list = |ptr: &str, key: &str, len: usize, upper: bool| -> Result<Vec<String>, String> {
+        let mut out = Vec::new();
+        for e in v
+            .pointer(ptr)
+            .and_then(|a| a.as_array())
+            .into_iter()
+            .flatten()
+        {
+            let h = e[key].as_str().unwrap_or_default();
+            if h.len() != len || !h.bytes().all(|b| b.is_ascii_hexdigit()) {
+                return Err(format!("{TRUST}: {ptr} entry without a {len}-hex `{key}`"));
+            }
+            out.push(if upper {
+                h.to_ascii_uppercase()
+            } else {
+                h.to_ascii_lowercase()
+            });
+        }
+        Ok(out)
+    };
+    let roots = list("/microsoft_roots", "sha1", 40, true)?;
+    if roots.is_empty() {
+        return Err(format!("{TRUST}: names no Microsoft root"));
+    }
+    Ok(Trust {
+        roots,
+        revoked_files: list("/revoked/file_sha256", "sha256", 64, false)?,
+        revoked_certs: list("/revoked/certificate_sha1", "sha1", 40, true)?,
+    })
+}
 
 /// Authenticode of `path` as Windows verifies it (WinVerifyTrust, through Windows PowerShell by
-/// absolute path): Valid, signed by Microsoft Corporation, chaining to a pinned Microsoft root.
+/// absolute path): Valid, signed by Microsoft Corporation, chaining to a root in `TRUST`, and
+/// matching none of its revoked files or certificates.
 #[cfg(windows)]
 fn microsoft_signed(path: &Path) -> Result<String, String> {
+    let trust = parse_trust(
+        &std::fs::read_to_string(TRUST)
+            .map_err(|e| format!("{TRUST}: {e} (run from the repo root)"))?,
+    )?;
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    if trust
+        .revoked_files
+        .contains(&crate::sha256::sha256_hex(&bytes))
+    {
+        return Err(format!("revoked file ({TRUST})"));
+    }
     let ps = std::path::PathBuf::from(
         std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()),
     )
@@ -194,7 +244,7 @@ fn microsoft_signed(path: &Path) -> Result<String, String> {
          if ($s.Status -ne 'Valid') {{ \"$($s.Status)||\"; exit }}; \
          $c = [System.Security.Cryptography.X509Certificates.X509Chain]::new(); \
          $c.ChainPolicy.RevocationMode = 'NoCheck'; [void]$c.Build($s.SignerCertificate); \
-         \"Valid|$($s.SignerCertificate.Subject)|$($c.ChainElements[$c.ChainElements.Count - 1].Certificate.Thumbprint)\""
+         \"Valid|$($s.SignerCertificate.Subject)|$(($c.ChainElements | ForEach-Object {{ $_.Certificate.Thumbprint }}) -join ',')\""
     );
     // PSModulePath from PowerShell 7 makes Windows PowerShell load the wrong
     // Microsoft.PowerShell.Security; without it, its own default applies.
@@ -205,18 +255,26 @@ fn microsoft_signed(path: &Path) -> Result<String, String> {
         .map_err(|e| format!("cannot run {}: {e}", ps.display()))?;
     let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
     let mut f = text.splitn(3, '|');
-    let (status, subject, root) = (
+    let (status, subject, chain) = (
         f.next().unwrap_or(""),
         f.next().unwrap_or(""),
         f.next().unwrap_or(""),
     );
+    let prints: Vec<&str> = chain.split(',').filter(|p| !p.is_empty()).collect();
+    let root = prints.last().copied().unwrap_or("");
     if status != "Valid" {
         return Err(format!("Authenticode status {status:?}"));
     }
     if !subject.split(", ").any(|p| p == "O=Microsoft Corporation") {
         return Err(format!("signed by {subject}, not Microsoft Corporation"));
     }
-    if !MICROSOFT_ROOTS.contains(&root) {
+    if let Some(p) = prints
+        .iter()
+        .find(|p| trust.revoked_certs.iter().any(|r| r == *p))
+    {
+        return Err(format!("chain holds revoked certificate {p}"));
+    }
+    if !trust.roots.iter().any(|r| r == root) {
         return Err(format!("chains to unpinned root {root}"));
     }
     Ok(format!("Microsoft-signed, root {}", &root[..8]))
@@ -590,6 +648,27 @@ pub(crate) fn sdk_component(sdk_version: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_committed_trust_policy_parses_and_bad_ones_fail() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let t = parse_trust(&std::fs::read_to_string(root.join(TRUST)).unwrap()).unwrap();
+        assert_eq!(t.roots.len(), 3);
+        assert!(
+            parse_trust(r#"{"schema":"hp-thermal/toolchain-trust/v1","microsoft_roots":[]}"#)
+                .is_err()
+        );
+        assert!(parse_trust(r#"{"schema":"x","microsoft_roots":[{"sha1":"3B1EFD3A66EA28B16697394703A72CA340A05BD5"}]}"#).is_err());
+        let revoked = r#"{"schema":"hp-thermal/toolchain-trust/v1","microsoft_roots":[{"sha1":"3b1efd3a66ea28b16697394703a72ca340a05bd5"}],"revoked":{"file_sha256":[{"sha256":"AB"}]}}"#;
+        assert!(parse_trust(revoked).unwrap_err().contains("64-hex"));
+        let ok = r#"{"schema":"hp-thermal/toolchain-trust/v1","microsoft_roots":[{"sha1":"3b1efd3a66ea28b16697394703a72ca340a05bd5"}],"revoked":{"certificate_sha1":[{"sha1":"cdd4eeae6000ac7f40c3802c171e30148030c072","why":"drill","date":"2026-11-13"}]}}"#;
+        let t = parse_trust(ok).unwrap();
+        assert_eq!(t.roots[0], "3B1EFD3A66EA28B16697394703A72CA340A05BD5");
+        assert_eq!(
+            t.revoked_certs[0],
+            "CDD4EEAE6000AC7F40C3802C171E30148030C072"
+        );
+    }
 
     #[test]
     fn recorded_reads_nested_formulation_refs() {
