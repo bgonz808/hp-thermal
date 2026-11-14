@@ -189,6 +189,11 @@ jobs:
             fi
             if ! "$X" "${args[@]}"; then echo "::error::$f: differs from what the evidence regenerates"; fail=1; fi
           done
+          # Every pin has a report. A pin without one would escape this check, and with it the
+          # custody check its build record gets when the report regenerates.
+          while read -r pin; do
+            [ -f "supply-chain/evidence/$pin/vdr.cdx.json" ] || { echo "::error::pinned $pin has no vdr.cdx.json"; fail=1; }
+          done <<<"$pinned"
           echo "VDR check: $n report(s) regenerated, $kept kept as history"
           [ "$n" -gt 0 ] || { echo "::error::no committed VDRs found (fail-closed)"; exit 1; }
           exit "$fail"
