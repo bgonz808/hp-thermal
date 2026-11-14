@@ -38,6 +38,9 @@ pub struct Floors {
     pub build_link_arg: bool,
     pub build_foreign_link_search: bool,
     pub build_new_env: bool,
+    /// Folders under the pinned MSVC toolset (`VC/Tools/MSVC/<VCToolsVersion>/`) a build script
+    /// may add to the link search path. Empty: none.
+    pub toolset_link_search: Vec<String>,
 }
 
 pub fn load(path: &Path) -> Result<Floors, String> {
@@ -103,6 +106,11 @@ pub fn parse(text: &str) -> Result<Floors, String> {
         build_link_arg: flag("/build_instructions/hard_stop_link_arg"),
         build_foreign_link_search: flag("/build_instructions/hard_stop_foreign_link_search"),
         build_new_env: flag("/build_instructions/hard_stop_new_rustc_env"),
+        toolset_link_search: match v.pointer("/build_instructions/allow_pinned_toolset_link_search")
+        {
+            None | Some(Value::Null) => Vec::new(),
+            Some(a) => strs(Some(a))?,
+        },
     })
 }
 
@@ -329,6 +337,56 @@ impl Floors {
                 "measured inventory crosses the caps floor: {}: absolute floor, not ackable",
                 hits.join(", ")
             )
+        })
+    }
+
+    /// The absolute link-search rule on cargo's build record: a `linked_paths` entry outside the
+    /// emitting package's own build output or registry source is a floor, unless it is a folder
+    /// of the pinned MSVC toolset that policy names (`allow_pinned_toolset_link_search`). cc-rs
+    /// adds the toolset's `atlmfc/lib/<arch>` for every MSVC C build; cackle measures on Linux and
+    /// never sees it.
+    pub fn record_link_search_stop(&self, head: &[Value], toolset: Option<&str>) -> Option<String> {
+        if !self.build_foreign_link_search {
+            return None;
+        }
+        let mut hits = Vec::new();
+        for (key, (name, _, paths)) in crate::build_record::link_directives(head) {
+            for p in paths {
+                let path = p.split_once('=').map_or(p.as_str(), |(_, x)| x);
+                if own_dir(&name, path) || self.toolset_dir(path, toolset) {
+                    continue;
+                }
+                hits.push(format!(
+                    "{key} build script adds link search path `{p}`: outside its own OUT_DIR / registry source"
+                ));
+            }
+        }
+        (!hits.is_empty()).then(|| {
+            format!(
+                "build record crosses the build_instructions floor: {}: absolute floor, not ackable",
+                hits.join(", ")
+            )
+        })
+    }
+
+    /// `path` is exactly one of the policy's folders under the pinned toolset, inside a Visual
+    /// Studio installation, with no relative segment.
+    fn toolset_dir(&self, path: &str, toolset: Option<&str>) -> bool {
+        let Some(toolset) = toolset else {
+            return false;
+        };
+        let p = path.replace('\\', "/").to_ascii_lowercase();
+        if p.split('/')
+            .skip(1)
+            .any(|seg| seg.is_empty() || seg == "." || seg == "..")
+            || !p.contains("/microsoft visual studio/")
+        {
+            return false;
+        }
+        self.toolset_link_search.iter().any(|rel| {
+            let tail =
+                format!("/vc/tools/msvc/{toolset}/{}", rel.trim_matches('/')).to_ascii_lowercase();
+            p.ends_with(&tail)
         })
     }
 
@@ -1280,5 +1338,107 @@ build.allow_build_instructions = [\"cargo:x=1
             crate::build_record::new_cfgs(&more_cfg, &base),
             vec!["serde_json@1: b".to_string()]
         );
+    }
+
+    #[test]
+    fn record_link_search_allows_own_dirs_and_only_the_pinned_toolset_folder() {
+        let f = policy();
+        let rec = |pkg: &str, path: &str| {
+            let raw = format!(
+                "{}\n{}\n",
+                format_args!(
+                    r#"{{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#{pkg}@1.0.0","linked_libs":[],"linked_paths":[{}],"cfgs":[],"env":[],"out_dir":"o"}}"#,
+                    serde_json::to_string(path).unwrap()
+                ),
+                r#"{"reason":"build-finished","success":true}"#
+            );
+            crate::build_record::parse(&raw).unwrap()
+        };
+        let own = rec(
+            "zstd-sys",
+            r"native=D:\a\_temp/tool-build\release\build\zstd-sys/f06bd08e594183cf\out",
+        );
+        assert_eq!(f.record_link_search_stop(&own, Some("14.51.36231")), None);
+        let registry = rec(
+            "windows_x86_64_msvc",
+            r"native=C:\Users\runneradmin\.cargo\registry\src\index.crates.io-1949cf8c6b5b557f\windows_x86_64_msvc-1.0.0\lib",
+        );
+        assert_eq!(
+            f.record_link_search_stop(&registry, Some("14.51.36231")),
+            None
+        );
+        let atlmfc = rec(
+            "zstd-sys",
+            r"native=C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\atlmfc\lib\x64",
+        );
+        assert_eq!(
+            f.record_link_search_stop(&atlmfc, Some("14.51.36231")),
+            None
+        );
+        assert!(
+            f.record_link_search_stop(&atlmfc, Some("14.50.35717"))
+                .is_some(),
+            "another toolset version is foreign"
+        );
+        assert!(
+            f.record_link_search_stop(&atlmfc, None).is_some(),
+            "no pin: foreign"
+        );
+        let other_folder = rec(
+            "zstd-sys",
+            r"native=C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\lib\x64",
+        );
+        assert!(
+            f.record_link_search_stop(&other_folder, Some("14.51.36231"))
+                .is_some()
+        );
+        let traversal = rec(
+            "zstd-sys",
+            r"native=C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\atlmfc\lib\x64\..\..\..\..\..\..\Windows",
+        );
+        assert!(
+            f.record_link_search_stop(&traversal, Some("14.51.36231"))
+                .is_some()
+        );
+        let system = rec("evil-sys", r"native=C:\Windows\System32");
+        assert!(
+            f.record_link_search_stop(&system, Some("14.51.36231"))
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn frontier_build_records_pass_the_record_floors() {
+        let f = policy();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let config = std::fs::read_to_string(root.join(".cargo/config.toml")).unwrap();
+        let toolset = crate::build_env::pin(&config).unwrap().toolset;
+        let lock = std::fs::read_to_string(root.join("tools/TOOLS.lock")).unwrap();
+        let mut seen = 0;
+        for t in crate::gate::parse_tools_lock(&lock) {
+            let p = root
+                .join("supply-chain/evidence")
+                .join(&t.name)
+                .join(&t.sha)
+                .join(crate::build_record::FILE);
+            let Ok(text) = std::fs::read_to_string(&p) else {
+                continue;
+            };
+            seen += 1;
+            let (_, msgs) = crate::build_record::read_evidence(&text).unwrap();
+            assert_eq!(
+                f.record_link_search_stop(&msgs, Some(&toolset)),
+                None,
+                "{}",
+                p.display()
+            );
+            assert_eq!(
+                f.build_record_stop(&msgs, Some(&msgs)),
+                None,
+                "{}",
+                p.display()
+            );
+        }
+        assert!(seen >= 7, "frontier build records read: {seen}");
     }
 }
