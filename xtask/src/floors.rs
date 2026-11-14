@@ -507,6 +507,74 @@ impl Floors {
     }
 }
 
+/// Where two instruments disagree about what a package's build script told rustc: cackle's
+/// inventory (`caps.toml`, measured on Linux) and cargo's build record (`build.jsonl`, the
+/// binary's own target). A disagreement is a blind spot in one of them; the Windows records
+/// showed winapi's link requests and cc-rs's atlmfc search path, which the inventory never had.
+/// Compared: `rustc-link-lib`, `rustc-env`, and link-search paths outside the package's own
+/// directories. Not compared: `rustc-cfg` (cackle never records it) and own-directory search
+/// paths (always allowed). Each entry reads `name: directive (build record only)` or
+/// `name: directive (inventory only)`.
+pub fn reconcile(record: &[Value], caps: &str) -> Result<BTreeSet<String>, String> {
+    let keep = |name: &str, d: &str| -> Option<String> {
+        let d = normalize_directive(d);
+        let (k, v) = d.split_once('=').unwrap_or((d.as_str(), ""));
+        match k {
+            "rustc-link-lib" | "rustc-env" => Some(d.clone()),
+            "rustc-link-search" => {
+                let path = v.split_once('=').map_or(v, |(_, p)| p);
+                (!own_dir(name, path)).then(|| d.clone())
+            }
+            _ => None,
+        }
+    };
+    let mut rec: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (_, (name, libs, paths)) in crate::build_record::link_directives(record) {
+        let e = rec.entry(name.clone()).or_default();
+        let found = libs
+            .iter()
+            .map(|l| format!("rustc-link-lib={l}"))
+            .chain(paths.iter().map(|p| format!("rustc-link-search={p}")));
+        e.extend(found.filter_map(|d| keep(&name, &d)));
+    }
+    for (key, directives) in crate::build_record::cfg_env_directives(record) {
+        let name = key.split('@').next().unwrap_or(&key).to_string();
+        let env: BTreeSet<String> = directives
+            .iter()
+            .filter(|d| d.starts_with("cargo:rustc-env="))
+            .filter_map(|d| keep(&name, d))
+            .collect();
+        if !env.is_empty() {
+            rec.entry(name).or_default().extend(env);
+        }
+    }
+    let mut inv: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+    for (name, directives) in build_instructions(caps)? {
+        let kept: BTreeSet<String> = directives.iter().filter_map(|d| keep(&name, d)).collect();
+        if !kept.is_empty() {
+            inv.entry(name).or_default().extend(kept);
+        }
+    }
+    let names: BTreeSet<&String> = rec.keys().chain(inv.keys()).collect();
+    let mut out = BTreeSet::new();
+    let none = BTreeSet::new();
+    for name in names {
+        let (a, b) = (
+            rec.get(name).unwrap_or(&none),
+            inv.get(name).unwrap_or(&none),
+        );
+        out.extend(
+            a.difference(b)
+                .map(|d| format!("{name}: {d} (build record only)")),
+        );
+        out.extend(
+            b.difference(a)
+                .map(|d| format!("{name}: {d} (inventory only)")),
+        );
+    }
+    Ok(out)
+}
+
 /// `cargo::` (Cargo >= 1.77) and `cargo:` spellings are one directive.
 fn normalize_directive(d: &str) -> String {
     let d = d.trim();
@@ -1440,5 +1508,42 @@ build.allow_build_instructions = [\"cargo:x=1
             );
         }
         assert!(seen >= 7, "frontier build records read: {seen}");
+    }
+
+    #[test]
+    fn reconcile_names_what_one_instrument_saw_and_the_other_did_not() {
+        let raw = concat!(
+            r#"{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#libz-sys@1.1.31","linked_libs":["static=z"],"linked_paths":["native=D:\\a\\_temp/tool-build\\release\\build\\libz-sys/db40440ddeb56c95\\out\\lib","native=C:\\Program Files\\Microsoft Visual Studio\\18\\Enterprise\\VC\\Tools\\MSVC\\14.51.36231\\atlmfc\\lib\\x64"],"cfgs":["x"],"env":[],"out_dir":"o"}"#,
+            "\n",
+            r#"{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#winapi@0.3.9","linked_libs":["dylib=user32"],"linked_paths":[],"cfgs":[],"env":[],"out_dir":"o"}"#,
+            "\n",
+            r#"{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#ring@0.17.14","linked_libs":["static=ring_core_0_17_14_"],"linked_paths":["native=D:\\a\\_temp/tool-build\\release\\build\\ring/6b8c42ec6fbd0a6b\\out"],"cfgs":[],"env":[],"out_dir":"o"}"#,
+            "\n",
+            r#"{"reason":"build-finished","success":true}"#,
+            "\n",
+        );
+        let record = crate::build_record::parse(raw).unwrap();
+        let caps = "[pkg.libz-sys]\nbuild.allow_build_instructions = [\n    \"cargo:include=/usr/include\",\n    \"cargo:rustc-link-lib=z\",\n]\n\n[pkg.ring]\nbuild.allow_build_instructions = [\n    \"cargo:rustc-link-lib=static=ring_core_0_17_14_\",\n    \"cargo:rustc-link-search=native=/home/runner/work/_temp/caps-build/cackle/build/ring-5b2e18cf6310251a/out\",\n]\n";
+        let d = reconcile(&record, caps).unwrap();
+        let want: BTreeSet<String> = [
+            r"libz-sys: rustc-link-lib=static=z (build record only)",
+            r"libz-sys: rustc-link-lib=z (inventory only)",
+            r"libz-sys: rustc-link-search=native=C:\Program Files\Microsoft Visual Studio\18\Enterprise\VC\Tools\MSVC\14.51.36231\atlmfc\lib\x64 (build record only)",
+            r"winapi: rustc-link-lib=dylib=user32 (build record only)",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        assert_eq!(
+            d, want,
+            "ring agrees; own-directory paths and cfgs are not compared"
+        );
+        assert!(
+            reconcile(
+                &record,
+                "[pkg.x]\nbuild.allow_build_instructions = [\n\"a\"\n[pkg.y]\n"
+            )
+            .is_err()
+        );
     }
 }
