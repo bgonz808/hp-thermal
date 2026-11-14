@@ -51,13 +51,16 @@ every time: the identity is the claim.
 | `hp-thermal.provenance.sigstore.jsonl` | `https://slsa.dev/provenance/v1` | `release-pipeline.yml` | These bytes were built by that workflow from this repository at the tagged commit (SLSA Build L3). |
 | `hp-thermal.sbom.sigstore.jsonl` | `https://cyclonedx.org/bom` | `release-pipeline.yml` | The CycloneDX 1.6 SBOM bound to the exe: dependency set, and `formulation` naming the build environment (rustc commit, MSVC toolset checked against the exe's Rich header, Windows SDK, runner image). |
 | `hp-thermal.vsa.sigstore.jsonl` (from the first release after v0.3.2) | `https://slsa.dev/verification_summary/v1` | `release.yml` | The release workflow's signed statement that it verified the provenance and SBOM attestations against this repository's policy at that commit and found Build L3 to hold. It is **self-issued**: the verifier is the same party as the builder, so it is a machine-readable record of what was checked, not an independent audit. |
-| `hp-thermal.vdr.cdx.json` + `hp-thermal.vdr.sigstore.jsonl` (attached after release) | `https://cyclonedx.org/bom` | `release-vdr.yml` | The CycloneDX Vulnerability Disclosure Report for the shipped dependency set: every RustSec finding, with the maintainer's ruling where one is recorded. Issued once the release's evidence is recorded and reviewed, so it arrives days after the exe; the signer identity tells it apart from the SBOM. |
+| `hp-thermal.vdr.cdx.json` + `hp-thermal.vdr.sigstore.jsonl` (attached after release; later revisions attach beside it as `hp-thermal.vdr.vN.*`) | `https://cyclonedx.org/bom` | `release-vdr.yml` | The CycloneDX Vulnerability Disclosure Report for the shipped dependency set: every RustSec finding, with the maintainer's ruling where one is recorded. Issued once the release's evidence is recorded and reviewed, so it arrives days after the exe; the signer identity tells it apart from the SBOM. |
 | `SHA256SUMS` | none | none | Convenience only. A checksum proves a file matches itself; the attestations prove where it came from. |
 
 The same `gh attestation verify` command with `--predicate-type` set to a row's type and
 `--signer-workflow` set to `bgonz808/hp-thermal/.github/workflows/<row's workflow>` checks that
 row. The SBOM and the VDR share a predicate type because a VDR is a CycloneDX document; use the
 signer workflow, or the `vulnerabilities` field in the verified statement, to pick the one you mean.
+A VDR is revised as findings change: every revision keeps the release's one `serialNumber` and
+takes a higher `version`, and earlier revisions stay attached and verifiable. The highest version
+for the serial is the current report.
 
 The attestation is the real integrity anchor. `SHA256SUMS` is attached as a convenience, but
 a bare checksum only proves a file matches itself; the attestation proves it came from this

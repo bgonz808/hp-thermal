@@ -14,7 +14,9 @@ name: Release VDR attestation
 # CUSTODY: the exe and SBOM are downloaded from the release and admitted only after their
 # provenance verifies against this repository's documented signer identities; the exe digest is
 # re-checked against SHA256SUMS; the committed VDR is regenerated from the evidence before it is
-# signed. One VDR per release: an existing asset is a refusal, not an overwrite.
+# signed. Revisions are append-only: version 1 is hp-thermal.vdr.cdx.json, version N >= 2 is
+# hp-thermal.vdr.vN.cdx.json, each under the release's one serial and above every version already
+# attached; an existing asset name is a refusal, never an overwrite.
 #
 # JUDGMENT GATE: the `release-attest` environment (maintainer approval, no admin bypass, deployable
 # from `main` only). Deliberately not `release-publish`: that environment admits only `v*` tag refs,
@@ -72,10 +74,15 @@ jobs:
           mkdir -p rel
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir rel \
             --pattern hp-thermal.exe --pattern hp-thermal.cdx.json --pattern SHA256SUMS
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx 'hp-thermal.vdr.cdx.json'; then
-            echo "::error::release $TAG already carries hp-thermal.vdr.cdx.json; one VDR per release, refusing to overwrite"
-            exit 1
-          fi
+          # Already-published revisions of this release's VDR (version 1 is hp-thermal.vdr.cdx.json,
+          # version N >= 2 is hp-thermal.vdr.vN.cdx.json). Read so the next one can be checked against
+          # them; never replaced.
+          mkdir -p published
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
+            | grep -E '^hp-thermal\.vdr(\.v[0-9]+)?\.cdx\.json$' > published/names.txt || true
+          while read -r n; do
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$n" --dir published
+          done < published/names.txt
           digest=$(awk '$2=="hp-thermal.exe"{print $1}' rel/SHA256SUMS)
           [ "${#digest}" = 64 ] || { echo "::error::SHA256SUMS has no hp-thermal.exe line"; exit 1; }
           got=$(sha256sum rel/hp-thermal.exe | cut -d' ' -f1)
@@ -92,6 +99,7 @@ jobs:
         id: rel
 
       - name: Regenerate the committed VDR from the evidence (must match byte for byte)
+        id: vdr
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -103,8 +111,24 @@ jobs:
           xtask/target/release/xtask vdr check --product hp-thermal --digest "$DIGEST" --sbom rel/hp-thermal.cdx.json
           jq -e '.bomFormat == "CycloneDX" and .specVersion == "1.6" and has("vulnerabilities") and (.metadata.component.name == "hp-thermal")' "$vdr" > /dev/null \
             || { echo "::error::$vdr: not a CycloneDX 1.6 VDR for hp-thermal"; exit 1; }
-          mkdir -p out && cp "$vdr" out/hp-thermal.vdr.cdx.json
-          echo "VDR: $(jq '.components | length' "$vdr") component(s), $(jq '.vulnerabilities | length' "$vdr") vulnerabilit(ies)"
+          # CycloneDX revision rule: one serialNumber per subject, `version` names the revision. A
+          # release accepts a revision only under the serial it already carries and only above every
+          # version already attached; the asset name encodes the version, so nothing is overwritten.
+          serial=$(jq -r '.serialNumber' "$vdr"); version=$(jq -r '.version' "$vdr")
+          case "$version" in ''|*[!0-9]*|0) echo "::error::$vdr: version '$version' is not a positive integer"; exit 1 ;; esac
+          max=0
+          for f in published/*.cdx.json; do
+            [ -f "$f" ] || continue
+            [ "$(jq -r '.serialNumber' "$f")" = "$serial" ] \
+              || { echo "::error::$(basename "$f") on $TAG has serial $(jq -r '.serialNumber' "$f"), not $serial; refusing a second document for one subject"; exit 1; }
+            v=$(jq -r '.version' "$f"); [ "$v" -gt "$max" ] && max=$v
+          done
+          [ "$version" -gt "$max" ] \
+            || { echo "::error::$TAG already carries VDR version $max; the committed report is version $version, nothing newer to attest"; exit 1; }
+          if [ "$version" = 1 ]; then name=hp-thermal.vdr; else name="hp-thermal.vdr.v$version"; fi
+          mkdir -p out && cp "$vdr" "out/$name.cdx.json"
+          { echo "name=$name"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
+          echo "VDR version $version (published max $max): $(jq '.components | length' "$vdr") component(s), $(jq '.vulnerabilities | length' "$vdr") vulnerabilit(ies)"
 
       - name: Attest the VDR to the released exe
         id: attest
@@ -112,13 +136,14 @@ jobs:
         with:
           subject-path: rel/hp-thermal.exe
           predicate-type: https://cyclonedx.org/bom
-          predicate-path: out/hp-thermal.vdr.cdx.json
+          predicate-path: out/${{ steps.vdr.outputs.name }}.cdx.json
 
       - name: Verify the VDR attestation (identity-pinned to this workflow) and attach it
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
+          NAME: ${{ steps.vdr.outputs.name }}
         run: |
           set -euo pipefail
           gh attestation verify rel/hp-thermal.exe --bundle "$BUNDLE" --repo "$GITHUB_REPOSITORY" \
@@ -126,6 +151,7 @@ jobs:
             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release-vdr.yml" --format json > verified.json
           jq -e '.[0].verificationResult.statement.predicate | has("vulnerabilities") and (.metadata.component.name == "hp-thermal")' verified.json > /dev/null \
             || { echo "::error::verified statement is not the VDR"; exit 1; }
-          cp "$BUNDLE" out/hp-thermal.vdr.sigstore.jsonl
-          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" out/hp-thermal.vdr.cdx.json out/hp-thermal.vdr.sigstore.jsonl
-          echo "attached hp-thermal.vdr.cdx.json + hp-thermal.vdr.sigstore.jsonl to $TAG"
+          cp "$BUNDLE" "out/$NAME.sigstore.jsonl"
+          # No --clobber: an existing asset of this name fails the upload rather than being replaced.
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "out/$NAME.cdx.json" "out/$NAME.sigstore.jsonl"
+          echo "attached $NAME.cdx.json + $NAME.sigstore.jsonl to $TAG"
