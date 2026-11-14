@@ -817,18 +817,26 @@ fn record_custody(text: &str, h: &ToolLine) -> Result<Vec<Value>, String> {
 /// Verifies a committed build record's custody; returns its messages.
 type Custody<'a> = &'a dyn Fn(&str, &ToolLine) -> Result<Vec<Value>, String>;
 
+/// The prior blessed state the build axis compares against: its build record and its
+/// capability inventory (for the instrument reconciliation).
+struct Prior {
+    record: Option<String>,
+    caps: Option<String>,
+}
+
 /// The build axis: cargo's record of the build that produced the digest (`build.jsonl`).
 ///   * missing, unparseable, or failing custody (`record_custody`): UNEVALUATED.
 ///   * a `rustc-env` the prior record lacks for the same package series, or a link search path
 ///     outside the package's own directories and the policy's pinned-toolset folders: HARD-STOP.
-///   * a `rustc-cfg` or link library the prior record lacks, no prior record to compare, or a
-///     record added or rewritten under a digest already pinned (`evidence_edit`): RAISE, signed
-///     by a `build` ack bound to the record's bytes. The template lists what is new under
-///     `finding`.
+///   * a `rustc-cfg` or link library the prior record lacks, a new disagreement between the
+///     record and the digest's capability inventory (`floors::reconcile`), no prior record to
+///     compare, or a record added or rewritten under a digest already pinned (`evidence_edit`):
+///     RAISE, signed by a `build` ack bound to the record's bytes. The template lists what is
+///     new under `finding`.
 ///   * otherwise ALLOW.
 fn build_verdict(
     evidence_dir: &Path,
-    prior: Option<String>,
+    prior: Prior,
     head: &ToolLine,
     acks: &Acks,
     floors: &crate::floors::Floors,
@@ -864,7 +872,12 @@ fn build_verdict(
         }
         Err(e) => return Verdict::Unevaluated(format!("{}: custody: {e}", path.display())),
     }
-    let prior = match prior.as_deref().map(crate::build_record::read_evidence) {
+    let prior_caps = prior.caps;
+    let prior = match prior
+        .record
+        .as_deref()
+        .map(crate::build_record::read_evidence)
+    {
         None => None,
         Some(Ok((_, m))) => Some(m),
         Some(Err(e)) => {
@@ -890,9 +903,43 @@ fn build_verdict(
         .as_deref()
         .map(|p| crate::build_record::new_link_libs(&msgs, p))
         .unwrap_or_default();
-    if prior.is_some() && !evidence_edit && new_cfgs.is_empty() && new_libs.is_empty() {
+    // Instrument reconciliation: what this record and this digest's inventory disagree on, less
+    // what the prior record and prior inventory already disagreed on (and were signed with).
+    let head_caps =
+        std::fs::read_to_string(evidence_dir.join(tool).join(&head.sha).join("caps.toml")).ok();
+    let disagree = |m: &[Value], c: &str| crate::floors::reconcile(m, c);
+    let head_dis = match head_caps.as_deref().map(|c| disagree(&msgs, c)) {
+        None => BTreeSet::new(),
+        Some(Ok(d)) => d,
+        Some(Err(e)) => {
+            return Verdict::Unevaluated(format!(
+                "inventory not parseable for reconciliation: {e}"
+            ));
+        }
+    };
+    let prior_dis = match (prior.as_deref(), prior_caps.as_deref()) {
+        (Some(m), Some(c)) => match disagree(m, c) {
+            Ok(d) => Some(d),
+            Err(e) => {
+                return Verdict::Unevaluated(format!(
+                    "prior inventory not parseable for reconciliation: {e}"
+                ));
+            }
+        },
+        _ => None,
+    };
+    let new_dis: Vec<String> = match &prior_dis {
+        Some(p) => head_dis.difference(p).cloned().collect(),
+        None => head_dis.iter().cloned().collect(),
+    };
+    if prior.is_some()
+        && !evidence_edit
+        && new_cfgs.is_empty()
+        && new_libs.is_empty()
+        && (prior_dis.is_none() || new_dis.is_empty())
+    {
         return Verdict::Allow(format!(
-            "build record {}: no rustc-cfg, rustc-env, or link library beyond the prior record",
+            "build record {}: no rustc-cfg, rustc-env, link library, or instrument disagreement beyond the prior record",
             &sha[..12]
         ));
     }
@@ -906,6 +953,7 @@ fn build_verdict(
             new_cfgs
                 .iter()
                 .chain(&new_libs)
+                .chain(&new_dis)
                 .cloned()
                 .collect::<Vec<_>>()
                 .join(", ")
@@ -926,6 +974,9 @@ fn build_verdict(
         }
         if !new_libs.is_empty() {
             finding.insert("new_link_lib".into(), serde_json::json!(new_libs));
+        }
+        if !new_dis.is_empty() {
+            finding.insert("instrument_disagreement".into(), serde_json::json!(new_dis));
         }
         if !finding.is_empty() {
             template["finding"] = Value::Object(finding);
@@ -1357,7 +1408,10 @@ pub fn run(args: &[String]) -> i32 {
             "build",
             build_verdict(
                 &evidence_dir,
-                base_record_of(&base_evidence_dir, &h.name, b.as_ref(), h),
+                Prior {
+                    record: base_record_of(&base_evidence_dir, &h.name, b.as_ref(), h),
+                    caps: base_caps_of(&base_evidence_dir, &h.name, b.as_ref()),
+                },
                 h,
                 &acks,
                 floors,
@@ -1441,7 +1495,10 @@ pub fn run(args: &[String]) -> i32 {
                 axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
             }
             if changed.iter().any(|f| f == crate::build_record::FILE) {
-                let prior = std::fs::read_to_string(base_rec.join(crate::build_record::FILE)).ok();
+                let prior = Prior {
+                    record: std::fs::read_to_string(base_rec.join(crate::build_record::FILE)).ok(),
+                    caps: std::fs::read_to_string(base_rec.join("caps.toml")).ok(),
+                };
                 axes.push((
                     "build",
                     build_verdict(
@@ -1971,7 +2028,18 @@ mod tests {
             Ok(crate::build_record::read_evidence(text)?.1)
         };
         let verdict = |prior: Option<String>, acks: &Acks, edit: bool| {
-            build_verdict(&dir, prior, &h, acks, &floors(), edit, &offline)
+            build_verdict(
+                &dir,
+                Prior {
+                    record: prior,
+                    caps: None,
+                },
+                &h,
+                acks,
+                &floors(),
+                edit,
+                &offline,
+            )
         };
 
         // Custody failing is unevaluated, never a pass.
@@ -1981,7 +2049,18 @@ mod tests {
             Err("raw record missing from the store".into())
         };
         assert!(matches!(
-            build_verdict(&dir, None, &h, &none, &floors(), false, &refused),
+            build_verdict(
+                &dir,
+                Prior {
+                    record: None,
+                    caps: None,
+                },
+                &h,
+                &none,
+                &floors(),
+                false,
+                &refused,
+            ),
             Verdict::Unevaluated(_)
         ));
         std::fs::remove_file(rec.join(crate::build_record::FILE)).unwrap();
@@ -2034,6 +2113,47 @@ mod tests {
             verdict(Some(base.clone()), &signed_more, false),
             Verdict::RaiseCovered(_)
         ));
+
+        // Instrument reconciliation: a disagreement the prior record and inventory already had
+        // passes; a new one is raised and named.
+        let caps = "[pkg.serde_json]\nbuild.allow_build_instructions = [\n    \"cargo:rustc-link-lib=z\",\n]\n";
+        std::fs::write(rec.join(crate::build_record::FILE), &base).unwrap();
+        std::fs::write(rec.join("caps.toml"), caps).unwrap();
+        let with_caps = |record: &str, c: &str| Prior {
+            record: Some(record.to_string()),
+            caps: Some(c.to_string()),
+        };
+        assert!(matches!(
+            build_verdict(
+                &dir,
+                with_caps(&base, caps),
+                &h,
+                &none,
+                &floors(),
+                false,
+                &offline
+            ),
+            Verdict::Allow(_)
+        ));
+        let quiet = "[pkg.serde_json]\nbuild.allow_build_instructions = [\n]\n";
+        let Verdict::RaiseUncovered { needed, .. } = build_verdict(
+            &dir,
+            with_caps(&base, quiet),
+            &h,
+            &none,
+            &floors(),
+            false,
+            &offline,
+        ) else {
+            panic!("a new disagreement must ask for a sign-off")
+        };
+        assert!(
+            needed[0].contains("instrument_disagreement")
+                && needed[0].contains("serde_json: rustc-link-lib=z (inventory only)"),
+            "{}",
+            needed[0]
+        );
+        std::fs::remove_file(rec.join("caps.toml")).unwrap();
 
         // Rewritten under a pinned digest: signed again even without a new cfg.
         std::fs::write(rec.join(crate::build_record::FILE), &base).unwrap();

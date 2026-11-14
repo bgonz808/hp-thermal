@@ -686,8 +686,9 @@ pub fn run(args: &[String]) -> i32 {
     let res = match args.get(1).map(String::as_str) {
         Some("check") => check(&args[2..]),
         Some("baseline") => baseline(&args[2..]),
+        Some("reconcile") => reconcile_cmd(&args[2..]),
         _ => Err(
-            "usage: build-record check <raw.jsonl> --package <name> | baseline --run <id>".into(),
+            "usage: build-record check <raw.jsonl> --package <name> | baseline --run <id> | reconcile --tool <name> --digest <sha256>".into(),
         ),
     };
     match res {
@@ -720,6 +721,29 @@ fn check(args: &[String]) -> Result<(), String> {
         .ok_or("check: no record path")?;
     let package = flag(args, "--package").ok_or("check: --package is required")?;
     println!("build record ({package}): {}", check_file(path, &package)?);
+    Ok(())
+}
+
+/// `build-record reconcile --tool <name> --digest <sha256>`: where the digest's build record and
+/// its capability inventory disagree (`floors::reconcile`).
+fn reconcile_cmd(args: &[String]) -> Result<(), String> {
+    let tool = flag(args, "--tool").ok_or("reconcile: --tool is required")?;
+    let digest = flag(args, "--digest").ok_or("reconcile: --digest is required")?;
+    let dir = Path::new("supply-chain/evidence").join(&tool).join(&digest);
+    let rec = std::fs::read_to_string(dir.join(FILE))
+        .map_err(|e| format!("{}: {e}", dir.join(FILE).display()))?;
+    let caps = std::fs::read_to_string(dir.join("caps.toml"))
+        .map_err(|e| format!("{}: {e}", dir.join("caps.toml").display()))?;
+    let (_, msgs) = read_evidence(&rec)?;
+    let d = crate::floors::reconcile(&msgs, &caps)?;
+    println!(
+        "{tool} {}: {} disagreement(s)",
+        &digest[..12.min(digest.len())],
+        d.len()
+    );
+    for x in d {
+        println!("  {x}");
+    }
     Ok(())
 }
 
