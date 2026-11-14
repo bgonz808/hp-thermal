@@ -126,8 +126,10 @@ copying its graph. `serialNumber` is fixed per subject and `version` is the revi
 content keeps the committed version, changed content takes the next, so a published version
 never changes meaning.
 A `vdr.cdx.json` is committed beside the evidence of every live-frontier digest (each
-`TOOLS.lock` pin and the latest release); the supply-chain workflow regenerates each one and
-fails on any difference, admitting the app's release SBOM only after its provenance verifies.
+`TOOLS.lock` pin and the latest release); the supply-chain workflow regenerates each pinned
+tool's report and every release's report and fails on any difference, admitting the app's release
+SBOM only after its provenance verifies. When a bless supersedes a tool digest, that digest's last
+report stays committed as history and is no longer regenerated.
 
 ## Rules
 
