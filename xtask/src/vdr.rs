@@ -509,13 +509,18 @@ pub(crate) struct Compiled<'a> {
     pub linked: &'a BTreeSet<(String, String)>,
     /// Packages with any unit, proc-macros and build scripts included.
     pub any: &'a BTreeSet<(String, String)>,
+    /// The build compiled the standard library (`-Z build-std`), whose crates.io dependencies are
+    /// lib units linked into the binary but absent from the tool's own `.dep-v0`.
+    pub builds_std: bool,
     /// Names the record, for the evidence method.
     pub desc: &'a str,
 }
 
 /// CycloneDX `scope` per lock component. An unset scope reads as `required` (CycloneDX 1.6
 /// default), so each component is scoped from the strongest evidence there is:
-///   * absent from the binary's `.dep-v0`, or listed there as a `build` dependency: `excluded`.
+///   * absent from the binary's `.dep-v0`, or listed there as a `build` dependency: `excluded`,
+///     except under `-Z build-std` when the record has a lib unit for that name and version: it
+///     may be the standard library's own copy, which is linked, so `required`.
 ///   * listed as `runtime`: `.dep-v0` is the resolved graph, a superset of what was compiled
 ///     (cargo-audit 5e1bf935c84c lists 329 packages; 23 have no compile line). With cargo's
 ///     build record, a package with a lib or bin unit is `required` and any other `excluded`;
@@ -564,6 +569,9 @@ pub(crate) fn apply_scope(
             }));
         }
         let scope = match (listed, built) {
+            (None | Some(DepKind::Build), Some(b)) if b.builds_std && b.linked.contains(&key) => {
+                Some("required")
+            }
             (None | Some(DepKind::Build), _) => Some("excluded"),
             (Some(DepKind::Runtime), Some(b)) if b.linked.contains(&key) => Some("required"),
             (Some(DepKind::Runtime), Some(_)) => Some("excluded"),
@@ -741,11 +749,13 @@ pub fn run(args: &[String]) -> i32 {
                             .ok_or("no TOOLS.lock row for the digest")?;
                         let msgs =
                             crate::build_record::verify_custody(&text, &product, &target, &digest)
-                                .map_err(|e| format!("{}: {e}", record_path.display()))?;
+                                .map_err(|e| format!("{}: {e}", record_path.display()))?
+                                .messages;
                         let (h, _) = crate::build_record::read_evidence(&text)?;
                         Some((
                             crate::build_record::linked(&msgs),
                             crate::build_record::compiled(&msgs),
+                            crate::build_record::builds_std(&msgs),
                             format!(
                                 "cargo build record {} (sha256 {})",
                                 s(&h, &["rawRecord", "asset"]),
@@ -763,10 +773,14 @@ pub fn run(args: &[String]) -> i32 {
                     )
                     .map_err(|e| format!("{asset}: {e}"))?,
                 );
-                let built =
-                    record
-                        .as_ref()
-                        .map(|(linked, any, desc)| Compiled { linked, any, desc });
+                let built = record
+                    .as_ref()
+                    .map(|(linked, any, builds_std, desc)| Compiled {
+                        linked,
+                        any,
+                        builds_std: *builds_std,
+                        desc,
+                    });
                 apply_scope(
                     &mut comps,
                     &present,
@@ -899,6 +913,7 @@ mod tests {
         let built = Compiled {
             linked: &linked,
             any: &any,
+            builds_std: false,
             desc: "cargo build record r",
         };
         let mut comps = components_from_lock(LOCK3);
@@ -923,6 +938,18 @@ mod tests {
             last(&comps[1]).ends_with("compiled for build time only (proc-macro or build script)")
         );
         assert_eq!(last(&comps[2]), "cargo build record r: not compiled");
+
+        // Under build-std, a build-kind package with a lib unit may be std's linked copy.
+        let linked_b: BTreeSet<_> = [k("a", "1.0.0"), k("b", "2.0.0")].into();
+        let std_built = Compiled {
+            linked: &linked_b,
+            any: &any,
+            builds_std: true,
+            desc: "cargo build record r",
+        };
+        let mut comps = components_from_lock(LOCK3);
+        apply_scope(&mut comps, &dep_v0, "x.exe (sha256 d)", Some(&std_built));
+        assert_eq!(comps[1]["scope"], "required");
     }
 
     #[test]

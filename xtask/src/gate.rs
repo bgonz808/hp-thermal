@@ -785,11 +785,18 @@ fn caps_verdict(
     }
 }
 
-/// The prior blessed build record for a TOOLS.lock candidate: the base entry's build.jsonl.
-fn base_record_of(evidence_dir: &Path, tool: &str, base: Option<&ToolLine>) -> Option<String> {
-    base.and_then(|b| {
+/// The prior blessed build record for a TOOLS.lock candidate: the base entry's build.jsonl, read
+/// from the BASE commit's evidence tree (a PR cannot rewrite the prior it is compared against),
+/// and only for the same target (another target's build scripts emit other cfgs).
+fn base_record_of(
+    base_evidence_dir: &Path,
+    tool: &str,
+    base: Option<&ToolLine>,
+    head: &ToolLine,
+) -> Option<String> {
+    base.filter(|b| b.target == head.target).and_then(|b| {
         std::fs::read_to_string(
-            evidence_dir
+            base_evidence_dir
                 .join(tool)
                 .join(&b.sha)
                 .join(crate::build_record::FILE),
@@ -798,23 +805,34 @@ fn base_record_of(evidence_dir: &Path, tool: &str, base: Option<&ToolLine>) -> O
     })
 }
 
-/// The build axis: cargo's record of the build that produced the digest (`build.jsonl`). The
-/// VDR check on the same change re-verifies its custody (raw record in the store, one producer
-/// statement naming record and binary); this reads the committed messages.
-///   * missing or unparseable: UNEVALUATED.
+/// Custody of a committed build record, as the gate runs it: the raw record in the store, one
+/// producer statement naming record and binary, the committed messages equal to the raw
+/// record's, and the producer run made at a commit whose pipeline equals HEAD's.
+fn record_custody(text: &str, h: &ToolLine) -> Result<Vec<Value>, String> {
+    let v = crate::build_record::verify_custody(text, &h.name, &h.target, &h.sha)?;
+    crate::build_record::same_producer(&v.source_commit, &h.name)?;
+    Ok(v.messages)
+}
+
+/// Verifies a committed build record's custody; returns its messages.
+type Custody<'a> = &'a dyn Fn(&str, &ToolLine) -> Result<Vec<Value>, String>;
+
+/// The build axis: cargo's record of the build that produced the digest (`build.jsonl`).
+///   * missing, unparseable, or failing custody (`record_custody`): UNEVALUATED.
 ///   * a `rustc-cfg` / `rustc-env` the prior record lacks for the same package: HARD-STOP.
 ///   * no prior record to compare, or a record added or rewritten under a digest already pinned
 ///     (`evidence_edit`): RAISE, signed by a `build` ack bound to the record's bytes.
 ///   * otherwise ALLOW.
 fn build_verdict(
-    tool: &str,
     evidence_dir: &Path,
     prior: Option<String>,
     head: &ToolLine,
     acks: &Acks,
     floors: &crate::floors::Floors,
     evidence_edit: bool,
+    custody: Custody,
 ) -> Verdict {
+    let tool = head.name.as_str();
     let path = evidence_dir
         .join(tool)
         .join(&head.sha)
@@ -832,6 +850,16 @@ fn build_verdict(
     };
     if s(&hdr, &["subject", "sha256"]) != head.sha {
         return Verdict::Unevaluated(format!("{}: names another digest", path.display()));
+    }
+    match custody(&text, head) {
+        Ok(verified) if verified == msgs => {}
+        Ok(_) => {
+            return Verdict::Unevaluated(format!(
+                "{}: custody returned other messages",
+                path.display()
+            ));
+        }
+        Err(e) => return Verdict::Unevaluated(format!("{}: custody: {e}", path.display())),
     }
     let prior = match prior.as_deref().map(crate::build_record::read_evidence) {
         None => None,
@@ -1276,7 +1304,7 @@ pub fn run(args: &[String]) -> i32 {
             caps_verdict(
                 &h.name,
                 &evidence_dir,
-                base_caps_of(&evidence_dir, &h.name, b.as_ref()),
+                base_caps_of(&base_evidence_dir, &h.name, b.as_ref()),
                 h,
                 &acks,
                 floors,
@@ -1287,13 +1315,13 @@ pub fn run(args: &[String]) -> i32 {
         axes.push((
             "build",
             build_verdict(
-                &h.name,
                 &evidence_dir,
-                base_record_of(&evidence_dir, &h.name, b.as_ref()),
+                base_record_of(&base_evidence_dir, &h.name, b.as_ref(), h),
                 h,
                 &acks,
                 floors,
                 false,
+                &record_custody,
             ),
         ));
 
@@ -1375,7 +1403,15 @@ pub fn run(args: &[String]) -> i32 {
                 let prior = std::fs::read_to_string(base_rec.join(crate::build_record::FILE)).ok();
                 axes.push((
                     "build",
-                    build_verdict(&h.name, &evidence_dir, prior, h, &acks, floors, true),
+                    build_verdict(
+                        &evidence_dir,
+                        prior,
+                        h,
+                        &acks,
+                        floors,
+                        true,
+                        &record_custody,
+                    ),
                 ));
             }
             if changed.iter().any(|f| f == "vuln.jsonl") {
@@ -1889,9 +1925,25 @@ mod tests {
                 &msgs,
             )
         };
-        let verdict = |prior: Option<String>, acks: &Acks, edit: bool| {
-            build_verdict("t", &dir, prior, &h, acks, &floors(), edit)
+        // Custody needs the store and Sigstore; offline, the committed messages stand in.
+        let offline = |text: &str, _: &ToolLine| -> Result<Vec<Value>, String> {
+            Ok(crate::build_record::read_evidence(text)?.1)
         };
+        let verdict = |prior: Option<String>, acks: &Acks, edit: bool| {
+            build_verdict(&dir, prior, &h, acks, &floors(), edit, &offline)
+        };
+
+        // Custody failing is unevaluated, never a pass.
+        let tmp_base = record(r#""a""#);
+        std::fs::write(rec.join(crate::build_record::FILE), &tmp_base).unwrap();
+        let refused = |_: &str, _: &ToolLine| -> Result<Vec<Value>, String> {
+            Err("raw record missing from the store".into())
+        };
+        assert!(matches!(
+            build_verdict(&dir, None, &h, &none, &floors(), false, &refused),
+            Verdict::Unevaluated(_)
+        ));
+        std::fs::remove_file(rec.join(crate::build_record::FILE)).unwrap();
 
         // No record at all: unevaluated, never a pass.
         assert!(matches!(
