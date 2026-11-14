@@ -65,6 +65,9 @@ jobs:
           persist-credentials: false
           fetch-depth: 0   # full history so build.rs `git rev-list --count HEAD` is accurate
 
+      - name: Verify MSVC toolchain authenticity (before anything compiles)
+        uses: ./.github/actions/verify-msvc
+
       - name: Install pinned toolchain + components
         uses: ./.github/actions/install-toolchain
 

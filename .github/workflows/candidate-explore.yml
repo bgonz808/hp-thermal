@@ -47,6 +47,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify MSVC toolchain authenticity (before anything compiles)
+        uses: ./.github/actions/verify-msvc
+
       - name: Fetch prior-blessed auditor (digest + attestation verified)
         id: auditor
         uses: ./.github/actions/fetch-tools

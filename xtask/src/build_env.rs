@@ -142,11 +142,14 @@ fn version_key(v: &str) -> Vec<u64> {
 }
 
 pub fn run(args: &[String]) -> i32 {
-    let exe = args
-        .iter()
-        .position(|a| a == "--exe")
-        .and_then(|i| args.get(i + 1))
-        .map(String::as_str);
+    let flag = |name: &str| {
+        args.iter()
+            .position(|a| a == name)
+            .and_then(|i| args.get(i + 1))
+            .map(String::as_str)
+    };
+    let exe = flag("--exe");
+    let against = flag("--against");
     let text = match std::fs::read_to_string(CONFIG) {
         Ok(t) => t,
         Err(e) => {
@@ -164,11 +167,221 @@ pub fn run(args: &[String]) -> i32 {
     println!("pinned ({CONFIG} [env]):");
     println!("  MSVC toolset   {}", pin.toolset);
     println!("  Windows SDK    {} under {}", pin.sdk_version, pin.sdk_dir);
-    check(&pin, exe)
+    check(&pin, exe, against)
+}
+
+/// Microsoft root certificates (SHA-1 thumbprints) a toolchain signature must chain to: Root
+/// Certificate Authority 2010 and 2011, and the 2001 Root Certificate Authority. The CI action
+/// `.github/actions/verify-msvc` pins the same three.
+#[cfg(windows)]
+const MICROSOFT_ROOTS: [&str; 3] = [
+    "3B1EFD3A66EA28B16697394703A72CA340A05BD5",
+    "8F43288AD272F3103B6FB1428485EA3014C0BCFE",
+    "CDD4EEAE6000AC7F40C3802C171E30148030C072",
+];
+
+/// Authenticode of `path` as Windows verifies it (WinVerifyTrust, through Windows PowerShell by
+/// absolute path): Valid, signed by Microsoft Corporation, chaining to a pinned Microsoft root.
+#[cfg(windows)]
+fn microsoft_signed(path: &Path) -> Result<String, String> {
+    let ps = std::path::PathBuf::from(
+        std::env::var("SystemRoot").unwrap_or_else(|_| r"C:\Windows".into()),
+    )
+    .join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+    let lit = path.display().to_string().replace('\'', "''");
+    let script = format!(
+        "$s = Get-AuthenticodeSignature -LiteralPath '{lit}'; \
+         if ($s.Status -ne 'Valid') {{ \"$($s.Status)||\"; exit }}; \
+         $c = [System.Security.Cryptography.X509Certificates.X509Chain]::new(); \
+         $c.ChainPolicy.RevocationMode = 'NoCheck'; [void]$c.Build($s.SignerCertificate); \
+         \"Valid|$($s.SignerCertificate.Subject)|$($c.ChainElements[$c.ChainElements.Count - 1].Certificate.Thumbprint)\""
+    );
+    // PSModulePath from PowerShell 7 makes Windows PowerShell load the wrong
+    // Microsoft.PowerShell.Security; without it, its own default applies.
+    let out = std::process::Command::new(&ps)
+        .env_remove("PSModulePath")
+        .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+        .output()
+        .map_err(|e| format!("cannot run {}: {e}", ps.display()))?;
+    let text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    let mut f = text.splitn(3, '|');
+    let (status, subject, root) = (
+        f.next().unwrap_or(""),
+        f.next().unwrap_or(""),
+        f.next().unwrap_or(""),
+    );
+    if status != "Valid" {
+        return Err(format!("Authenticode status {status:?}"));
+    }
+    if !subject.split(", ").any(|p| p == "O=Microsoft Corporation") {
+        return Err(format!("signed by {subject}, not Microsoft Corporation"));
+    }
+    if !MICROSOFT_ROOTS.contains(&root) {
+        return Err(format!("chains to unpinned root {root}"));
+    }
+    Ok(format!("Microsoft-signed, root {}", &root[..8]))
+}
+
+/// The formulation facts a release SBOM records for the build environment.
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Debug)]
+struct Recorded {
+    link_version: String,
+    link_sha256: String,
+    toolset: String,
+    sdk: String,
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+fn find_ref<'a>(v: &'a serde_json::Value, r: &str) -> Option<&'a serde_json::Value> {
+    if v["bom-ref"] == r {
+        return Some(v);
+    }
+    match v {
+        serde_json::Value::Array(a) => a.iter().find_map(|x| find_ref(x, r)),
+        serde_json::Value::Object(o) => o.values().find_map(|x| find_ref(x, r)),
+        _ => None,
+    }
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+fn recorded(sbom: &serde_json::Value) -> Result<Recorded, String> {
+    let f = sbom
+        .get("formulation")
+        .ok_or("the SBOM has no formulation (releases before 0.3.3 carry none)")?;
+    let get = |r: &str| find_ref(f, r).ok_or_else(|| format!("formulation has no {r}"));
+    let s = |v: &serde_json::Value, k: &str| v[k].as_str().unwrap_or_default().to_string();
+    let link = get("build-env:link-exe")?;
+    Ok(Recorded {
+        link_version: s(link, "version"),
+        link_sha256: link["hashes"][0]["content"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string(),
+        toolset: s(get("build-env:msvc-toolset")?, "version"),
+        sdk: s(get("build-env:windows-sdk")?, "version"),
+    })
+}
+
+/// `--against`: a release tag (its SBOM is downloaded and its provenance verified first) or a
+/// path to an SBOM file (taken as given, e.g. a dry run's).
+#[cfg_attr(not(windows), allow(dead_code))]
+fn load_against(target: &str) -> Result<(serde_json::Value, String), String> {
+    let p = Path::new(target);
+    if p.is_file() {
+        let text = std::fs::read_to_string(p).map_err(|e| format!("{target}: {e}"))?;
+        let v = serde_json::from_str(&text).map_err(|e| format!("{target}: {e}"))?;
+        return Ok((v, format!("{target} (file, not verified)")));
+    }
+    let dir = std::env::temp_dir().join(format!("verify-build-env-{target}"));
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let d = dir.to_string_lossy().into_owned();
+    crate::advance::gh(&[
+        "release",
+        "download",
+        target,
+        "--pattern",
+        "hp-thermal.cdx.json",
+        "--dir",
+        &d,
+        "--clobber",
+    ])?;
+    let file = dir.join("hp-thermal.cdx.json");
+    let f = file.to_string_lossy().into_owned();
+    let repo = crate::advance::gh(&[
+        "repo",
+        "view",
+        "--json",
+        "nameWithOwner",
+        "--jq",
+        ".nameWithOwner",
+    ])?;
+    let repo = repo.trim();
+    // release-pipeline.yml signs from 0.3.3; release.yml signed the releases before it.
+    let verified = ["release-pipeline.yml", "release.yml"].iter().any(|w| {
+        let signer = format!("{repo}/.github/workflows/{w}");
+        crate::advance::gh(&[
+            "attestation",
+            "verify",
+            &f,
+            "--repo",
+            repo,
+            "--signer-workflow",
+            &signer,
+        ])
+        .is_ok()
+    });
+    if !verified {
+        return Err(format!(
+            "{target}: SBOM provenance did not verify against this repository's release workflows"
+        ));
+    }
+    let text = std::fs::read_to_string(&file).map_err(|e| e.to_string())?;
+    let v = serde_json::from_str(&text).map_err(|e| format!("{f}: {e}"))?;
+    Ok((v, format!("release {target} (provenance verified)")))
+}
+
+/// Compare this machine's pinned toolchain with what a release's SBOM recorded on the runner.
+/// Two independent installs agreeing on the linker's bytes is evidence both are the genuine
+/// Microsoft files; any difference is printed and fails.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn cross_check(pin: &Pin, link: &Path, target: &str) -> bool {
+    let (sbom, what) = match load_against(target) {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("MISMATCH  --against {target}: {e}");
+            return false;
+        }
+    };
+    let rec = match recorded(&sbom) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("MISMATCH  {what}: {e}");
+            return false;
+        }
+    };
+    let mut ok = true;
+    let mut line = |good: bool, msg: String| {
+        if good {
+            println!("OK  {msg}");
+        } else {
+            ok = false;
+            eprintln!("MISMATCH  {msg}");
+        }
+    };
+    line(
+        rec.toolset == pin.toolset,
+        format!("toolset: here {}, {what} {}", pin.toolset, rec.toolset),
+    );
+    line(
+        rec.sdk == pin.sdk_version,
+        format!("Windows SDK: here {}, {what} {}", pin.sdk_version, rec.sdk),
+    );
+    match std::fs::read(link) {
+        Ok(bytes) => {
+            let here = crate::sha256::sha256_hex(&bytes);
+            line(
+                here == rec.link_sha256,
+                format!(
+                    "link.exe {} sha256: here {}, {what} {} ({})",
+                    rec.link_version,
+                    &here[..16],
+                    &rec.link_sha256[..rec.link_sha256.len().min(16)],
+                    if here == rec.link_sha256 {
+                        "same bytes on both machines"
+                    } else {
+                        "different bytes"
+                    }
+                ),
+            );
+        }
+        Err(e) => line(false, format!("{}: {e}", link.display())),
+    }
+    ok
 }
 
 #[cfg(not(windows))]
-fn check(_pin: &Pin, _exe: Option<&str>) -> i32 {
+fn check(_pin: &Pin, _exe: Option<&str>, _against: Option<&str>) -> i32 {
     println!(
         "not Windows: the pin applies to x86_64-pc-windows-msvc builds only; nothing to check here"
     );
@@ -176,7 +389,7 @@ fn check(_pin: &Pin, _exe: Option<&str>) -> i32 {
 }
 
 #[cfg(windows)]
-fn check(pin: &Pin, exe: Option<&str>) -> i32 {
+fn check(pin: &Pin, exe: Option<&str>, against: Option<&str>) -> i32 {
     let list = match instances() {
         Ok(l) => l,
         Err(e) => {
@@ -200,6 +413,13 @@ fn check(pin: &Pin, exe: Option<&str>) -> i32 {
     let mut missing_spectre = false;
     if link.is_file() {
         println!("OK  toolset {} present in {name} {ver}", pin.toolset);
+        match microsoft_signed(&link) {
+            Ok(m) => println!("OK  link.exe {m}"),
+            Err(e) => {
+                ok = false;
+                eprintln!("UNVERIFIED  link.exe {}: {e}", link.display());
+            }
+        }
     } else {
         ok = false;
         let default = std::fs::read_to_string(
@@ -239,6 +459,9 @@ fn check(pin: &Pin, exe: Option<&str>) -> i32 {
             "MISSING  Windows SDK {} under {}",
             pin.sdk_version, pin.sdk_dir
         );
+    }
+    if let Some(t) = against {
+        ok &= link.is_file() && cross_check(pin, &link, t);
     }
     // --exe: the same binding the pipeline makes. The Rich header of a produced exe names the
     // build of the link.exe that wrote it; the pinned toolset's link.exe carries that build in
@@ -367,6 +590,31 @@ pub(crate) fn sdk_component(sdk_version: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recorded_reads_nested_formulation_refs() {
+        let sbom = serde_json::json!({"formulation": [{"components": [
+            {"bom-ref": "build-env:visual-studio", "components": [
+                {"bom-ref": "build-env:msvc-toolset", "version": "14.51.36231", "components": [
+                    {"bom-ref": "build-env:link-exe", "version": "14.51.36260.0",
+                     "hashes": [{"alg": "SHA-256", "content": "ab"}]}]}]},
+            {"bom-ref": "build-env:windows-sdk", "version": "10.0.26100.0"}]}]});
+        let r = recorded(&sbom).unwrap();
+        assert_eq!(
+            (
+                r.toolset.as_str(),
+                r.sdk.as_str(),
+                r.link_version.as_str(),
+                r.link_sha256.as_str()
+            ),
+            ("14.51.36231", "10.0.26100.0", "14.51.36260.0", "ab")
+        );
+        assert!(
+            recorded(&serde_json::json!({}))
+                .unwrap_err()
+                .contains("no formulation")
+        );
+    }
 
     const CFG: &str = r#"
 [alias]

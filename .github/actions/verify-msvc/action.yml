@@ -1,0 +1,83 @@
+name: Verify MSVC toolchain authenticity
+description: >-
+  Runs before anything compiles. Every executable and DLL the build can run from the pinned MSVC
+  toolset (.cargo/config.toml [env] VCToolsVersion, bin/Hostx64/x64), the pinned Windows SDK's
+  rc.exe and rcdll.dll, and vswhere.exe must carry a valid Authenticode signature from Microsoft
+  Corporation that chains to one of Microsoft's pinned root certificates. Libraries and headers
+  cannot carry signatures; the one folder outside the toolset's own library path that a build
+  script adds to the link search path (atlmfc/lib/x64, floors.json
+  allow_pinned_toolset_link_search) must not shadow a library of the toolset or SDK, because
+  link.exe searches /LIBPATH folders before LIB.
+runs:
+  using: composite
+  steps:
+    - name: Verify MSVC toolchain authenticity
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+        # Microsoft root certificates, by SHA-1 thumbprint: Root Certificate Authority 2010 and
+        # 2011, and the 2001 Root Certificate Authority some toolset files still chain to.
+        $roots = @(
+          '3B1EFD3A66EA28B16697394703A72CA340A05BD5',
+          '8F43288AD272F3103B6FB1428485EA3014C0BCFE',
+          'CDD4EEAE6000AC7F40C3802C171E30148030C072'
+        )
+        $failures = [System.Collections.Generic.List[string]]::new()
+        $byRoot = @{}
+        function Assert-Microsoft([string]$path) {
+          $s = Get-AuthenticodeSignature -LiteralPath $path
+          if ($s.Status -ne 'Valid') { $failures.Add("$($s.Status): $path"); return }
+          if ($s.SignerCertificate.Subject -notmatch '(^|, )O=Microsoft Corporation(,|$)') {
+            $failures.Add("signer is not Microsoft Corporation ($($s.SignerCertificate.Subject)): $path"); return
+          }
+          $chain = [System.Security.Cryptography.X509Certificates.X509Chain]::new()
+          $chain.ChainPolicy.RevocationMode = 'NoCheck'
+          [void]$chain.Build($s.SignerCertificate)
+          $root = $chain.ChainElements[$chain.ChainElements.Count - 1].Certificate.Thumbprint
+          if ($roots -notcontains $root) { $failures.Add("chains to unpinned root $($root): $path"); return }
+          $byRoot[$root] = 1 + [int]$byRoot[$root]
+        }
+
+        $cfg = Get-Content .cargo/config.toml
+        function Pin($name) {
+          $line = $cfg | Where-Object { $_ -match "^\s*$name\s*=" } | Select-Object -First 1
+          if (-not $line) { throw ".cargo/config.toml pins no $name" }
+          if ($line -notmatch "value\s*=\s*(?:'([^']*)'|`"([^`"]*)`")") { throw ".cargo/config.toml: cannot read $name value" }
+          if ($Matches[1]) { $Matches[1] } else { $Matches[2] }
+        }
+        $toolset = Pin 'VCToolsVersion'
+        $sdkDir = (Pin 'WindowsSdkDir').TrimEnd('\')
+        $sdk = (Pin 'WindowsSDKVersion').TrimEnd('\')
+
+        $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+        Assert-Microsoft $vswhere
+        if ($failures.Count) { throw "vswhere.exe is not a verified Microsoft binary: $($failures -join '; ')" }
+        $inst = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json | Select-Object -First 1
+        if (-not $inst) { throw 'no Visual Studio instance with the VC tools' }
+        $tools = Join-Path $inst.installationPath "VC\Tools\MSVC\$toolset"
+        $bin = Join-Path $tools 'bin\Hostx64\x64'
+        if (-not (Test-Path $bin)) { throw "pinned toolset $toolset is not installed under $($inst.installationPath)" }
+
+        $exec = @(Get-ChildItem -LiteralPath $bin -File -Recurse -Include *.exe, *.dll)
+        $exec += Get-Item -LiteralPath "$sdkDir\bin\$sdk\x64\rc.exe", "$sdkDir\bin\$sdk\x64\rcdll.dll"
+        foreach ($f in $exec) { Assert-Microsoft $f.FullName }
+
+        # No library in the allowed atlmfc folder may share a name with one in the toolset's or
+        # SDK's library folders: link.exe would take the atlmfc copy first.
+        $atl = Join-Path $tools 'atlmfc\lib\x64'
+        $shadowed = @()
+        if (Test-Path $atl) {
+          $own = @(Get-ChildItem -LiteralPath (Join-Path $tools 'lib\x64'), "$sdkDir\Lib\$sdk\um\x64", "$sdkDir\Lib\$sdk\ucrt\x64" -File -Filter *.lib |
+            ForEach-Object { $_.Name.ToLowerInvariant() })
+          $shadowed = @(Get-ChildItem -LiteralPath $atl -File -Filter *.lib |
+            Where-Object { $own -contains $_.Name.ToLowerInvariant() } | ForEach-Object { $_.Name })
+          foreach ($n in $shadowed) { $failures.Add("atlmfc\lib\x64\$n shadows a toolset or SDK library of the same name") }
+        }
+
+        if ($failures.Count) {
+          $failures | ForEach-Object { Write-Output "::error::$_" }
+          throw "MSVC toolchain authenticity: $($failures.Count) failure(s); nothing compiles"
+        }
+        Write-Output "MSVC $toolset ($($inst.displayName) $($inst.installationVersion)), SDK $($sdk): $($exec.Count + 1) executables and DLLs Microsoft-signed"
+        $byRoot.GetEnumerator() | ForEach-Object { Write-Output "  $($_.Value) chain to root $($_.Key)" }
+        Write-Output "atlmfc\lib\x64: $(if (Test-Path $atl) { 'present, shadows nothing' } else { 'absent' })"

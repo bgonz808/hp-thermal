@@ -49,6 +49,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify MSVC toolchain authenticity (before anything compiles)
+        uses: ./.github/actions/verify-msvc
+
       - name: Install pinned toolchain
         uses: ./.github/actions/install-toolchain
 
@@ -79,6 +82,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
         with:
           persist-credentials: false
+
+      - name: Verify MSVC toolchain authenticity (before anything compiles)
+        uses: ./.github/actions/verify-msvc
 
       - name: Install pinned toolchain
         uses: ./.github/actions/install-toolchain

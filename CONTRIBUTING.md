@@ -73,7 +73,12 @@ It prints the pinned versus installed toolset, Spectre-mitigated CRT (build.rs l
 #385) and SDK and, on a mismatch, the install command. After a build, add
 `--exe app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe` to prove that build used the
 pinned linker: the exe's Rich header names the linker build, and it must equal the pinned
-toolset's `link.exe` version, the same check the release pipeline makes. The toolset ships inside Visual Studio
+toolset's `link.exe` version, the same check the release pipeline makes. It also checks that
+the pinned `link.exe` carries a valid Microsoft Authenticode signature. Add `--against <release
+tag>` to compare your machine with what that release recorded on the CI runner: the release's
+SBOM provenance is verified first, then the toolset, SDK and `link.exe` bytes must match. Two
+independent installs agreeing on the linker's bytes is evidence both are Microsoft's. CI runs the
+same signature check before anything compiles (`.github/actions/verify-msvc`). The toolset ships inside Visual Studio
 2026 Build Tools; the point build follows the Visual Studio servicing release, so match the
 release rather than hunting for a component:
 
