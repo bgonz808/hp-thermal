@@ -171,6 +171,8 @@ jobs:
       - name: Collect build environment facts
         working-directory: app
         shell: pwsh
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
         run: |
           $ErrorActionPreference = 'Stop'
           $vv = rustc -vV
@@ -201,12 +203,29 @@ jobs:
           $linkver = (Get-Item $link).VersionInfo.FileVersion
           $linksha = (Get-FileHash $link -Algorithm SHA256).Hash.ToLower()
           if (-not (Test-Path "$sdkDir\Lib\$sdk\um\x64\kernel32.lib")) { throw "pinned Windows SDK $sdk is not installed under $sdkDir" }
+          # The fleet tools this job executes, hashed from the files it runs and checked against
+          # their TOOLS.lock pins (fetch-tools verified them on download; this re-reads at use).
+          $tools = @()
+          foreach ($name in 'cargo-auditable','cargo-cyclonedx','cargo-audit','cargo-deny') {
+            $row = $null
+            foreach ($l in (Get-Content ../tools/TOOLS.lock)) {
+              $f = ($l -replace '\s*#.*$','').Trim() -split '\s+'
+              if ($f.Count -ge 5 -and $f[0] -eq $name -and $f[3] -eq 'windows-x86_64') { $row = $f; break }
+            }
+            if (-not $row) { throw "TOOLS.lock has no windows-x86_64 row for $name" }
+            $file = Join-Path $env:TOOLS_DIR "$name.exe"
+            if (-not (Test-Path $file)) { throw "$file not found" }
+            $h = (Get-FileHash $file -Algorithm SHA256).Hash.ToLower()
+            if ($h -ne $row[4]) { throw "$name executed file $h != TOOLS.lock pin $($row[4])" }
+            $tools += [ordered]@{ name = $name; repo = $row[1]; rev = $row[2]; sha256 = $h }
+          }
           $out = [ordered]@{
-            schema = 'hp-thermal/build-env/v2'
+            schema = 'hp-thermal/build-env/v3'
             rustc = [ordered]@{ version = $ver; commit = $commit; host = $hostTriple; channel = $channel }
             msvc = [ordered]@{ product = $inst.displayName; product_version = $inst.installationVersion; toolset = $toolset; link_file_version = $linkver; link_sha256 = $linksha }
             windows_sdk = [ordered]@{ version = $sdk }
             runner = [ordered]@{ image_os = "$env:ImageOS"; image_version = "$env:ImageVersion"; os_version = [System.Environment]::OSVersion.Version.ToString() }
+            tools = $tools
           }
           $out | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8NoBOM build-env.json
           Get-Content build-env.json
@@ -222,7 +241,7 @@ jobs:
           f=$1
           xtask/target/release/xtask.exe sbom-formulate --sbom "$f" \
             --exe app/target/x86_64-pc-windows-msvc/release/hp-thermal.exe --env app/build-env.json
-          jq -e '(.formulation | length) == 1 and (.formulation[0].components | length) == 5' "$f" > /dev/null \
+          jq -e '(.formulation | length) == 1 and (.formulation[0].components | length) == 9' "$f" > /dev/null \
             || { echo "::error::$f: formulation not declared"; exit 1; }
           rm app/build-env.json
 
@@ -424,7 +443,8 @@ jobs:
             if ! jq -e '.formulation | length > 0' prev/hp-thermal.cdx.json > /dev/null; then
               echo "| all | $tag has no formulation | | no prior record (predates the build-environment declaration) |" >> env-summary.md
             else
-              for ref in build-env:rustc build-env:visual-studio build-env:msvc-toolset build-env:link-exe build-env:windows-sdk build-env:os; do
+              for ref in build-env:rustc build-env:visual-studio build-env:msvc-toolset build-env:link-exe build-env:windows-sdk build-env:os \
+                         build-env:tool:cargo-auditable build-env:tool:cargo-cyclonedx build-env:tool:cargo-audit build-env:tool:cargo-deny; do
                 p=$(field prev/hp-thermal.cdx.json "$ref"); c=$(field "$cur" "$ref")
                 if [ "$p" = "$c" ]; then st=unchanged; else st=changed; echo "::notice::$ref: '$p' -> '$c'"; fi
                 echo "| $ref | $p | $c | $st |" >> env-summary.md
