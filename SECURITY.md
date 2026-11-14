@@ -12,32 +12,39 @@ the bounded-impact ceiling described below — those are prioritized.
 
 ## Verifying a release
 
-Every release is built by a public GitHub Actions workflow and carries a **[SLSA](https://slsa.dev) build
-provenance** attestation and an **SBOM** attestation (CycloneDX 1.6), so you can prove the `.exe`
-was built from this repo's source by that workflow and was not altered in transit. The SBOM's
-`formulation` declares the build environment for rebuilders: rustc commit, MSVC toolset (checked
-against the linker build recorded in the exe's Rich header), Windows SDK and runner image.
+Every release is built by a public GitHub Actions workflow and carries a
+**[SLSA](https://slsa.dev) build provenance** attestation and a CycloneDX **SBOM** attestation, so
+you can prove the `.exe` was built from this repo's source by that workflow and was not altered in
+transit. Since v0.3.3, the SBOM's `formulation` declares the build environment for rebuilders:
+rustc commit, MSVC toolset (checked against the linker build recorded in the exe's Rich header),
+Windows SDK and runner image.
 
-**SLSA v1.2 Build Level 3.** Build, Authenticode signing and attestation run in a reusable
-workflow (`release-pipeline.yml`) that the calling release job cannot inject steps into, on
-GitHub-hosted ephemeral runners with OIDC-only signing and no caches; provenance is signed by
+**SLSA v1.2 Build Level 3, since v0.3.3.** Build, Authenticode signing and attestation run in a
+reusable workflow (`release-pipeline.yml`) that the calling release job cannot inject steps into,
+on GitHub-hosted ephemeral runners with OIDC-only signing and no caches; provenance is signed by
 that workflow's identity and verified before publish. The Source track has no formal level on
 GitHub today (GitHub issues no Source VSA); `main` enforces signed commits from a committed key
-roster, required checks, linear history and no force-push. `v*` tags and the `tools` store tag
-cannot be updated or deleted by anyone, administrators included; creating a `v*` tag requires a
-repository administrator and a commit that passed the required checks.
+roster, required checks, linear history and no force-push. A ruleset with no bypass actors blocks
+updating or deleting `v*` tags and the `tools` store tag; only a repository administrator can
+create a `v*` tag.
 
-With the [GitHub CLI](https://cli.github.com), pinning the signer to the reusable pipeline (the
-identity check is what makes verification meaningful):
+With the [GitHub CLI](https://cli.github.com) 2.102.0 or later (earlier versions match
+`--signer-workflow` by prefix only), pin the signer workflow and the tag of the release you
+downloaded; the identity check is what makes verification meaningful:
 
 ```sh
 gh attestation verify hp-thermal.exe \
   --repo bgonz808/hp-thermal \
-  --signer-workflow bgonz808/hp-thermal/.github/workflows/release-pipeline.yml
+  --signer-workflow bgonz808/hp-thermal/.github/workflows/release-pipeline.yml \
+  --source-ref refs/tags/v0.3.3
 ```
 
-Releases v0.3.0 through v0.3.2 predate the reusable pipeline: verify those with
-`--signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml`.
+`--source-ref` ties the attestation to that release: without it, a run of the same workflow
+from another branch or tag also passes. To pin the commit as well, add `--source-digest` with
+the tag's commit, from `git ls-remote https://github.com/bgonz808/hp-thermal 'refs/tags/v0.3.3^{}'`.
+
+Releases before v0.3.3 were built by `release.yml`: verify those with
+`--signer-workflow bgonz808/hp-thermal/.github/workflows/release.yml` and their own tag.
 
 ### What a release carries, and what each piece proves
 
@@ -55,13 +62,16 @@ every time: the identity is the claim.
 | `hp-thermal.build.jsonl` | none; a subject of the provenance attestation | `release-pipeline.yml` | cargo's own record of the build (`--message-format=json-render-diagnostics`): every compiled unit with its features and profile, and every build script's cfgs, env, and link directives. Two independent builds must record the same units, features, and cfgs. |
 | `SHA256SUMS` | none | none | Convenience only. A checksum proves a file matches itself; the attestations prove where it came from. |
 
-The same `gh attestation verify` command with `--predicate-type` set to a row's type and
-`--signer-workflow` set to `bgonz808/hp-thermal/.github/workflows/<row's workflow>` checks that
-row. The SBOM and the VDR share a predicate type because a VDR is a CycloneDX document; use the
-signer workflow, or the `vulnerabilities` field in the verified statement, to pick the one you mean.
-A VDR is revised as findings change: every revision keeps the release's one `serialNumber` and
-takes a higher `version`, and earlier revisions stay attached and verifiable. The highest version
-for the serial is the current report.
+The same `gh attestation verify` command with `--bundle` set to a row's asset, `--predicate-type`
+set to its type, and `--signer-workflow` set to `bgonz808/hp-thermal/.github/workflows/<row's
+workflow>` checks that row. `--source-ref` is the release's tag for every row except the VDR,
+which `release-vdr.yml` issues from `refs/heads/main`. Verify the VSA with `--bundle`: GitHub's
+attestation API does not accept its predicate type as a filter. The SBOM and the VDR share a
+predicate type because a VDR is a CycloneDX document; use the signer workflow, or the
+`vulnerabilities` field in the verified statement, to pick the one you mean. A VDR is revised as
+findings change: every revision keeps the release's one `serialNumber` and takes a higher
+`version`, and earlier revisions stay attached and verifiable. The highest version for the serial
+is the current report.
 
 The attestation is the real integrity anchor. `SHA256SUMS` is attached as a convenience, but
 a bare checksum only proves a file matches itself; the attestation proves it came from this
