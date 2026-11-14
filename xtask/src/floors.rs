@@ -332,6 +332,31 @@ impl Floors {
         })
     }
 
+    /// The relative `rustc-cfg` / `rustc-env` rule on cargo's build record (`build.jsonl`): a
+    /// directive a package's build script emitted that the prior blessed record for the same
+    /// package lacks. cackle never records `rustc-cfg`; this is the arm that measures it, as
+    /// emitted for the binary's own target. No prior record: nothing to compare.
+    pub fn build_record_stop(&self, head: &[Value], prior: Option<&[Value]>) -> Option<String> {
+        let prior = prior.map(crate::build_record::cfg_env_directives);
+        let mut hits = Vec::new();
+        for (pkg, directives) in crate::build_record::cfg_env_directives(head) {
+            let prior_pkg = prior
+                .as_ref()
+                .map(|p| p.get(&pkg).map_or(&[][..], Vec::as_slice));
+            for d in &directives {
+                if let Some(why) = self.directive_stop(&pkg, d, prior_pkg) {
+                    hits.push(why);
+                }
+            }
+        }
+        (!hits.is_empty()).then(|| {
+            format!(
+                "build record crosses the build_instructions floor: {}: absolute floor, not ackable",
+                hits.join(", ")
+            )
+        })
+    }
+
     fn build_armed(&self) -> bool {
         self.build_link_arg || self.build_foreign_link_search || self.build_new_env_cfg
     }
@@ -1213,5 +1238,37 @@ build.allow_build_instructions = [\"cargo:x=1
             ["fs", "net", "process"]
         );
         assert!(!g.contains_key("net"));
+    }
+
+    #[test]
+    fn build_record_arm_measures_rustc_cfg_against_the_prior_record() {
+        let f = policy();
+        let rec = |cfgs: &str| {
+            let raw = format!(
+                "{}\n{}\n",
+                format_args!(
+                    r#"{{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154","linked_libs":[],"linked_paths":[],"cfgs":[{cfgs}],"env":[],"out_dir":"o"}}"#
+                ),
+                r#"{"reason":"build-finished","success":true}"#
+            );
+            crate::build_record::parse(&raw).unwrap()
+        };
+        let base = rec(r#""fast_arithmetic=\"64\"""#);
+        let same = rec(r#""fast_arithmetic=\"64\"""#);
+        let more = rec(r#""fast_arithmetic=\"64\"","unsafe_fast_path""#);
+        assert_eq!(f.build_record_stop(&same, Some(&base)), None);
+        assert!(
+            f.build_record_stop(&more, Some(&base))
+                .unwrap()
+                .contains("cargo:rustc-cfg=unsafe_fast_path")
+        );
+        assert_eq!(
+            f.build_record_stop(&more, None),
+            None,
+            "no prior: nothing to compare"
+        );
+        let mut off = policy();
+        off.build_new_env_cfg = false;
+        assert_eq!(off.build_record_stop(&more, Some(&base)), None);
     }
 }

@@ -252,18 +252,22 @@ fn ack_quality(v: &Value) -> Result<(), String> {
     // bytes; a mal ack binds to the engine AND its verdict string. Without those fields the
     // line is not a usable sign-off and is rejected (reported, never counted).
     match s(v, &["axis"]) {
-        "caps" => {
+        axis @ ("caps" | "build") => {
+            let file = if axis == "caps" {
+                "caps.toml"
+            } else {
+                "build.jsonl"
+            };
             let h = s(v, &["evidence_sha256"]);
             if h.len() != 64
                 || !h
                     .bytes()
                     .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
             {
-                return Err(
-                    "caps ack without `evidence_sha256` (64 lowercase hex of the caps.toml it \
-                     signs, #380) — it would cover any rewrite of that inventory"
-                        .into(),
-                );
+                return Err(format!(
+                    "{axis} ack without `evidence_sha256` (64 lowercase hex of the {file} it \
+                     signs, #380) — it would cover any rewrite of that record"
+                ));
             }
         }
         "lock-shape" if s(v, &["package", "name"]).is_empty() => {
@@ -348,10 +352,15 @@ fn ack_covers_mal(acks: &Acks, digest: &str, engine: &str, result: &str) -> bool
 /// new grants rode through under the old signature. An ack without `evidence_sha256` is
 /// quality-rejected (see `ack_quality`) and never reaches here.
 fn ack_covers_caps(acks: &Acks, digest: &str, caps_sha256: &str) -> bool {
+    ack_covers_evidence(acks, "caps", digest, caps_sha256)
+}
+
+/// An ack on `axis` for `digest` that names the sha256 of the exact evidence bytes it signed.
+fn ack_covers_evidence(acks: &Acks, axis: &str, digest: &str, evidence_sha256: &str) -> bool {
     acks.entries.iter().any(|a| {
-        s(a, &["axis"]) == "caps"
+        s(a, &["axis"]) == axis
             && s(a, &["product", "digest"]) == digest
-            && s(a, &["evidence_sha256"]) == caps_sha256
+            && s(a, &["evidence_sha256"]) == evidence_sha256
     })
 }
 
@@ -526,11 +535,15 @@ fn ack_template_mal(tool: &str, digest: &str, engine: &str, result: &str) -> Str
 }
 
 fn ack_template_caps(tool: &str, digest: &str, caps_sha256: &str) -> String {
+    ack_template_evidence("caps", tool, digest, caps_sha256)
+}
+
+fn ack_template_evidence(axis: &str, tool: &str, digest: &str, evidence_sha256: &str) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
-        "axis": "caps",
+        "axis": axis,
         "product": {"name": tool, "digest": digest},
-        "evidence_sha256": caps_sha256,
+        "evidence_sha256": evidence_sha256,
         "status": "reviewed",
         "status_notes": "",
         "author": "",
@@ -772,6 +785,89 @@ fn caps_verdict(
     }
 }
 
+/// The prior blessed build record for a TOOLS.lock candidate: the base entry's build.jsonl.
+fn base_record_of(evidence_dir: &Path, tool: &str, base: Option<&ToolLine>) -> Option<String> {
+    base.and_then(|b| {
+        std::fs::read_to_string(
+            evidence_dir
+                .join(tool)
+                .join(&b.sha)
+                .join(crate::build_record::FILE),
+        )
+        .ok()
+    })
+}
+
+/// The build axis: cargo's record of the build that produced the digest (`build.jsonl`). The
+/// VDR check on the same change re-verifies its custody (raw record in the store, one producer
+/// statement naming record and binary); this reads the committed messages.
+///   * missing or unparseable: UNEVALUATED.
+///   * a `rustc-cfg` / `rustc-env` the prior record lacks for the same package: HARD-STOP.
+///   * no prior record to compare, or a record added or rewritten under a digest already pinned
+///     (`evidence_edit`): RAISE, signed by a `build` ack bound to the record's bytes.
+///   * otherwise ALLOW.
+fn build_verdict(
+    tool: &str,
+    evidence_dir: &Path,
+    prior: Option<String>,
+    head: &ToolLine,
+    acks: &Acks,
+    floors: &crate::floors::Floors,
+    evidence_edit: bool,
+) -> Verdict {
+    let path = evidence_dir
+        .join(tool)
+        .join(&head.sha)
+        .join(crate::build_record::FILE);
+    let Ok(bytes) = std::fs::read(&path) else {
+        return Verdict::Unevaluated(format!(
+            "no build record at {} — `candidate-advance digest` records it from the producer run",
+            path.display()
+        ));
+    };
+    let text = String::from_utf8_lossy(&bytes);
+    let (hdr, msgs) = match crate::build_record::read_evidence(&text) {
+        Ok(x) => x,
+        Err(e) => return Verdict::Unevaluated(format!("{}: {e}", path.display())),
+    };
+    if s(&hdr, &["subject", "sha256"]) != head.sha {
+        return Verdict::Unevaluated(format!("{}: names another digest", path.display()));
+    }
+    let prior = match prior.as_deref().map(crate::build_record::read_evidence) {
+        None => None,
+        Some(Ok((_, m))) => Some(m),
+        Some(Err(e)) => {
+            return Verdict::Unevaluated(format!("prior build record not parseable: {e}"));
+        }
+    };
+    if let Some(why) = floors.build_record_stop(&msgs, prior.as_deref()) {
+        return Verdict::HardStop(why);
+    }
+    let sha = crate::sha256::sha256_hex(&bytes);
+    if prior.is_some() && !evidence_edit {
+        return Verdict::Allow(format!(
+            "build record {}: no rustc-cfg or rustc-env beyond the prior record",
+            &sha[..12]
+        ));
+    }
+    let what = if evidence_edit {
+        "added or rewritten under a pinned digest"
+    } else {
+        "no prior record to compare"
+    };
+    if ack_covers_evidence(acks, "build", &head.sha, &sha) {
+        Verdict::RaiseCovered(vec![format!(
+            "build record {} (content sha256 {sha}), {what}: reviewed + acked",
+            head.sha
+        )])
+    } else {
+        Verdict::RaiseUncovered {
+            covered: Vec::new(),
+            needed: vec![ack_template_evidence("build", tool, &head.sha, &sha)],
+        }
+    }
+}
+
 // ---------- vuln-axis scanning (paired, single DB state; #241 §5) ----------
 
 /// Invoke the PINNED cargo-audit (#221: absolute path from PINNED_TOOLS_DIR, env-scrubbed;
@@ -855,7 +951,13 @@ pub(crate) fn resolve_lock(
 // ---------- evidence-only edits (#380 part 2) ----------
 
 /// The per-digest evidence files whose change on the LIVE FRONTIER re-opens evaluation.
-const EVIDENCE_FILES: &[&str] = &["caps.toml", "caps.UNEVALUATED", "mal.jsonl", "vuln.jsonl"];
+const EVIDENCE_FILES: &[&str] = &[
+    "caps.toml",
+    "caps.UNEVALUATED",
+    "mal.jsonl",
+    "vuln.jsonl",
+    "build.jsonl",
+];
 
 fn read_opt(p: &Path) -> Option<Vec<u8>> {
     std::fs::read(p).ok()
@@ -1182,6 +1284,18 @@ pub fn run(args: &[String]) -> i32 {
             ),
         ));
         axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
+        axes.push((
+            "build",
+            build_verdict(
+                &h.name,
+                &evidence_dir,
+                base_record_of(&evidence_dir, &h.name, b.as_ref()),
+                h,
+                &acks,
+                floors,
+                false,
+            ),
+        ));
 
         if !acks.rejected.is_empty() {
             axes.push((
@@ -1256,6 +1370,13 @@ pub fn run(args: &[String]) -> i32 {
             }
             if changed.iter().any(|f| f == "mal.jsonl") {
                 axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
+            }
+            if changed.iter().any(|f| f == crate::build_record::FILE) {
+                let prior = std::fs::read_to_string(base_rec.join(crate::build_record::FILE)).ok();
+                axes.push((
+                    "build",
+                    build_verdict(&h.name, &evidence_dir, prior, h, &acks, floors, true),
+                ));
             }
             if changed.iter().any(|f| f == "vuln.jsonl") {
                 axes.push((
@@ -1733,6 +1854,86 @@ mod tests {
             needed[0].contains(&new_sha) && !needed[0].contains(&signed_sha),
             "{needed:?}"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn build_axis_baseline_floor_allow_and_rewrite() {
+        let dir = std::env::temp_dir().join(format!("gate-build-{}", std::process::id()));
+        let head = "e".repeat(64);
+        let rec = dir.join("t").join(&head);
+        std::fs::create_dir_all(&rec).unwrap();
+        let h = tl("t", &head);
+        let none = Acks {
+            entries: Vec::new(),
+            rejected: Vec::new(),
+        };
+        let record = |cfgs: &str| {
+            let raw = format!(
+                "{}\n{}\n",
+                format_args!(
+                    r#"{{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154","linked_libs":[],"linked_paths":[],"cfgs":[{cfgs}],"env":[],"out_dir":"o"}}"#
+                ),
+                r#"{"reason":"build-finished","success":true}"#
+            );
+            let msgs = crate::build_record::parse(&raw).unwrap();
+            let raw_sha = "f".repeat(64);
+            crate::build_record::evidence(
+                &crate::build_record::Anchor {
+                    tool: "t",
+                    digest: &head,
+                    run_url: "u",
+                    raw_sha256: &raw_sha,
+                    asset: "a",
+                },
+                &msgs,
+            )
+        };
+        let verdict = |prior: Option<String>, acks: &Acks, edit: bool| {
+            build_verdict("t", &dir, prior, &h, acks, &floors(), edit)
+        };
+
+        // No record at all: unevaluated, never a pass.
+        assert!(matches!(
+            verdict(None, &none, false),
+            Verdict::Unevaluated(_)
+        ));
+
+        let base = record(r#""a""#);
+        std::fs::write(rec.join(crate::build_record::FILE), &base).unwrap();
+        let sha = crate::sha256::sha256_hex(base.as_bytes());
+
+        // No prior record: the baseline asks for a build ack bound to these bytes.
+        let Verdict::RaiseUncovered { needed, .. } = verdict(None, &none, false) else {
+            panic!("baseline must ask for a sign-off")
+        };
+        assert!(needed[0].contains(r#""axis":"build""#) && needed[0].contains(&sha));
+        let signed = ack(&format!(
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"build","product":{{"name":"t","digest":"{head}"}},"evidence_sha256":"{sha}","status":"reviewed","status_notes":"reviewed","author":"a","timestamp":"t","refs":[]}}"#
+        ));
+        assert!(matches!(
+            verdict(None, &signed, false),
+            Verdict::RaiseCovered(_)
+        ));
+
+        // A prior with the same cfgs: allow. A new cfg against the prior: floor, ack or not.
+        assert!(matches!(
+            verdict(Some(base.clone()), &none, false),
+            Verdict::Allow(_)
+        ));
+        let more = record(r#""a","b""#);
+        std::fs::write(rec.join(crate::build_record::FILE), &more).unwrap();
+        assert!(matches!(
+            verdict(Some(base.clone()), &signed, false),
+            Verdict::HardStop(_)
+        ));
+
+        // Rewritten under a pinned digest: signed again even without a new cfg.
+        std::fs::write(rec.join(crate::build_record::FILE), &base).unwrap();
+        assert!(matches!(
+            verdict(Some(base.clone()), &none, true),
+            Verdict::RaiseUncovered { .. }
+        ));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

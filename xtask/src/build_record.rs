@@ -288,16 +288,15 @@ pub(crate) fn record_line(log: &str, tool: &str, target: &str, digest: &str) -> 
     })
 }
 
-/// Fetch a raw record from the store and build its evidence. Refused unless the bytes match the
-/// logged sha256, one statement signed by the producer workflow names both the record and the
-/// binary, and the record shows the tool's own binary target compiled.
-pub(crate) fn fetch_evidence(
+/// Fetch a raw record from the store and parse it. Refused unless the bytes match `raw_sha256`,
+/// one statement signed by the producer workflow names both the record and the binary, and the
+/// record shows the tool's own binary target compiled. Returns the asset name and kept messages.
+fn fetch_verified(
     tool: &str,
     target: &str,
     digest: &str,
     raw_sha256: &str,
-    run_id: &str,
-) -> Result<String, String> {
+) -> Result<(String, Vec<Value>), String> {
     let asset = asset_name(tool, target, digest, raw_sha256);
     let dir = std::env::temp_dir().join(format!("build-record-{}", &raw_sha256[..12]));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -316,9 +315,7 @@ pub(crate) fn fetch_evidence(
     let bytes = std::fs::read(&path).map_err(|e| format!("{asset}: {e}"))?;
     let got = crate::sha256::sha256_hex(&bytes);
     if got != raw_sha256 {
-        return Err(format!(
-            "{asset}: sha256 {got}, the run logged {raw_sha256}"
-        ));
+        return Err(format!("{asset}: sha256 {got}, expected {raw_sha256}"));
     }
     let repo = gh(&[
         "repo",
@@ -361,6 +358,18 @@ pub(crate) fn fetch_evidence(
     let text = String::from_utf8(bytes).map_err(|_| format!("{asset}: not UTF-8"))?;
     let msgs = parse(&text).map_err(|e| format!("{asset}: {e}"))?;
     root_bin(&msgs, tool).map_err(|e| format!("{asset}: {e}"))?;
+    Ok((asset, msgs))
+}
+
+/// Fetch a producer run's raw record (see `fetch_verified`) and build its evidence.
+pub(crate) fn fetch_evidence(
+    tool: &str,
+    target: &str,
+    digest: &str,
+    raw_sha256: &str,
+    run_id: &str,
+) -> Result<String, String> {
+    let (asset, msgs) = fetch_verified(tool, target, digest, raw_sha256)?;
     let run_url = gh(&["run", "view", run_id, "--json", "url", "--jq", ".url"])?;
     Ok(evidence(
         &Anchor {
@@ -372,6 +381,39 @@ pub(crate) fn fetch_evidence(
         },
         &msgs,
     ))
+}
+
+/// Re-verify a committed `build.jsonl`: it names this subject, its anchored raw record is in the
+/// store under the expected name and sha256 with a producer statement naming both it and the
+/// binary, and its messages are exactly what that raw record parses to. Returns the messages.
+pub(crate) fn verify_custody(
+    text: &str,
+    tool: &str,
+    target: &str,
+    digest: &str,
+) -> Result<Vec<Value>, String> {
+    let (h, msgs) = read_evidence(text)?;
+    if h["subject"]["name"] != tool || h["subject"]["sha256"] != digest {
+        return Err(format!(
+            "names another subject than {tool} {}",
+            &digest[..12]
+        ));
+    }
+    let raw = h["rawRecord"]["sha256"]
+        .as_str()
+        .filter(|x| is_hex64(x))
+        .ok_or("header has no rawRecord sha256")?;
+    let asset = asset_name(tool, target, digest, raw);
+    if h["rawRecord"]["asset"] != asset.as_str() {
+        return Err(format!("header names another asset than {asset}"));
+    }
+    let (_, fetched) = fetch_verified(tool, target, digest, raw)?;
+    if fetched != msgs {
+        return Err(format!(
+            "{asset}: committed messages differ from the raw record"
+        ));
+    }
+    Ok(msgs)
 }
 
 /// The record must show the tool's own `bin` target compiled.

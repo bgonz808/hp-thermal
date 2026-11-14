@@ -64,8 +64,9 @@ the enforcement layer's own burn-down list.
   with a critical-shape CVSS vector, a panel with too many malicious verdicts or a malicious sandbox
   verdict, a measured inventory newly granting `process`/`net` or recording a build script that
   passes arbitrary linker flags, searches a foreign link path, emits an unclassifiable directive,
-  or sets a `rustc-env` the prior inventory lacked (#382; the `rustc-cfg` arm exists but cannot fire,
-  because cackle never records `rustc-cfg` lines). HARD-STOP in `gate`, FAIL
+  or sets a `rustc-env` the prior inventory lacked (#382). cackle never records `rustc-cfg`; the
+  digest's build record (`build.jsonl`, cargo's own messages) does, and a `rustc-cfg` or `rustc-env`
+  the prior record lacked is the same floor. HARD-STOP in `gate`, FAIL
   in the monitors, never ackable; a missing policy is UNEVALUATED, not "no floors".
 - **`eox-check`** (#376) — OpenEoX Core "Validator Basic" over `policy/eox/records.json` against
   the digest-pinned schema (TC test vectors vendored under `xtask/testdata/openeox/`), plus the
