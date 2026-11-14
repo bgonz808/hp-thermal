@@ -8,7 +8,7 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 Patch release. No runtime logic changed; `app/src` is unchanged. The shipped bytes change
 because build paths are now trimmed. The release process gains isolation, a reproducibility
-check, and more verifiable records.
+check, toolchain authenticity checks, and more verifiable records.
 
 ### Verification
 - Build, signing, and attestation now run in a reusable workflow, `release-pipeline.yml`,
@@ -31,19 +31,31 @@ check, and more verifiable records.
   workflow, records that it verified the provenance and SBOM against this repository's
   policy; a CycloneDX vulnerability disclosure report is attached after release by
   `release-vdr.yml`. (#453, #454, #461, #463, #468)
+- Before anything compiles, each executable the MSVC toolchain can run must carry a valid
+  Microsoft Authenticode signature chaining to a pinned Microsoft root, and must match no
+  revoked file or certificate; `supply-chain/policy/toolchain-trust.json` names both.
+  `cargo xtask verify-build-env --against <tag>` compares a local install with what a release
+  recorded. (#488, #490)
+- The release fails if link.exe keeps the previous release's file version but not its bytes.
+  This release records the hash that later releases compare against. (#491)
 
 ### Build-tool fleet
 - The producer moves into a reusable workflow, and tool fetches pin its signer identity.
   (#438, #445)
 - Each tool build keeps cargo's record of what it compiled, attested together with the binary.
   Each tool's report scopes locked packages from that record and from the binary's own
-  dependency list: build-only and uncompiled packages are excluded. (#469, #471, #483, #484)
+  dependency list: build-only and uncompiled packages are excluded. Every pinned tool carries
+  a reviewed baseline record. (#469, #471, #483, #484, #486)
 
 ### Gate and evidence
 - xtask is vetted at safe-to-deploy, dev dependencies included. (#439)
 - Build scripts' `rustc-cfg` directives, which the capabilities inventory never recorded, are
-  measured from the build record; a new one against the prior record needs a signed review.
-  (#484)
+  measured from the build record. The gate asks for a signed review of a new `rustc-cfg`, a new
+  link library, or a new disagreement between a tool's build record and its capabilities
+  inventory, and stops a link search path outside a crate's own directories other than the
+  pinned MSVC toolset's atlmfc folder. (#484, #487, #489)
+- `cargo xtask freeze` reconciles a frozen lock with the tool's patched manifest, removals
+  only. (#492)
 - Hardening flags and time bounds move into policy files: `hardening.json` and
   `cadence.json`. (#444, #455)
 - The app's post-release evidence runs as `cargo xtask release-advance` stages, and release
