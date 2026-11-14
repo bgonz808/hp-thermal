@@ -1,7 +1,7 @@
 # Per-digest evidence store (#241 §7)
 
 Persisted baseline evidence for every blessed tool binary, keyed by content:
-`<tool>/<sha256:0:12>/` holds the three-axis record for that exact digest; `<tool>/acks.jsonl`
+`<tool>/<sha256:0:12>/` holds the three-axis record and the build record for that exact digest; `<tool>/acks.jsonl`
 holds the recorded residual-risk sign-offs. This store is what makes honest candidate
 evaluation possible — a diff needs a recorded baseline — and it is deliberately **in-repo**:
 every ack is an attributed commit, every baseline is reviewable history.
@@ -37,6 +37,16 @@ parseable. The schema borrows established vocabularies rather than inventing one
   instrument it was measured with, so it stays native TOML (converting would sever that
   identity). A `caps.UNEVALUATED` file in its place records *why* no data exists — fail-secure:
   absence of evidence is recorded, never implied clean.
+- **build.jsonl** — cargo's own record of the build that produced the digest. Line 1 is a header:
+  `{schema, subject{name, sha256}, format, producerRun, rawRecord{sha256, store, asset}}`. Each
+  further line is one message from cargo's documented JSON output
+  (`--message-format=json-render-diagnostics`, The Cargo Book "JSON messages"), sorted:
+  `compiler-artifact` (package_id, target kind/crate_types/name, profile, features) and
+  `build-script-executed` (package_id, cfgs, env, linked_libs, linked_paths). Runner paths are
+  dropped; nothing is added. The raw stdout is in the `tools` store, named
+  `<binary asset without .exe>.build-<sha256:0:12>.jsonl`, and is a subject of the same producer
+  provenance statement as the binary. `candidate-advance digest` writes it for a candidate;
+  `build-record baseline --run <id>` writes it for every pin that producer run reproduced.
 - **acks.jsonl** — sign-offs aligned to **OpenVEX** (`status` ∈ not_affected/affected/fixed/
   under_investigation, `justification`, `impact_statement`/`status_notes`, `action_statement`,
   `author`, `timestamp`). Our records are an OpenVEX-*aligned profile* (a `schema` field names
@@ -67,7 +77,7 @@ parseable. The schema borrows established vocabularies rather than inventing one
   asset digest vs the recorded sha256, no download); a missing or mismatched backing report makes
   the pin UNEVALUATED.
 
-Raw scanner payloads (full `cargo audit --json`, full VT panels) are point-in-time and
+Raw scanner payloads (full `cargo audit --json`, full VT panels) and raw build records are point-in-time and
 non-reproducible; they go to the content-addressed `tools` release store referenced by hash
 (#225 doctrine) rather than bloating the repo. Retention is **defined but unarmed**: keep raw
 payloads for current-pinned digests + last N supersessions; prune only unreferenced payloads

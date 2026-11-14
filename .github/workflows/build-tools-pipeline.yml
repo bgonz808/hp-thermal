@@ -247,17 +247,18 @@ jobs:
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1 \
                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              # 2>&1 | tee: the diagnostics land in diag-<name>.log for verify-allowances
+              # stderr | tee: the diagnostics land in diag-<name>.log for verify-allowances
               # to read AFTER the loop. pipefail is set, so cargo's failure still reaches
-              # `|| built=0` through the pipe.
+              # `|| built=0` through the pipe. stdout is the build record: cargo's JSON
+              # messages (json-render-diagnostics keeps rustc's diagnostics as text on stderr).
               epoch=$(git -C "src-$name" log -1 --format=%ct HEAD)
-              SOURCE_DATE_EPOCH="$epoch" RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install --path "$(dirname "$manifest")" --locked --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
+              SOURCE_DATE_EPOCH="$epoch" RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install --path "$(dirname "$manifest")" --locked --root ./toolroot --message-format=json-render-diagnostics "${std_args[@]}" "${tool_args[@]}" 2>&1 >"record-$name.jsonl" | tee "diag-$name.log" || built=0
             else
               # No checkout on this path: fetch just the pinned commit for its epoch.
               rm -rf "rev-$name"; git init -q "rev-$name"
               git -C "rev-$name" fetch -q --depth 1 "https://github.com/$repo" "$rev"
               epoch=$(git -C "rev-$name" log -1 --format=%ct FETCH_HEAD)
-              SOURCE_DATE_EPOCH="$epoch" RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${std_args[@]}" "${tool_args[@]}" 2>&1 | tee "diag-$name.log" || built=0
+              SOURCE_DATE_EPOCH="$epoch" RUSTFLAGS="$tool_rustflags" "$AUDIT_DIR/cargo-auditable.exe" auditable install "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot --message-format=json-render-diagnostics "${std_args[@]}" "${tool_args[@]}" 2>&1 >"record-$name.jsonl" | tee "diag-$name.log" || built=0
             fi
             # REPORT EVERY FAILING TOOL, not the first. The loop used to exit here, so a
             # ~10-minute run answered "does cargo-audit build?" when the question was "which
@@ -284,11 +285,23 @@ jobs:
               echo "::endgroup::"
               continue
             fi
+            # Build record (cargo's JSON messages, above): every compiled unit and each build
+            # script's directives. Checked here; published and attested with the binary.
+            if ! env -u RUSTFLAGS cargo run --locked -q --manifest-path xtask/Cargo.toml -- build-record check "record-$name.jsonl" --package "$name"; then
+              build_failures="$build_failures $name"
+              echo "::error::$name: build record check failed"
+              echo "::endgroup::"
+              continue
+            fi
             d=$(sha256sum "./toolroot/bin/$name.exe" | cut -d' ' -f1)
+            r=$(sha256sum "record-$name.jsonl" | cut -d' ' -f1)
             # #225: digest computed FIRST, the asset name derives from it; consumers re-derive
-            # the name and re-hash the bytes — the name itself is never trusted.
+            # the name and re-hash the bytes — the name itself is never trusted. The record is
+            # named for both digests: the binary it describes and its own bytes.
             cp "./toolroot/bin/$name.exe" "out/$name-${d:0:12}.exe"
+            cp "record-$name.jsonl" "out/$name-${d:0:12}.build-${r:0:12}.jsonl"
             printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d" >> out/DIGEST-BLOCK.txt
+            echo "build record: $name $target $d $r"
             echo "::endgroup::"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
 
@@ -348,7 +361,10 @@ jobs:
       - name: Attest build provenance (windows tools)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # actions/attest-build-provenance v4.2.2
         with:
-          subject-path: out/*.exe
+          # One statement names every binary and its build record.
+          subject-path: |
+            out/*.exe
+            out/*.build-*.jsonl
 
       - name: Emit TOOLS.lock lines to bless
         shell: bash
@@ -357,6 +373,16 @@ jobs:
           echo "=================== copy into tools/TOOLS.lock (re-append version comments) ==================="
           cat out/DIGEST-BLOCK.txt
           echo "==============================================================================================="
+          # Per row: did this run reproduce the pinned bytes? A candidate's own row differs by design.
+          pins=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
+          while read -r name _repo _rev target d; do
+            pin=$(awk -v n="$name" -v t="$target" '$1==n && $4==t {print $5}' <<<"$pins")
+            if [ "$d" = "$pin" ]; then
+              echo "reproduced: $name $target ${d:0:12}"
+            else
+              echo "::notice::$name $target built ${d:0:12}; TOOLS.lock pins ${pin:0:12}"
+            fi
+          done < out/DIGEST-BLOCK.txt
 
       # Content-addressed names never collide, so nothing is overwritten — the store accumulates
       # full history (#225). --clobber retained only for idempotent same-run retries (same name
@@ -373,7 +399,7 @@ jobs:
               --notes "Prebuilt cargo-* build tools consumed by the release + supply-chain workflows. Integrity is anchored by tools/TOOLS.lock digests, NOT by this release. Assets are content-addressed (#225) with per-asset provenance attestations (#205). Rebuilt by .github/workflows/build-tools.yml." \
               --latest=false
           fi
-          gh release upload "$TAG" out/*.exe --clobber
+          gh release upload "$TAG" out/*.exe out/*.build-*.jsonl --clobber
 
   build-tools-linux:
     # JUDGMENT GATE (#261). Referencing an environment makes the run PAUSE before this job
@@ -485,13 +511,18 @@ jobs:
               cp "tools/locks/$name.lock" "src-$name/Cargo.lock"
               manifest=$(cd "src-$name" && cargo metadata --no-deps --locked --format-version 1                           | jq -r --arg n "$name" '.packages[] | select(.name==$n) | .manifest_path' | head -1)
               [ -n "$manifest" ] || { echo "::error::frozen-lock build: crate '$name' not found in $repo@$rev"; exit 1; }
-              "${INSTALL[@]}" --path "$(dirname "$manifest")" --locked --root ./toolroot "${tool_args[@]}"
+              "${INSTALL[@]}" --path "$(dirname "$manifest")" --locked --root ./toolroot --message-format=json-render-diagnostics "${tool_args[@]}" >"record-$name.jsonl"
             else
-              "${INSTALL[@]}" "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot "${tool_args[@]}"
+              "${INSTALL[@]}" "$name" --locked --git "https://github.com/$repo" --rev "$rev" --root ./toolroot --message-format=json-render-diagnostics "${tool_args[@]}" >"record-$name.jsonl"
             fi
+            # Build record: cargo's JSON messages from the build above (see the windows lane).
+            cargo run --locked -q --manifest-path xtask/Cargo.toml -- build-record check "record-$name.jsonl" --package "$name"
             d=$(sha256sum "./toolroot/bin/$name" | cut -d' ' -f1)
+            r=$(sha256sum "record-$name.jsonl" | cut -d' ' -f1)
             cp "./toolroot/bin/$name" "out/$name-${d:0:12}-linux-x86_64"
+            cp "record-$name.jsonl" "out/$name-${d:0:12}-linux-x86_64.build-${r:0:12}.jsonl"
             printf '%-18s %-34s %s  %s  %s\n' "$name" "$repo" "$rev" "$target" "$d" >> out/DIGEST-BLOCK.txt
+            echo "build record: $name $target $d $r"
             echo "::endgroup::"
           done < <(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
 
@@ -532,7 +563,9 @@ jobs:
       - name: Attest build provenance (linux tools)
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8  # actions/attest-build-provenance v4.2.2
         with:
-          subject-path: out/*-linux-x86_64
+          subject-path: |
+            out/*-linux-x86_64
+            out/*-linux-x86_64.build-*.jsonl
 
       - name: Emit TOOLS.lock lines to bless
         shell: bash
@@ -541,6 +574,16 @@ jobs:
           echo "=================== copy into tools/TOOLS.lock (re-append version comments) ==================="
           cat out/DIGEST-BLOCK.txt
           echo "==============================================================================================="
+          # Per row: did this run reproduce the pinned bytes? A candidate's own row differs by design.
+          pins=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//')
+          while read -r name _repo _rev target d; do
+            pin=$(awk -v n="$name" -v t="$target" '$1==n && $4==t {print $5}' <<<"$pins")
+            if [ "$d" = "$pin" ]; then
+              echo "reproduced: $name $target ${d:0:12}"
+            else
+              echo "::notice::$name $target built ${d:0:12}; TOOLS.lock pins ${pin:0:12}"
+            fi
+          done < out/DIGEST-BLOCK.txt
 
       - name: Publish linux tool binaries to the tools release
         shell: bash
@@ -549,4 +592,4 @@ jobs:
           TAG: ${{ inputs.tools_tag }}
         run: |
           set -euo pipefail
-          gh release upload "$TAG" out/*-linux-x86_64 --clobber
+          gh release upload "$TAG" out/*-linux-x86_64 out/*-linux-x86_64.build-*.jsonl --clobber
