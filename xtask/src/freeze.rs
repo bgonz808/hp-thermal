@@ -15,6 +15,9 @@
 //!
 //! `--patches tools/patches/<tool>` stages the tool's patches onto the checkout before the
 //! lock, in the producer's order, `git apply --check`ed first (fail-closed supersession).
+//! A patch can change what the manifest requires, so the lock is then reconciled with the patched
+//! manifest (`cargo update --workspace`): removals only, any added package or moved version is
+//! refused. With `--patches`, `--update` is optional.
 //! `--require-improvement` refuses a run that fixes zero instances: with "no regression"
 //! already enforced, that is the other half of the strictly-better certificate the autonomous
 //! path needs. Every directive is attempted and every refusal reported before failing; on any
@@ -148,6 +151,32 @@ pub fn lock_package_names_from_str(text: &str) -> BTreeSet<String> {
 }
 
 /// `name -> resident versions` of a Cargo.lock (several when semver-incompatible copies coexist).
+/// The lock change a patched manifest may make on its own: removals only. Returns what was
+/// pruned (`name version`); an added package or a moved version is refused, because no
+/// directive reviewed it.
+pub fn prune_only(before: &str, after: &str) -> Result<Vec<String>, String> {
+    let (b, a) = (lock_package_versions(before), lock_package_versions(after));
+    let missing = |from: &BTreeMap<String, Vec<String>>, to: &BTreeMap<String, Vec<String>>| {
+        let mut out = Vec::new();
+        for (n, vs) in from {
+            for v in vs {
+                if !to.get(n).is_some_and(|x| x.contains(v)) {
+                    out.push(format!("{n} {v}"));
+                }
+            }
+        }
+        out
+    };
+    let added = missing(&a, &b);
+    if !added.is_empty() {
+        return Err(format!(
+            "the patched manifest adds or moves {}: a reviewed directive must make that change",
+            added.join(", ")
+        ));
+    }
+    Ok(missing(&b, &a))
+}
+
 pub fn lock_package_versions(text: &str) -> BTreeMap<String, Vec<String>> {
     let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
     let mut in_pkg = false;
@@ -734,10 +763,15 @@ pub fn run(args: &[String]) -> i32 {
         );
         return 2;
     }
-    if tool.is_empty() || repo.is_empty() || rev.is_empty() || directives.is_empty() {
+    if tool.is_empty()
+        || repo.is_empty()
+        || rev.is_empty()
+        || (directives.is_empty() && patches.is_none())
+    {
         eprintln!(
             "usage: cargo xtask freeze --tool <name> --repo <owner/repo> --rev <sha> \\\n\
-             \x20         --update <pkg>[@cur]=<ver> [--update ...] [--soak-days N] [--out-dir DIR] [--dry-run]"
+             \x20         --update <pkg>[@cur]=<ver> [--update ...] [--soak-days N] [--out-dir DIR] [--dry-run]\n\
+             \x20         (--update is optional with --patches: a patches-only freeze reconciles the lock)"
         );
         return 2;
     }
@@ -1012,6 +1046,56 @@ pub fn run(args: &[String]) -> i32 {
             return 1;
         }
     };
+
+    // 3a. Patches can change what the manifest requires (a feature dropped, a dependency gone),
+    //     leaving the starting lock stale: `cargo build --locked` still builds, but `cargo
+    //     metadata --locked`, which cargo-auditable runs inside every build, refuses. Reconcile
+    //     before any directive. `cargo update --workspace` re-resolves without moving a
+    //     dependency's version, so the only acceptable effect is a removal (`prune_only`).
+    if patches.is_some() {
+        let start = std::fs::read_to_string(&lock).unwrap_or_default();
+        let out = Command::new("cargo")
+            .current_dir(&work)
+            .args(["update", "--workspace"])
+            .env_remove("CARGO")
+            .env_remove("RUSTC")
+            .env_remove("RUSTUP_TOOLCHAIN")
+            .output();
+        let ok = match out {
+            Ok(o) if o.status.success() => true,
+            Ok(o) => {
+                eprintln!(
+                    "freeze: cargo update --workspace failed on the patched manifest: {}",
+                    String::from_utf8_lossy(&o.stderr).trim()
+                );
+                false
+            }
+            Err(e) => {
+                eprintln!("freeze: cannot run cargo update --workspace: {e}");
+                false
+            }
+        };
+        if !ok {
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+        let now = std::fs::read_to_string(&lock).unwrap_or_default();
+        match prune_only(&start, &now) {
+            Ok(pruned) if pruned.is_empty() => {
+                println!("# lock agrees with the patched manifest (nothing to prune)")
+            }
+            Ok(pruned) => {
+                for p in pruned {
+                    println!("  pruned by the patched manifest: {p}");
+                }
+            }
+            Err(e) => {
+                eprintln!("  REFUSED: {e}");
+                let _ = std::fs::remove_dir_all(&work);
+                return 1;
+            }
+        }
+    }
 
     // 4. Apply the directives. `cargo update --precise` moves ONLY the named packages
     //    (plus whatever their own requirements force), keeping the rest of upstream's
@@ -1838,6 +1922,43 @@ mod tests {
         assert!(genuine.is_empty());
         assert_eq!(unfixed, vec![inst("A", "p", "3.0")]);
     }
+    #[test]
+    fn prune_only_admits_removals_and_refuses_additions_or_moves() {
+        let lock = |pkgs: &[(&str, &str)]| {
+            pkgs.iter()
+                .map(|(n, v)| format!("[[package]]\nname = \"{n}\"\nversion = \"{v}\"\n"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        let before = lock(&[
+            ("flate2", "1.1.9"),
+            ("libz-sys", "1.1.31"),
+            ("miniz_oxide", "0.8.9"),
+        ]);
+        let pruned = lock(&[("flate2", "1.1.9"), ("miniz_oxide", "0.8.9")]);
+        assert_eq!(
+            prune_only(&before, &pruned).unwrap(),
+            vec!["libz-sys 1.1.31"]
+        );
+        assert!(prune_only(&before, &before).unwrap().is_empty());
+        let added = lock(&[
+            ("flate2", "1.1.9"),
+            ("miniz_oxide", "0.8.9"),
+            ("zlib-rs", "0.5.0"),
+        ]);
+        assert!(
+            prune_only(&before, &added)
+                .unwrap_err()
+                .contains("zlib-rs 0.5.0")
+        );
+        let moved = lock(&[("flate2", "1.1.9"), ("miniz_oxide", "0.9.1")]);
+        assert!(
+            prune_only(&before, &moved)
+                .unwrap_err()
+                .contains("miniz_oxide 0.9.1")
+        );
+    }
+
     #[test]
     fn patch_files_are_absolute_sorted_and_only_patches() {
         // The staged checkout is `git apply`'s cwd, so a relative patch path would be looked
