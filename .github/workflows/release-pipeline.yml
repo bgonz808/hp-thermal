@@ -349,6 +349,7 @@ jobs:
       exe_unsigned_sha256: ${{ steps.compare.outputs.exe_unsigned_sha256 }}
       pdb_sha256: ${{ steps.compare.outputs.pdb_sha256 }}
       xtask_sha256: ${{ steps.compare.outputs.xtask_sha256 }}
+      rec_sha256: ${{ steps.compare.outputs.rec_sha256 }}
     steps:
       - name: Download both builds
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # actions/download-artifact v8.0.2
@@ -383,9 +384,11 @@ jobs:
           if [ "$ca" = "$cb" ]; then echo "SBOM component set: identical"; else echo "::error::SBOM component sets differ"; fail=1; fi
           # Build records: the same units compiled with the same features, and the same
           # build-script cfgs. Read to EOF (no early-exit reader under pipefail).
+          # `|| return 1` on each: errexit is off inside $(...), so a failing first jq would
+          # otherwise be masked by the second.
           units() {
-            jq -r 'select(.reason=="compiler-artifact") | [.package_id, (.target.kind|join(",")), (.features|join(","))] | join(" ")' "$1" | sort
-            jq -r 'select(.reason=="build-script-executed") | [.package_id, (.cfgs|join(","))] | join(" ")' "$1" | sort
+            jq -r 'select(.reason=="compiler-artifact") | [.package_id, (.target.kind|join(",")), (.features|join(","))] | join(" ")' "$1" | sort || return 1
+            jq -r 'select(.reason=="build-script-executed") | [.package_id, (.cfgs|join(","))] | join(" ")' "$1" | sort || return 1
           }
           ra=$(units builds/dist-unsigned-a/hp-thermal.build.jsonl | sha256sum | cut -d' ' -f1)
           rb=$(units builds/dist-unsigned-b/hp-thermal.build.jsonl | sha256sum | cut -d' ' -f1)
@@ -409,6 +412,7 @@ jobs:
             echo "exe_unsigned_sha256=$(sha256sum builds/dist-unsigned-a/hp-thermal.exe | cut -d' ' -f1)"
             echo "pdb_sha256=$(sha256sum builds/dist-unsigned-a/hp-thermal.pdb | cut -d' ' -f1)"
             echo "xtask_sha256=$(sha256sum builds/xtask-verifier-a/xtask.exe | cut -d' ' -f1)"
+            echo "rec_sha256=$(sha256sum builds/dist-unsigned-a/hp-thermal.build.jsonl | cut -d' ' -f1)"
           } >> "$GITHUB_OUTPUT"
 
       # Build-environment drift against the previous release's attested SBOM (its formulation).
@@ -579,11 +583,14 @@ jobs:
         env:
           EXPECT_EXE: ${{ needs.reproducibility.outputs.exe_unsigned_sha256 }}
           EXPECT_PDB: ${{ needs.reproducibility.outputs.pdb_sha256 }}
+          EXPECT_REC: ${{ needs.reproducibility.outputs.rec_sha256 }}
         run: |
           $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
           $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
+          $rec = (Get-FileHash dist/hp-thermal.build.jsonl -Algorithm SHA256).Hash.ToLower()
           if ($exe -ne $env:EXPECT_EXE) { throw "pre-sign exe digest != build output (build->sign custody break)" }
           if ($pdb -ne $env:EXPECT_PDB) { throw "pre-sign pdb digest != build output (build->sign custody break)" }
+          if (-not $env:EXPECT_REC -or $rec -ne $env:EXPECT_REC) { throw "pre-sign build record digest != build output (build->sign custody break)" }
           Write-Output "build->sign custody OK: signing the exact bytes build verified"
 
       - name: Azure login (OIDC, federated — no secret)
