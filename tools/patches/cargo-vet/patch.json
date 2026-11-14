@@ -2,19 +2,30 @@
   "schema": "hp-thermal/tool-patch/v1",
   "tool": "cargo-vet",
   "applies_to_rev": "cef4dd43a0b9d2d37febf0e5ad42abc6d9ea5472",
-  "reason": "discharge manifest technical lag: indicatif ^0.17 carries the unmaintained number_prefix (RUSTSEC-2025-0119); 0.18 drops it. The reqwest 0.12 and windows-sys Win32_System_IO intents of the previous patch were satisfied upstream at v0.10.3 and are shed.",
+  "reason": "discharge manifest technical lag: indicatif ^0.17 carries the unmaintained number_prefix (RUSTSEC-2025-0119); 0.18 drops it. The reqwest 0.12 and windows-sys Win32_System_IO intents of the previous patch were satisfied upstream at v0.10.3 and are shed. 0002: flate2 on its default pure-Rust backend (miniz_oxide) instead of C zlib (libz-sys): cargo-vet unpacks downloaded .crate archives with it, so the parser of that input is memory-safe, and libz-sys, pkg-config and vcpkg leave the build.",
   "intents": [
     {
       "crate": "indicatif",
       "min": "0.18"
+    },
+    {
+      "crate": "flate2",
+      "features": [
+        "rust_backend"
+      ],
+      "not": [
+        "zlib"
+      ]
     }
   ],
-  "shed_when": "upstream's manifest satisfies the intent natively - git apply --check conflicts the moment that line changes upstream; delete this directory in the same PR that adopts the newer rev",
+  "shed_when": "upstream's manifest satisfies an intent natively - git apply --check conflicts the moment that line changes upstream; drop that patch (or the directory, when none remain) in the same PR that adopts the newer rev",
   "refs": [
     "#255",
     "#264",
-    "hp-thermal#255 item 7"
+    "hp-thermal#255 item 7",
+    "#486",
+    "#489"
   ],
   "author": "bgonz808",
-  "timestamp": "2026-11-12"
+  "timestamp": "2026-11-13"
 }
