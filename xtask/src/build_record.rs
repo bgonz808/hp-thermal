@@ -222,15 +222,20 @@ pub(crate) fn linked(messages: &[Value]) -> BTreeSet<(String, String)> {
         .collect()
 }
 
-/// The build compiled the standard library itself (`-Z build-std`): its units come from the
-/// toolchain's `rust-src` tree, and its crates.io dependencies compile as ordinary lib units.
-pub(crate) fn builds_std(messages: &[Value]) -> bool {
-    messages.iter().any(|m| {
-        m["reason"] == "compiler-artifact"
-            && m["package_id"].as_str().is_some_and(|id| {
-                id.starts_with("path+file:") && id.contains("/lib/rustlib/src/rust/library/")
-            })
-    })
+/// Packages compiled as dependencies of the standard library (`-Z build-std`): cargo builds
+/// them with the `rustc-dep-of-std` feature, and they link into the binary through std.
+pub(crate) fn std_deps(messages: &[Value]) -> BTreeSet<(String, String)> {
+    messages
+        .iter()
+        .filter(|m| m["reason"] == "compiler-artifact")
+        .filter(|m| kinds(m).any(|k| LINKED_KINDS.contains(&k)))
+        .filter(|m| {
+            m["features"]
+                .as_array()
+                .is_some_and(|f| f.iter().any(|x| x == "rustc-dep-of-std"))
+        })
+        .filter_map(|m| package_of(m["package_id"].as_str()?).ok())
+        .collect()
 }
 
 /// Packages cargo compiled any unit of: linked code, a proc-macro, or a build script.
@@ -787,7 +792,7 @@ mod tests {
         assert_eq!(series("0.52.6"), "0.52");
         assert_eq!(series("0.0.7"), "0.0.7");
         assert_eq!(series("2.0.0-rc.1"), "2");
-        assert!(!builds_std(&parse(RAW).unwrap()));
+        assert!(std_deps(&parse(RAW).unwrap()).is_empty());
     }
 
     #[test]
