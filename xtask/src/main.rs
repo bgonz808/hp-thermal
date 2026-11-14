@@ -55,6 +55,7 @@ mod propose;
 /// `candidate-advance`: the bless cycle as idempotent stages (digest, vuln, caps, mal, summary).
 mod advance;
 mod build_env;
+mod build_record;
 mod cadence;
 mod formulate;
 mod record_vuln;
@@ -114,6 +115,7 @@ fn main() {
         Some("eox-check") => eox::run(&args),
         Some("cadence-check") => cadence::run(&args),
         Some("verify-build-env") => build_env::run(&args),
+        Some("build-record") => build_record::run(&args),
         Some("sbom-formulate") => formulate::run(&args),
         Some("freeze") => freeze::run(&args),
         Some("freeze-propose") => propose::run(&args),

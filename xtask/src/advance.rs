@@ -15,8 +15,10 @@
 //! Stages (each refuses to run when its precondition is missing; each commits what it wrote):
 //!   status   — what the branch records for the tool's current digest, what is missing.
 //!   digest   — `--run <producer run>`: verify the run built THIS branch's lock, read the
-//!              digest from its TOOLS.lock-format table, write it into TOOLS.lock. A superseded
-//!              never-blessed digest is retired per supply-chain/evidence/README.md rule 2.
+//!              digest from its TOOLS.lock-format table, write it into TOOLS.lock, and record
+//!              the run's build record (`build.jsonl`, verified against the producer's
+//!              statement). A superseded never-blessed digest is retired per
+//!              supply-chain/evidence/README.md rule 2.
 //!   vuln     — record-vuln with the digest-pinned auditor, upload the raw payload, verify it.
 //!   caps     — dispatch caps-measure (seed = main's blessed inventory unless `--seed`), wait,
 //!              verify the header names THIS lock, commit the inventory.
@@ -648,6 +650,25 @@ fn stage_digest(ctx: &Ctx, run_id: &str) -> Result<(), String> {
         );
         let out = rewrite_tools_lock(&text, &ctx.tool, &ctx.target, &new, &comment)?;
         std::fs::write(TOOLS_LOCK, out).map_err(|e| e.to_string())?;
+    }
+    let record = ctx.evidence_dir(&new).join(crate::build_record::FILE);
+    if record.exists() {
+        println!("  {} already recorded", record.display());
+    } else {
+        let raw = crate::build_record::record_line(&log, &ctx.tool, &ctx.target, &new).ok_or_else(
+            || {
+                format!(
+                    "run {run_id} logged no build record for {} {} {}",
+                    ctx.tool,
+                    ctx.target,
+                    short(&new)
+                )
+            },
+        )?;
+        let text = crate::build_record::fetch_evidence(&ctx.tool, &ctx.target, &new, &raw, run_id)?;
+        std::fs::create_dir_all(record.parent().unwrap()).map_err(|e| e.to_string())?;
+        std::fs::write(&record, text).map_err(|e| e.to_string())?;
+        println!("  build record {} verified and recorded", short(&raw));
     }
     ctx.commit(
         &[
