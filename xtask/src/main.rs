@@ -75,6 +75,9 @@ const RELEASE_EXE: &str = "app/target/x86_64-pc-windows-msvc/release/hp-thermal.
 /// build.rs names the pdb hp-thermal.pdb AT THE SOURCE (/PDB + /PDBALTPATH from CARGO_PKG_NAME,
 /// #168), matching the exe basename — no rename anywhere. This is the build-output name.
 const RELEASE_PDB: &str = "app/target/x86_64-pc-windows-msvc/release/hp-thermal.pdb";
+/// The release build's record: cargo's JSON messages from the auditable release build. The
+/// release pipeline stages it as `hp-thermal.build.jsonl`.
+const APP_BUILD_RECORD: &str = "app/target/build-record.jsonl";
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -612,6 +615,46 @@ fn cargo_tool_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
     }
 }
 
+/// `cargo_tool_step` with the tool's stdout written to `out` (stderr stays on the console).
+fn cargo_tool_step_to(desc: &str, cwd: &str, args: &[&str], out: &str) -> bool {
+    let program = match std::env::var("PINNED_TOOLS_DIR") {
+        Ok(dir) => format!("{dir}/cargo-{}{}", args[0], std::env::consts::EXE_SUFFIX),
+        Err(_) => "cargo".to_string(),
+    };
+    eprintln!("\n=== {desc} ===");
+    let file = std::path::Path::new(out)
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::File::create(out));
+    let file = match file {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!("FAIL: {desc} — cannot create {out} ({e})");
+            return false;
+        }
+    };
+    // Same toolchain-env scrub as `step`.
+    match Command::new(&program)
+        .current_dir(cwd)
+        .env_remove("RUSTUP_TOOLCHAIN")
+        .env_remove("CARGO")
+        .env_remove("RUSTC")
+        .args(args)
+        .stdout(file)
+        .status()
+    {
+        Ok(s) if s.success() => true,
+        Ok(s) => {
+            eprintln!("FAIL: {desc} (exit {:?})", s.code());
+            false
+        }
+        Err(e) => {
+            eprintln!("FAIL: {desc} — cannot run `{program}` ({e})");
+            false
+        }
+    }
+}
+
 /// Production-artifact tier: supply-chain policy + artifact attestation. Run in release.yml
 /// (which fetches the digest-pinned prebuilt tools, #138/#221). osv-scanner is
 /// intentionally NOT invoked here — RustSec exports to OSV in real time, so cargo-deny/
@@ -643,11 +686,29 @@ fn release_attest_checks() -> bool {
     );
     // xtask's cargo-vet exemptions are claims about the build graph; prove them every run.
     ok &= vet_guard::check();
-    ok &= cargo_tool_step(
+    // stdout is the build record (cargo's JSON messages); json-render-diagnostics keeps
+    // rustc's diagnostics rendered on stderr.
+    ok &= cargo_tool_step_to(
         "auditable release build",
         APP_DIR,
-        &["auditable", "build", "--release"],
+        &[
+            "auditable",
+            "build",
+            "--release",
+            "--message-format=json-render-diagnostics",
+        ],
+        APP_BUILD_RECORD,
     );
+    ok &= match build_record::check_file(APP_BUILD_RECORD, "hp-thermal") {
+        Ok(summary) => {
+            eprintln!("build record (hp-thermal): {summary}");
+            true
+        }
+        Err(e) => {
+            eprintln!("FAIL: build record — {e}");
+            false
+        }
+    };
     // #386: `audit bin` is fail-open on a binary without `.dep-v0` (partial list recovered
     // from panic strings, exit 0). Prove the section is there before the scan may count.
     ok &= auditable::check(RELEASE_EXE);

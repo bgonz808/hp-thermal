@@ -188,6 +188,8 @@ jobs:
           }
           if ($manifest['hp-thermal.exe'] -ne $exe) { throw "SHA256SUMS exe hash != computed" }
           if ($manifest['hp-thermal.pdb'] -ne $pdb) { throw "SHA256SUMS pdb hash != computed" }
+          $rec = (Get-FileHash dist/hp-thermal.build.jsonl -Algorithm SHA256).Hash.ToLower()
+          if ($manifest['hp-thermal.build.jsonl'] -ne $rec) { throw "SHA256SUMS build record hash != computed" }
           Write-Output "digest chain OK: published bytes are byte-identical to the signed, sealed bytes"
 
       # --- PASS 2 of 2 (#130): the AUTHORITATIVE run, on the exact bytes that ship.
@@ -645,10 +647,12 @@ jobs:
             echo
             echo "hp-thermal.pdb is optional debug symbols (to symbolicate a crash report); not needed to run. It is hashed in SHA256SUMS and carries the same provenance attestation as the exe."
             echo
+            echo "hp-thermal.build.jsonl is cargo's own record of the build (--message-format=json-render-diagnostics): every compiled unit with its features, and every build script's cfgs, env, and link directives. Same hashing and provenance as the exe."
+            echo
             echo "Details in the README and SECURITY.md."
           } > notes.md
           gh release create "${GITHUB_REF_NAME}" \
-            dist/hp-thermal.exe dist/hp-thermal.pdb dist/hp-thermal.cdx.json dist/SHA256SUMS \
+            dist/hp-thermal.exe dist/hp-thermal.pdb dist/hp-thermal.cdx.json dist/hp-thermal.build.jsonl dist/SHA256SUMS \
             dist/hp-thermal.provenance.sigstore.jsonl dist/hp-thermal.sbom.sigstore.jsonl             dist/hp-thermal.vsa.sigstore.jsonl \
             --repo "${GITHUB_REPOSITORY}" \
             --title "hp-thermal ${GITHUB_REF_NAME}" \

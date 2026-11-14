@@ -20,9 +20,13 @@ check, and more verifiable records.
   byte before signing, and signing checks that it received the compared bytes. The exe embeds
   no build paths. (#441, #447, #452, #474)
 - The SBOM's `formulation` declares the build environment: rustc commit, Visual Studio, the
-  MSVC toolset and its link.exe by hash, the Windows SDK, and the runner image. The toolset is
-  pinned in `.cargo/config.toml` and checked against the linker build recorded in the exe's
-  Rich header. (#457, #458, #459, #471)
+  MSVC toolset and its link.exe by hash, the Windows SDK, the runner image, and the build tools
+  the job ran, by source and hash. The toolset is pinned in `.cargo/config.toml` and checked
+  against the linker build recorded in the exe's Rich header. (#457, #458, #459, #471, #479)
+- The release carries `hp-thermal.build.jsonl`, cargo's own record of the build: every
+  compiled unit with its features, and every build script's cfgs, env, and link directives. It
+  is hashed in SHA256SUMS and covered by the provenance attestation, and both reproducibility
+  builds must record the same units. (#485)
 - Two new attestations: a Verification Summary Attestation, self-issued by the release
   workflow, records that it verified the provenance and SBOM against this repository's
   policy; a CycloneDX vulnerability disclosure report is attached after release by
@@ -31,11 +35,15 @@ check, and more verifiable records.
 ### Build-tool fleet
 - The producer moves into a reusable workflow, and tool fetches pin its signer identity.
   (#438, #445)
-- Each tool's report marks locked packages absent from the binary's own dependency record as
-  excluded, measured from the binary itself. (#469, #471)
+- Each tool build keeps cargo's record of what it compiled, attested together with the binary.
+  Each tool's report scopes locked packages from that record and from the binary's own
+  dependency list: build-only and uncompiled packages are excluded. (#469, #471, #483, #484)
 
 ### Gate and evidence
 - xtask is vetted at safe-to-deploy, dev dependencies included. (#439)
+- Build scripts' `rustc-cfg` directives, which the capabilities inventory never recorded, are
+  measured from the build record; a new one against the prior record needs a signed review.
+  (#484)
 - Hardening flags and time bounds move into policy files: `hardening.json` and
   `cadence.json`. (#444, #455)
 - The app's post-release evidence runs as `cargo xtask release-advance` stages, and release
