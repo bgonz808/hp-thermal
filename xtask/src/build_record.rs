@@ -293,6 +293,56 @@ pub(crate) fn cfg_env_directives(messages: &[Value]) -> BTreeMap<String, Vec<Str
     out
 }
 
+/// Per package series, `(name, link libraries, link-search paths)` its build script gave rustc,
+/// as cargo recorded them (`linked_libs`, `linked_paths`).
+pub(crate) fn link_directives(
+    messages: &[Value],
+) -> BTreeMap<String, (String, Vec<String>, Vec<String>)> {
+    let mut out: BTreeMap<String, (String, Vec<String>, Vec<String>)> = BTreeMap::new();
+    for m in messages
+        .iter()
+        .filter(|m| m["reason"] == "build-script-executed")
+    {
+        let Some(Ok((name, version))) = m["package_id"].as_str().map(package_of) else {
+            continue;
+        };
+        let e = out
+            .entry(format!("{name}@{}", series(&version)))
+            .or_insert_with(|| (name.clone(), Vec::new(), Vec::new()));
+        let strs = |k: &str| {
+            m[k].as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        };
+        e.1.extend(strs("linked_libs"));
+        e.2.extend(strs("linked_paths"));
+        e.1.sort();
+        e.1.dedup();
+        e.2.sort();
+        e.2.dedup();
+    }
+    out
+}
+
+/// The link libraries in `head` that the prior record lacks for the same package series, as
+/// `name@series: lib`. A new static library is new native code in the binary; a new dylib, a new
+/// import. Either is reviewed.
+pub(crate) fn new_link_libs(head: &[Value], prior: &[Value]) -> Vec<String> {
+    let before = link_directives(prior);
+    let mut out = Vec::new();
+    for (key, (_, libs, _)) in link_directives(head) {
+        for l in libs {
+            if !before.get(&key).is_some_and(|b| b.1.contains(&l)) {
+                out.push(format!("{key}: {l}"));
+            }
+        }
+    }
+    out
+}
+
 /// The `rustc-cfg` values in `head` that the prior record lacks for the same package series,
 /// as `name@series: cfg`.
 pub(crate) fn new_cfgs(head: &[Value], prior: &[Value]) -> Vec<String> {

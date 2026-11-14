@@ -819,10 +819,12 @@ type Custody<'a> = &'a dyn Fn(&str, &ToolLine) -> Result<Vec<Value>, String>;
 
 /// The build axis: cargo's record of the build that produced the digest (`build.jsonl`).
 ///   * missing, unparseable, or failing custody (`record_custody`): UNEVALUATED.
-///   * a `rustc-env` the prior record lacks for the same package series: HARD-STOP.
-///   * a `rustc-cfg` the prior record lacks, no prior record to compare, or a record added or
-///     rewritten under a digest already pinned (`evidence_edit`): RAISE, signed by a `build` ack
-///     bound to the record's bytes. The template lists the new cfgs under `finding`.
+///   * a `rustc-env` the prior record lacks for the same package series, or a link search path
+///     outside the package's own directories and the policy's pinned-toolset folders: HARD-STOP.
+///   * a `rustc-cfg` or link library the prior record lacks, no prior record to compare, or a
+///     record added or rewritten under a digest already pinned (`evidence_edit`): RAISE, signed
+///     by a `build` ack bound to the record's bytes. The template lists what is new under
+///     `finding`.
 ///   * otherwise ALLOW.
 fn build_verdict(
     evidence_dir: &Path,
@@ -872,14 +874,25 @@ fn build_verdict(
     if let Some(why) = floors.build_record_stop(&msgs, prior.as_deref()) {
         return Verdict::HardStop(why);
     }
+    let toolset = std::fs::read_to_string(".cargo/config.toml")
+        .ok()
+        .and_then(|c| crate::build_env::pin(&c).ok())
+        .map(|p| p.toolset);
+    if let Some(why) = floors.record_link_search_stop(&msgs, toolset.as_deref()) {
+        return Verdict::HardStop(why);
+    }
     let sha = crate::sha256::sha256_hex(&bytes);
     let new_cfgs = prior
         .as_deref()
         .map(|p| crate::build_record::new_cfgs(&msgs, p))
         .unwrap_or_default();
-    if prior.is_some() && !evidence_edit && new_cfgs.is_empty() {
+    let new_libs = prior
+        .as_deref()
+        .map(|p| crate::build_record::new_link_libs(&msgs, p))
+        .unwrap_or_default();
+    if prior.is_some() && !evidence_edit && new_cfgs.is_empty() && new_libs.is_empty() {
         return Verdict::Allow(format!(
-            "build record {}: no rustc-cfg or rustc-env beyond the prior record",
+            "build record {}: no rustc-cfg, rustc-env, or link library beyond the prior record",
             &sha[..12]
         ));
     }
@@ -889,8 +902,13 @@ fn build_verdict(
         "no prior record to compare".to_string()
     } else {
         format!(
-            "rustc-cfg new against the prior record: {}",
-            new_cfgs.join(", ")
+            "new against the prior record: {}",
+            new_cfgs
+                .iter()
+                .chain(&new_libs)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ")
         )
     };
     if ack_covers_evidence(acks, "build", &head.sha, &sha) {
@@ -902,8 +920,15 @@ fn build_verdict(
         let mut template: Value =
             serde_json::from_str(&ack_template_evidence("build", tool, &head.sha, &sha))
                 .expect("template is JSON");
+        let mut finding = serde_json::Map::new();
         if !new_cfgs.is_empty() {
-            template["finding"] = serde_json::json!({ "new_rustc_cfg": new_cfgs });
+            finding.insert("new_rustc_cfg".into(), serde_json::json!(new_cfgs));
+        }
+        if !new_libs.is_empty() {
+            finding.insert("new_link_lib".into(), serde_json::json!(new_libs));
+        }
+        if !finding.is_empty() {
+            template["finding"] = Value::Object(finding);
         }
         Verdict::RaiseUncovered {
             covered: Vec::new(),
