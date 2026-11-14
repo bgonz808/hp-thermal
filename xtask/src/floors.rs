@@ -37,7 +37,7 @@ pub struct Floors {
     /// so the policy file shows what is enforced.
     pub build_link_arg: bool,
     pub build_foreign_link_search: bool,
-    pub build_new_env_cfg: bool,
+    pub build_new_env: bool,
 }
 
 pub fn load(path: &Path) -> Result<Floors, String> {
@@ -102,7 +102,7 @@ pub fn parse(text: &str) -> Result<Floors, String> {
         caps_new_grants,
         build_link_arg: flag("/build_instructions/hard_stop_link_arg"),
         build_foreign_link_search: flag("/build_instructions/hard_stop_foreign_link_search"),
-        build_new_env_cfg: flag("/build_instructions/hard_stop_new_rustc_env_cfg"),
+        build_new_env: flag("/build_instructions/hard_stop_new_rustc_env"),
     })
 }
 
@@ -332,10 +332,10 @@ impl Floors {
         })
     }
 
-    /// The relative `rustc-cfg` / `rustc-env` rule on cargo's build record (`build.jsonl`): a
-    /// directive a package's build script emitted that the prior blessed record for the same
-    /// package lacks. cackle never records `rustc-cfg`; this is the arm that measures it, as
-    /// emitted for the binary's own target. No prior record: nothing to compare.
+    /// The relative `rustc-env` rule on cargo's build record (`build.jsonl`): an env a package's
+    /// build script set that the prior blessed record for the same package series lacks, as
+    /// emitted for the binary's own target. No prior record: nothing to compare. A new
+    /// `rustc-cfg` is the gate's build axis, a RAISE, not a floor.
     pub fn build_record_stop(&self, head: &[Value], prior: Option<&[Value]>) -> Option<String> {
         let prior = prior.map(crate::build_record::cfg_env_directives);
         let mut hits = Vec::new();
@@ -358,7 +358,7 @@ impl Floors {
     }
 
     fn build_armed(&self) -> bool {
-        self.build_link_arg || self.build_foreign_link_search || self.build_new_env_cfg
+        self.build_link_arg || self.build_foreign_link_search || self.build_new_env
     }
 
     /// Classify one `cargo:` directive a build script emitted (#382). `Some(why)` is a floor.
@@ -420,10 +420,11 @@ impl Floors {
                 }
                 (!bad.is_empty()).then(|| format!("{emits}: {}", bad.join("; ")))
             }
-            "rustc-env" | "rustc-cfg" => match prior {
-                Some(p)
-                    if self.build_new_env_cfg && !p.iter().any(|x| normalize_directive(x) == d) =>
-                {
+            // A new rustc-env is a floor. A new rustc-cfg is not: build scripts set cfgs by
+            // probing the compiler, so toolchain bumps change them; the gate's build axis raises
+            // each one for a signed review instead.
+            "rustc-env" => match prior {
+                Some(p) if self.build_new_env && !p.iter().any(|x| normalize_directive(x) == d) => {
                     Some(format!(
                         "{emits}: not in the prior blessed inventory for this package"
                     ))
@@ -431,6 +432,7 @@ impl Floors {
                 _ => None,
             },
             "rustc-link-lib"
+            | "rustc-cfg"
             | "rustc-check-cfg"
             | "rerun-if-changed"
             | "rerun-if-env-changed"
@@ -719,7 +721,7 @@ mod tests {
         assert!(f.mal_sandbox_malicious);
         assert_eq!(f.mal_min_engines, Some(50));
         assert_eq!(f.caps_new_grants, ["process", "net"]);
-        assert!(f.build_link_arg && f.build_foreign_link_search && f.build_new_env_cfg);
+        assert!(f.build_link_arg && f.build_foreign_link_search && f.build_new_env);
     }
 
     #[test]
@@ -1038,7 +1040,7 @@ mod tests {
     }
 
     #[test]
-    fn rustc_env_and_cfg_are_floors_only_when_new_against_a_prior() {
+    fn rustc_env_is_a_floor_only_when_new_against_a_prior_and_cfg_never_is() {
         let f = policy();
         let prior = with_directives(
             "ring",
@@ -1066,20 +1068,24 @@ mod tests {
                 "cargo:rustc-cfg=unsafe_fast_path",
             ],
         );
+        assert_eq!(
+            f.caps_stop(&new_cfg, Some(&prior)),
+            None,
+            "a new cfg is raised by the build axis, not floored"
+        );
+        let new_env = with_directives("ring", &["cargo:rustc-env=RUSTFLAGS_OVERRIDE=1"]);
         assert!(
-            f.caps_stop(&new_cfg, Some(&prior))
+            f.caps_stop(&new_env, Some(&prior))
                 .unwrap()
                 .contains("not in the prior blessed inventory")
         );
-        let new_env = with_directives("ring", &["cargo:rustc-env=RUSTFLAGS_OVERRIDE=1"]);
-        assert!(f.caps_stop(&new_env, Some(&prior)).is_some());
-        let other_pkg_prior = with_directives("other", &["cargo:rustc-cfg=unsafe_fast_path"]);
+        let other_pkg_prior = with_directives("other", &["cargo:rustc-env=RUSTFLAGS_OVERRIDE=1"]);
         assert!(
-            f.caps_stop(&new_cfg, Some(&other_pkg_prior)).is_some(),
+            f.caps_stop(&new_env, Some(&other_pkg_prior)).is_some(),
             "the prior is per package"
         );
         assert_eq!(
-            f.caps_stop(&new_cfg, None),
+            f.caps_stop(&new_env, None),
             None,
             "no prior: the ack path, not the floor"
         );
@@ -1241,34 +1247,38 @@ build.allow_build_instructions = [\"cargo:x=1
     }
 
     #[test]
-    fn build_record_arm_measures_rustc_cfg_against_the_prior_record() {
+    fn build_record_arm_floors_a_new_env_but_not_a_new_cfg() {
         let f = policy();
-        let rec = |cfgs: &str| {
+        let rec = |cfgs: &str, env: &str| {
             let raw = format!(
                 "{}\n{}\n",
                 format_args!(
-                    r#"{{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154","linked_libs":[],"linked_paths":[],"cfgs":[{cfgs}],"env":[],"out_dir":"o"}}"#
+                    r#"{{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.154","linked_libs":[],"linked_paths":[],"cfgs":[{cfgs}],"env":[{env}],"out_dir":"o"}}"#
                 ),
                 r#"{"reason":"build-finished","success":true}"#
             );
             crate::build_record::parse(&raw).unwrap()
         };
-        let base = rec(r#""fast_arithmetic=\"64\"""#);
-        let same = rec(r#""fast_arithmetic=\"64\"""#);
-        let more = rec(r#""fast_arithmetic=\"64\"","unsafe_fast_path""#);
-        assert_eq!(f.build_record_stop(&same, Some(&base)), None);
+        let base = rec(r#""a""#, "");
+        let more_cfg = rec(r#""a","b""#, "");
+        let more_env = rec(r#""a""#, r#"["K","v"]"#);
+        assert_eq!(f.build_record_stop(&more_cfg, Some(&base)), None);
         assert!(
-            f.build_record_stop(&more, Some(&base))
+            f.build_record_stop(&more_env, Some(&base))
                 .unwrap()
-                .contains("cargo:rustc-cfg=unsafe_fast_path")
+                .contains("cargo:rustc-env=K=v")
         );
         assert_eq!(
-            f.build_record_stop(&more, None),
+            f.build_record_stop(&more_env, None),
             None,
             "no prior: nothing to compare"
         );
         let mut off = policy();
-        off.build_new_env_cfg = false;
-        assert_eq!(off.build_record_stop(&more, Some(&base)), None);
+        off.build_new_env = false;
+        assert_eq!(off.build_record_stop(&more_env, Some(&base)), None);
+        assert_eq!(
+            crate::build_record::new_cfgs(&more_cfg, &base),
+            vec!["serde_json@1: b".to_string()]
+        );
     }
 }

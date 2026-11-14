@@ -288,6 +288,27 @@ pub(crate) fn cfg_env_directives(messages: &[Value]) -> BTreeMap<String, Vec<Str
     out
 }
 
+/// The `rustc-cfg` values in `head` that the prior record lacks for the same package series,
+/// as `name@series: cfg`.
+pub(crate) fn new_cfgs(head: &[Value], prior: &[Value]) -> Vec<String> {
+    let before = cfg_env_directives(prior);
+    let mut out = Vec::new();
+    for (pkg, directives) in cfg_env_directives(head) {
+        for d in directives
+            .iter()
+            .filter(|d| d.starts_with("cargo:rustc-cfg="))
+        {
+            if !before.get(&pkg).is_some_and(|b| b.contains(d)) {
+                out.push(format!(
+                    "{pkg}: {}",
+                    d.trim_start_matches("cargo:rustc-cfg=")
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// The store asset name for a record: the binary's asset name, `.exe` dropped, plus the record's
 /// own digest prefix.
 pub(crate) fn asset_name(tool: &str, target: &str, digest: &str, raw_sha256: &str) -> String {

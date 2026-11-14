@@ -819,9 +819,10 @@ type Custody<'a> = &'a dyn Fn(&str, &ToolLine) -> Result<Vec<Value>, String>;
 
 /// The build axis: cargo's record of the build that produced the digest (`build.jsonl`).
 ///   * missing, unparseable, or failing custody (`record_custody`): UNEVALUATED.
-///   * a `rustc-cfg` / `rustc-env` the prior record lacks for the same package: HARD-STOP.
-///   * no prior record to compare, or a record added or rewritten under a digest already pinned
-///     (`evidence_edit`): RAISE, signed by a `build` ack bound to the record's bytes.
+///   * a `rustc-env` the prior record lacks for the same package series: HARD-STOP.
+///   * a `rustc-cfg` the prior record lacks, no prior record to compare, or a record added or
+///     rewritten under a digest already pinned (`evidence_edit`): RAISE, signed by a `build` ack
+///     bound to the record's bytes. The template lists the new cfgs under `finding`.
 ///   * otherwise ALLOW.
 fn build_verdict(
     evidence_dir: &Path,
@@ -872,16 +873,25 @@ fn build_verdict(
         return Verdict::HardStop(why);
     }
     let sha = crate::sha256::sha256_hex(&bytes);
-    if prior.is_some() && !evidence_edit {
+    let new_cfgs = prior
+        .as_deref()
+        .map(|p| crate::build_record::new_cfgs(&msgs, p))
+        .unwrap_or_default();
+    if prior.is_some() && !evidence_edit && new_cfgs.is_empty() {
         return Verdict::Allow(format!(
             "build record {}: no rustc-cfg or rustc-env beyond the prior record",
             &sha[..12]
         ));
     }
     let what = if evidence_edit {
-        "added or rewritten under a pinned digest"
+        "added or rewritten under a pinned digest".to_string()
+    } else if prior.is_none() {
+        "no prior record to compare".to_string()
     } else {
-        "no prior record to compare"
+        format!(
+            "rustc-cfg new against the prior record: {}",
+            new_cfgs.join(", ")
+        )
     };
     if ack_covers_evidence(acks, "build", &head.sha, &sha) {
         Verdict::RaiseCovered(vec![format!(
@@ -889,9 +899,15 @@ fn build_verdict(
             head.sha
         )])
     } else {
+        let mut template: Value =
+            serde_json::from_str(&ack_template_evidence("build", tool, &head.sha, &sha))
+                .expect("template is JSON");
+        if !new_cfgs.is_empty() {
+            template["finding"] = serde_json::json!({ "new_rustc_cfg": new_cfgs });
+        }
         Verdict::RaiseUncovered {
             covered: Vec::new(),
-            needed: vec![ack_template_evidence("build", tool, &head.sha, &sha)],
+            needed: vec![template.to_string()],
         }
     }
 }
@@ -1968,16 +1984,30 @@ mod tests {
             Verdict::RaiseCovered(_)
         ));
 
-        // A prior with the same cfgs: allow. A new cfg against the prior: floor, ack or not.
+        // A prior with the same cfgs: allow. A new cfg against the prior: RAISE, the template
+        // naming it, covered once a build ack names these bytes.
         assert!(matches!(
             verdict(Some(base.clone()), &none, false),
             Verdict::Allow(_)
         ));
         let more = record(r#""a","b""#);
         std::fs::write(rec.join(crate::build_record::FILE), &more).unwrap();
+        let Verdict::RaiseUncovered { needed, .. } = verdict(Some(base.clone()), &signed, false)
+        else {
+            panic!("a new cfg must ask for a sign-off")
+        };
+        assert!(
+            needed[0].contains(r#""new_rustc_cfg":["serde_json@1: b"]"#),
+            "{}",
+            needed[0]
+        );
+        let more_sha = crate::sha256::sha256_hex(more.as_bytes());
+        let signed_more = ack(&format!(
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"build","product":{{"name":"t","digest":"{head}"}},"evidence_sha256":"{more_sha}","status":"reviewed","status_notes":"reviewed","author":"a","timestamp":"t","refs":[]}}"#
+        ));
         assert!(matches!(
-            verdict(Some(base.clone()), &signed, false),
-            Verdict::HardStop(_)
+            verdict(Some(base.clone()), &signed_more, false),
+            Verdict::RaiseCovered(_)
         ));
 
         // Rewritten under a pinned digest: signed again even without a new cfg.
