@@ -42,7 +42,8 @@ check, and more verifiable records.
 ### Gate and evidence
 - xtask is vetted at safe-to-deploy, dev dependencies included. (#439)
 - Build scripts' `rustc-cfg` directives, which the capabilities inventory never recorded, are
-  measured from the build record; a new one against the prior record is a floor. (#484)
+  measured from the build record; a new one against the prior record needs a signed review.
+  (#484)
 - Hardening flags and time bounds move into policy files: `hardening.json` and
   `cadence.json`. (#444, #455)
 - The app's post-release evidence runs as `cargo xtask release-advance` stages, and release
