@@ -44,6 +44,9 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Verify MSVC toolchain authenticity (before anything compiles)
+        uses: ./.github/actions/verify-msvc
+
       - name: Install pinned toolchain
         uses: ./.github/actions/install-toolchain
 
