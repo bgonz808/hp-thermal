@@ -159,11 +159,19 @@ jobs:
           set -euo pipefail
           cargo build --release --locked --quiet --manifest-path xtask/Cargo.toml
           X=xtask/target/release/xtask.exe
-          n=0; fail=0
+          n=0; fail=0; kept=0
+          # Tool reports are regenerated only for digests TOOLS.lock pins now. A digest a bless
+          # superseded keeps its last report as history (evidence rule 2: blessed evidence is
+          # immutable); its binary is no longer pinned, so it is not regenerated. App reports are
+          # all checked: each belongs to a published release.
+          pinned=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' | awk '{print $1"/"$5}')
           for f in supply-chain/evidence/*/*/vdr.cdx.json; do
             [ -f "$f" ] || continue
-            n=$((n+1))
             dir=${f%/vdr.cdx.json}; digest=${dir##*/}; product=${dir%/*}; product=${product##*/}
+            if [ "$product" != "hp-thermal" ] && ! grep -qx "$product/$digest" <<<"$pinned"; then
+              echo "kept as history (superseded, not pinned): $f"; kept=$((kept+1)); continue
+            fi
+            n=$((n+1))
             args=(vdr check --product "$product" --digest "$digest")
             if [ "$product" = "hp-thermal" ]; then
               # Find the release whose exe is this digest, then the SBOM shipped beside it.
@@ -181,6 +189,6 @@ jobs:
             fi
             if ! "$X" "${args[@]}"; then echo "::error::$f: differs from what the evidence regenerates"; fail=1; fi
           done
-          echo "VDR check: $n report(s)"
+          echo "VDR check: $n report(s) regenerated, $kept kept as history"
           [ "$n" -gt 0 ] || { echo "::error::no committed VDRs found (fail-closed)"; exit 1; }
           exit "$fail"
