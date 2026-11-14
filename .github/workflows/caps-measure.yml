@@ -130,7 +130,8 @@ jobs:
           # Measure under the Bubblewrap sandbox whatever the seed recorded (#50: sandbox ON in
           # CI). The written inventory records what was MEASURED, so the first Bubblewrap record
           # after a Disabled seed differs in its [sandbox] block and takes a human signature once.
-          sed -e '/^\[sandbox\]/,/^\[/ s/^kind = "Disabled"/kind = "Bubblewrap"/' "$src" > src/cackle.toml
+          # Read the fetched copy: on the default path $src is a `git show` spec, not a file.
+          sed -e '/^\[sandbox\]/,/^\[/ s/^kind = "Disabled"/kind = "Bubblewrap"/' seed.toml > src/cackle.toml
           # AS BUILT (#387): cackle's documented `[common] build_flags` (default ["--all-targets"]) is
           # set to exactly the producer's flavor from tools/build-args/<tool>, with no --all-targets:
           # the shipped artifact has no test or example targets, and features nobody builds are not
