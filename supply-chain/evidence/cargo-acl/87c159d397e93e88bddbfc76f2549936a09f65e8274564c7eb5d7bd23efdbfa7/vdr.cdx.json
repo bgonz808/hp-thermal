@@ -17,7 +17,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -50,7 +50,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -141,7 +141,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -174,7 +174,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -207,7 +207,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -240,7 +240,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -302,7 +302,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -335,7 +335,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -542,7 +542,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -662,7 +662,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -695,7 +695,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -722,7 +722,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -755,7 +755,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -817,7 +817,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -879,7 +879,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -912,7 +912,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -945,7 +945,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -959,6 +959,7 @@
       ],
       "name": "clap_derive",
       "purl": "pkg:cargo/clap_derive@4.6.1",
+      "scope": "excluded",
       "type": "library",
       "version": "4.6.1"
     },
@@ -978,7 +979,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1011,7 +1012,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1044,7 +1045,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1164,7 +1165,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1632,7 +1633,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1665,7 +1666,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1756,7 +1757,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1876,7 +1877,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2141,7 +2142,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2174,7 +2175,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2265,7 +2266,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2298,7 +2299,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2312,6 +2313,7 @@
       ],
       "name": "heck",
       "purl": "pkg:cargo/heck@0.5.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.5.0"
     },
@@ -2447,7 +2449,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2480,7 +2482,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2542,7 +2544,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2575,7 +2577,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2637,7 +2639,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2815,7 +2817,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2877,7 +2879,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2968,7 +2970,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3059,7 +3061,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3179,7 +3181,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3415,7 +3417,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3448,7 +3450,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3974,7 +3976,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3988,6 +3990,7 @@
       ],
       "name": "proc-macro2",
       "purl": "pkg:cargo/proc-macro2@1.0.106",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.106"
     },
@@ -4007,7 +4010,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4021,6 +4024,7 @@
       ],
       "name": "quote",
       "purl": "pkg:cargo/quote@1.0.45",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.45"
     },
@@ -4098,7 +4102,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4479,7 +4483,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4512,7 +4516,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4574,7 +4578,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4607,7 +4611,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4621,6 +4625,7 @@
       ],
       "name": "rustversion",
       "purl": "pkg:cargo/rustversion@1.0.22",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.22"
     },
@@ -4640,7 +4645,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4731,7 +4736,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4764,7 +4769,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4797,7 +4802,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4830,7 +4835,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4844,6 +4849,7 @@
       ],
       "name": "serde_derive",
       "purl": "pkg:cargo/serde_derive@1.0.228",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.228"
     },
@@ -4863,7 +4869,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4896,7 +4902,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5045,7 +5051,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5165,7 +5171,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5227,7 +5233,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5347,7 +5353,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5361,6 +5367,7 @@
       ],
       "name": "syn",
       "purl": "pkg:cargo/syn@2.0.117",
+      "scope": "excluded",
       "type": "library",
       "version": "2.0.117"
     },
@@ -5380,7 +5387,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5529,7 +5536,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5591,7 +5598,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5605,6 +5612,7 @@
       ],
       "name": "thiserror-impl",
       "purl": "pkg:cargo/thiserror-impl@2.0.18",
+      "scope": "excluded",
       "type": "library",
       "version": "2.0.18"
     },
@@ -5682,7 +5690,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5715,7 +5723,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5748,7 +5756,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5781,7 +5789,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5814,7 +5822,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5876,7 +5884,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5967,7 +5975,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6000,7 +6008,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6149,7 +6157,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6878,7 +6886,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7114,7 +7122,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-acl-87c159d397e9-linux-x86_64 (sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7641,7 +7649,7 @@
   },
   "serialNumber": "urn:uuid:95ac68f4-c3bd-455f-8709-4507732c062c",
   "specVersion": "1.6",
-  "version": 3,
+  "version": 4,
   "vulnerabilities": [
     {
       "advisories": [

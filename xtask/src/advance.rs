@@ -652,19 +652,21 @@ fn stage_digest(ctx: &Ctx, run_id: &str) -> Result<(), String> {
         std::fs::write(TOOLS_LOCK, out).map_err(|e| e.to_string())?;
     }
     let record = ctx.evidence_dir(&new).join(crate::build_record::FILE);
-    if record.exists() {
-        println!("  {} already recorded", record.display());
+    if let Ok(text) = std::fs::read_to_string(&record) {
+        // Already recorded: proven, not assumed.
+        crate::build_record::verify_custody(&text, &ctx.tool, &ctx.target, &new)
+            .map_err(|e| format!("{}: {e}", record.display()))?;
+        println!("  {} already recorded; custody verified", record.display());
     } else {
-        let raw = crate::build_record::record_line(&log, &ctx.tool, &ctx.target, &new).ok_or_else(
-            || {
+        let raw = crate::build_record::record_line(&log, &ctx.tool, &ctx.target, &new)?
+            .ok_or_else(|| {
                 format!(
                     "run {run_id} logged no build record for {} {} {}",
                     ctx.tool,
                     ctx.target,
                     short(&new)
                 )
-            },
-        )?;
+            })?;
         let text = crate::build_record::fetch_evidence(&ctx.tool, &ctx.target, &new, &raw, run_id)?;
         std::fs::create_dir_all(record.parent().unwrap()).map_err(|e| e.to_string())?;
         std::fs::write(&record, text).map_err(|e| e.to_string())?;

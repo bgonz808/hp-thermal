@@ -104,7 +104,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -166,7 +166,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -199,7 +199,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -232,7 +232,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -265,7 +265,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -298,7 +298,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -331,7 +331,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -422,7 +422,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -436,6 +436,7 @@
       ],
       "name": "autocfg",
       "purl": "pkg:cargo/autocfg@1.1.0",
+      "scope": "excluded",
       "type": "library",
       "version": "1.1.0"
     },
@@ -513,7 +514,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -662,7 +663,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -782,7 +783,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -815,7 +816,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -842,7 +843,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -875,7 +876,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -908,7 +909,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -941,7 +942,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -974,7 +975,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1007,7 +1008,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1040,7 +1041,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1054,6 +1055,7 @@
       ],
       "name": "clap_derive",
       "purl": "pkg:cargo/clap_derive@4.4.7",
+      "scope": "excluded",
       "type": "library",
       "version": "4.4.7"
     },
@@ -1073,7 +1075,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1164,7 +1166,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1342,7 +1344,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1369,7 +1371,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1396,7 +1398,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1487,7 +1489,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1607,7 +1609,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1640,7 +1642,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1673,7 +1675,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1851,7 +1853,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1913,7 +1915,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -1975,7 +1977,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2095,7 +2097,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2128,7 +2130,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2142,6 +2144,7 @@
       ],
       "name": "heck",
       "purl": "pkg:cargo/heck@0.4.1",
+      "scope": "excluded",
       "type": "library",
       "version": "0.4.1"
     },
@@ -2161,7 +2164,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2175,6 +2178,7 @@
       ],
       "name": "heck",
       "purl": "pkg:cargo/heck@0.5.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.5.0"
     },
@@ -2194,7 +2198,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2227,7 +2231,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2260,7 +2264,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2293,7 +2297,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2326,7 +2330,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2359,7 +2363,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2392,7 +2396,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2425,7 +2429,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2458,7 +2462,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2491,7 +2495,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2524,7 +2528,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2557,7 +2561,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2571,6 +2575,7 @@
       ],
       "name": "icu_provider_macros",
       "purl": "pkg:cargo/icu_provider_macros@1.5.0",
+      "scope": "excluded",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2590,7 +2595,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2623,7 +2628,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2714,7 +2719,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2805,7 +2810,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -2896,7 +2901,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3103,7 +3108,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3165,7 +3170,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3198,7 +3203,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3463,7 +3468,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3583,7 +3588,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3645,7 +3650,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3678,7 +3683,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3711,7 +3716,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3831,7 +3836,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3864,7 +3869,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3897,7 +3902,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3930,7 +3935,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3944,6 +3949,7 @@
       ],
       "name": "phf_generator",
       "purl": "pkg:cargo/phf_generator@0.11.2",
+      "scope": "excluded",
       "type": "library",
       "version": "0.11.2"
     },
@@ -3963,7 +3969,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -3977,6 +3983,7 @@
       ],
       "name": "phf_macros",
       "purl": "pkg:cargo/phf_macros@0.11.2",
+      "scope": "excluded",
       "type": "library",
       "version": "0.11.2"
     },
@@ -3996,7 +4003,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4087,7 +4094,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4265,7 +4272,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4298,7 +4305,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4331,7 +4338,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4364,7 +4371,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4378,6 +4385,7 @@
       ],
       "name": "rand",
       "purl": "pkg:cargo/rand@0.8.7",
+      "scope": "excluded",
       "type": "library",
       "version": "0.8.7"
     },
@@ -4397,7 +4405,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4411,6 +4419,7 @@
       ],
       "name": "rand_core",
       "purl": "pkg:cargo/rand_core@0.6.4",
+      "scope": "excluded",
       "type": "library",
       "version": "0.6.4"
     },
@@ -4488,7 +4497,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4521,7 +4530,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4535,6 +4544,7 @@
       ],
       "name": "ref-cast-impl",
       "purl": "pkg:cargo/ref-cast-impl@1.0.25",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.25"
     },
@@ -4554,7 +4564,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4587,7 +4597,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4620,7 +4630,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4769,7 +4779,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4860,7 +4870,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4893,7 +4903,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4926,7 +4936,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4959,7 +4969,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -4973,6 +4983,7 @@
       ],
       "name": "serde_derive",
       "purl": "pkg:cargo/serde_derive@1.0.229",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.229"
     },
@@ -4992,7 +5003,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5025,7 +5036,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5116,7 +5127,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5149,7 +5160,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5211,7 +5222,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5244,7 +5255,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5277,7 +5288,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5310,7 +5321,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5343,7 +5354,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5357,6 +5368,7 @@
       ],
       "name": "strum_macros",
       "purl": "pkg:cargo/strum_macros@0.28.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.28.0"
     },
@@ -5376,7 +5388,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5409,7 +5421,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5423,6 +5435,7 @@
       ],
       "name": "syn",
       "purl": "pkg:cargo/syn@3.0.10",
+      "scope": "excluded",
       "type": "library",
       "version": "3.0.10"
     },
@@ -5442,7 +5455,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5556,7 +5569,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5589,7 +5602,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5622,7 +5635,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5636,6 +5649,7 @@
       ],
       "name": "thiserror-impl",
       "purl": "pkg:cargo/thiserror-impl@1.0.69",
+      "scope": "excluded",
       "type": "library",
       "version": "1.0.69"
     },
@@ -5655,7 +5669,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5669,6 +5683,7 @@
       ],
       "name": "thiserror-impl",
       "purl": "pkg:cargo/thiserror-impl@2.0.18",
+      "scope": "excluded",
       "type": "library",
       "version": "2.0.18"
     },
@@ -5717,7 +5732,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5750,7 +5765,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5783,7 +5798,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5797,6 +5812,7 @@
       ],
       "name": "time-macros",
       "purl": "pkg:cargo/time-macros@0.2.32",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.32"
     },
@@ -5816,7 +5832,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5849,7 +5865,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5882,7 +5898,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5915,7 +5931,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -5948,7 +5964,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6155,7 +6171,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6188,7 +6204,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6279,7 +6295,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6312,7 +6328,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6345,7 +6361,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6378,7 +6394,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6411,7 +6427,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6444,7 +6460,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6506,7 +6522,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -6520,6 +6536,7 @@
       ],
       "name": "version_check",
       "purl": "pkg:cargo/version_check@0.9.4",
+      "scope": "excluded",
       "type": "library",
       "version": "0.9.4"
     },
@@ -6974,7 +6991,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7007,7 +7024,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7069,7 +7086,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7131,7 +7148,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7744,7 +7761,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7806,7 +7823,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7839,7 +7856,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7872,7 +7889,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7905,7 +7922,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7938,7 +7955,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -7971,7 +7988,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -8033,7 +8050,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -8066,7 +8083,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -8157,7 +8174,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -8190,7 +8207,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -8223,7 +8240,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -8256,7 +8273,7 @@
               {
                 "confidence": 1.0,
                 "technique": "binary-analysis",
-                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d); resolved graph, a superset of compiled crates"
+                "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
               }
             ]
           }
@@ -9205,6 +9222,6 @@
   },
   "serialNumber": "urn:uuid:e3f4f6fe-6be5-4535-867c-16b5c1874e9f",
   "specVersion": "1.6",
-  "version": 3,
+  "version": 4,
   "vulnerabilities": []
 }

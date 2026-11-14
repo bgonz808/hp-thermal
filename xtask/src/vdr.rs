@@ -25,7 +25,7 @@
 //! Determinism: `metadata.timestamp` is the scan date from the header, not wall-clock, and the
 //! serial number is derived from the subject digest, so `check` can regenerate and diff.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde_json::{Map, Value, json};
@@ -368,20 +368,44 @@ pub(crate) fn build(
     Ok((doc, burn_down))
 }
 
-/// `(name, version)` of every package recorded in a cargo-auditable `.dep-v0` section (zlib-
-/// compressed JSON). Runtime and build kinds are both recorded by cargo-auditable; the root is too.
-pub(crate) fn packages_from_dep_v0(section: &[u8]) -> Result<BTreeSet<(String, String)>, String> {
+/// A package's dependency kind as cargo-auditable records it: `runtime` (the default; the field is
+/// omitted) or `build` (reachable only through build dependencies, proc-macros included).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum DepKind {
+    Runtime,
+    Build,
+}
+
+impl DepKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            DepKind::Runtime => "runtime",
+            DepKind::Build => "build",
+        }
+    }
+}
+
+/// Every package recorded in a cargo-auditable `.dep-v0` section (zlib-compressed JSON), with its
+/// kind. The root is recorded too.
+pub(crate) fn packages_from_dep_v0(
+    section: &[u8],
+) -> Result<BTreeMap<(String, String), DepKind>, String> {
     let bytes = miniz_oxide::inflate::decompress_to_vec_zlib(section)
         .map_err(|e| format!(".dep-v0: zlib inflate failed: {e:?}"))?;
     let v: Value = serde_json::from_slice(&bytes).map_err(|e| format!(".dep-v0: {e}"))?;
     let pk = v["packages"]
         .as_array()
         .ok_or(".dep-v0: no packages array")?;
-    let mut out = BTreeSet::new();
+    let mut out = BTreeMap::new();
     for p in pk {
+        let kind = match p.get("kind").and_then(Value::as_str) {
+            None | Some("runtime") => DepKind::Runtime,
+            Some("build") => DepKind::Build,
+            Some(other) => return Err(format!(".dep-v0: unknown dependency kind `{other}`")),
+        };
         match (p["name"].as_str(), p["version"].as_str()) {
             (Some(n), Some(ver)) => {
-                out.insert((n.to_string(), ver.to_string()));
+                out.insert((n.to_string(), ver.to_string()), kind);
             }
             _ => return Err(".dep-v0: package without name/version".into()),
         }
@@ -472,42 +496,89 @@ pub(crate) fn bom_link(serial: &str, version: u64) -> Option<String> {
     (uuid.len() == 36 && version >= 1).then(|| format!("urn:cdx:{uuid}/{version}"))
 }
 
-/// The packages compiled into a binary, read from its own `.dep-v0` section (PE or ELF).
-pub(crate) fn auditable_packages(bin: &[u8]) -> Result<BTreeSet<(String, String)>, String> {
+/// The packages a binary's own `.dep-v0` section lists (PE or ELF), with their kinds.
+pub(crate) fn auditable_packages(
+    bin: &[u8],
+) -> Result<BTreeMap<(String, String), DepKind>, String> {
     packages_from_dep_v0(crate::auditable::dep_v0_section(bin)?)
 }
 
-/// CycloneDX `scope` per component from the binary's package set. cargo-auditable records the
-/// RESOLVED graph, a superset of what was compiled: measured on cargo-audit 5e1bf935c84c, 23 of
-/// its 329 listed packages (defmt, quinn, ...) appear in no compile line of the producer log.
-/// So only absence is decisive: a lock package missing from the record was not built, and is
-/// `excluded`. Presence asserts no scope. Each component states how its identity was
-/// established (`evidence.identity`): the frozen lock always, the binary's record when listed.
+/// What cargo's build record (`build.jsonl`) says the build compiled.
+pub(crate) struct Compiled<'a> {
+    /// Packages with a lib or bin unit.
+    pub linked: &'a BTreeSet<(String, String)>,
+    /// Packages with any unit, proc-macros and build scripts included.
+    pub any: &'a BTreeSet<(String, String)>,
+    /// The build compiled the standard library (`-Z build-std`), whose crates.io dependencies are
+    /// lib units linked into the binary but absent from the tool's own `.dep-v0`.
+    pub builds_std: bool,
+    /// Names the record, for the evidence method.
+    pub desc: &'a str,
+}
+
+/// CycloneDX `scope` per lock component. An unset scope reads as `required` (CycloneDX 1.6
+/// default), so each component is scoped from the strongest evidence there is:
+///   * absent from the binary's `.dep-v0`, or listed there as a `build` dependency: `excluded`,
+///     except under `-Z build-std` when the record has a lib unit for that name and version: it
+///     may be the standard library's own copy, which is linked, so `required`.
+///   * listed as `runtime`: `.dep-v0` is the resolved graph, a superset of what was compiled
+///     (cargo-audit 5e1bf935c84c lists 329 packages; 23 have no compile line). With cargo's
+///     build record, a package with a lib or bin unit is `required` and any other `excluded`;
+///     without one the scope stays unset.
+///
+/// Each component states how its identity and scope were established (`evidence.identity`).
 pub(crate) fn apply_scope(
     components: &mut [Value],
-    present: &BTreeSet<(String, String)>,
+    dep_v0: &BTreeMap<(String, String), DepKind>,
     binary_desc: &str,
+    built: Option<&Compiled>,
 ) {
     for c in components.iter_mut() {
         let key = (
             c["name"].as_str().unwrap_or_default().to_string(),
             c["version"].as_str().unwrap_or_default().to_string(),
         );
-        let in_binary = present.contains(&key);
-        if !in_binary {
-            c["scope"] = json!("excluded");
-        }
+        let listed = dep_v0.get(&key).copied();
         let mut methods = vec![json!({
             "technique": "manifest-analysis",
             "confidence": 1.0,
             "value": "frozen Cargo.lock (tools/locks)"
         })];
-        if in_binary {
+        if let Some(k) = listed {
             methods.push(json!({
                 "technique": "binary-analysis",
                 "confidence": 1.0,
-                "value": format!("{binary_desc}; resolved graph, a superset of compiled crates")
+                "value": format!(
+                    "{binary_desc}: {} dependency; resolved graph, a superset of compiled crates",
+                    k.as_str()
+                )
             }));
+        }
+        if let Some(b) = built {
+            let what = if b.linked.contains(&key) {
+                "compiled, lib or bin unit"
+            } else if b.any.contains(&key) {
+                "compiled for build time only (proc-macro or build script)"
+            } else {
+                "not compiled"
+            };
+            methods.push(json!({
+                "technique": "manifest-analysis",
+                "confidence": 1.0,
+                "value": format!("{}: {what}", b.desc)
+            }));
+        }
+        let scope = match (listed, built) {
+            (None | Some(DepKind::Build), Some(b)) if b.builds_std && b.linked.contains(&key) => {
+                Some("required")
+            }
+            (None | Some(DepKind::Build), _) => Some("excluded"),
+            (Some(DepKind::Runtime), Some(b)) if b.linked.contains(&key) => Some("required"),
+            (Some(DepKind::Runtime), Some(_)) => Some("excluded"),
+            (Some(DepKind::Runtime), None) => None,
+        };
+        if let Some(sc) = scope {
+            c["scope"] = json!(sc);
         }
         c["evidence"] =
             json!({"identity": [{"field": "purl", "confidence": 1.0, "methods": methods}]});
@@ -667,6 +738,34 @@ pub fn run(args: &[String]) -> i32 {
                 // list says which lock packages were compiled into it (runtime and build kinds).
                 let (asset, bin) = fetch_tool_binary(&product, &digest)?;
                 let present = auditable_packages(&bin).map_err(|e| format!("{asset}: {e}"))?;
+                // cargo's build record, when the digest has one: re-verified against its raw
+                // record and the producer statement before it decides any scope.
+                let record_path = dir.join(crate::build_record::FILE);
+                let record = match std::fs::read_to_string(&record_path) {
+                    Ok(text) => {
+                        let lock = std::fs::read_to_string("tools/TOOLS.lock")
+                            .map_err(|e| format!("tools/TOOLS.lock: {e}"))?;
+                        let target = tools_lock_target(&lock, &product, &digest)
+                            .ok_or("no TOOLS.lock row for the digest")?;
+                        let msgs =
+                            crate::build_record::verify_custody(&text, &product, &target, &digest)
+                                .map_err(|e| format!("{}: {e}", record_path.display()))?
+                                .messages;
+                        let (h, _) = crate::build_record::read_evidence(&text)?;
+                        Some((
+                            crate::build_record::linked(&msgs),
+                            crate::build_record::compiled(&msgs),
+                            crate::build_record::builds_std(&msgs),
+                            format!(
+                                "cargo build record {} (sha256 {})",
+                                s(&h, &["rawRecord", "asset"]),
+                                s(&h, &["rawRecord", "sha256"])
+                            ),
+                        ))
+                    }
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+                    Err(e) => return Err(format!("{}: {e}", record_path.display())),
+                };
                 graph = Some(
                     graph_from_dep_v0(
                         crate::auditable::dep_v0_section(&bin)
@@ -674,10 +773,19 @@ pub fn run(args: &[String]) -> i32 {
                     )
                     .map_err(|e| format!("{asset}: {e}"))?,
                 );
+                let built = record
+                    .as_ref()
+                    .map(|(linked, any, builds_std, desc)| Compiled {
+                        linked,
+                        any,
+                        builds_std: *builds_std,
+                        desc,
+                    });
                 apply_scope(
                     &mut comps,
                     &present,
                     &format!("cargo-auditable .dep-v0 section of {asset} (sha256 {digest})"),
+                    built.as_ref(),
                 );
                 (comps, None)
             }
@@ -769,27 +877,79 @@ mod tests {
     const LOCK: &str = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"ab\"\n\n[[package]]\nname = \"b\"\nversion = \"2.0.0\"\n\n[metadata]\nk = \"v\"\n";
 
     #[test]
-    fn scope_and_identity_evidence_follow_the_binary_package_set() {
-        let mut comps = components_from_lock(LOCK);
-        let mut present = BTreeSet::new();
-        present.insert(("a".to_string(), "1.0.0".to_string()));
-        apply_scope(&mut comps, &present, "x.exe (sha256 d)");
-        assert!(
-            comps[0].get("scope").is_none(),
-            "listing in the record proves no scope"
+    fn scope_from_dep_v0_kinds_then_the_build_record() {
+        const LOCK3: &str = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\n\n[[package]]\nname = \"b\"\nversion = \"2.0.0\"\n\n[[package]]\nname = \"c\"\nversion = \"3.0.0\"\n\n[[package]]\nname = \"d\"\nversion = \"4.0.0\"\n";
+        let k = |n: &str, v: &str| (n.to_string(), v.to_string());
+        let mut dep_v0 = BTreeMap::new();
+        dep_v0.insert(k("a", "1.0.0"), DepKind::Runtime);
+        dep_v0.insert(k("b", "2.0.0"), DepKind::Build);
+        dep_v0.insert(k("c", "3.0.0"), DepKind::Runtime);
+        // d is absent from .dep-v0.
+
+        // Without a build record: absent and build-kind are excluded; runtime stays unset.
+        let mut comps = components_from_lock(LOCK3);
+        apply_scope(&mut comps, &dep_v0, "x.exe (sha256 d)", None);
+        let scopes: Vec<&str> = comps
+            .iter()
+            .map(|c| c["scope"].as_str().unwrap_or(""))
+            .collect();
+        assert_eq!(scopes, ["", "excluded", "", "excluded"]);
+        assert_eq!(
+            comps[0]["evidence"]["identity"][0]["methods"][1]["value"],
+            "x.exe (sha256 d): runtime dependency; resolved graph, a superset of compiled crates"
         );
         assert_eq!(
-            comps[0]["evidence"]["identity"][0]["methods"][1]["technique"],
-            "binary-analysis"
-        );
-        assert_eq!(comps[1]["scope"], "excluded");
-        assert_eq!(
-            comps[1]["evidence"]["identity"][0]["methods"]
+            comps[3]["evidence"]["identity"][0]["methods"]
                 .as_array()
                 .unwrap()
                 .len(),
             1
         );
+
+        // With one: a runtime package with a lib or bin unit is required; a runtime package with
+        // none (listed in the resolved graph, never compiled) is excluded.
+        let linked: BTreeSet<_> = [k("a", "1.0.0")].into();
+        let any: BTreeSet<_> = [k("a", "1.0.0"), k("b", "2.0.0")].into();
+        let built = Compiled {
+            linked: &linked,
+            any: &any,
+            builds_std: false,
+            desc: "cargo build record r",
+        };
+        let mut comps = components_from_lock(LOCK3);
+        apply_scope(&mut comps, &dep_v0, "x.exe (sha256 d)", Some(&built));
+        let scopes: Vec<&str> = comps.iter().map(|c| c["scope"].as_str().unwrap()).collect();
+        assert_eq!(scopes, ["required", "excluded", "excluded", "excluded"]);
+        let last = |c: &Value| {
+            c["evidence"]["identity"][0]["methods"]
+                .as_array()
+                .unwrap()
+                .last()
+                .unwrap()["value"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(
+            last(&comps[0]),
+            "cargo build record r: compiled, lib or bin unit"
+        );
+        assert!(
+            last(&comps[1]).ends_with("compiled for build time only (proc-macro or build script)")
+        );
+        assert_eq!(last(&comps[2]), "cargo build record r: not compiled");
+
+        // Under build-std, a build-kind package with a lib unit may be std's linked copy.
+        let linked_b: BTreeSet<_> = [k("a", "1.0.0"), k("b", "2.0.0")].into();
+        let std_built = Compiled {
+            linked: &linked_b,
+            any: &any,
+            builds_std: true,
+            desc: "cargo build record r",
+        };
+        let mut comps = components_from_lock(LOCK3);
+        apply_scope(&mut comps, &dep_v0, "x.exe (sha256 d)", Some(&std_built));
+        assert_eq!(comps[1]["scope"], "required");
     }
 
     #[test]
@@ -797,8 +957,22 @@ mod tests {
         let doc = br#"{"packages":[{"name":"a","version":"1.0.0","root":true},{"name":"b","version":"2.0.0","kind":"build"}]}"#;
         let z = miniz_oxide::deflate::compress_to_vec_zlib(doc, 6);
         let set = packages_from_dep_v0(&z).unwrap();
-        assert!(set.contains(&("b".to_string(), "2.0.0".to_string())));
+        assert_eq!(
+            set.get(&("b".to_string(), "2.0.0".to_string())),
+            Some(&DepKind::Build)
+        );
+        assert_eq!(
+            set.get(&("a".to_string(), "1.0.0".to_string())),
+            Some(&DepKind::Runtime)
+        );
         assert_eq!(set.len(), 2);
+        let odd = br#"{"packages":[{"name":"a","version":"1.0.0","kind":"dev"}]}"#;
+        let odd = miniz_oxide::deflate::compress_to_vec_zlib(odd, 6);
+        assert!(
+            packages_from_dep_v0(&odd)
+                .unwrap_err()
+                .contains("unknown dependency kind")
+        );
         assert!(packages_from_dep_v0(b"not zlib").is_err());
         let empty = miniz_oxide::deflate::compress_to_vec_zlib(br#"{"packages":[]}"#, 6);
         assert!(packages_from_dep_v0(&empty).unwrap_err().contains("empty"));

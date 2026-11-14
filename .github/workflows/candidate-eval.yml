@@ -70,6 +70,8 @@ jobs:
         env:
           PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          # Build record custody: the raw record from the tools store, its producer statement.
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           # Base = the PR base commit's TOOLS.lock. On workflow_dispatch there is no

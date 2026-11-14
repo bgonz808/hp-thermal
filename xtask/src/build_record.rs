@@ -222,6 +222,17 @@ pub(crate) fn linked(messages: &[Value]) -> BTreeSet<(String, String)> {
         .collect()
 }
 
+/// The build compiled the standard library itself (`-Z build-std`): its units come from the
+/// toolchain's `rust-src` tree, and its crates.io dependencies compile as ordinary lib units.
+pub(crate) fn builds_std(messages: &[Value]) -> bool {
+    messages.iter().any(|m| {
+        m["reason"] == "compiler-artifact"
+            && m["package_id"].as_str().is_some_and(|id| {
+                id.starts_with("path+file:") && id.contains("/lib/rustlib/src/rust/library/")
+            })
+    })
+}
+
 /// Packages cargo compiled any unit of: linked code, a proc-macro, or a build script.
 pub(crate) fn compiled(messages: &[Value]) -> BTreeSet<(String, String)> {
     messages
@@ -231,7 +242,20 @@ pub(crate) fn compiled(messages: &[Value]) -> BTreeSet<(String, String)> {
         .collect()
 }
 
-/// Per package name, the `rustc-cfg` and `rustc-env` directives its build script emitted, spelled
+/// The semver-compatible series of a version, as cargo groups them: `1.2.3` -> `1`,
+/// `0.52.0` -> `0.52`, `0.0.7` -> `0.0.7`.
+fn series(version: &str) -> String {
+    let core = version.split(['-', '+']).next().unwrap_or(version);
+    let p: Vec<&str> = core.split('.').collect();
+    match p.as_slice() {
+        [maj, ..] if *maj != "0" => (*maj).to_string(),
+        ["0", min, ..] if *min != "0" => format!("0.{min}"),
+        _ => core.to_string(),
+    }
+}
+
+/// Per package series (`name@series`, so windows-sys 0.52 and 0.61 stay apart while a patch bump
+/// keeps its key), the `rustc-cfg` and `rustc-env` directives its build script emitted, spelled
 /// as the floors read them (`cargo:rustc-cfg=...`, `cargo:rustc-env=K=V`).
 pub(crate) fn cfg_env_directives(messages: &[Value]) -> BTreeMap<String, Vec<String>> {
     let mut out: BTreeMap<String, Vec<String>> = BTreeMap::new();
@@ -239,10 +263,12 @@ pub(crate) fn cfg_env_directives(messages: &[Value]) -> BTreeMap<String, Vec<Str
         .iter()
         .filter(|m| m["reason"] == "build-script-executed")
     {
-        let Some(Ok((name, _))) = m["package_id"].as_str().map(package_of) else {
+        let Some(Ok((name, version))) = m["package_id"].as_str().map(package_of) else {
             continue;
         };
-        let d = out.entry(name).or_default();
+        let d = out
+            .entry(format!("{name}@{}", series(&version)))
+            .or_default();
         for c in m["cfgs"].as_array().into_iter().flatten() {
             d.push(format!(
                 "cargo:rustc-cfg={}",
@@ -262,6 +288,27 @@ pub(crate) fn cfg_env_directives(messages: &[Value]) -> BTreeMap<String, Vec<Str
     out
 }
 
+/// The `rustc-cfg` values in `head` that the prior record lacks for the same package series,
+/// as `name@series: cfg`.
+pub(crate) fn new_cfgs(head: &[Value], prior: &[Value]) -> Vec<String> {
+    let before = cfg_env_directives(prior);
+    let mut out = Vec::new();
+    for (pkg, directives) in cfg_env_directives(head) {
+        for d in directives
+            .iter()
+            .filter(|d| d.starts_with("cargo:rustc-cfg="))
+        {
+            if !before.get(&pkg).is_some_and(|b| b.contains(d)) {
+                out.push(format!(
+                    "{pkg}: {}",
+                    d.trim_start_matches("cargo:rustc-cfg=")
+                ));
+            }
+        }
+    }
+    out
+}
+
 /// The store asset name for a record: the binary's asset name, `.exe` dropped, plus the record's
 /// own digest prefix.
 pub(crate) fn asset_name(tool: &str, target: &str, digest: &str, raw_sha256: &str) -> String {
@@ -274,30 +321,60 @@ pub(crate) fn asset_name(tool: &str, target: &str, digest: &str, raw_sha256: &st
 }
 
 /// The producer logs `build record: <tool> <target> <binary sha256> <record sha256>` per tool.
-pub(crate) fn record_line(log: &str, tool: &str, target: &str, digest: &str) -> Option<String> {
-    log.lines().map(log_message).find_map(|m| {
-        let f: Vec<&str> = m.split_whitespace().collect();
-        (f.len() == 6
-            && f[0] == "build"
-            && f[1] == "record:"
-            && f[2] == tool
-            && f[3] == target
-            && f[4] == digest
-            && is_hex64(f[5]))
-        .then(|| f[5].to_string())
-    })
+/// Two different record digests for one binary in one log is refused: build output can print
+/// text of that shape, and the record is taken from custody, never from a guess.
+pub(crate) fn record_line(
+    log: &str,
+    tool: &str,
+    target: &str,
+    digest: &str,
+) -> Result<Option<String>, String> {
+    let mut found: Vec<String> = log
+        .lines()
+        .map(log_message)
+        .filter_map(|m| {
+            let f: Vec<&str> = m.split_whitespace().collect();
+            (f.len() == 6
+                && f[0] == "build"
+                && f[1] == "record:"
+                && f[2] == tool
+                && f[3] == target
+                && f[4] == digest
+                && is_hex64(f[5]))
+            .then(|| f[5].to_string())
+        })
+        .collect();
+    found.sort();
+    found.dedup();
+    match found.len() {
+        0 => Ok(None),
+        1 => Ok(found.pop()),
+        _ => Err(format!(
+            "the run log names {} records for {tool} {target} {}: {}",
+            found.len(),
+            &digest[..12],
+            found.join(", ")
+        )),
+    }
 }
 
-/// Fetch a raw record from the store and build its evidence. Refused unless the bytes match the
-/// logged sha256, one statement signed by the producer workflow names both the record and the
-/// binary, and the record shows the tool's own binary target compiled.
-pub(crate) fn fetch_evidence(
+/// A verified raw record: its store asset, kept messages, and the commit the producer ran at.
+pub(crate) struct Verified {
+    pub asset: String,
+    pub messages: Vec<Value>,
+    pub source_commit: String,
+}
+
+/// Fetch a raw record from the store and parse it. Refused unless the bytes match `raw_sha256`,
+/// one statement signed by the producer workflow names both the record and the binary and was
+/// issued by producer run `run_id`, and the record shows the tool's own binary target compiled.
+fn fetch_verified(
     tool: &str,
     target: &str,
     digest: &str,
     raw_sha256: &str,
     run_id: &str,
-) -> Result<String, String> {
+) -> Result<Verified, String> {
     let asset = asset_name(tool, target, digest, raw_sha256);
     let dir = std::env::temp_dir().join(format!("build-record-{}", &raw_sha256[..12]));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -316,9 +393,7 @@ pub(crate) fn fetch_evidence(
     let bytes = std::fs::read(&path).map_err(|e| format!("{asset}: {e}"))?;
     let got = crate::sha256::sha256_hex(&bytes);
     if got != raw_sha256 {
-        return Err(format!(
-            "{asset}: sha256 {got}, the run logged {raw_sha256}"
-        ));
+        return Err(format!("{asset}: sha256 {got}, expected {raw_sha256}"));
     }
     let repo = gh(&[
         "repo",
@@ -348,19 +423,113 @@ pub(crate) fn fetch_evidence(
             .flatten()
             .any(|s| s["digest"]["sha256"] == want)
     };
-    let bound = v.as_array().into_iter().flatten().any(|r| {
+    let run = format!("/actions/runs/{run_id}/");
+    let bound = v.as_array().into_iter().flatten().find(|r| {
         let subj = &r["verificationResult"]["statement"]["subject"];
-        names(subj, raw_sha256) && names(subj, digest)
+        let cert = &r["verificationResult"]["signature"]["certificate"];
+        names(subj, raw_sha256)
+            && names(subj, digest)
+            && cert["runInvocationURI"]
+                .as_str()
+                .is_some_and(|u| u.contains(&run))
     });
-    if !bound {
+    let Some(bound) = bound else {
         return Err(format!(
-            "{asset}: no statement from {PRODUCER} names both the record and {}",
+            "{asset}: no statement from {PRODUCER} run {run_id} names both the record and {}",
             &digest[..12]
         ));
-    }
+    };
+    let source_commit =
+        bound["verificationResult"]["signature"]["certificate"]["sourceRepositoryDigest"]
+            .as_str()
+            .filter(|c| c.len() == 40 && c.bytes().all(|b| b.is_ascii_hexdigit()))
+            .ok_or_else(|| format!("{asset}: the statement names no source commit"))?
+            .to_string();
     let text = String::from_utf8(bytes).map_err(|_| format!("{asset}: not UTF-8"))?;
-    let msgs = parse(&text).map_err(|e| format!("{asset}: {e}"))?;
-    root_bin(&msgs, tool).map_err(|e| format!("{asset}: {e}"))?;
+    let messages = parse(&text).map_err(|e| format!("{asset}: {e}"))?;
+    root_bin(&messages, tool).map_err(|e| format!("{asset}: {e}"))?;
+    Ok(Verified {
+        asset,
+        messages,
+        source_commit,
+    })
+}
+
+/// Files that decide how the producer built a tool and recorded the build. A record (and the
+/// binary in its statement) is admitted only if its run's commit and HEAD agree on all of them:
+/// otherwise the bytes came from a pipeline other than the one being merged.
+pub(crate) fn producer_inputs(tool: &str) -> Vec<String> {
+    let mut v: Vec<String> = [
+        ".github/workflows/build-tools-pipeline.yml",
+        ".github/workflows/build-tools.yml",
+        ".github/actions/install-toolchain",
+        ".cargo/config.toml",
+        "app/rust-toolchain.toml",
+        "tools/TOOLCHAIN.lock",
+    ]
+    .iter()
+    .map(|s| (*s).to_string())
+    .collect();
+    for dir in ["tools/build-args", "tools/rustflags", "tools/patches"] {
+        v.push(format!("{dir}/{tool}"));
+    }
+    v.push(format!("tools/locks/{tool}.lock"));
+    v
+}
+
+/// The producer inputs at `commit` equal HEAD's. The commit is fetched if absent; one that
+/// cannot be read fails closed.
+pub(crate) fn same_producer(commit: &str, tool: &str) -> Result<(), String> {
+    let have = |c: &str| {
+        std::process::Command::new("git")
+            .args(["cat-file", "-e", &format!("{c}^{{commit}}")])
+            .status()
+            .is_ok_and(|s| s.success())
+    };
+    if !have(commit) {
+        let _ = crate::advance::git(&["fetch", "--quiet", "origin", commit]);
+        if !have(commit) {
+            return Err(format!(
+                "producer commit {} is not available to compare",
+                &commit[..12]
+            ));
+        }
+    }
+    let mut args = vec![
+        "diff".to_string(),
+        "--name-only".to_string(),
+        commit.to_string(),
+        "HEAD".to_string(),
+        "--".to_string(),
+    ];
+    args.extend(producer_inputs(tool));
+    let argv: Vec<&str> = args.iter().map(String::as_str).collect();
+    let changed = crate::advance::git(&argv)?;
+    let changed: Vec<&str> = changed.lines().filter(|l| !l.trim().is_empty()).collect();
+    if changed.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "built at {} by a different pipeline than HEAD's ({}): rerun the producer",
+            &commit[..12],
+            changed.join(", ")
+        ))
+    }
+}
+
+/// Fetch a producer run's raw record (see `fetch_verified`) and build its evidence.
+pub(crate) fn fetch_evidence(
+    tool: &str,
+    target: &str,
+    digest: &str,
+    raw_sha256: &str,
+    run_id: &str,
+) -> Result<String, String> {
+    let Verified {
+        asset,
+        messages: msgs,
+        ..
+    } = fetch_verified(tool, target, digest, raw_sha256, run_id)?;
     let run_url = gh(&["run", "view", run_id, "--json", "url", "--jq", ".url"])?;
     Ok(evidence(
         &Anchor {
@@ -372,6 +541,49 @@ pub(crate) fn fetch_evidence(
         },
         &msgs,
     ))
+}
+
+/// Re-verify a committed `build.jsonl`: it names this subject, its anchored raw record is in the
+/// store under the expected name and sha256 with a producer statement naming both it and the
+/// binary, and its messages are exactly what that raw record parses to. Returns the messages.
+pub(crate) fn verify_custody(
+    text: &str,
+    tool: &str,
+    target: &str,
+    digest: &str,
+) -> Result<Verified, String> {
+    let (h, msgs) = read_evidence(text)?;
+    if h["subject"]["name"] != tool || h["subject"]["sha256"] != digest {
+        return Err(format!(
+            "names another subject than {tool} {}",
+            &digest[..12]
+        ));
+    }
+    let raw = h["rawRecord"]["sha256"]
+        .as_str()
+        .filter(|x| is_hex64(x))
+        .ok_or("header has no rawRecord sha256")?;
+    let asset = asset_name(tool, target, digest, raw);
+    if h["rawRecord"]["asset"] != asset.as_str() {
+        return Err(format!("header names another asset than {asset}"));
+    }
+    let run_id = h["producerRun"]
+        .as_str()
+        .and_then(|u| u.rsplit_once("/actions/runs/"))
+        .map(|(_, id)| id.trim_end_matches('/'))
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()))
+        .ok_or("header names no producer run")?;
+    let fetched = fetch_verified(tool, target, digest, raw, run_id)?;
+    if fetched.messages != msgs {
+        return Err(format!(
+            "{asset}: committed messages differ from the raw record"
+        ));
+    }
+    Ok(Verified {
+        asset,
+        messages: msgs,
+        source_commit: fetched.source_commit,
+    })
 }
 
 /// The record must show the tool's own `bin` target compiled.
@@ -460,7 +672,7 @@ fn baseline(args: &[String]) -> Result<(), String> {
         let dir = Path::new("supply-chain/evidence")
             .join(&t.name)
             .join(&t.sha);
-        match record_line(&log, &t.name, &t.target, &t.sha) {
+        match record_line(&log, &t.name, &t.target, &t.sha)? {
             Some(raw) => {
                 let text = fetch_evidence(&t.name, &t.target, &t.sha, &raw, &run_id)?;
                 std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -565,6 +777,15 @@ mod tests {
     }
 
     #[test]
+    fn semver_series_keys() {
+        assert_eq!(series("1.0.154"), "1");
+        assert_eq!(series("0.52.6"), "0.52");
+        assert_eq!(series("0.0.7"), "0.0.7");
+        assert_eq!(series("2.0.0-rc.1"), "2");
+        assert!(!builds_std(&parse(RAW).unwrap()));
+    }
+
+    #[test]
     fn linked_excludes_proc_macros_and_build_scripts() {
         let msgs = parse(RAW).unwrap();
         let l = linked(&msgs);
@@ -578,7 +799,7 @@ mod tests {
     fn directives_spelled_as_the_floors_read_them() {
         let d = cfg_env_directives(&parse(RAW).unwrap());
         assert_eq!(
-            d["serde_json"],
+            d["serde_json@1"],
             vec![
                 r#"cargo:rustc-cfg=fast_arithmetic="64""#.to_string(),
                 "cargo:rustc-env=K=v".to_string()
@@ -623,10 +844,22 @@ mod tests {
              build-tools-windows\tBuild\t2026-11-13T00:00:00.0000000Z   echo \"build record: $name $target $d $r\"\n"
         );
         assert_eq!(
-            record_line(&log, "cargo-audit", "windows-x86_64", &d),
+            record_line(&log, "cargo-audit", "windows-x86_64", &d).unwrap(),
             Some(r.clone())
         );
-        assert_eq!(record_line(&log, "cargo-deny", "windows-x86_64", &d), None);
+        assert_eq!(
+            record_line(&log, "cargo-deny", "windows-x86_64", &d).unwrap(),
+            None
+        );
+        let other = "9".repeat(64);
+        let forged = format!(
+            "{log}x\tstep\t2026-11-13T00:00:01.0000000Z build record: cargo-audit windows-x86_64 {d} {other}\n"
+        );
+        assert!(
+            record_line(&forged, "cargo-audit", "windows-x86_64", &d)
+                .unwrap_err()
+                .contains("2 records")
+        );
         assert_eq!(
             asset_name("cargo-audit", "windows-x86_64", &d, &r),
             "cargo-audit-cccccccccccc.build-dddddddddddd.jsonl"
