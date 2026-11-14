@@ -650,16 +650,21 @@ fn flag(args: &[String], name: &str) -> Option<String> {
         .and_then(|i| args.get(i + 1).cloned())
 }
 
+/// Parse a raw record file and require the package's own `bin` target. Returns a summary line.
+pub(crate) fn check_file(path: &str, package: &str) -> Result<String, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+    let msgs = parse(&text).map_err(|e| format!("{path}: {e}"))?;
+    root_bin(&msgs, package).map_err(|e| format!("{path}: {e}"))?;
+    Ok(summary(&msgs))
+}
+
 fn check(args: &[String]) -> Result<(), String> {
     let path = args
         .first()
         .filter(|a| !a.starts_with("--"))
         .ok_or("check: no record path")?;
     let package = flag(args, "--package").ok_or("check: --package is required")?;
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
-    let msgs = parse(&text).map_err(|e| format!("{path}: {e}"))?;
-    root_bin(&msgs, &package)?;
-    println!("build record ({package}): {}", summary(&msgs));
+    println!("build record ({package}): {}", check_file(path, &package)?);
     Ok(())
 }
 

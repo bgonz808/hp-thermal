@@ -271,6 +271,8 @@ jobs:
           # directory — so this is a straight copy, no rename.
           Copy-Item app/target/x86_64-pc-windows-msvc/release/hp-thermal.pdb dist/hp-thermal.pdb
           Copy-Item app/*.cdx.json dist/hp-thermal.cdx.json
+          # cargo's record of this build (release-attest wrote and checked it).
+          Copy-Item app/target/build-record.jsonl dist/hp-thermal.build.jsonl
           $exe = (Get-FileHash dist/hp-thermal.exe -Algorithm SHA256).Hash.ToLower()
           $pdb = (Get-FileHash dist/hp-thermal.pdb -Algorithm SHA256).Hash.ToLower()
           "exe_unsigned_sha256=$exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
@@ -379,6 +381,19 @@ jobs:
           ca=$(jq -S '[.components[]|{purl,hashes}]|sort_by(.purl)' builds/dist-unsigned-a/hp-thermal.cdx.json | sha256sum | cut -d' ' -f1)
           cb=$(jq -S '[.components[]|{purl,hashes}]|sort_by(.purl)' builds/dist-unsigned-b/hp-thermal.cdx.json | sha256sum | cut -d' ' -f1)
           if [ "$ca" = "$cb" ]; then echo "SBOM component set: identical"; else echo "::error::SBOM component sets differ"; fail=1; fi
+          # Build records: the same units compiled with the same features, and the same
+          # build-script cfgs. Read to EOF (no early-exit reader under pipefail).
+          units() {
+            jq -r 'select(.reason=="compiler-artifact") | [.package_id, (.target.kind|join(",")), (.features|join(","))] | join(" ")' "$1" | sort
+            jq -r 'select(.reason=="build-script-executed") | [.package_id, (.cfgs|join(","))] | join(" ")' "$1" | sort
+          }
+          ra=$(units builds/dist-unsigned-a/hp-thermal.build.jsonl | sha256sum | cut -d' ' -f1)
+          rb=$(units builds/dist-unsigned-b/hp-thermal.build.jsonl | sha256sum | cut -d' ' -f1)
+          if [ "$ra" = "$rb" ]; then echo "build records: same units, features, and cfgs"; else
+            echo "::error::build records differ between builds"
+            diff <(units builds/dist-unsigned-a/hp-thermal.build.jsonl) <(units builds/dist-unsigned-b/hp-thermal.build.jsonl) || true
+            fail=1
+          fi
           # Build environment (formulation) is reported, not gated: identical bytes from two
           # environments is the stronger result, and image rollouts can put a/b on different
           # image versions mid-run.
@@ -733,10 +748,11 @@ jobs:
           $exe = (Get-FileHash dist/hp-thermal.exe      -Algorithm SHA256).Hash.ToLower()
           $pdb = (Get-FileHash dist/hp-thermal.pdb      -Algorithm SHA256).Hash.ToLower()
           $cdx = (Get-FileHash dist/hp-thermal.cdx.json -Algorithm SHA256).Hash.ToLower()
+          $rec = (Get-FileHash dist/hp-thermal.build.jsonl -Algorithm SHA256).Hash.ToLower()
           # LF + no BOM so `sha256sum -c SHA256SUMS` parses on Linux/macOS. Out-File -Encoding
           # ascii writes CRLF, whose trailing \r trips sha256sum ("No such file or directory").
           # -NoNewline keeps exactly our explicit `n between/after entries.
-          $lines = @("$exe  hp-thermal.exe", "$pdb  hp-thermal.pdb", "$cdx  hp-thermal.cdx.json")
+          $lines = @("$exe  hp-thermal.exe", "$pdb  hp-thermal.pdb", "$cdx  hp-thermal.cdx.json", "$rec  hp-thermal.build.jsonl")
           ($lines -join "`n") + "`n" | Set-Content -Path dist/SHA256SUMS -NoNewline -Encoding utf8NoBOM
           "exe_sha256=$exe" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
           "pdb_sha256=$pdb" | Out-File $env:GITHUB_OUTPUT -Append -Encoding ascii
@@ -776,6 +792,7 @@ jobs:
             dist/hp-thermal.exe
             dist/hp-thermal.pdb
             dist/hp-thermal.cdx.json
+            dist/hp-thermal.build.jsonl
             dist/SHA256SUMS
 
       - name: Attest SBOM
