@@ -13,6 +13,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -42,6 +47,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -71,6 +81,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -105,6 +120,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -118,6 +138,7 @@
       ],
       "name": "aho-corasick",
       "purl": "pkg:cargo/aho-corasick@1.1.2",
+      "scope": "required",
       "type": "library",
       "version": "1.1.2"
     },
@@ -133,6 +154,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -167,6 +193,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -180,6 +211,7 @@
       ],
       "name": "anstream",
       "purl": "pkg:cargo/anstream@0.6.20",
+      "scope": "required",
       "type": "library",
       "version": "0.6.20"
     },
@@ -200,6 +232,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -213,6 +250,7 @@
       ],
       "name": "anstyle",
       "purl": "pkg:cargo/anstyle@1.0.14",
+      "scope": "required",
       "type": "library",
       "version": "1.0.14"
     },
@@ -233,6 +271,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -246,6 +289,7 @@
       ],
       "name": "anstyle-parse",
       "purl": "pkg:cargo/anstyle-parse@0.2.2",
+      "scope": "required",
       "type": "library",
       "version": "0.2.2"
     },
@@ -266,6 +310,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -279,6 +328,7 @@
       ],
       "name": "anstyle-query",
       "purl": "pkg:cargo/anstyle-query@1.0.0",
+      "scope": "required",
       "type": "library",
       "version": "1.0.0"
     },
@@ -299,6 +349,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -312,6 +367,7 @@
       ],
       "name": "anstyle-wincon",
       "purl": "pkg:cargo/anstyle-wincon@3.0.10",
+      "scope": "required",
       "type": "library",
       "version": "3.0.10"
     },
@@ -332,6 +388,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -345,6 +406,7 @@
       ],
       "name": "anyhow",
       "purl": "pkg:cargo/anyhow@1.0.104",
+      "scope": "required",
       "type": "library",
       "version": "1.0.104"
     },
@@ -360,6 +422,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -389,6 +456,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -423,6 +495,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -452,6 +529,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -481,6 +563,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -515,6 +602,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -528,6 +620,7 @@
       ],
       "name": "base64",
       "purl": "pkg:cargo/base64@0.22.1",
+      "scope": "required",
       "type": "library",
       "version": "0.22.1"
     },
@@ -543,6 +636,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -572,6 +670,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -601,6 +704,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -630,6 +738,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -664,6 +777,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -677,6 +795,7 @@
       ],
       "name": "borrow-or-share",
       "purl": "pkg:cargo/borrow-or-share@0.2.4",
+      "scope": "required",
       "type": "library",
       "version": "0.2.4"
     },
@@ -692,6 +811,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -721,6 +845,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -750,6 +879,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -784,6 +918,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -797,6 +936,7 @@
       ],
       "name": "camino",
       "purl": "pkg:cargo/camino@1.2.6",
+      "scope": "required",
       "type": "library",
       "version": "1.2.6"
     },
@@ -817,6 +957,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -824,6 +969,7 @@
       },
       "name": "cargo-cyclonedx",
       "purl": "pkg:cargo/cargo-cyclonedx@0.5.10",
+      "scope": "required",
       "type": "library",
       "version": "0.5.10"
     },
@@ -844,6 +990,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -857,6 +1008,7 @@
       ],
       "name": "cargo-lock",
       "purl": "pkg:cargo/cargo-lock@11.0.1",
+      "scope": "required",
       "type": "library",
       "version": "11.0.1"
     },
@@ -877,6 +1029,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -890,6 +1047,7 @@
       ],
       "name": "cargo-platform",
       "purl": "pkg:cargo/cargo-platform@0.3.1",
+      "scope": "required",
       "type": "library",
       "version": "0.3.1"
     },
@@ -910,6 +1068,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -923,6 +1086,7 @@
       ],
       "name": "cargo_metadata",
       "purl": "pkg:cargo/cargo_metadata@0.23.1",
+      "scope": "required",
       "type": "library",
       "version": "0.23.1"
     },
@@ -943,6 +1107,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -956,6 +1125,7 @@
       ],
       "name": "cfg-if",
       "purl": "pkg:cargo/cfg-if@1.0.0",
+      "scope": "required",
       "type": "library",
       "version": "1.0.0"
     },
@@ -976,6 +1146,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -989,6 +1164,7 @@
       ],
       "name": "clap",
       "purl": "pkg:cargo/clap@4.4.11",
+      "scope": "required",
       "type": "library",
       "version": "4.4.11"
     },
@@ -1009,6 +1185,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1022,6 +1203,7 @@
       ],
       "name": "clap_builder",
       "purl": "pkg:cargo/clap_builder@4.4.11",
+      "scope": "required",
       "type": "library",
       "version": "4.4.11"
     },
@@ -1042,6 +1224,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -1076,6 +1263,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1089,6 +1281,7 @@
       ],
       "name": "clap_lex",
       "purl": "pkg:cargo/clap_lex@0.6.0",
+      "scope": "required",
       "type": "library",
       "version": "0.6.0"
     },
@@ -1104,6 +1297,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1133,6 +1331,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1167,6 +1370,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1180,6 +1388,7 @@
       ],
       "name": "colorchoice",
       "purl": "pkg:cargo/colorchoice@1.0.0",
+      "scope": "required",
       "type": "library",
       "version": "1.0.0"
     },
@@ -1195,6 +1404,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1224,6 +1438,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1253,6 +1472,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1282,6 +1506,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1311,6 +1540,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1345,6 +1579,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1352,6 +1591,7 @@
       },
       "name": "cyclonedx-bom",
       "purl": "pkg:cargo/cyclonedx-bom@0.9.0",
+      "scope": "required",
       "type": "library",
       "version": "0.9.0"
     },
@@ -1372,6 +1612,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -1379,6 +1624,7 @@
       },
       "name": "cyclonedx-bom-macros",
       "purl": "pkg:cargo/cyclonedx-bom-macros@0.1.0",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.0"
     },
@@ -1399,6 +1645,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1412,6 +1663,7 @@
       ],
       "name": "deranged",
       "purl": "pkg:cargo/deranged@0.5.9",
+      "scope": "required",
       "type": "library",
       "version": "0.5.9"
     },
@@ -1427,6 +1679,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1456,6 +1713,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1490,6 +1752,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -1503,6 +1770,7 @@
       ],
       "name": "displaydoc",
       "purl": "pkg:cargo/displaydoc@0.2.5",
+      "scope": "excluded",
       "type": "library",
       "version": "0.2.5"
     },
@@ -1518,6 +1786,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1547,6 +1820,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1576,6 +1854,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1610,6 +1893,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1623,6 +1911,7 @@
       ],
       "name": "env_filter",
       "purl": "pkg:cargo/env_filter@0.1.4",
+      "scope": "required",
       "type": "library",
       "version": "0.1.4"
     },
@@ -1643,6 +1932,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1656,6 +1950,7 @@
       ],
       "name": "env_logger",
       "purl": "pkg:cargo/env_logger@0.11.2",
+      "scope": "required",
       "type": "library",
       "version": "0.11.2"
     },
@@ -1676,6 +1971,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1689,6 +1989,7 @@
       ],
       "name": "equivalent",
       "purl": "pkg:cargo/equivalent@1.0.1",
+      "scope": "required",
       "type": "library",
       "version": "1.0.1"
     },
@@ -1704,6 +2005,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1733,6 +2039,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1762,6 +2073,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1791,6 +2107,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1820,6 +2141,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1854,6 +2180,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1867,6 +2198,7 @@
       ],
       "name": "fluent-uri",
       "purl": "pkg:cargo/fluent-uri@0.4.1",
+      "scope": "required",
       "type": "library",
       "version": "0.4.1"
     },
@@ -1882,6 +2214,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1916,6 +2253,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1929,6 +2271,7 @@
       ],
       "name": "form_urlencoded",
       "purl": "pkg:cargo/form_urlencoded@1.2.1",
+      "scope": "required",
       "type": "library",
       "version": "1.2.1"
     },
@@ -1944,6 +2287,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -1978,6 +2326,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -1991,6 +2344,7 @@
       ],
       "name": "getrandom",
       "purl": "pkg:cargo/getrandom@0.2.11",
+      "scope": "required",
       "type": "library",
       "version": "0.2.11"
     },
@@ -2006,6 +2360,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2035,6 +2394,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2064,6 +2428,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2098,6 +2467,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2111,6 +2485,7 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.16.1",
+      "scope": "required",
       "type": "library",
       "version": "0.16.1"
     },
@@ -2131,6 +2506,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2165,6 +2545,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2199,6 +2584,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2212,6 +2602,7 @@
       ],
       "name": "hex",
       "purl": "pkg:cargo/hex@0.4.3",
+      "scope": "required",
       "type": "library",
       "version": "0.4.3"
     },
@@ -2232,6 +2623,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2245,6 +2641,7 @@
       ],
       "name": "humantime",
       "purl": "pkg:cargo/humantime@2.1.0",
+      "scope": "required",
       "type": "library",
       "version": "2.1.0"
     },
@@ -2265,6 +2662,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2278,6 +2680,7 @@
       ],
       "name": "icu_collections",
       "purl": "pkg:cargo/icu_collections@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2298,6 +2701,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2311,6 +2719,7 @@
       ],
       "name": "icu_locid",
       "purl": "pkg:cargo/icu_locid@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2331,6 +2740,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2344,6 +2758,7 @@
       ],
       "name": "icu_locid_transform",
       "purl": "pkg:cargo/icu_locid_transform@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2364,6 +2779,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2377,6 +2797,7 @@
       ],
       "name": "icu_locid_transform_data",
       "purl": "pkg:cargo/icu_locid_transform_data@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2397,6 +2818,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2410,6 +2836,7 @@
       ],
       "name": "icu_normalizer",
       "purl": "pkg:cargo/icu_normalizer@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2430,6 +2857,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2443,6 +2875,7 @@
       ],
       "name": "icu_normalizer_data",
       "purl": "pkg:cargo/icu_normalizer_data@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2463,6 +2896,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2476,6 +2914,7 @@
       ],
       "name": "icu_properties",
       "purl": "pkg:cargo/icu_properties@1.5.1",
+      "scope": "required",
       "type": "library",
       "version": "1.5.1"
     },
@@ -2496,6 +2935,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2509,6 +2953,7 @@
       ],
       "name": "icu_properties_data",
       "purl": "pkg:cargo/icu_properties_data@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2529,6 +2974,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2542,6 +2992,7 @@
       ],
       "name": "icu_provider",
       "purl": "pkg:cargo/icu_provider@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -2562,6 +3013,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -2596,6 +3052,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2609,6 +3070,7 @@
       ],
       "name": "idna",
       "purl": "pkg:cargo/idna@1.0.3",
+      "scope": "required",
       "type": "library",
       "version": "1.0.3"
     },
@@ -2629,6 +3091,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2642,6 +3109,7 @@
       ],
       "name": "idna_adapter",
       "purl": "pkg:cargo/idna_adapter@1.2.0",
+      "scope": "required",
       "type": "library",
       "version": "1.2.0"
     },
@@ -2657,6 +3125,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2686,6 +3159,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2720,6 +3198,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2733,6 +3216,7 @@
       ],
       "name": "indexmap",
       "purl": "pkg:cargo/indexmap@2.13.0",
+      "scope": "required",
       "type": "library",
       "version": "2.13.0"
     },
@@ -2748,6 +3232,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2777,6 +3266,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2811,6 +3305,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2824,6 +3323,7 @@
       ],
       "name": "is_terminal_polyfill",
       "purl": "pkg:cargo/is_terminal_polyfill@1.70.1",
+      "scope": "required",
       "type": "library",
       "version": "1.70.1"
     },
@@ -2839,6 +3339,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2868,6 +3373,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2902,6 +3412,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -2915,6 +3430,7 @@
       ],
       "name": "itoa",
       "purl": "pkg:cargo/itoa@1.0.9",
+      "scope": "required",
       "type": "library",
       "version": "1.0.9"
     },
@@ -2930,6 +3446,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2959,6 +3480,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -2988,6 +3514,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3017,6 +3548,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3046,6 +3582,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3075,6 +3616,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3109,6 +3655,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3122,6 +3673,7 @@
       ],
       "name": "litemap",
       "purl": "pkg:cargo/litemap@0.7.4",
+      "scope": "required",
       "type": "library",
       "version": "0.7.4"
     },
@@ -3137,6 +3689,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3171,6 +3728,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3184,6 +3746,7 @@
       ],
       "name": "log",
       "purl": "pkg:cargo/log@0.4.20",
+      "scope": "required",
       "type": "library",
       "version": "0.4.20"
     },
@@ -3204,6 +3767,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3217,6 +3785,7 @@
       ],
       "name": "memchr",
       "purl": "pkg:cargo/memchr@2.6.4",
+      "scope": "required",
       "type": "library",
       "version": "2.6.4"
     },
@@ -3232,6 +3801,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3261,6 +3835,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3290,6 +3869,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3319,6 +3903,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3348,6 +3937,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3377,6 +3971,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3406,6 +4005,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3435,6 +4039,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3469,6 +4078,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3482,6 +4096,7 @@
       ],
       "name": "num-conv",
       "purl": "pkg:cargo/num-conv@0.2.2",
+      "scope": "required",
       "type": "library",
       "version": "0.2.2"
     },
@@ -3497,6 +4112,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3526,6 +4146,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3555,6 +4180,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3589,6 +4219,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3602,6 +4237,7 @@
       ],
       "name": "num-traits",
       "purl": "pkg:cargo/num-traits@0.2.19",
+      "scope": "required",
       "type": "library",
       "version": "0.2.19"
     },
@@ -3617,6 +4253,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3651,6 +4292,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3664,6 +4310,7 @@
       ],
       "name": "once_cell",
       "purl": "pkg:cargo/once_cell@1.21.4",
+      "scope": "required",
       "type": "library",
       "version": "1.21.4"
     },
@@ -3684,6 +4331,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3697,6 +4349,7 @@
       ],
       "name": "once_cell_polyfill",
       "purl": "pkg:cargo/once_cell_polyfill@1.70.1",
+      "scope": "required",
       "type": "library",
       "version": "1.70.1"
     },
@@ -3717,6 +4370,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3730,6 +4388,7 @@
       ],
       "name": "ordered-float",
       "purl": "pkg:cargo/ordered-float@5.1.0",
+      "scope": "required",
       "type": "library",
       "version": "5.1.0"
     },
@@ -3745,6 +4404,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3774,6 +4438,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3803,6 +4472,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -3837,6 +4511,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3850,6 +4529,7 @@
       ],
       "name": "pathdiff",
       "purl": "pkg:cargo/pathdiff@0.2.1",
+      "scope": "required",
       "type": "library",
       "version": "0.2.1"
     },
@@ -3870,6 +4550,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3883,6 +4568,7 @@
       ],
       "name": "percent-encoding",
       "purl": "pkg:cargo/percent-encoding@2.3.1",
+      "scope": "required",
       "type": "library",
       "version": "2.3.1"
     },
@@ -3903,6 +4589,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3916,6 +4607,7 @@
       ],
       "name": "phf",
       "purl": "pkg:cargo/phf@0.11.2",
+      "scope": "required",
       "type": "library",
       "version": "0.11.2"
     },
@@ -3936,6 +4628,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -3970,6 +4667,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -4004,6 +4706,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4017,6 +4724,7 @@
       ],
       "name": "phf_shared",
       "purl": "pkg:cargo/phf_shared@0.11.2",
+      "scope": "required",
       "type": "library",
       "version": "0.11.2"
     },
@@ -4032,6 +4740,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4061,6 +4774,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4095,6 +4813,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4108,6 +4831,7 @@
       ],
       "name": "powerfmt",
       "purl": "pkg:cargo/powerfmt@0.2.0",
+      "scope": "required",
       "type": "library",
       "version": "0.2.0"
     },
@@ -4123,6 +4847,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4152,6 +4881,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4181,6 +4915,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4210,6 +4949,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4239,6 +4983,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4273,6 +5022,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4286,6 +5040,7 @@
       ],
       "name": "proc-macro2",
       "purl": "pkg:cargo/proc-macro2@1.0.103",
+      "scope": "required",
       "type": "library",
       "version": "1.0.103"
     },
@@ -4306,6 +5061,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4319,6 +5079,7 @@
       ],
       "name": "purl",
       "purl": "pkg:cargo/purl@0.1.3",
+      "scope": "required",
       "type": "library",
       "version": "0.1.3"
     },
@@ -4339,6 +5100,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4352,6 +5118,7 @@
       ],
       "name": "quote",
       "purl": "pkg:cargo/quote@1.0.35",
+      "scope": "required",
       "type": "library",
       "version": "1.0.35"
     },
@@ -4372,6 +5139,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4406,6 +5178,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4435,6 +5212,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4464,6 +5246,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4498,6 +5285,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4511,6 +5303,7 @@
       ],
       "name": "ref-cast",
       "purl": "pkg:cargo/ref-cast@1.0.25",
+      "scope": "required",
       "type": "library",
       "version": "1.0.25"
     },
@@ -4531,6 +5324,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -4565,6 +5363,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4578,6 +5381,7 @@
       ],
       "name": "regex",
       "purl": "pkg:cargo/regex@1.10.2",
+      "scope": "required",
       "type": "library",
       "version": "1.10.2"
     },
@@ -4598,6 +5402,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4611,6 +5420,7 @@
       ],
       "name": "regex-automata",
       "purl": "pkg:cargo/regex-automata@0.4.3",
+      "scope": "required",
       "type": "library",
       "version": "0.4.3"
     },
@@ -4631,6 +5441,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4644,6 +5459,7 @@
       ],
       "name": "regex-syntax",
       "purl": "pkg:cargo/regex-syntax@0.8.2",
+      "scope": "required",
       "type": "library",
       "version": "0.8.2"
     },
@@ -4659,6 +5475,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4688,6 +5509,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4717,6 +5543,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4746,6 +5577,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4780,6 +5616,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4793,6 +5634,7 @@
       ],
       "name": "ryu",
       "purl": "pkg:cargo/ryu@1.0.15",
+      "scope": "required",
       "type": "library",
       "version": "1.0.15"
     },
@@ -4808,6 +5650,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4837,6 +5684,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -4871,6 +5723,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4884,6 +5741,7 @@
       ],
       "name": "semver",
       "purl": "pkg:cargo/semver@1.0.28",
+      "scope": "required",
       "type": "library",
       "version": "1.0.28"
     },
@@ -4904,6 +5762,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4917,6 +5780,7 @@
       ],
       "name": "serde",
       "purl": "pkg:cargo/serde@1.0.229",
+      "scope": "required",
       "type": "library",
       "version": "1.0.229"
     },
@@ -4937,6 +5801,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -4950,6 +5819,7 @@
       ],
       "name": "serde_core",
       "purl": "pkg:cargo/serde_core@1.0.229",
+      "scope": "required",
       "type": "library",
       "version": "1.0.229"
     },
@@ -4970,6 +5840,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -5004,6 +5879,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5017,6 +5897,7 @@
       ],
       "name": "serde_json",
       "purl": "pkg:cargo/serde_json@1.0.143",
+      "scope": "required",
       "type": "library",
       "version": "1.0.143"
     },
@@ -5037,6 +5918,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5050,6 +5936,7 @@
       ],
       "name": "serde_spanned",
       "purl": "pkg:cargo/serde_spanned@1.1.0",
+      "scope": "required",
       "type": "library",
       "version": "1.1.0"
     },
@@ -5065,6 +5952,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -5094,6 +5986,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -5128,6 +6025,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5141,6 +6043,7 @@
       ],
       "name": "siphasher",
       "purl": "pkg:cargo/siphasher@0.3.11",
+      "scope": "required",
       "type": "library",
       "version": "0.3.11"
     },
@@ -5161,6 +6064,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5174,6 +6082,7 @@
       ],
       "name": "smallvec",
       "purl": "pkg:cargo/smallvec@1.15.1",
+      "scope": "required",
       "type": "library",
       "version": "1.15.1"
     },
@@ -5189,6 +6098,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -5223,6 +6137,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5236,6 +6155,7 @@
       ],
       "name": "spdx",
       "purl": "pkg:cargo/spdx@0.13.2",
+      "scope": "required",
       "type": "library",
       "version": "0.13.2"
     },
@@ -5256,6 +6176,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5269,6 +6194,7 @@
       ],
       "name": "stable_deref_trait",
       "purl": "pkg:cargo/stable_deref_trait@1.2.0",
+      "scope": "required",
       "type": "library",
       "version": "1.2.0"
     },
@@ -5289,6 +6215,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5302,6 +6233,7 @@
       ],
       "name": "strsim",
       "purl": "pkg:cargo/strsim@0.10.0",
+      "scope": "required",
       "type": "library",
       "version": "0.10.0"
     },
@@ -5322,6 +6254,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5335,6 +6272,7 @@
       ],
       "name": "strum",
       "purl": "pkg:cargo/strum@0.28.0",
+      "scope": "required",
       "type": "library",
       "version": "0.28.0"
     },
@@ -5355,6 +6293,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -5389,6 +6332,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5402,6 +6350,7 @@
       ],
       "name": "syn",
       "purl": "pkg:cargo/syn@2.0.111",
+      "scope": "required",
       "type": "library",
       "version": "2.0.111"
     },
@@ -5422,6 +6371,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5456,6 +6410,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5469,6 +6428,7 @@
       ],
       "name": "synstructure",
       "purl": "pkg:cargo/synstructure@0.13.1",
+      "scope": "required",
       "type": "library",
       "version": "0.13.1"
     },
@@ -5484,6 +6444,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -5513,6 +6478,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -5542,6 +6512,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -5570,6 +6545,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5583,6 +6563,7 @@
       ],
       "name": "thiserror",
       "purl": "pkg:cargo/thiserror@1.0.69",
+      "scope": "required",
       "type": "library",
       "version": "1.0.69"
     },
@@ -5603,6 +6584,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5616,6 +6602,7 @@
       ],
       "name": "thiserror",
       "purl": "pkg:cargo/thiserror@2.0.18",
+      "scope": "required",
       "type": "library",
       "version": "2.0.18"
     },
@@ -5636,6 +6623,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -5670,6 +6662,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -5699,6 +6696,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -5733,6 +6735,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5746,6 +6753,7 @@
       ],
       "name": "time",
       "purl": "pkg:cargo/time@0.3.55",
+      "scope": "required",
       "type": "library",
       "version": "0.3.55"
     },
@@ -5766,6 +6774,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5779,6 +6792,7 @@
       ],
       "name": "time-core",
       "purl": "pkg:cargo/time-core@0.1.9",
+      "scope": "required",
       "type": "library",
       "version": "0.1.9"
     },
@@ -5799,6 +6813,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -5833,6 +6852,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5846,6 +6870,7 @@
       ],
       "name": "tinystr",
       "purl": "pkg:cargo/tinystr@0.7.6",
+      "scope": "required",
       "type": "library",
       "version": "0.7.6"
     },
@@ -5866,6 +6891,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5879,6 +6909,7 @@
       ],
       "name": "toml",
       "purl": "pkg:cargo/toml@0.9.12+spec-1.1.0",
+      "scope": "required",
       "type": "library",
       "version": "0.9.12+spec-1.1.0"
     },
@@ -5899,6 +6930,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5912,6 +6948,7 @@
       ],
       "name": "toml_datetime",
       "purl": "pkg:cargo/toml_datetime@0.7.5+spec-1.1.0",
+      "scope": "required",
       "type": "library",
       "version": "0.7.5+spec-1.1.0"
     },
@@ -5932,6 +6969,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5945,6 +6987,7 @@
       ],
       "name": "toml_parser",
       "purl": "pkg:cargo/toml_parser@1.1.0+spec-1.1.0",
+      "scope": "required",
       "type": "library",
       "version": "1.1.0+spec-1.1.0"
     },
@@ -5965,6 +7008,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -5978,6 +7026,7 @@
       ],
       "name": "toml_writer",
       "purl": "pkg:cargo/toml_writer@1.1.0+spec-1.1.0",
+      "scope": "required",
       "type": "library",
       "version": "1.1.0+spec-1.1.0"
     },
@@ -5993,6 +7042,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6022,6 +7076,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6051,6 +7110,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6080,6 +7144,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6109,6 +7178,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6138,6 +7212,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6172,6 +7251,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6185,6 +7269,7 @@
       ],
       "name": "unicase",
       "purl": "pkg:cargo/unicase@2.7.0",
+      "scope": "required",
       "type": "library",
       "version": "2.7.0"
     },
@@ -6205,6 +7290,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6218,6 +7308,7 @@
       ],
       "name": "unicode-ident",
       "purl": "pkg:cargo/unicode-ident@1.0.12",
+      "scope": "required",
       "type": "library",
       "version": "1.0.12"
     },
@@ -6233,6 +7324,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6262,6 +7358,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6296,6 +7397,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6309,6 +7415,7 @@
       ],
       "name": "url",
       "purl": "pkg:cargo/url@2.5.4",
+      "scope": "required",
       "type": "library",
       "version": "2.5.4"
     },
@@ -6329,6 +7436,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6342,6 +7454,7 @@
       ],
       "name": "utf16_iter",
       "purl": "pkg:cargo/utf16_iter@1.0.5",
+      "scope": "required",
       "type": "library",
       "version": "1.0.5"
     },
@@ -6362,6 +7475,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6375,6 +7493,7 @@
       ],
       "name": "utf8_iter",
       "purl": "pkg:cargo/utf8_iter@1.0.4",
+      "scope": "required",
       "type": "library",
       "version": "1.0.4"
     },
@@ -6395,6 +7514,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6408,6 +7532,7 @@
       ],
       "name": "utf8parse",
       "purl": "pkg:cargo/utf8parse@0.2.1",
+      "scope": "required",
       "type": "library",
       "version": "0.2.1"
     },
@@ -6428,6 +7553,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6441,6 +7571,7 @@
       ],
       "name": "uuid",
       "purl": "pkg:cargo/uuid@1.6.1",
+      "scope": "required",
       "type": "library",
       "version": "1.6.1"
     },
@@ -6461,6 +7592,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6474,6 +7610,7 @@
       ],
       "name": "validator",
       "purl": "pkg:cargo/validator@0.20.0",
+      "scope": "required",
       "type": "library",
       "version": "0.20.0"
     },
@@ -6489,6 +7626,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6523,6 +7665,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -6552,6 +7699,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6581,6 +7733,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6610,6 +7767,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6639,6 +7801,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6668,6 +7835,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6697,6 +7869,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6726,6 +7903,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6755,6 +7937,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6784,6 +7971,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6813,6 +8005,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6842,6 +8039,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6871,6 +8073,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6900,6 +8107,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6929,6 +8141,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6958,6 +8175,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -6992,6 +8214,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7005,6 +8232,7 @@
       ],
       "name": "windows-sys",
       "purl": "pkg:cargo/windows-sys@0.48.0",
+      "scope": "required",
       "type": "library",
       "version": "0.48.0"
     },
@@ -7025,6 +8253,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7038,6 +8271,7 @@
       ],
       "name": "windows-sys",
       "purl": "pkg:cargo/windows-sys@0.60.2",
+      "scope": "required",
       "type": "library",
       "version": "0.60.2"
     },
@@ -7053,6 +8287,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7087,6 +8326,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7100,6 +8344,7 @@
       ],
       "name": "windows-targets",
       "purl": "pkg:cargo/windows-targets@0.48.5",
+      "scope": "required",
       "type": "library",
       "version": "0.48.5"
     },
@@ -7115,6 +8360,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7149,6 +8399,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7162,6 +8417,7 @@
       ],
       "name": "windows-targets",
       "purl": "pkg:cargo/windows-targets@0.53.3",
+      "scope": "required",
       "type": "library",
       "version": "0.53.3"
     },
@@ -7177,6 +8433,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7206,6 +8467,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7235,6 +8501,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7264,6 +8535,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7293,6 +8569,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7322,6 +8603,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7351,6 +8637,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7380,6 +8671,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7409,6 +8705,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7438,6 +8739,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7467,6 +8773,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7496,6 +8807,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7525,6 +8841,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7554,6 +8875,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7583,6 +8909,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7612,6 +8943,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7641,6 +8977,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7670,6 +9011,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7699,6 +9045,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7728,6 +9079,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7762,6 +9118,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7775,6 +9136,7 @@
       ],
       "name": "windows_x86_64_msvc",
       "purl": "pkg:cargo/windows_x86_64_msvc@0.48.5",
+      "scope": "required",
       "type": "library",
       "version": "0.48.5"
     },
@@ -7790,6 +9152,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -7824,6 +9191,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7837,6 +9209,7 @@
       ],
       "name": "windows_x86_64_msvc",
       "purl": "pkg:cargo/windows_x86_64_msvc@0.53.0",
+      "scope": "required",
       "type": "library",
       "version": "0.53.0"
     },
@@ -7857,6 +9230,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7870,6 +9248,7 @@
       ],
       "name": "winnow",
       "purl": "pkg:cargo/winnow@0.7.15",
+      "scope": "required",
       "type": "library",
       "version": "0.7.15"
     },
@@ -7890,6 +9269,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7903,6 +9287,7 @@
       ],
       "name": "winnow",
       "purl": "pkg:cargo/winnow@1.0.0",
+      "scope": "required",
       "type": "library",
       "version": "1.0.0"
     },
@@ -7923,6 +9308,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7936,6 +9326,7 @@
       ],
       "name": "write16",
       "purl": "pkg:cargo/write16@1.0.0",
+      "scope": "required",
       "type": "library",
       "version": "1.0.0"
     },
@@ -7956,6 +9347,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -7969,6 +9365,7 @@
       ],
       "name": "writeable",
       "purl": "pkg:cargo/writeable@0.5.5",
+      "scope": "required",
       "type": "library",
       "version": "0.5.5"
     },
@@ -7989,6 +9386,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -8002,6 +9404,7 @@
       ],
       "name": "xml-rs",
       "purl": "pkg:cargo/xml-rs@0.8.29",
+      "scope": "required",
       "type": "library",
       "version": "0.8.29"
     },
@@ -8017,6 +9420,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -8051,6 +9459,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -8064,6 +9477,7 @@
       ],
       "name": "yoke",
       "purl": "pkg:cargo/yoke@0.7.5",
+      "scope": "required",
       "type": "library",
       "version": "0.7.5"
     },
@@ -8084,6 +9498,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -8097,6 +9516,7 @@
       ],
       "name": "yoke-derive",
       "purl": "pkg:cargo/yoke-derive@0.7.5",
+      "scope": "excluded",
       "type": "library",
       "version": "0.7.5"
     },
@@ -8112,6 +9532,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -8141,6 +9566,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): not compiled"
               }
             ]
           }
@@ -8175,6 +9605,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -8188,6 +9623,7 @@
       ],
       "name": "zerofrom",
       "purl": "pkg:cargo/zerofrom@0.1.5",
+      "scope": "required",
       "type": "library",
       "version": "0.1.5"
     },
@@ -8208,6 +9644,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -8221,6 +9662,7 @@
       ],
       "name": "zerofrom-derive",
       "purl": "pkg:cargo/zerofrom-derive@0.1.5",
+      "scope": "excluded",
       "type": "library",
       "version": "0.1.5"
     },
@@ -8241,6 +9683,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled, lib or bin unit"
               }
             ]
           }
@@ -8254,6 +9701,7 @@
       ],
       "name": "zerovec",
       "purl": "pkg:cargo/zerovec@0.10.4",
+      "scope": "required",
       "type": "library",
       "version": "0.10.4"
     },
@@ -8274,6 +9722,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-cyclonedx-ddd3cbbe7607.exe (sha256 ddd3cbbe76072026457044eac18ef77ff170a50f044fb2b527ecf8b7629f832d): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-cyclonedx-ddd3cbbe7607.build-17b113a2b513.jsonl (sha256 17b113a2b513231c432a9077e6f34b1bf894661e5586ca48d4c2b09cc19aab27): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -8287,6 +9740,7 @@
       ],
       "name": "zerovec-derive",
       "purl": "pkg:cargo/zerovec-derive@0.10.3",
+      "scope": "excluded",
       "type": "library",
       "version": "0.10.3"
     }
@@ -9222,6 +10676,6 @@
   },
   "serialNumber": "urn:uuid:e3f4f6fe-6be5-4535-867c-16b5c1874e9f",
   "specVersion": "1.6",
-  "version": 4,
+  "version": 5,
   "vulnerabilities": []
 }

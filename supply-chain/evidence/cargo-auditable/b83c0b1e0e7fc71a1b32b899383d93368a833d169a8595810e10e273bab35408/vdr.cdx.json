@@ -18,6 +18,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -31,6 +36,7 @@
       ],
       "name": "adler2",
       "purl": "pkg:cargo/adler2@2.0.1",
+      "scope": "required",
       "type": "library",
       "version": "2.0.1"
     },
@@ -46,6 +52,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -75,6 +86,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -98,6 +114,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -121,6 +142,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -149,6 +175,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -156,6 +187,7 @@
       },
       "name": "auditable-serde",
       "purl": "pkg:cargo/auditable-serde@0.9.0",
+      "scope": "required",
       "type": "library",
       "version": "0.9.0"
     },
@@ -171,6 +203,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -194,6 +231,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -223,6 +265,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -252,6 +299,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -281,6 +333,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -310,6 +367,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -339,6 +401,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -373,6 +440,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -386,6 +458,7 @@
       ],
       "name": "byteorder",
       "purl": "pkg:cargo/byteorder@0.5.3",
+      "scope": "required",
       "type": "library",
       "version": "0.5.3"
     },
@@ -406,6 +479,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -419,6 +497,7 @@
       ],
       "name": "camino",
       "purl": "pkg:cargo/camino@1.2.1",
+      "scope": "required",
       "type": "library",
       "version": "1.2.1"
     },
@@ -439,6 +518,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -446,6 +530,7 @@
       },
       "name": "cargo-auditable",
       "purl": "pkg:cargo/cargo-auditable@0.7.7",
+      "scope": "required",
       "type": "library",
       "version": "0.7.7"
     },
@@ -466,6 +551,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -479,6 +569,7 @@
       ],
       "name": "cargo-platform",
       "purl": "pkg:cargo/cargo-platform@0.3.1",
+      "scope": "required",
       "type": "library",
       "version": "0.3.1"
     },
@@ -499,6 +590,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -512,6 +608,7 @@
       ],
       "name": "cargo_metadata",
       "purl": "pkg:cargo/cargo_metadata@0.23.0",
+      "scope": "required",
       "type": "library",
       "version": "0.23.0"
     },
@@ -532,6 +629,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -545,6 +647,7 @@
       ],
       "name": "cfg-if",
       "purl": "pkg:cargo/cfg-if@1.0.4",
+      "scope": "required",
       "type": "library",
       "version": "1.0.4"
     },
@@ -565,6 +668,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -578,6 +686,7 @@
       ],
       "name": "crc32fast",
       "purl": "pkg:cargo/crc32fast@1.5.0",
+      "scope": "required",
       "type": "library",
       "version": "1.5.0"
     },
@@ -593,6 +702,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -622,6 +736,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -651,6 +770,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -680,6 +804,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -709,6 +838,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -743,6 +877,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -756,6 +895,7 @@
       ],
       "name": "equivalent",
       "purl": "pkg:cargo/equivalent@1.0.2",
+      "scope": "required",
       "type": "library",
       "version": "1.0.2"
     },
@@ -771,6 +911,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -800,6 +945,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -834,6 +984,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -847,6 +1002,7 @@
       ],
       "name": "foldhash",
       "purl": "pkg:cargo/foldhash@0.1.5",
+      "scope": "required",
       "type": "library",
       "version": "0.1.5"
     },
@@ -862,6 +1018,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -896,6 +1057,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -909,6 +1075,7 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.15.5",
+      "scope": "required",
       "type": "library",
       "version": "0.15.5"
     },
@@ -929,6 +1096,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -942,6 +1114,7 @@
       ],
       "name": "hashbrown",
       "purl": "pkg:cargo/hashbrown@0.16.0",
+      "scope": "required",
       "type": "library",
       "version": "0.16.0"
     },
@@ -957,6 +1130,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -986,6 +1164,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1020,6 +1203,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1033,6 +1221,7 @@
       ],
       "name": "indexmap",
       "purl": "pkg:cargo/indexmap@2.12.0",
+      "scope": "required",
       "type": "library",
       "version": "2.12.0"
     },
@@ -1053,6 +1242,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1066,6 +1260,7 @@
       ],
       "name": "itoa",
       "purl": "pkg:cargo/itoa@1.0.15",
+      "scope": "required",
       "type": "library",
       "version": "1.0.15"
     },
@@ -1081,6 +1276,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1115,6 +1315,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1128,6 +1333,7 @@
       ],
       "name": "leb128",
       "purl": "pkg:cargo/leb128@0.2.5",
+      "scope": "required",
       "type": "library",
       "version": "0.2.5"
     },
@@ -1143,6 +1349,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1172,6 +1383,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1206,6 +1422,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1219,6 +1440,7 @@
       ],
       "name": "memchr",
       "purl": "pkg:cargo/memchr@2.7.6",
+      "scope": "required",
       "type": "library",
       "version": "2.7.6"
     },
@@ -1239,6 +1461,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1252,6 +1479,7 @@
       ],
       "name": "miniz_oxide",
       "purl": "pkg:cargo/miniz_oxide@0.9.1",
+      "scope": "required",
       "type": "library",
       "version": "0.9.1"
     },
@@ -1267,6 +1495,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1296,6 +1529,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1330,6 +1568,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1343,6 +1586,7 @@
       ],
       "name": "object",
       "purl": "pkg:cargo/object@0.37.3",
+      "scope": "required",
       "type": "library",
       "version": "0.37.3"
     },
@@ -1358,6 +1602,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1387,6 +1636,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1416,6 +1670,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1450,6 +1709,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1463,6 +1727,7 @@
       ],
       "name": "pico-args",
       "purl": "pkg:cargo/pico-args@0.5.0",
+      "scope": "required",
       "type": "library",
       "version": "0.5.0"
     },
@@ -1478,6 +1743,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1512,6 +1782,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1541,6 +1816,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1575,6 +1855,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1604,6 +1889,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1633,6 +1923,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1662,6 +1957,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1691,6 +1991,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1720,6 +2025,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1743,6 +2053,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1772,6 +2087,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1806,6 +2126,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1819,6 +2144,7 @@
       ],
       "name": "ryu",
       "purl": "pkg:cargo/ryu@1.0.20",
+      "scope": "required",
       "type": "library",
       "version": "1.0.20"
     },
@@ -1834,6 +2160,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1863,6 +2194,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -1897,6 +2233,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1910,6 +2251,7 @@
       ],
       "name": "semver",
       "purl": "pkg:cargo/semver@1.0.27",
+      "scope": "required",
       "type": "library",
       "version": "1.0.27"
     },
@@ -1930,6 +2272,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1943,6 +2290,7 @@
       ],
       "name": "serde",
       "purl": "pkg:cargo/serde@1.0.228",
+      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
@@ -1963,6 +2311,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -1976,6 +2329,7 @@
       ],
       "name": "serde_core",
       "purl": "pkg:cargo/serde_core@1.0.228",
+      "scope": "required",
       "type": "library",
       "version": "1.0.228"
     },
@@ -1996,6 +2350,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -2025,6 +2384,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2059,6 +2423,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -2072,6 +2441,7 @@
       ],
       "name": "serde_json",
       "purl": "pkg:cargo/serde_json@1.0.145",
+      "scope": "required",
       "type": "library",
       "version": "1.0.145"
     },
@@ -2087,6 +2457,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2116,6 +2491,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2145,6 +2525,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2174,6 +2559,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2203,6 +2593,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2237,6 +2632,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -2266,6 +2666,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2300,6 +2705,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -2313,6 +2723,7 @@
       ],
       "name": "thiserror",
       "purl": "pkg:cargo/thiserror@2.0.17",
+      "scope": "required",
       "type": "library",
       "version": "2.0.17"
     },
@@ -2328,6 +2739,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2362,6 +2778,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled for build time only (proc-macro or build script)"
               }
             ]
           }
@@ -2391,6 +2812,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2420,6 +2846,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2449,6 +2880,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2478,6 +2914,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2507,6 +2948,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2536,6 +2982,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2570,6 +3021,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -2583,6 +3039,7 @@
       ],
       "name": "topological-sort",
       "purl": "pkg:cargo/topological-sort@0.2.2",
+      "scope": "required",
       "type": "library",
       "version": "0.2.2"
     },
@@ -2603,6 +3060,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): build dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -2632,6 +3094,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2661,6 +3128,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2690,6 +3162,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2719,6 +3196,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2748,6 +3230,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2777,6 +3264,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2811,6 +3303,11 @@
                 "confidence": 1.0,
                 "technique": "binary-analysis",
                 "value": "cargo-auditable .dep-v0 section of cargo-auditable-b83c0b1e0e7f-linux-x86_64 (sha256 b83c0b1e0e7fc71a1b32b899383d93368a833d169a8595810e10e273bab35408): runtime dependency; resolved graph, a superset of compiled crates"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): compiled, lib or bin unit"
               }
             ]
           }
@@ -2824,6 +3321,7 @@
       ],
       "name": "wasm-gen",
       "purl": "pkg:cargo/wasm-gen@0.1.4",
+      "scope": "required",
       "type": "library",
       "version": "0.1.4"
     },
@@ -2839,6 +3337,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2868,6 +3371,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2897,6 +3405,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2926,6 +3439,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2955,6 +3473,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -2984,6 +3507,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -3013,6 +3541,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -3042,6 +3575,11 @@
                 "confidence": 1.0,
                 "technique": "manifest-analysis",
                 "value": "frozen Cargo.lock (tools/locks)"
+              },
+              {
+                "confidence": 1.0,
+                "technique": "manifest-analysis",
+                "value": "cargo build record cargo-auditable-b83c0b1e0e7f-linux-x86_64.build-55411df5e3ae.jsonl (sha256 55411df5e3ae5167f84b02de79ac5dcfa1cded4ac3a391afdbc4c6f68dddc20e): not compiled"
               }
             ]
           }
@@ -3336,6 +3874,6 @@
   },
   "serialNumber": "urn:uuid:9f1b8783-a351-47d1-98d2-2982ef0bd2bc",
   "specVersion": "1.6",
-  "version": 4,
+  "version": 5,
   "vulnerabilities": []
 }

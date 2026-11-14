@@ -509,9 +509,9 @@ pub(crate) struct Compiled<'a> {
     pub linked: &'a BTreeSet<(String, String)>,
     /// Packages with any unit, proc-macros and build scripts included.
     pub any: &'a BTreeSet<(String, String)>,
-    /// The build compiled the standard library (`-Z build-std`), whose crates.io dependencies are
-    /// lib units linked into the binary but absent from the tool's own `.dep-v0`.
-    pub builds_std: bool,
+    /// Packages compiled as standard-library dependencies under `-Z build-std` (feature
+    /// `rustc-dep-of-std`): linked through std, absent from the tool's own `.dep-v0` graph.
+    pub std_deps: &'a BTreeSet<(String, String)>,
     /// Names the record, for the evidence method.
     pub desc: &'a str,
 }
@@ -519,8 +519,8 @@ pub(crate) struct Compiled<'a> {
 /// CycloneDX `scope` per lock component. An unset scope reads as `required` (CycloneDX 1.6
 /// default), so each component is scoped from the strongest evidence there is:
 ///   * absent from the binary's `.dep-v0`, or listed there as a `build` dependency: `excluded`,
-///     except under `-Z build-std` when the record has a lib unit for that name and version: it
-///     may be the standard library's own copy, which is linked, so `required`.
+///     unless the build record compiled that name and version as a standard-library dependency
+///     (`rustc-dep-of-std`, under `-Z build-std`): std's copy links in, so `required`.
 ///   * listed as `runtime`: `.dep-v0` is the resolved graph, a superset of what was compiled
 ///     (cargo-audit 5e1bf935c84c lists 329 packages; 23 have no compile line). With cargo's
 ///     build record, a package with a lib or bin unit is `required` and any other `excluded`;
@@ -555,7 +555,9 @@ pub(crate) fn apply_scope(
             }));
         }
         if let Some(b) = built {
-            let what = if b.linked.contains(&key) {
+            let what = if b.std_deps.contains(&key) {
+                "compiled as a standard-library dependency (rustc-dep-of-std), lib unit"
+            } else if b.linked.contains(&key) {
                 "compiled, lib or bin unit"
             } else if b.any.contains(&key) {
                 "compiled for build time only (proc-macro or build script)"
@@ -569,9 +571,7 @@ pub(crate) fn apply_scope(
             }));
         }
         let scope = match (listed, built) {
-            (None | Some(DepKind::Build), Some(b)) if b.builds_std && b.linked.contains(&key) => {
-                Some("required")
-            }
+            (None | Some(DepKind::Build), Some(b)) if b.std_deps.contains(&key) => Some("required"),
             (None | Some(DepKind::Build), _) => Some("excluded"),
             (Some(DepKind::Runtime), Some(b)) if b.linked.contains(&key) => Some("required"),
             (Some(DepKind::Runtime), Some(_)) => Some("excluded"),
@@ -755,7 +755,7 @@ pub fn run(args: &[String]) -> i32 {
                         Some((
                             crate::build_record::linked(&msgs),
                             crate::build_record::compiled(&msgs),
-                            crate::build_record::builds_std(&msgs),
+                            crate::build_record::std_deps(&msgs),
                             format!(
                                 "cargo build record {} (sha256 {})",
                                 s(&h, &["rawRecord", "asset"]),
@@ -775,10 +775,10 @@ pub fn run(args: &[String]) -> i32 {
                 );
                 let built = record
                     .as_ref()
-                    .map(|(linked, any, builds_std, desc)| Compiled {
+                    .map(|(linked, any, std_deps, desc)| Compiled {
                         linked,
                         any,
-                        builds_std: *builds_std,
+                        std_deps,
                         desc,
                     });
                 apply_scope(
@@ -913,7 +913,7 @@ mod tests {
         let built = Compiled {
             linked: &linked,
             any: &any,
-            builds_std: false,
+            std_deps: &BTreeSet::new(),
             desc: "cargo build record r",
         };
         let mut comps = components_from_lock(LOCK3);
@@ -939,17 +939,23 @@ mod tests {
         );
         assert_eq!(last(&comps[2]), "cargo build record r: not compiled");
 
-        // Under build-std, a build-kind package with a lib unit may be std's linked copy.
-        let linked_b: BTreeSet<_> = [k("a", "1.0.0"), k("b", "2.0.0")].into();
+        // Under build-std: a build-kind package compiled as a std dependency (rustc-dep-of-std)
+        // links in through std; one compiled only as a host lib (a proc-macro's syn) does not.
+        let linked_b: BTreeSet<_> = [k("a", "1.0.0"), k("b", "2.0.0"), k("d", "4.0.0")].into();
+        let std_b: BTreeSet<_> = [k("d", "4.0.0")].into();
         let std_built = Compiled {
             linked: &linked_b,
             any: &any,
-            builds_std: true,
+            std_deps: &std_b,
             desc: "cargo build record r",
         };
         let mut comps = components_from_lock(LOCK3);
         apply_scope(&mut comps, &dep_v0, "x.exe (sha256 d)", Some(&std_built));
-        assert_eq!(comps[1]["scope"], "required");
+        assert_eq!(
+            comps[1]["scope"], "excluded",
+            "a host-only lib is not linked"
+        );
+        assert_eq!(comps[3]["scope"], "required", "std's copy is linked");
     }
 
     #[test]
