@@ -421,7 +421,8 @@ jobs:
       # Build-environment drift against the previous release's attested SBOM (its formulation).
       # The runner image cannot be pinned, so its check is monotonic: the same family must not go
       # backwards. A family change, toolset / SDK / rustc changes, and "no prior record" are
-      # written to the run summary the release-publish approver reads; only a rollback fails.
+      # written to the run summary the release-publish approver reads. Two things fail: a
+      # rollback, and link.exe at the same file version with different bytes.
       # The prior record is admitted only after its attestation verifies against this repo's two
       # documented signer identities.
       - name: Compare build environment with the previous release
@@ -434,6 +435,7 @@ jobs:
           # Components may be nested (product -> toolset -> link.exe), so search the whole formula.
           field() { jq -r --arg ref "$2" '[.formulation[0].components[]? | .. | objects | select(."bom-ref"? == $ref) | .version] | first // empty' "$1"; }
           name_of() { jq -r --arg ref "$2" '[.formulation[0].components[]? | .. | objects | select(."bom-ref"? == $ref) | .name] | first // empty' "$1"; }
+          sha_of() { jq -r --arg ref "$2" '[.formulation[0].components[]? | .. | objects | select(."bom-ref"? == $ref) | .hashes[]? | select(.alg == "SHA-256") | .content] | first // empty' "$1"; }
           tag=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName 2>/dev/null || true)
           {
             echo "## Build environment vs previous release (${tag:-none})"
@@ -471,6 +473,22 @@ jobs:
                 if [ "$p" = "$c" ]; then st=unchanged; else st=changed; echo "::notice::$ref: '$p' -> '$c'"; fi
                 echo "| $ref | $p | $c | $st |" >> env-summary.md
               done
+              # Same version, different bytes: Microsoft does not ship two link.exe builds under one
+              # file version, so an equal version with a different SHA-256 is a substituted linker.
+              lv=$(field "$cur" build-env:link-exe); plv=$(field prev/hp-thermal.cdx.json build-env:link-exe)
+              ph=$(sha_of prev/hp-thermal.cdx.json build-env:link-exe); ch=$(sha_of "$cur" build-env:link-exe)
+              [ -n "$ch" ] || { echo "::error::this build's formulation records no link.exe SHA-256"; exit 1; }
+              if [ -z "$ph" ]; then
+                st="not compared ($tag recorded no hash)"
+              elif [ "$plv" != "$lv" ]; then
+                st="version changed; bytes not comparable"
+              elif [ "$ph" = "$ch" ]; then
+                st="same version, same bytes"
+              else
+                st="SAME VERSION, DIFFERENT BYTES"; status=1
+                echo "::error::link.exe $lv: SHA-256 $ch differs from $tag's $ph under the same file version"
+              fi
+              echo "| link.exe bytes | ${ph:-none} | $ch | $st |" >> env-summary.md
               pn=$(name_of prev/hp-thermal.cdx.json build-env:runner-image); cn=$(name_of "$cur" build-env:runner-image)
               pv=$(field prev/hp-thermal.cdx.json build-env:runner-image);   cv=$(field "$cur" build-env:runner-image)
               if [ "$pn" != "$cn" ]; then
