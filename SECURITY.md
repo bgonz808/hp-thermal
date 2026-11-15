@@ -4,6 +4,10 @@ Security is a first-class goal for hp-thermal: a privileged SYSTEM service that 
 BIOS/WMI calls, driven by an unprivileged tray over a local pipe, has to be built to be
 safe by design.
 
+## Supported versions
+
+Only the latest release receives security fixes.
+
 ## Reporting a vulnerability
 
 Report privately via **GitHub Security Advisories** ("Report a vulnerability" on the
