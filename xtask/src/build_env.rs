@@ -355,17 +355,22 @@ fn load_against(target: &str) -> Result<(serde_json::Value, String), String> {
         ".nameWithOwner",
     ])?;
     let repo = repo.trim();
-    // release-pipeline.yml signs from 0.3.3; release.yml signed the releases before it.
+    // release-pipeline.yml signs from 0.3.3; release.yml signed the releases before it. Exactly
+    // that workflow at this release's tag: an attestation signed on any other ref is refused.
+    let source_ref = format!("refs/tags/{target}");
     let verified = ["release-pipeline.yml", "release.yml"].iter().any(|w| {
-        let signer = format!("{repo}/.github/workflows/{w}");
+        let identity = format!("https://github.com/{repo}/.github/workflows/{w}@{source_ref}");
         crate::advance::gh(&[
             "attestation",
             "verify",
             &f,
             "--repo",
             repo,
-            "--signer-workflow",
-            &signer,
+            "--cert-identity",
+            &identity,
+            "--source-ref",
+            &source_ref,
+            "--deny-self-hosted-runners",
         ])
         .is_ok()
     });

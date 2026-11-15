@@ -406,7 +406,8 @@ jobs:
             --bundle "$BUNDLE" \
             --repo "${GITHUB_REPOSITORY}" \
             --predicate-type https://docs.oasis-open.org/sarif/sarif/v2.1.0 \
-            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+            --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}" \
+            --source-ref "$GITHUB_REF" --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
           echo "SARIF attestation verified."
 
   # ALSO surface the release SARIF in the Code-scanning tab (human-browsable posture) — the
@@ -548,13 +549,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          signer="${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml"
+          # Exactly the pipeline this run called: release-pipeline.yml at this run's ref and commit.
+          pin=(--cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml@${GITHUB_REF}"
+               --source-ref "$GITHUB_REF" --source-digest "$GITHUB_SHA" --deny-self-hosted-runners)
           echo "::group::provenance"
           for art in dist/hp-thermal.exe dist/hp-thermal.pdb; do
             gh attestation verify "$art" \
               --bundle bundles/hp-thermal.provenance.sigstore.jsonl \
               --repo "${GITHUB_REPOSITORY}" \
-              --signer-workflow "$signer"
+              "${pin[@]}"
           done
           echo "::endgroup::"
           echo "::group::sbom (cyclonedx)"
@@ -562,7 +565,7 @@ jobs:
             --bundle bundles/hp-thermal.sbom.sigstore.jsonl \
             --repo "${GITHUB_REPOSITORY}" \
             --predicate-type https://cyclonedx.org/bom \
-            --signer-workflow "$signer"
+            "${pin[@]}"
           echo "::endgroup::"
           cp bundles/hp-thermal.provenance.sigstore.jsonl dist/hp-thermal.provenance.sigstore.jsonl
           cp bundles/hp-thermal.sbom.sigstore.jsonl       dist/hp-thermal.sbom.sigstore.jsonl
@@ -601,7 +604,10 @@ jobs:
           VSA_BUNDLE: ${{ steps.vsa.outputs.bundle-path }}
         run: |
           set -euo pipefail
-          gh attestation verify dist/hp-thermal.exe --bundle "$VSA_BUNDLE" --repo "${GITHUB_REPOSITORY}"             --predicate-type https://slsa.dev/verification_summary/v1             --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release.yml"
+          gh attestation verify dist/hp-thermal.exe --bundle "$VSA_BUNDLE" --repo "${GITHUB_REPOSITORY}" \
+            --predicate-type https://slsa.dev/verification_summary/v1 \
+            --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}" \
+            --source-ref "$GITHUB_REF" --source-digest "$GITHUB_SHA" --deny-self-hosted-runners
           cp "$VSA_BUNDLE" dist/hp-thermal.vsa.sigstore.jsonl
 
       - name: Publish GitHub Release
