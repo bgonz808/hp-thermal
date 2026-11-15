@@ -218,8 +218,14 @@ jobs:
               [ -n "$tag" ] || { echo "::error::$f: no release carries exe digest $digest"; fail=1; continue; }
               mkdir -p "rel-$tag"
               gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern hp-thermal.cdx.json --dir "rel-$tag" --clobber
-              gh attestation verify "rel-$tag/hp-thermal.cdx.json" --repo "$GITHUB_REPOSITORY" > /dev/null \
-                || { echo "::error::$f: release $tag SBOM provenance did not verify; not admitted"; fail=1; continue; }
+              # Exactly a release workflow at this release's tag; nothing signed on another ref.
+              ok=0
+              for w in release-pipeline.yml release.yml; do
+                if gh attestation verify "rel-$tag/hp-thermal.cdx.json" --repo "$GITHUB_REPOSITORY" \
+                     --cert-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/$w@refs/tags/$tag" \
+                     --source-ref "refs/tags/$tag" --deny-self-hosted-runners > /dev/null 2>&1; then ok=1; break; fi
+              done
+              [ "$ok" = 1 ] || { echo "::error::$f: release $tag SBOM provenance did not verify against a release workflow at refs/tags/$tag; not admitted"; fail=1; continue; }
               args+=(--sbom "rel-$tag/hp-thermal.cdx.json")
             fi
             if ! "$X" "${args[@]}"; then echo "::error::$f: differs from what the evidence regenerates"; fail=1; fi

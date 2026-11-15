@@ -457,8 +457,9 @@ jobs:
             for w in release-pipeline.yml release.yml; do
               if gh attestation verify prev/hp-thermal.exe --bundle prev/hp-thermal.sbom.sigstore.jsonl \
                    --repo "$GITHUB_REPOSITORY" --predicate-type https://cyclonedx.org/bom \
-                   --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/$w" --format json > prev/verify.json 2> prev/verify.err; then
-                verified=1; echo "previous release $tag: SBOM attestation verified (signer $w)"; break
+                   --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/$w@refs/tags/$tag" \
+                   --source-ref "refs/tags/$tag" --deny-self-hosted-runners --format json > prev/verify.json 2> prev/verify.err; then
+                verified=1; echo "previous release $tag: SBOM attestation verified ($w at refs/tags/$tag)"; break
               fi
             done
             [ "$verified" = 1 ] || { echo "::error::previous release $tag: SBOM attestation did not verify; refusing to compare against an unverified record"; cat prev/verify.err; exit 1; }
@@ -838,12 +839,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          signer="${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml"
+          # Exactly this run's identity: the pipeline at this run's ref and commit.
+          pin=(--cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml@${GITHUB_REF}"
+               --source-ref "$GITHUB_REF" --source-digest "$GITHUB_SHA" --deny-self-hosted-runners)
           for art in dist/hp-thermal.exe dist/hp-thermal.pdb; do
-            gh attestation verify "$art" --bundle "$PROVENANCE_BUNDLE" --repo "${GITHUB_REPOSITORY}" --signer-workflow "$signer"
+            gh attestation verify "$art" --bundle "$PROVENANCE_BUNDLE" --repo "${GITHUB_REPOSITORY}" "${pin[@]}"
           done
           gh attestation verify dist/hp-thermal.exe --bundle "$SBOM_BUNDLE" --repo "${GITHUB_REPOSITORY}" \
-            --predicate-type https://cyclonedx.org/bom --signer-workflow "$signer"
+            --predicate-type https://cyclonedx.org/bom "${pin[@]}"
           mkdir -p bundles
           cp "$PROVENANCE_BUNDLE" bundles/hp-thermal.provenance.sigstore.jsonl
           cp "$SBOM_BUNDLE"       bundles/hp-thermal.sbom.sigstore.jsonl
