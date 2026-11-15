@@ -191,6 +191,8 @@ exe's digest, into `provenance.sigstore.jsonl`, `sbom.sigstore.jsonl`, and where
 them `sarif.sigstore.jsonl` and `vsa.sigstore.jsonl`. The digest is hashed from the published
 exe. An original verifies against a release workflow at the tag's ref and commit, was made by
 the tag push, and was logged before the release was published; every provenance subject must
-still match its published file. Any other attestation signed at the tag stops the stage. Each
+still match its published file. Any other attestation signed at the tag stops the stage. VDR
+revisions are anchored as `vdr.v<version>.sigstore.jsonl`: signed by `release-vdr.yml` at
+`refs/heads/main`, dispatched, logged after the release was published, one serial. Each
 bundle carries its Rekor inclusion proof, so the record checks against the public log without
 GitHub's attestation store. Anchors are never replaced.

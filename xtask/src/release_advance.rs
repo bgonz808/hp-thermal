@@ -14,7 +14,9 @@
 //! what was released does not rest on GitHub's attestation store (deletable by the repository
 //! owner) or on release assets. An original is signed by a release workflow at the tag's ref and
 //! commit, by the tag push, and logged before the release was published. Anything else signed at
-//! the tag (a re-run or dispatch after publish) stops the stage for a person to look.
+//! the tag (a re-run or dispatch after publish) stops the stage for a person to look. VDR
+//! revisions, which `release-vdr.yml` attests from `main` after the release, are anchored too, as
+//! `vdr.v<version>.sigstore.jsonl`.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -300,13 +302,17 @@ fn stage_mal(
 /// `release-pipeline.yml` from v0.3.3, `release.yml` before it.
 const RELEASE_SIGNERS: [&str; 2] = ["release-pipeline.yml", "release.yml"];
 const PROVENANCE: &str = "https://slsa.dev/provenance/v1";
+const CYCLONEDX: &str = "https://cyclonedx.org/bom";
+/// Issues VDR revisions from `main` after a release (never a release asset: a published release
+/// is immutable). Anchored as `vdr.v<version>.sigstore.jsonl`.
+const VDR_SIGNER: &str = "release-vdr.yml";
 
 /// The evidence file an original attestation of `predicate_type` is anchored in; the names match
 /// the release's own `hp-thermal.<kind>.sigstore.jsonl` assets.
 pub(crate) fn anchor_file(predicate_type: &str) -> Option<&'static str> {
     match predicate_type {
         PROVENANCE => Some("provenance.sigstore.jsonl"),
-        "https://cyclonedx.org/bom" => Some("sbom.sigstore.jsonl"),
+        CYCLONEDX => Some("sbom.sigstore.jsonl"),
         "https://docs.oasis-open.org/sarif/sarif/v2.1.0" => Some("sarif.sigstore.jsonl"),
         "https://slsa.dev/verification_summary/v1" => Some("vsa.sigstore.jsonl"),
         _ => None,
@@ -427,6 +433,33 @@ pub(crate) fn judge(trigger: &str, runner: &str, tlog: &[i64], published: i64) -
     }
 }
 
+/// A VDR revision is issued by dispatching `release-vdr.yml` on `main` once the release exists.
+pub(crate) fn judge_vdr(trigger: &str, runner: &str, tlog: &[i64], published: i64) -> Origin {
+    if trigger != "workflow_dispatch" {
+        return Origin::Suspect(format!("build trigger `{trigger}`, not a dispatch"));
+    }
+    if runner != "github-hosted" {
+        return Origin::Suspect(format!("runner `{runner}`"));
+    }
+    match tlog.iter().min() {
+        None => Origin::Suspect("no transparency-log time".into()),
+        Some(&t) if t < published => {
+            Origin::Suspect("logged before the release was published".into())
+        }
+        Some(_) => Origin::Original,
+    }
+}
+
+fn tlog_times(result: &serde_json::Value) -> Vec<i64> {
+    result["verifiedTimestamps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|t| s(t, &["type"]) == "Tlog")
+        .filter_map(|t| rfc3339_unix(&s(t, &["timestamp"])))
+        .collect()
+}
+
 /// The commit a tag names on origin (the peeled `^{}` line for an annotated tag).
 fn remote_tag_commit(tag: &str) -> Result<String, String> {
     let out = git(&[
@@ -509,7 +542,8 @@ fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
         return Err("100 or more attestations for one digest: the list may be truncated".into());
     }
     let source_ref = format!("refs/tags/{tag}");
-    let mut kept: BTreeMap<&'static str, Vec<String>> = BTreeMap::new();
+    let mut kept: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut vdr_serials = std::collections::BTreeSet::new();
     let mut subjects: Vec<(String, String)> = Vec::new();
     let mut suspects = 0usize;
     for (i, a) in atts.iter().enumerate() {
@@ -560,19 +594,69 @@ fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
             }
         }
         let Some((wf, v)) = verified else {
+            if pt == CYCLONEDX {
+                let ident = format!(
+                    "https://github.com/{repo}/.github/workflows/{VDR_SIGNER}@refs/heads/main"
+                );
+                if let Ok(v) = gh_json(&[
+                    "attestation",
+                    "verify",
+                    &x,
+                    "--bundle",
+                    &b,
+                    "--repo",
+                    &repo,
+                    "--predicate-type",
+                    &pt,
+                    "--cert-identity",
+                    &ident,
+                    "--source-ref",
+                    "refs/heads/main",
+                    "--deny-self-hosted-runners",
+                    "--format",
+                    "json",
+                ]) {
+                    let r = &v[0]["verificationResult"];
+                    let cert = &r["signature"]["certificate"];
+                    let run = s(cert, &["runInvocationURI"]);
+                    let pred = &r["statement"]["predicate"];
+                    let version = pred["version"].as_u64().filter(|n| *n > 0);
+                    let is_vdr = pred["vulnerabilities"].is_array()
+                        && s(pred, &["metadata", "component", "name"]) == PRODUCT;
+                    let (Some(n), true) = (version, is_vdr) else {
+                        println!(
+                            "  SUSPECT   {VDR_SIGNER} statement is not a versioned {PRODUCT} VDR: {run}"
+                        );
+                        suspects += 1;
+                        continue;
+                    };
+                    match judge_vdr(
+                        &s(cert, &["buildTrigger"]),
+                        &s(cert, &["runnerEnvironment"]),
+                        &tlog_times(r),
+                        published,
+                    ) {
+                        Origin::Original => {
+                            vdr_serials.insert(s(pred, &["serialNumber"]));
+                            let f = format!("vdr.v{n}.sigstore.jsonl");
+                            println!("  vdr       {f:<26} {VDR_SIGNER}, {run}");
+                            kept.entry(f).or_default().push(line);
+                        }
+                        Origin::Suspect(why) => {
+                            println!("  SUSPECT   VDR v{n} {VDR_SIGNER}, {run}: {why}");
+                            suspects += 1;
+                        }
+                    }
+                    continue;
+                }
+            }
             println!("  other     {fname:<26} not signed by a release workflow at {tag}");
             continue;
         };
         let r = &v[0]["verificationResult"];
         let cert = &r["signature"]["certificate"];
         let run = s(cert, &["runInvocationURI"]);
-        let tlog: Vec<i64> = r["verifiedTimestamps"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|t| s(t, &["type"]) == "Tlog")
-            .filter_map(|t| rfc3339_unix(&s(t, &["timestamp"])))
-            .collect();
+        let tlog = tlog_times(r);
         match judge(
             &s(cert, &["buildTrigger"]),
             &s(cert, &["runnerEnvironment"]),
@@ -586,7 +670,7 @@ fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
                         subjects.push((s(sub, &["name"]), s(sub, &["digest", "sha256"])));
                     }
                 }
-                kept.entry(fname).or_default().push(line);
+                kept.entry(fname.to_string()).or_default().push(line);
             }
             Origin::Suspect(why) => {
                 println!("  SUSPECT   {fname:<26} {wf}, {run}: {why}");
@@ -597,6 +681,12 @@ fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
     if suspects > 0 {
         return Err(format!(
             "{suspects} attestation(s) signed at {tag} are not originals; investigate before anchoring"
+        ));
+    }
+    if vdr_serials.len() > 1 {
+        return Err(format!(
+            "VDR revisions under {} serial numbers; one subject has one serial",
+            vdr_serials.len()
         ));
     }
     for (f, lines) in &kept {
@@ -656,7 +746,7 @@ fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
     commit(
         &[&dir],
         &format!(
-            "evidence: {PRODUCT} {tag} ({}): original attestations anchored",
+            "evidence: {PRODUCT} {tag} ({}): attestations anchored",
             short(&digest)
         ),
         no_commit,
@@ -788,6 +878,37 @@ mod tests {
         ));
         assert!(matches!(
             judge("push", "github-hosted", &[published + 1], published),
+            Origin::Suspect(_)
+        ));
+    }
+
+    #[test]
+    fn vdr_revisions_are_dispatched_after_publish() {
+        let published = rfc3339_unix("2026-11-12T23:00:38Z").unwrap();
+        let issued = rfc3339_unix("2026-11-13T21:49:00Z").unwrap();
+        assert_eq!(
+            judge_vdr("workflow_dispatch", "github-hosted", &[issued], published),
+            Origin::Original
+        );
+        assert!(matches!(
+            judge_vdr("push", "github-hosted", &[issued], published),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge_vdr("workflow_dispatch", "self-hosted", &[issued], published),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge_vdr(
+                "workflow_dispatch",
+                "github-hosted",
+                &[published - 1],
+                published
+            ),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge_vdr("workflow_dispatch", "github-hosted", &[], published),
             Origin::Suspect(_)
         ));
     }
