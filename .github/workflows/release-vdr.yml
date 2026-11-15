@@ -3,27 +3,31 @@ name: Release VDR attestation
 # Post-release stage (#396). A shipped exe's Vulnerability Disclosure Report can exist only after
 # `release-advance vuln` recorded the exe's evidence and `vdr emit` committed the report beside it
 # (supply-chain/evidence/hp-thermal/<digest>/vdr.cdx.json, regenerated and compared by CI). This
-# dispatch-only stage attests that committed report to the released exe and attaches both the
-# report and its Sigstore bundle to the release.
+# dispatch-only stage attests that committed report to the released exe.
+#
+# DELIVERY: the attestation (GitHub's attestation store and the public Rekor log) and the committed
+# report. Nothing is attached to the release: a published release is immutable and accepts no
+# asset afterwards. `cargo xtask release-advance anchor --tag <tag>` then records the attestation's
+# bundle beside the report as vdr.v<version>.sigstore.jsonl.
 #
 # CARRIER: a VDR is a CycloneDX BOM whose payload is `vulnerabilities[]`; CycloneDX defines no
 # VDR-specific in-toto predicate type, so the attestation uses https://cyclonedx.org/bom, the same
 # type as the SBOM. Consumers tell them apart by content (`vulnerabilities`, `metadata.lifecycles`)
-# and by signer: this workflow's identity, never the pipeline's.
+# and by signer: this workflow's identity at refs/heads/main, never the release workflows'.
 #
 # CUSTODY: the exe and SBOM are downloaded from the release and admitted only after their
-# provenance verifies against this repository's documented signer identities; the exe digest is
+# provenance verifies against a release workflow at the release's tag; the exe digest is
 # re-checked against SHA256SUMS; the committed VDR is regenerated from the evidence before it is
-# signed. Revisions are append-only: version 1 is hp-thermal.vdr.cdx.json, version N >= 2 is
-# hp-thermal.vdr.vN.cdx.json, each under the release's one serial and above every version already
-# attached; an existing asset name is a refusal, never an overwrite.
+# signed. Revisions are append-only: each keeps the release's one serial and takes a version
+# above every revision this workflow already attested to the exe, read back from the attestation
+# store and counted only if it verifies against this workflow at main.
 #
 # JUDGMENT GATE: the `release-attest` environment (maintainer approval, no admin bypass, deployable
 # from `main` only). Deliberately not `release-publish`: that environment admits only `v*` tag refs,
 # which is what makes "publish" mean "a tagged release", and this stage runs from `main` because
 # the evidence it attests lives there, after the release. A distinct environment keeps the two
-# approvals independently recorded. Nothing here commits to git; the only writes are the
-# attestation and two release assets.
+# approvals independently recorded. Nothing here commits to git or writes to the release; the
+# only write is the attestation.
 
 on:
   workflow_dispatch:
@@ -47,11 +51,12 @@ jobs:
     environment: release-attest
     runs-on: ubuntu-24.04
     permissions:
-      contents: write        # release asset upload only; no git write path exists in this job
+      contents: read         # read the release; nothing is written to it
       id-token: write        # Sigstore keyless signing
       attestations: write
     env:
       TAG: ${{ inputs.tag }}
+      VDR_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release-vdr.yml@refs/heads/main
     steps:
       - name: Checkout (evidence + policy at main)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
@@ -65,6 +70,7 @@ jobs:
         run: cargo build --release --locked --quiet --manifest-path xtask/Cargo.toml
 
       - name: Download the release's exe, SBOM and manifest; verify custody
+        id: rel
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -74,15 +80,6 @@ jobs:
           mkdir -p rel
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir rel \
             --pattern hp-thermal.exe --pattern hp-thermal.cdx.json --pattern SHA256SUMS
-          # Already-published revisions of this release's VDR (version 1 is hp-thermal.vdr.cdx.json,
-          # version N >= 2 is hp-thermal.vdr.vN.cdx.json). Read so the next one can be checked against
-          # them; never replaced.
-          mkdir -p published
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
-            | grep -E '^hp-thermal\.vdr(\.v[0-9]+)?\.cdx\.json$' > published/names.txt || true
-          while read -r n; do
-            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$n" --dir published
-          done < published/names.txt
           digest=$(awk '$2=="hp-thermal.exe"{print $1}' rel/SHA256SUMS)
           [ "${#digest}" = 64 ] || { echo "::error::SHA256SUMS has no hp-thermal.exe line"; exit 1; }
           got=$(sha256sum rel/hp-thermal.exe | cut -d' ' -f1)
@@ -91,12 +88,40 @@ jobs:
             ok=0
             for w in release-pipeline.yml release.yml; do
               if gh attestation verify "rel/$f" --repo "$GITHUB_REPOSITORY" \
-                   --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/$w" > /dev/null 2>&1; then ok=1; echo "$f: provenance verified (signer $w)"; break; fi
+                   --cert-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/$w@refs/tags/$TAG" \
+                   --source-ref "refs/tags/$TAG" --deny-self-hosted-runners > /dev/null 2>&1; then
+                ok=1; echo "$f: provenance verified ($w at refs/tags/$TAG)"; break
+              fi
             done
-            [ "$ok" = 1 ] || { echo "::error::$f: provenance did not verify against either documented signer; not admitted"; exit 1; }
+            [ "$ok" = 1 ] || { echo "::error::$f: provenance did not verify against a release workflow at refs/tags/$TAG; not admitted"; exit 1; }
           done
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
-        id: rel
+
+      - name: Read the published revisions back from the attestation store
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIGEST: ${{ steps.rel.outputs.digest }}
+        run: |
+          set -euo pipefail
+          # Every attestation for the exe; only those that verify against this workflow at main
+          # are VDR revisions. An unreadable store fails the run: the next version must never be
+          # guessed.
+          mkdir -p published
+          gh api "repos/$GITHUB_REPOSITORY/attestations/sha256:$DIGEST?per_page=100" > published/list.json
+          n=$(jq '.attestations | length' published/list.json)
+          [ "$n" -lt 100 ] || { echo "::error::100 or more attestations for one digest: the list may be truncated"; exit 1; }
+          for i in $(seq 0 $((n - 1))); do
+            [ "$(jq -r ".attestations[$i].bundle | type" published/list.json)" = object ] \
+              || { echo "::error::attestation $i has no inline bundle; refusing to skip it unseen"; exit 1; }
+            jq -c ".attestations[$i].bundle" published/list.json > "published/b$i.jsonl"
+            if gh attestation verify rel/hp-thermal.exe --bundle "published/b$i.jsonl" --repo "$GITHUB_REPOSITORY" \
+                 --predicate-type https://cyclonedx.org/bom --cert-identity "$VDR_IDENTITY" \
+                 --source-ref refs/heads/main --deny-self-hosted-runners --format json > "published/v$i.json" 2> /dev/null; then
+              jq '.[0].verificationResult.statement.predicate' "published/v$i.json" > "published/vdr-$i.cdx.json"
+            fi
+          done
+          echo "$n attestation(s) for the exe; $(find published -name 'vdr-*.cdx.json' | wc -l) published VDR revision(s)"
 
       - name: Regenerate the committed VDR from the evidence (must match byte for byte)
         id: vdr
@@ -112,22 +137,21 @@ jobs:
           jq -e '.bomFormat == "CycloneDX" and .specVersion == "1.6" and has("vulnerabilities") and (.metadata.component.name == "hp-thermal")' "$vdr" > /dev/null \
             || { echo "::error::$vdr: not a CycloneDX 1.6 VDR for hp-thermal"; exit 1; }
           # CycloneDX revision rule: one serialNumber per subject, `version` names the revision. A
-          # release accepts a revision only under the serial it already carries and only above every
-          # version already attached; the asset name encodes the version, so nothing is overwritten.
+          # revision is accepted only under the serial already published and only above every
+          # published version, so a published version never changes meaning.
           serial=$(jq -r '.serialNumber' "$vdr"); version=$(jq -r '.version' "$vdr")
           case "$version" in ''|*[!0-9]*|0) echo "::error::$vdr: version '$version' is not a positive integer"; exit 1 ;; esac
           max=0
-          for f in published/*.cdx.json; do
+          for f in published/vdr-*.cdx.json; do
             [ -f "$f" ] || continue
             [ "$(jq -r '.serialNumber' "$f")" = "$serial" ] \
-              || { echo "::error::$(basename "$f") on $TAG has serial $(jq -r '.serialNumber' "$f"), not $serial; refusing a second document for one subject"; exit 1; }
+              || { echo "::error::a published revision has serial $(jq -r '.serialNumber' "$f"), not $serial; refusing a second document for one subject"; exit 1; }
             v=$(jq -r '.version' "$f"); [ "$v" -gt "$max" ] && max=$v
           done
           [ "$version" -gt "$max" ] \
-            || { echo "::error::$TAG already carries VDR version $max; the committed report is version $version, nothing newer to attest"; exit 1; }
-          if [ "$version" = 1 ]; then name=hp-thermal.vdr; else name="hp-thermal.vdr.v$version"; fi
-          mkdir -p out && cp "$vdr" "out/$name.cdx.json"
-          { echo "name=$name"; echo "version=$version"; } >> "$GITHUB_OUTPUT"
+            || { echo "::error::VDR version $max is already attested to $TAG's exe; the committed report is version $version, nothing newer to attest"; exit 1; }
+          mkdir -p out && cp "$vdr" "out/vdr.v$version.cdx.json"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "VDR version $version (published max $max): $(jq '.components | length' "$vdr") component(s), $(jq '.vulnerabilities | length' "$vdr") vulnerabilit(ies)"
 
       - name: Attest the VDR to the released exe
@@ -136,22 +160,23 @@ jobs:
         with:
           subject-path: rel/hp-thermal.exe
           predicate-type: https://cyclonedx.org/bom
-          predicate-path: out/${{ steps.vdr.outputs.name }}.cdx.json
+          predicate-path: out/vdr.v${{ steps.vdr.outputs.version }}.cdx.json
 
-      - name: Verify the VDR attestation (identity-pinned to this workflow) and attach it
+      - name: Verify the VDR attestation (identity-pinned to this workflow at main)
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           BUNDLE: ${{ steps.attest.outputs.bundle-path }}
-          NAME: ${{ steps.vdr.outputs.name }}
+          VERSION: ${{ steps.vdr.outputs.version }}
         run: |
           set -euo pipefail
           gh attestation verify rel/hp-thermal.exe --bundle "$BUNDLE" --repo "$GITHUB_REPOSITORY" \
-            --predicate-type https://cyclonedx.org/bom \
-            --signer-workflow "${GITHUB_REPOSITORY}/.github/workflows/release-vdr.yml" --format json > verified.json
-          jq -e '.[0].verificationResult.statement.predicate | has("vulnerabilities") and (.metadata.component.name == "hp-thermal")' verified.json > /dev/null \
-            || { echo "::error::verified statement is not the VDR"; exit 1; }
-          cp "$BUNDLE" "out/$NAME.sigstore.jsonl"
-          # No --clobber: an existing asset of this name fails the upload rather than being replaced.
-          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" "out/$NAME.cdx.json" "out/$NAME.sigstore.jsonl"
-          echo "attached $NAME.cdx.json + $NAME.sigstore.jsonl to $TAG"
+            --predicate-type https://cyclonedx.org/bom --cert-identity "$VDR_IDENTITY" \
+            --source-ref refs/heads/main --deny-self-hosted-runners --format json > verified.json
+          jq -e --argjson v "$VERSION" '.[0].verificationResult.statement.predicate | has("vulnerabilities") and (.metadata.component.name == "hp-thermal") and (.version == $v)' verified.json > /dev/null \
+            || { echo "::error::verified statement is not VDR version $VERSION for hp-thermal"; exit 1; }
+          {
+            echo "VDR version $VERSION attested to the $TAG exe (not attached to the release)."
+            echo
+            echo "Record its bundle: \`cargo xtask release-advance anchor --tag $TAG\` on an \`evidence/*\` branch."
+          } >> "$GITHUB_STEP_SUMMARY"

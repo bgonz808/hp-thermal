@@ -4,6 +4,12 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 
 ## [Unreleased]
 
+### Verification
+- Each release's original attestations are recorded in this repository, checked against its
+  tag, its commit, and the public transparency log. (#497)
+- VDR revisions are published as attestations and recorded beside the release's evidence, not
+  attached to the release. (#498)
+
 ## [0.3.3] - 2026-11-13
 
 Patch release. No runtime logic changed; `app/src` is unchanged. The shipped bytes change

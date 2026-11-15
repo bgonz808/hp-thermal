@@ -140,6 +140,9 @@ A `vdr.cdx.json` is committed beside the evidence of every live-frontier digest 
 tool's report and every release's report and fails on any difference, admitting the app's release
 SBOM only after its provenance verifies. When a bless supersedes a tool digest, that digest's last
 report stays committed as history and is no longer regenerated.
+A release's report is published by `release-vdr.yml` as an attestation to the shipped exe, never
+as a release asset (a published release is immutable); `release-advance anchor` records each
+revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
 
 ## Rules
 
