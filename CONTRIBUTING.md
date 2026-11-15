@@ -116,13 +116,16 @@ cargo xtask verify-hardening <exe>   # check the PE exploit-mitigation flags (CF
 
 Semver, `0.x` while pre-1.0 (see CHANGELOG.md). The rules that are not obvious from semver alone:
 
-- **Dependency-only change, no observable behaviour change: PATCH.** A security fix in a
+- **Dependency-only change, no observable behavior change: PATCH.** A security fix in a
   dependency is the canonical patch release; ship it, do not accumulate it.
-- **Dependency change with an observable behaviour change** (root-store contents, platform or
+- **Dependency change with an observable behavior change** (root-store contents, platform or
   MSRV support, a protocol default): still PATCH in `0.x`, and the CHANGELOG entry names the
-  behaviour, not just the crate.
+  behavior, not just the crate.
 - **MINOR is for the app's own features.** Never for dependencies alone.
-- **Release candidates** (`-rc.N`) are the soak window before a tag.
+- **Release candidates** (`-rc.N`) are published only for someone outside the project who needs
+  to test a build, decided case by case: every published release is permanent. Otherwise a
+  candidate soaks as a dry run (`release.yml` dispatched on `main`: TEST ONLY-signed, attested,
+  artifacts kept one day).
 - **Build metadata** (`+…`) records the build (commit), never the version. Tooling ignores it
   for version identity (`xtask explore`).
 - A release with byte-identical source and a changed lock is a real release: the embedded
