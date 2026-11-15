@@ -96,9 +96,11 @@ issue when an upstream cuts a release newer than the pin.
 1. `tool-updates.yml` opens/refreshes a tracking issue when an upstream is ahead (or you notice
    a needed security fix yourself). For an advisory with a RustSec `patched` version,
    `freeze-propose.yml` (#405) goes one step further on its own: it runs `xtask freeze
-   --require-improvement` for the strictly-better move and opens ONE pull request with the
-   frozen lock(s) — close/reopen it to arm the checks, review, merge. It never bumps a `rev`,
-   blesses a digest, or merges.
+   --require-improvement` for the strictly-better move and reports it in ONE issue. Apply it
+   with `cargo xtask freeze-apply --run <id>` on a new branch: it checks the run and the
+   artifact's digest, writes the frozen lock(s), and commits them with your signing key; open
+   the PR, and the checks run as usual. CI holds no write access for this and never bumps a
+   `rev`, blesses a digest, or merges.
 2. Edit the tool's `rev` in `TOOLS.lock` (a reviewed change).
 3. Run **build-tools.yml** (Actions → Build release tools → Run workflow). It recompiles the
    tools off the release critical path and prints the new digest(s).

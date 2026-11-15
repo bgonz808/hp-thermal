@@ -42,6 +42,7 @@ mod monitor;
 mod caps_subset;
 mod floors;
 mod freeze;
+mod freeze_apply;
 mod sha256;
 
 // #376: EoX tracking — OpenEoX Core documents for every runner image / OS / toolchain channel
@@ -122,6 +123,7 @@ fn main() {
         Some("sbom-formulate") => formulate::run(&args),
         Some("freeze") => freeze::run(&args),
         Some("freeze-propose") => propose::run(&args),
+        Some("freeze-apply") => freeze_apply::run(&args),
         Some("record-vuln") => record_vuln::run(&args),
         Some("candidate-advance") => advance::run(&args),
         Some("release-advance") => release_advance::run(&args),

@@ -14,8 +14,9 @@
 //! directives, `--require-improvement`, atop the frozen lock and the tool's patches; then — the
 //! check freeze itself does not do — soak/yank-check every TRANSITIVE package the resolver moved
 //! along (seen in #404: libc, linux-raw-sys). Accepted locks land in `<out>/locks/`, with a
-//! report and `proposals.json` for tier 2 (the workflow commits them via the API and opens ONE
-//! PR). Refusals are reported, never papered over: a freeze refusal opens no PR.
+//! report and `proposals.json`; the workflow reports them in ONE issue, and the maintainer applies
+//! them with `xtask freeze-apply` (freeze_apply.rs). Refusals are reported, never papered over: a
+//! freeze refusal proposes nothing.
 //!
 //! WHAT THIS NEVER DOES. Touch TOOLS.lock, evidence or acks; bless anything (the digest still
 //! comes from a producer run and `xtask gate`); merge anything; run with an overridden clock or
