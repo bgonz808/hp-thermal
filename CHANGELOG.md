@@ -9,6 +9,9 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
   tag, its commit, and the public transparency log. (#497)
 - VDR revisions are published as attestations and recorded beside the release's evidence, not
   attached to the release. (#498)
+- The app's dependencies are vetted with cargo-vet in the required `ci` check, fail-closed.
+  The 14 crates no imported audit covers are exempted at their exact versions as pending audits,
+  so any version change needs a new ruling.
 
 ## [0.3.3] - 2026-11-13
 
