@@ -14,27 +14,33 @@ cargo-vet catches the malicious-but-no-advisory-yet class (maintainer takeover, 
 poison) *before* a CVE exists. The daily monitor catches an advisory published *after* a dep was
 gated. Both operate on the full transitive `Cargo.lock` graph.
 
-## Baseline (do this once, then make the gate blocking)
+## Gate and baseline
 
-The cargo-vet gate ships **report-only** (`continue-on-error`) so it can't block work before the
-current tree is baselined. To establish the baseline and turn it on:
+The gate is **fail-closed** in the required `ci` check (`.github/workflows/ci.yml`), on every PR
+and push, with the TOOLS.lock-pinned cargo-vet (never `cargo install`, #221). Any crate version
+that is not audited, covered by an imported audit, or exempted **at that exact version** fails.
+
+The baseline (2026-11-15) exempts the 14 crates no import covers, each at its exact version with
+the note "Pending audit": the `windows` family (compiled into the exe), its proc-macros with
+`syn`, `proc-macro2` and `unicode-ident` (run at compile time), and `find-msvc-tools` (the build
+script). An exemption is recorded debt, not trust: a new version of any of them fails until it
+is audited or explicitly exempted in a reviewed change.
+
+## Paying down the debt
+
+Audit the code, then record it; the exemption goes away with it:
 
 ```bash
 cd app
-cargo install cargo-vet --locked --version 0.10.0
-cargo vet                        # fetches imports, lists unvetted crates
-cargo vet regenerate exemptions  # grandfather the CURRENT tree as recorded exemptions
-cargo vet suggest                # proposes [[trusted]] publishers — e.g. the windows-* family
-                                 # (Microsoft) and proc-macro2/syn/quote (rust-lang)
-cargo vet                        # should now pass
+cargo vet diff <crate> <audited-version> <our-version>      # review only the delta, or
+cargo vet inspect <crate> <our-version>                     # review the whole crate
+cargo vet certify <crate> [<audited-version>] <our-version>
+cargo vet prune                                             # drop exemptions now covered
 ```
 
-Review what `suggest` proposes, add `[[trusted]]` / audits you're comfortable with, commit the
-updated `config.toml` / `audits.toml` / `imports.lock`, then in a reviewed PR **delete the
-`continue-on-error: true` line** in `.github/workflows/supply-chain.yml` to make the gate enforce.
-
-From then on, any *new* crate or version that isn't audited, imported-audited, or exempted fails
-the PR.
+`cargo vet suggest` lists the cheapest audits first. Certifying records your authorship; nothing
+certifies automatically. Publisher trust (`[[trusted]]`) is not used: who published a crate is
+not a review of its code.
 
 ## Vetting a Dependabot bump
 
@@ -63,7 +69,7 @@ the PR.
 ## Why the store files carry no comments
 
 `cargo-vet` **owns the format of its store** (`config.toml`, `audits.toml`,
-`imports.lock`). It normalises those files and treats anything it did not write as a
+`imports.lock`). It normalizes those files and treats anything it did not write as a
 consistency error:
 
 ```

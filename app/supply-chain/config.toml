@@ -15,3 +15,73 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 
 [imports.zcash]
 url = "https://raw.githubusercontent.com/zcash/rust-ecosystem/main/supply-chain/audits.toml"
+
+[[exemptions.find-msvc-tools]]
+version = "0.1.15"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Build-script dependency; runs at build time to locate MSVC; exempted at this exact version."
+
+[[exemptions.proc-macro2]]
+version = "1.0.107"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Proc-macro dependency; runs at compile time on the release builder; exempted at this exact version."
+
+[[exemptions.syn]]
+version = "2.0.119"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Proc-macro dependency; runs at compile time on the release builder; exempted at this exact version."
+
+[[exemptions.unicode-ident]]
+version = "1.0.24"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Proc-macro dependency; runs at compile time on the release builder; exempted at this exact version."
+
+[[exemptions.windows]]
+version = "0.62.2"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Microsoft windows-rs bindings, compiled into hp-thermal.exe; exempted at this exact version so any change needs a new ruling."
+
+[[exemptions.windows-collections]]
+version = "0.3.2"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Microsoft windows-rs bindings, compiled into hp-thermal.exe; exempted at this exact version so any change needs a new ruling."
+
+[[exemptions.windows-core]]
+version = "0.62.2"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Microsoft windows-rs bindings, compiled into hp-thermal.exe; exempted at this exact version so any change needs a new ruling."
+
+[[exemptions.windows-future]]
+version = "0.3.2"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Microsoft windows-rs bindings, compiled into hp-thermal.exe; exempted at this exact version so any change needs a new ruling."
+
+[[exemptions.windows-implement]]
+version = "0.60.2"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Proc-macro dependency; runs at compile time on the release builder; exempted at this exact version."
+
+[[exemptions.windows-interface]]
+version = "0.59.3"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Proc-macro dependency; runs at compile time on the release builder; exempted at this exact version."
+
+[[exemptions.windows-numerics]]
+version = "0.3.1"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Microsoft windows-rs bindings, compiled into hp-thermal.exe; exempted at this exact version so any change needs a new ruling."
+
+[[exemptions.windows-result]]
+version = "0.4.1"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Microsoft windows-rs bindings, compiled into hp-thermal.exe; exempted at this exact version so any change needs a new ruling."
+
+[[exemptions.windows-strings]]
+version = "0.5.1"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Microsoft windows-rs bindings, compiled into hp-thermal.exe; exempted at this exact version so any change needs a new ruling."
+
+[[exemptions.windows-threading]]
+version = "0.2.1"
+criteria = "safe-to-deploy"
+notes = "Pending audit. Microsoft windows-rs bindings, compiled into hp-thermal.exe; exempted at this exact version so any change needs a new ruling."

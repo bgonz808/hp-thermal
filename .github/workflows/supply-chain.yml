@@ -5,9 +5,8 @@ name: supply-chain (cargo-vet)
 # reactive known-bad-signal gates already in CI (cargo-deny, cargo-audit, osv-scanner), which run
 # in the `ci` / release path. Operates on the full Cargo.lock graph (transitive).
 #
-# STAGED: the gate is REPORT-ONLY (continue-on-error) until the baseline is committed and reviewed
-# — see app/supply-chain/README.md. To make it blocking, delete the `continue-on-error: true`
-# line on the vet step in a reviewed PR.
+# The app tree is vetted fail-closed in the required `ci` check (ci.yml), which runs on every PR;
+# this workflow vets the xtask tree, guards its exemptions, and regenerates the committed VDRs.
 
 on:
   pull_request:
@@ -131,37 +130,6 @@ jobs:
           target: windows-x86_64
           only: cargo-vet
           verify-attestations: "true"
-
-      # --locked: vet the graph exactly as committed, no re-resolution. Report-only until baseline.
-      # NO PATH exposure (#221): the verified binary is invoked by absolute path, env-bound —
-      # nothing shadowable, no ambient authority for later steps.
-      - name: cargo vet
-        working-directory: app
-        continue-on-error: true   # REMOVE (in a reviewed PR) once the baseline is committed, to enforce
-        shell: bash
-        env:
-          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
-        run: |
-          set -uo pipefail
-          # cargo-vet expects $CARGO to be set. Cargo sets it automatically when a subcommand is
-          # invoked as `cargo vet`; we invoke the DIGEST-PINNED exe directly (#221, no PATH
-          # exposure), so nothing sets it and vet panics with "Cargo failed to set $CARGO" BEFORE
-          # evaluating a single crate. Symptom of that gap: this step reported "unvetted
-          # dependencies" on every run since adoption while never actually vetting anything.
-          CARGO="$(rustup which cargo)"
-          export CARGO
-          [ -x "$CARGO" ] || { echo "::error::cannot resolve cargo for CARGO env"; exit 1; }
-          "$TOOLS_DIR/cargo-vet.exe" vet --locked
-          rc=$?
-          if [ "$rc" -ne 0 ]; then
-            # Distinguish the two failure modes. Conflating them is what hid a non-functional
-            # gate behind a policy-debt message for its entire life.
-            echo "::warning::cargo vet exited $rc. If the output above lists unvetted crates,"
-            echo "::warning::is expected policy debt (REPORT-ONLY until the baseline lands, #199)."
-            echo "::warning::If it shows a PANIC or usage error, the gate did not run at all -"
-            echo "::warning::treat that as a broken control, not as findings."
-            exit "$rc"
-          fi
 
       # xtask is the toolchain that evaluates evidence and, via candidate-advance, runs with the
       # maintainer's credentials. Its own tree is vetted FAIL-CLOSED (no report-only phase): the

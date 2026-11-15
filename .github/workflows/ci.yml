@@ -32,7 +32,34 @@ jobs:
       - name: Install pinned toolchain + components
         uses: ./.github/actions/install-toolchain
 
-      # Toolchain-native only — no cargo-install of third-party tools here.
+      # The app's dependencies are vetted FAIL-CLOSED here, in the required check, on every PR and
+      # push: a crate version that is not audited, covered by an imported audit, or exempted at
+      # that exact version fails. Exemptions are recorded debt ("Pending audit"); paying one down
+      # is `cargo vet certify`. The binary is the TOOLS.lock-pinned cargo-vet (#221), run by
+      # absolute path; nothing is installed.
+      - name: Fetch + verify cargo-vet (digest-pinned, fail-closed)
+        id: tools
+        uses: ./.github/actions/fetch-tools
+        with:
+          token: ${{ github.token }}
+          target: windows-x86_64
+          only: cargo-vet
+          verify-attestations: "true"
+
+      - name: cargo vet (app tree, fail-closed)
+        working-directory: app
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: |
+          set -euo pipefail
+          # cargo-vet reads $CARGO, which cargo sets only for `cargo vet`; this runs the pinned exe.
+          CARGO="$(rustup which cargo)"
+          export CARGO
+          [ -x "$CARGO" ] || { echo "::error::cannot resolve cargo for CARGO env"; exit 1; }
+          "$TOOLS_DIR/cargo-vet.exe" vet --locked
+
+      # Toolchain-native, or digest-pinned through fetch-tools; nothing is cargo-installed here.
       # Hardening flags live in TWO non-merging sources (app/.cargo/config.toml for the app,
       # RUSTFLAGS in build-tools.yml for the tools). Adding a flag to one leaves the other
       # silently unhardened, and nothing else would notice. This asserts the common set is in
