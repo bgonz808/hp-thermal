@@ -629,13 +629,13 @@ jobs:
             echo
             echo "HP laptop thermal and performance control. A ~300 KB tray app plus Windows service."
             echo
-            echo "Verify this download (SLSA provenance + SBOM):"
+            echo "Verify this download (SLSA provenance + SBOM; GitHub CLI 2.102.0 or later):"
             echo
-            echo "    gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml"
+            echo "    gh attestation verify hp-thermal.exe --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml --source-ref refs/tags/${GITHUB_REF_NAME}"
             echo
             echo "Offline (no GitHub API): the attached *.sigstore.jsonl bundles carry the same attestations —"
             echo
-            echo "    gh attestation verify hp-thermal.exe --bundle hp-thermal.provenance.sigstore.jsonl --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml"
+            echo "    gh attestation verify hp-thermal.exe --bundle hp-thermal.provenance.sigstore.jsonl --repo ${GITHUB_REPOSITORY} --signer-workflow ${GITHUB_REPOSITORY}/.github/workflows/release-pipeline.yml --source-ref refs/tags/${GITHUB_REF_NAME}"
             echo
             if [ "${SIGNING_ENABLED:-}" = "true" ]; then
               echo "Authenticode-signed: Windows shows the verified publisher on the UAC prompt. Inspect the signature with:"

@@ -23,10 +23,11 @@ Download and run `hp-thermal.exe`. With your consent, it installs the background
 the privileged BIOS/WMI operations, talking over a hardened local named pipe. The tray
 client is reduced privilege, and handles the settings menu. See [SECURITY.md](SECURITY.md).
 
-Every release is cryptographically verifiable: SLSA v1.2 Build Level 3 provenance and a
-CycloneDX 1.6 SBOM, and the `.exe` is Authenticode-signed. To check a download before running
-it, see [Verifying a release](SECURITY.md#verifying-a-release). SmartScreen reputation accrues
-separately and slowly, so a warning on a fresh release is expected and is not a signature failure.
+Every release is cryptographically verifiable with SLSA provenance and a CycloneDX SBOM. Since
+v0.3.3, releases meet SLSA v1.2 Build Level 3 and the `.exe` is Authenticode-signed. To check a
+download before running it, see [Verifying a release](SECURITY.md#verifying-a-release).
+SmartScreen reputation accrues separately and slowly, so a warning on a fresh release is expected
+and is not a signature failure.
 
 Is easily uninstallable via **Settings → Apps** or `hp-thermal uninstall`
 
