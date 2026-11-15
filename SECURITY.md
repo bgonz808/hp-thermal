@@ -28,9 +28,9 @@ reusable workflow (`release-pipeline.yml`) that the calling release job cannot i
 on GitHub-hosted ephemeral runners with OIDC-only signing and no caches; provenance is signed by
 that workflow's identity and verified before publish. The Source track has no formal level on
 GitHub today (GitHub issues no Source VSA); `main` enforces signed commits from a committed key
-roster, required checks, linear history and no force-push. A ruleset with no bypass actors blocks
-updating or deleting `v*` tags and the `tools` store tag; only a repository administrator can
-create a `v*` tag.
+roster, required checks, linear history and no force-push. Rulesets with no bypass actors block
+updating or deleting `v*` tags and the `tools` store tag, and require a `v*` tag's commit to
+have passed the required checks; only a repository administrator can create a tag.
 
 With the [GitHub CLI](https://cli.github.com) 2.102.0 or later (earlier versions match
 `--signer-workflow` by prefix only), pin the signer workflow and the tag of the release you
