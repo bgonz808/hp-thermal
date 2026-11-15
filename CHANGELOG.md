@@ -16,6 +16,9 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
 - The app's dependencies are vetted with cargo-vet in the required `ci` check, fail-closed.
   The 14 crates no imported audit covers are exempted at their exact versions as pending audits,
   so any version change needs a new ruling. (#503)
+- Strictly-better lock fixes for the build tools are proposed nightly in one issue, with no
+  write access in CI; `cargo xtask freeze-apply` checks the run and the artifact's digest and
+  commits the locks with the maintainer's signing key.
 
 ## [0.3.3] - 2026-11-13
 
