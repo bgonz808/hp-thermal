@@ -182,6 +182,15 @@ shipped `hp-thermal.exe` digest (from the Release's SHA256SUMS) gets the same `v
 the monitor's `release:hp-thermal.exe` lookup) as a tool, under the same floors and acks
 semantics. Capabilities for the app are measured by `verify-caps`/BinSkim on the exe, not by
 cackle (Windows-only crate tree), so there is no `caps.toml` for `hp-thermal`.
-The app's records are written by `cargo xtask release-advance <status|vuln|mal> --tag vX.Y.Z` on an
-`evidence/*` branch (digest from the Release's SHA256SUMS; lock from the tag; VT lookup first,
-submit only if absent), the counterpart of `candidate-advance` for tools.
+The app's records are written by `cargo xtask release-advance <status|vuln|mal|anchor> --tag vX.Y.Z`
+on an `evidence/*` branch (digest from the Release's SHA256SUMS; lock from the tag; VT lookup
+first, submit only if absent), the counterpart of `candidate-advance` for tools.
+
+`anchor` copies a release's original attestations, the Sigstore bundles GitHub stores for the
+exe's digest, into `provenance.sigstore.jsonl`, `sbom.sigstore.jsonl`, and where the release has
+them `sarif.sigstore.jsonl` and `vsa.sigstore.jsonl`. The digest is hashed from the published
+exe. An original verifies against a release workflow at the tag's ref and commit, was made by
+the tag push, and was logged before the release was published; every provenance subject must
+still match its published file. Any other attestation signed at the tag stops the stage. Each
+bundle carries its Rekor inclusion proof, so the record checks against the public log without
+GitHub's attestation store. Anchors are never replaced.
