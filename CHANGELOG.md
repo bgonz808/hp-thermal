@@ -9,6 +9,10 @@ Notable changes to hp-thermal. Versions follow semver (0.x while pre-1.0).
   tag, its commit, and the public transparency log. (#497)
 - VDR revisions are published as attestations and recorded beside the release's evidence, not
   attached to the release. (#498)
+- Every release is an immutable GitHub release, verifiable with `gh release verify <tag>`.
+  Releases published earlier were made immutable on 2026-11-15 after every asset was checked
+  against the recorded originals; their assets are unchanged. `v0.2.0`, tagged but never built,
+  has a release with no assets.
 - The app's dependencies are vetted with cargo-vet in the required `ci` check, fail-closed.
   The 14 crates no imported audit covers are exempted at their exact versions as pending audits,
   so any version change needs a new ruling.

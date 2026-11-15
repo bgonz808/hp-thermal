@@ -77,6 +77,13 @@ findings change: every revision keeps the release's one `serialNumber` and takes
 `version`, and earlier revisions stay verifiable in the attestation store and the evidence tree.
 The highest version for the serial is the current report.
 
+Every release is an immutable GitHub release: its assets and tag cannot change, and `gh release
+verify <tag>` checks GitHub's release attestation of the tag and the asset digests. Releases
+published before the repository enabled immutable releases were made immutable on 2026-11-15
+(UTC) by an empty update, after every asset was checked against the originals recorded under
+`supply-chain/evidence/hp-thermal/`; their assets are unchanged. `v0.2.0` was tagged but never
+built; its release has no assets.
+
 The attestation is the real integrity anchor. `SHA256SUMS` is attached as a convenience, but
 a bare checksum only proves a file matches itself; the attestation proves it came from this
 build. Since v0.3.0 releases are also [Authenticode](https://learn.microsoft.com/windows-hardware/drivers/install/authenticode)-signed
