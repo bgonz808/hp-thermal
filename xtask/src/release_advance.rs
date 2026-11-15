@@ -8,8 +8,17 @@
 //! maintainer runs this on an `evidence/*` branch and opens the PR. Same privilege model as
 //! candidate-advance: the maintainer's `gh` session and signing key, no merge path.
 //!
-//! Stages: `status`, `vuln --auditor <digest-pinned cargo-audit>`, `mal [--no-submit]`.
+//! Stages: `status`, `vuln --auditor <digest-pinned cargo-audit>`, `mal [--no-submit]`, `anchor`.
+//!
+//! `anchor` copies the release's original attestations into the evidence tree, so the record of
+//! what was released does not rest on GitHub's attestation store (deletable by the repository
+//! owner) or on release assets. An original is signed by a release workflow at the tag's ref and
+//! commit, by the tag push, and logged before the release was published. Anything else signed at
+//! the tag (a re-run or dispatch after publish) stops the stage for a person to look. VDR
+//! revisions, which `release-vdr.yml` attests from `main` after the release, are anchored too, as
+//! `vdr.v<version>.sigstore.jsonl`.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -287,8 +296,466 @@ fn stage_mal(
     )
 }
 
+// ---------- anchor ----------
+
+/// Release workflows whose signature at `refs/tags/<tag>` can make an attestation an original:
+/// `release-pipeline.yml` from v0.3.3, `release.yml` before it.
+const RELEASE_SIGNERS: [&str; 2] = ["release-pipeline.yml", "release.yml"];
+const PROVENANCE: &str = "https://slsa.dev/provenance/v1";
+const CYCLONEDX: &str = "https://cyclonedx.org/bom";
+/// Issues VDR revisions from `main` after a release (never a release asset: a published release
+/// is immutable). Anchored as `vdr.v<version>.sigstore.jsonl`.
+const VDR_SIGNER: &str = "release-vdr.yml";
+
+/// The evidence file an original attestation of `predicate_type` is anchored in; the names match
+/// the release's own `hp-thermal.<kind>.sigstore.jsonl` assets.
+pub(crate) fn anchor_file(predicate_type: &str) -> Option<&'static str> {
+    match predicate_type {
+        PROVENANCE => Some("provenance.sigstore.jsonl"),
+        CYCLONEDX => Some("sbom.sigstore.jsonl"),
+        "https://docs.oasis-open.org/sarif/sarif/v2.1.0" => Some("sarif.sigstore.jsonl"),
+        "https://slsa.dev/verification_summary/v1" => Some("vsa.sigstore.jsonl"),
+        _ => None,
+    }
+}
+
+/// RFC 3339 date-time (`Z` or `+HH:MM`/`-HH:MM`, optional fraction) as Unix seconds.
+pub(crate) fn rfc3339_unix(t: &str) -> Option<i64> {
+    let b = t.as_bytes();
+    if b.len() < 20
+        || b[4] != b'-'
+        || b[7] != b'-'
+        || !matches!(b[10], b'T' | b't')
+        || b[13] != b':'
+        || b[16] != b':'
+    {
+        return None;
+    }
+    let num = |r: std::ops::Range<usize>| -> Option<i64> {
+        let x = t.get(r)?;
+        if x.bytes().all(|c| c.is_ascii_digit()) {
+            x.parse().ok()
+        } else {
+            None
+        }
+    };
+    let (y, mo, d) = (num(0..4)?, num(5..7)?, num(8..10)?);
+    let (h, mi, sec) = (num(11..13)?, num(14..16)?, num(17..19)?);
+    if !(1..=12).contains(&mo) || !(1..=31).contains(&d) || h > 23 || mi > 59 || sec > 60 {
+        return None;
+    }
+    let mut i = 19;
+    if b.get(i) == Some(&b'.') {
+        i += 1;
+        let start = i;
+        while i < b.len() && b[i].is_ascii_digit() {
+            i += 1;
+        }
+        if i == start {
+            return None;
+        }
+    }
+    let off = match *b.get(i)? {
+        b'Z' | b'z' if i + 1 == b.len() => 0,
+        sign @ (b'+' | b'-') if i + 6 == b.len() && b[i + 3] == b':' => {
+            let (oh, om) = (num(i + 1..i + 3)?, num(i + 4..i + 6)?);
+            if oh > 23 || om > 59 {
+                return None;
+            }
+            let o = oh * 3600 + om * 60;
+            if sign == b'+' { o } else { -o }
+        }
+        _ => return None,
+    };
+    let days = crate::eox::days_from_civil(y, mo as u32, d as u32);
+    Some(days * 86_400 + h * 3600 + mi * 60 + sec - off)
+}
+
+/// Standard-alphabet base64 (RFC 4648 section 4, padding optional). Used only to read a DSSE
+/// payload's claimed predicate type, which `gh attestation verify` then enforces.
+pub(crate) fn b64decode(text: &str) -> Option<Vec<u8>> {
+    let val = |c: u8| -> Option<u32> {
+        Some(match c {
+            b'A'..=b'Z' => c - b'A',
+            b'a'..=b'z' => c - b'a' + 26,
+            b'0'..=b'9' => c - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => return None,
+        } as u32)
+    };
+    let t = text.trim_end_matches('=');
+    if text.len() - t.len() > 2 {
+        return None;
+    }
+    let mut out = Vec::with_capacity(t.len() * 3 / 4);
+    let (mut acc, mut bits) = (0u32, 0u32);
+    for &c in t.as_bytes() {
+        acc = (acc << 6) | val(c)?;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            out.push((acc >> bits) as u8);
+            acc &= (1 << bits) - 1;
+        }
+    }
+    if bits >= 6 {
+        return None;
+    }
+    Some(out)
+}
+
+/// One stored attestation signed by a release workflow at the tag and commit, judged by how and
+/// when it was made.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Origin {
+    /// Made by the tag push and logged before the release was published.
+    Original,
+    /// Signed at the tag but not by the tag push, or logged after publish: never anchored.
+    Suspect(String),
+}
+
+/// `tlog` are the transparency-log times (Unix seconds); `published` is the release's.
+pub(crate) fn judge(trigger: &str, runner: &str, tlog: &[i64], published: i64) -> Origin {
+    if trigger != "push" {
+        return Origin::Suspect(format!("build trigger `{trigger}`, not the tag push"));
+    }
+    if runner != "github-hosted" {
+        return Origin::Suspect(format!("runner `{runner}`"));
+    }
+    match tlog.iter().max() {
+        None => Origin::Suspect("no transparency-log time".into()),
+        Some(&t) if t > published => Origin::Suspect(format!(
+            "logged {}s after the release was published",
+            t - published
+        )),
+        Some(_) => Origin::Original,
+    }
+}
+
+/// A VDR revision is issued by dispatching `release-vdr.yml` on `main` once the release exists.
+pub(crate) fn judge_vdr(trigger: &str, runner: &str, tlog: &[i64], published: i64) -> Origin {
+    if trigger != "workflow_dispatch" {
+        return Origin::Suspect(format!("build trigger `{trigger}`, not a dispatch"));
+    }
+    if runner != "github-hosted" {
+        return Origin::Suspect(format!("runner `{runner}`"));
+    }
+    match tlog.iter().min() {
+        None => Origin::Suspect("no transparency-log time".into()),
+        Some(&t) if t < published => {
+            Origin::Suspect("logged before the release was published".into())
+        }
+        Some(_) => Origin::Original,
+    }
+}
+
+fn tlog_times(result: &serde_json::Value) -> Vec<i64> {
+    result["verifiedTimestamps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter(|t| s(t, &["type"]) == "Tlog")
+        .filter_map(|t| rfc3339_unix(&s(t, &["timestamp"])))
+        .collect()
+}
+
+/// The commit a tag names on origin (the peeled `^{}` line for an annotated tag).
+fn remote_tag_commit(tag: &str) -> Result<String, String> {
+    let out = git(&[
+        "ls-remote",
+        "origin",
+        &format!("refs/tags/{tag}"),
+        &format!("refs/tags/{tag}^{{}}"),
+    ])?;
+    let mut direct = None;
+    for l in out.lines() {
+        let mut it = l.split_whitespace();
+        if let (Some(sha), Some(r)) = (it.next(), it.next()) {
+            if r.ends_with("^{}") {
+                return Ok(sha.to_string());
+            }
+            direct = Some(sha.to_string());
+        }
+    }
+    direct.ok_or_else(|| format!("origin has no tag {tag}"))
+}
+
+fn plain_file_name(name: &str) -> bool {
+    !name.starts_with('.') && Path::new(name).file_name().and_then(|f| f.to_str()) == Some(name)
+}
+
+fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
+    let repo = gh(&[
+        "repo",
+        "view",
+        "--json",
+        "nameWithOwner",
+        "--jq",
+        ".nameWithOwner",
+    ])?
+    .trim()
+    .to_string();
+    let rel = gh_json(&["release", "view", tag, "--json", "publishedAt,isDraft"])?;
+    if rel["isDraft"].as_bool() != Some(false) {
+        return Err(format!("{tag}: a draft, or its state is unreadable"));
+    }
+    let published_at = s(&rel, &["publishedAt"]);
+    let published = rfc3339_unix(&published_at)
+        .ok_or(format!("publishedAt `{published_at}` is not RFC 3339"))?;
+    let tag_commit = git(&["rev-list", "-n", "1", tag])?.trim().to_string();
+    let remote = remote_tag_commit(tag)?;
+    if remote != tag_commit {
+        return Err(format!("local {tag} is {tag_commit}; origin has {remote}"));
+    }
+
+    let work = std::env::temp_dir().join(format!("release-anchor-{tag}"));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
+    let w = work.to_string_lossy().into_owned();
+    gh(&[
+        "release",
+        "download",
+        tag,
+        "--pattern",
+        "hp-thermal.exe",
+        "--dir",
+        &w,
+        "--clobber",
+    ])?;
+    let exe = work.join("hp-thermal.exe");
+    let x = exe.to_string_lossy().into_owned();
+    let digest = crate::sha256::sha256_hex(&std::fs::read(&exe).map_err(|e| format!("{x}: {e}"))?);
+    println!(
+        "{PRODUCT} {tag}: exe {digest}, commit {}, published {published_at}",
+        short(&tag_commit)
+    );
+
+    let list = gh_json(&[
+        "api",
+        &format!("repos/{repo}/attestations/sha256:{digest}?per_page=100"),
+    ])?;
+    let atts = list["attestations"]
+        .as_array()
+        .ok_or("attestations API: no `attestations` array")?;
+    if atts.len() >= 100 {
+        return Err("100 or more attestations for one digest: the list may be truncated".into());
+    }
+    let source_ref = format!("refs/tags/{tag}");
+    let mut kept: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    let mut vdr_serials = std::collections::BTreeSet::new();
+    let mut subjects: Vec<(String, String)> = Vec::new();
+    let mut suspects = 0usize;
+    for (i, a) in atts.iter().enumerate() {
+        let bundle = &a["bundle"];
+        if !bundle.is_object() {
+            return Err(format!(
+                "attestation {i}: bundle not inline; refusing to skip it unseen"
+            ));
+        }
+        let payload = s(bundle, &["dsseEnvelope", "payload"]);
+        let statement: serde_json::Value = b64decode(&payload)
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .ok_or(format!("attestation {i}: DSSE payload is not base64 JSON"))?;
+        let pt = s(&statement, &["predicateType"]);
+        let Some(fname) = anchor_file(&pt) else {
+            println!("  other     {pt}: not a release attestation kind");
+            continue;
+        };
+        let line = serde_json::to_string(bundle).map_err(|e| e.to_string())?;
+        let bf = work.join(format!("bundle-{i}.jsonl"));
+        std::fs::write(&bf, format!("{line}\n")).map_err(|e| e.to_string())?;
+        let b = bf.to_string_lossy().into_owned();
+        let mut verified = None;
+        for wf in RELEASE_SIGNERS {
+            let ident = format!("https://github.com/{repo}/.github/workflows/{wf}@{source_ref}");
+            if let Ok(v) = gh_json(&[
+                "attestation",
+                "verify",
+                &x,
+                "--bundle",
+                &b,
+                "--repo",
+                &repo,
+                "--predicate-type",
+                &pt,
+                "--cert-identity",
+                &ident,
+                "--source-ref",
+                &source_ref,
+                "--source-digest",
+                &tag_commit,
+                "--deny-self-hosted-runners",
+                "--format",
+                "json",
+            ]) {
+                verified = Some((wf, v));
+                break;
+            }
+        }
+        let Some((wf, v)) = verified else {
+            if pt == CYCLONEDX {
+                let ident = format!(
+                    "https://github.com/{repo}/.github/workflows/{VDR_SIGNER}@refs/heads/main"
+                );
+                if let Ok(v) = gh_json(&[
+                    "attestation",
+                    "verify",
+                    &x,
+                    "--bundle",
+                    &b,
+                    "--repo",
+                    &repo,
+                    "--predicate-type",
+                    &pt,
+                    "--cert-identity",
+                    &ident,
+                    "--source-ref",
+                    "refs/heads/main",
+                    "--deny-self-hosted-runners",
+                    "--format",
+                    "json",
+                ]) {
+                    let r = &v[0]["verificationResult"];
+                    let signer = &r["signature"]["certificate"];
+                    let run = s(signer, &["runInvocationURI"]);
+                    let pred = &r["statement"]["predicate"];
+                    let version = pred["version"].as_u64().filter(|n| *n > 0);
+                    let is_vdr = pred["vulnerabilities"].is_array()
+                        && s(pred, &["metadata", "component", "name"]) == PRODUCT;
+                    let (Some(n), true) = (version, is_vdr) else {
+                        println!(
+                            "  SUSPECT   {VDR_SIGNER} statement is not a versioned {PRODUCT} VDR: {run}"
+                        );
+                        suspects += 1;
+                        continue;
+                    };
+                    match judge_vdr(
+                        &s(signer, &["buildTrigger"]),
+                        &s(signer, &["runnerEnvironment"]),
+                        &tlog_times(r),
+                        published,
+                    ) {
+                        Origin::Original => {
+                            vdr_serials.insert(s(pred, &["serialNumber"]));
+                            let f = format!("vdr.v{n}.sigstore.jsonl");
+                            println!("  vdr       {f:<26} {VDR_SIGNER}, {run}");
+                            kept.entry(f).or_default().push(line);
+                        }
+                        Origin::Suspect(why) => {
+                            println!("  SUSPECT   VDR v{n} {VDR_SIGNER}, {run}: {why}");
+                            suspects += 1;
+                        }
+                    }
+                    continue;
+                }
+            }
+            println!("  other     {fname:<26} not signed by a release workflow at {tag}");
+            continue;
+        };
+        let r = &v[0]["verificationResult"];
+        // The signing certificate's verified claims (public: the certificate is logged in Rekor).
+        let signer = &r["signature"]["certificate"];
+        let run = s(signer, &["runInvocationURI"]);
+        let tlog = tlog_times(r);
+        match judge(
+            &s(signer, &["buildTrigger"]),
+            &s(signer, &["runnerEnvironment"]),
+            &tlog,
+            published,
+        ) {
+            Origin::Original => {
+                println!("  original  {fname:<26} {wf}, {run}");
+                if pt == PROVENANCE {
+                    for sub in r["statement"]["subject"].as_array().into_iter().flatten() {
+                        subjects.push((s(sub, &["name"]), s(sub, &["digest", "sha256"])));
+                    }
+                }
+                kept.entry(fname.to_string()).or_default().push(line);
+            }
+            Origin::Suspect(why) => {
+                println!("  SUSPECT   {fname:<26} {wf}, {run}: {why}");
+                suspects += 1;
+            }
+        }
+    }
+    if suspects > 0 {
+        return Err(format!(
+            "{suspects} attestation(s) signed at {tag} are not originals; investigate before anchoring"
+        ));
+    }
+    if vdr_serials.len() > 1 {
+        return Err(format!(
+            "VDR revisions under {} serial numbers; one subject has one serial",
+            vdr_serials.len()
+        ));
+    }
+    for (f, lines) in &kept {
+        if lines.len() != 1 {
+            return Err(format!("{} originals for {f}: ambiguous", lines.len()));
+        }
+    }
+    if !kept.contains_key("provenance.sigstore.jsonl") {
+        return Err(format!("{tag}: no original provenance"));
+    }
+    for (name, want) in &subjects {
+        if !plain_file_name(name) {
+            return Err(format!(
+                "provenance subject `{name}` is not a plain file name"
+            ));
+        }
+        if name != "hp-thermal.exe" {
+            gh(&[
+                "release",
+                "download",
+                tag,
+                "--pattern",
+                name,
+                "--dir",
+                &w,
+                "--clobber",
+            ])?;
+        }
+        let got = crate::sha256::sha256_hex(
+            &std::fs::read(work.join(name)).map_err(|e| format!("{name}: {e}"))?,
+        );
+        if &got != want {
+            return Err(format!("{name}: published {got}, provenance says {want}"));
+        }
+        println!("  subject   {name:<26} matches the provenance");
+    }
+
+    let dir = evidence_dir(&digest);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    for (f, lines) in &kept {
+        let p = dir.join(f);
+        let body = format!("{}\n", lines[0]);
+        match std::fs::read(&p) {
+            Ok(old) if old == body.as_bytes() => println!("  recorded  {f} (unchanged)"),
+            Ok(_) => {
+                return Err(format!(
+                    "{}: differs from the original found now; anchors are never replaced",
+                    p.display()
+                ));
+            }
+            Err(_) => {
+                std::fs::write(&p, &body).map_err(|e| e.to_string())?;
+                println!("  wrote     {}", p.display());
+            }
+        }
+    }
+    commit(
+        &[&dir],
+        &format!(
+            "evidence: {PRODUCT} {tag} ({}): attestations anchored",
+            short(&digest)
+        ),
+        no_commit,
+    )
+}
+
 pub fn run(args: &[String]) -> i32 {
-    let usage = "usage: cargo xtask release-advance <status|vuln|mal> --tag <vX.Y.Z> [--no-commit]\n\
+    let usage = "usage: cargo xtask release-advance <status|vuln|mal|anchor> --tag <vX.Y.Z> [--no-commit]\n\
                  \x20 vuln --auditor <digest-pinned cargo-audit exe>\n\
                  \x20 mal  [--no-submit] [--panel-wait-seconds N] [--wait-minutes N]";
     let Some(stage) = args.get(1).map(String::as_str) else {
@@ -341,6 +808,7 @@ pub fn run(args: &[String]) -> i32 {
             wait,
             no_commit,
         ),
+        "anchor" => stage_anchor(&tag, no_commit),
         other => Err(format!("unknown stage `{other}`\n{usage}")),
     };
     match res {
@@ -355,6 +823,112 @@ pub fn run(args: &[String]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rfc3339_handles_offsets_fractions_and_rejects_junk() {
+        assert_eq!(rfc3339_unix("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(
+            rfc3339_unix("2026-08-02T09:20:03-07:00"),
+            rfc3339_unix("2026-08-02T16:20:03Z")
+        );
+        assert_eq!(
+            rfc3339_unix("2026-11-14T06:34:00.123Z"),
+            rfc3339_unix("2026-11-14T06:34:00Z")
+        );
+        for bad in [
+            "2026-08-02",
+            "2026-08-02T16:20:03",
+            "2026-13-02T16:20:03Z",
+            "2026-08-02T16:20:03+0700",
+            "2026-08-02T16:20:03.Z",
+        ] {
+            assert_eq!(rfc3339_unix(bad), None, "{bad}");
+        }
+    }
+
+    #[test]
+    fn base64_decodes_dsse_payloads_strictly() {
+        assert_eq!(b64decode("eyJhIjoxfQ==").unwrap(), br#"{"a":1}"#);
+        assert_eq!(b64decode("eyJhIjoxfQ").unwrap(), br#"{"a":1}"#);
+        assert_eq!(b64decode("").unwrap(), b"");
+        assert!(b64decode("eyJh!").is_none(), "outside the alphabet");
+        assert!(b64decode("e").is_none(), "a lone trailing sextet");
+        assert!(b64decode("eyJhIjoxfQ===").is_none(), "three pads");
+    }
+
+    #[test]
+    fn only_tag_push_attestations_logged_before_publish_are_originals() {
+        // v0.2.2: provenance logged 16:20:03Z, release published 16:20:19Z.
+        let published = rfc3339_unix("2026-08-02T16:20:19Z").unwrap();
+        let logged = rfc3339_unix("2026-08-02T09:20:03-07:00").unwrap();
+        assert_eq!(
+            judge("push", "github-hosted", &[logged], published),
+            Origin::Original
+        );
+        assert!(matches!(
+            judge("workflow_dispatch", "github-hosted", &[logged], published),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge("push", "self-hosted", &[logged], published),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge("push", "github-hosted", &[], published),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge("push", "github-hosted", &[published + 1], published),
+            Origin::Suspect(_)
+        ));
+    }
+
+    #[test]
+    fn vdr_revisions_are_dispatched_after_publish() {
+        let published = rfc3339_unix("2026-11-12T23:00:38Z").unwrap();
+        let issued = rfc3339_unix("2026-11-13T21:49:00Z").unwrap();
+        assert_eq!(
+            judge_vdr("workflow_dispatch", "github-hosted", &[issued], published),
+            Origin::Original
+        );
+        assert!(matches!(
+            judge_vdr("push", "github-hosted", &[issued], published),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge_vdr("workflow_dispatch", "self-hosted", &[issued], published),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge_vdr(
+                "workflow_dispatch",
+                "github-hosted",
+                &[published - 1],
+                published
+            ),
+            Origin::Suspect(_)
+        ));
+        assert!(matches!(
+            judge_vdr("workflow_dispatch", "github-hosted", &[], published),
+            Origin::Suspect(_)
+        ));
+    }
+
+    #[test]
+    fn anchor_files_mirror_release_asset_names() {
+        assert_eq!(anchor_file(PROVENANCE), Some("provenance.sigstore.jsonl"));
+        assert_eq!(
+            anchor_file("https://cyclonedx.org/bom"),
+            Some("sbom.sigstore.jsonl")
+        );
+        assert_eq!(
+            anchor_file("https://slsa.dev/verification_summary/v1"),
+            Some("vsa.sigstore.jsonl")
+        );
+        assert_eq!(anchor_file("https://example.com/other"), None);
+        assert!(plain_file_name("hp-thermal.pdb") && plain_file_name("SHA256SUMS"));
+        assert!(!plain_file_name("../x") && !plain_file_name("a/b") && !plain_file_name(".hidden"));
+    }
 
     #[test]
     fn sha256sums_parsing_is_strict() {

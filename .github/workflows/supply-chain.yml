@@ -31,6 +31,35 @@ permissions:
   contents: read
 
 jobs:
+  # Anchored attestations (`cargo xtask release-advance anchor`) are the repository's own copy of
+  # what each release was when published: a PR may add them, never modify, rename or delete one.
+  anchors:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Anchors are append-only
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          spec=':(glob)supply-chain/evidence/**/*.sigstore.jsonl'
+          bad=$(git diff --name-status --no-renames "$BASE"...HEAD -- "$spec" | awk '$1 != "A"')
+          if [ -n "$bad" ]; then
+            echo "::error::anchored attestations are append-only; this change modifies or deletes:"
+            echo "$bad"
+            exit 1
+          fi
+          echo "anchors: $(git diff --name-only --diff-filter=A "$BASE"...HEAD -- "$spec" | wc -l) added, none modified or deleted"
+
   # STANDING INSTRUMENT CHECK (#223). The two verdict paths (candidate-eval, build-tools)
   # canary their auditor before trusting it, but both are conditional -- candidate-eval is
   # path-filtered, build-tools is dispatch-only -- so neither gives CONTINUOUS assurance
