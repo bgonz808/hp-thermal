@@ -11,7 +11,9 @@ Rules:
   API forces them (keeps the diff reviewable and the shed cheap).
 - Every patch dir carries **`patch.json`**: machine-readable intents (what the patch
   ensures), the rev it applies to, reason, refs, author, timestamp, and the shed
-  condition.
+  condition. Intent shapes: `{"crate", "min"}` (at least this version),
+  `{"crate", "features", "not"}` (these features, not those), `{"crate", "absent": true}`
+  (removed from the manifest).
 - **Supersession is fail-closed**: the producer (and candidate builds) run
   `git apply --check` first — the moment upstream touches those manifest lines, the
   apply conflicts loudly with "superseded or conflicting; refresh or drop". A rev bump

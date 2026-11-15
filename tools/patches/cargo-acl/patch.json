@@ -1,0 +1,36 @@
+{
+  "schema": "hp-thermal/tool-patch/v1",
+  "tool": "cargo-acl",
+  "applies_to_rev": "e7109a3174378976ea881f1883439ba82524f061",
+  "reason": "0001: object 0.40 (#366). 0002: the ui subcommand's optional dependencies (ratatui, diff, crossterm, tui-input) are removed; the build already uses --no-default-features (#375), so none of them compiled, but Cargo.lock lists every optional dependency, so lock-based scans reported the ratatui tree (including lru, RUSTSEC-2026-0253) and freeze-propose could not reach lru's fix. default = [] and ui = [] keep cfg(feature = \"ui\") declared; enabling ui no longer builds. Supersedes the earlier 0002 that only made tui-input optional.",
+  "intents": [
+    {
+      "crate": "object",
+      "min": "0.40"
+    },
+    {
+      "crate": "ratatui",
+      "absent": true
+    },
+    {
+      "crate": "diff",
+      "absent": true
+    },
+    {
+      "crate": "crossterm",
+      "absent": true
+    },
+    {
+      "crate": "tui-input",
+      "absent": true
+    }
+  ],
+  "shed_when": "upstream's manifest satisfies an intent natively - git apply --check conflicts the moment that line changes upstream; drop that patch (or the directory, when none remain) in the same PR that adopts the newer rev",
+  "refs": [
+    "#361",
+    "#374",
+    "#375"
+  ],
+  "author": "bgonz808",
+  "timestamp": "2026-11-15"
+}
