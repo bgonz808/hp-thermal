@@ -617,8 +617,8 @@ fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
                     "json",
                 ]) {
                     let r = &v[0]["verificationResult"];
-                    let cert = &r["signature"]["certificate"];
-                    let run = s(cert, &["runInvocationURI"]);
+                    let signer = &r["signature"]["certificate"];
+                    let run = s(signer, &["runInvocationURI"]);
                     let pred = &r["statement"]["predicate"];
                     let version = pred["version"].as_u64().filter(|n| *n > 0);
                     let is_vdr = pred["vulnerabilities"].is_array()
@@ -631,8 +631,8 @@ fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
                         continue;
                     };
                     match judge_vdr(
-                        &s(cert, &["buildTrigger"]),
-                        &s(cert, &["runnerEnvironment"]),
+                        &s(signer, &["buildTrigger"]),
+                        &s(signer, &["runnerEnvironment"]),
                         &tlog_times(r),
                         published,
                     ) {
@@ -654,12 +654,13 @@ fn stage_anchor(tag: &str, no_commit: bool) -> Result<(), String> {
             continue;
         };
         let r = &v[0]["verificationResult"];
-        let cert = &r["signature"]["certificate"];
-        let run = s(cert, &["runInvocationURI"]);
+        // The signing certificate's verified claims (public: the certificate is logged in Rekor).
+        let signer = &r["signature"]["certificate"];
+        let run = s(signer, &["runInvocationURI"]);
         let tlog = tlog_times(r);
         match judge(
-            &s(cert, &["buildTrigger"]),
-            &s(cert, &["runnerEnvironment"]),
+            &s(signer, &["buildTrigger"]),
+            &s(signer, &["runnerEnvironment"]),
             &tlog,
             published,
         ) {
