@@ -12,9 +12,13 @@
 //! Add-only: every crates.io unit must come from app/Cargo.lock or std's lock, every path unit
 //! must be the app or the toolchain's library, and std must be among the units. Anything else
 //! fails; nothing here can drop a package from a scan.
+//!
+//! Scope: crates.io registry packages. Code std carries in its own tree (`library/backtrace`,
+//! `library/compiler-builtins`, ...) has no crates.io identity for RustSec to match; it is
+//! anchored by the toolchain pin and covered by `toolchain-advisories`.
 
 use crate::freeze::{LockEntry, lock_entries};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::process::{Command, Stdio};
 
 const CRATES_IO: &str = "registry+https://github.com/rust-lang/crates.io-index";
@@ -44,8 +48,11 @@ fn parse_pkg_id(id: &str) -> Result<(String, String, String), String> {
 pub struct StdDeps {
     pub units: usize,
     pub std_units: usize,
-    /// std's crates.io dependencies compiled into the product, with their std-lock entries.
+    /// std's crates.io dependencies compiled for the product, with their std-lock entries.
     pub carried: BTreeMap<(String, String), LockEntry>,
+    /// Of `carried`, those with no target unit: compiled only for the build host (build
+    /// scripts, proc macros). Still scanned; labeled so the report does not overstate.
+    pub host_only: BTreeSet<(String, String)>,
 }
 
 /// Classify every unit of `graph` (cargo's `--unit-graph` JSON). `library_url` is the
@@ -70,24 +77,30 @@ pub fn analyze(
         .get("roots")
         .and_then(serde_json::Value::as_array)
         .ok_or("unit graph: no `roots` array")?;
-    let [root] = roots.as_slice() else {
-        return Err(format!(
-            "unit graph: expected exactly one root, found {}",
-            roots.len()
-        ));
-    };
-    let root_id = root
-        .as_u64()
-        .and_then(|i| units.get(usize::try_from(i).ok()?))
-        .and_then(|u| u.get("pkg_id"))
-        .and_then(serde_json::Value::as_str)
-        .ok_or("unit graph: root index out of range")?;
-    let (root_url, name, _) = parse_pkg_id(root_id)?;
-    if name != root_name || !root_url.starts_with("path+") {
-        return Err(format!(
-            "unit graph: root is `{root_id}`, expected the local package `{root_name}`"
-        ));
+    if roots.is_empty() {
+        return Err("unit graph: no root".into());
     }
+    // Several roots (a lib plus a bin) are fine; each must be the product.
+    let mut root_url: Option<String> = None;
+    for root in roots {
+        let root_id = root
+            .as_u64()
+            .and_then(|i| units.get(usize::try_from(i).ok()?))
+            .and_then(|u| u.get("pkg_id"))
+            .and_then(serde_json::Value::as_str)
+            .ok_or("unit graph: root index out of range")?;
+        let (url, name, _) = parse_pkg_id(root_id)?;
+        if name != root_name || !url.starts_with("path+") {
+            return Err(format!(
+                "unit graph: root is `{root_id}`, expected the local package `{root_name}`"
+            ));
+        }
+        if root_url.as_ref().is_some_and(|u| *u != url) {
+            return Err("unit graph: roots name two different local packages".into());
+        }
+        root_url = Some(url);
+    }
+    let root_url = root_url.unwrap_or_default();
 
     let app = lock_entries(app_lock);
     let std = lock_entries(std_lock);
@@ -96,6 +109,7 @@ pub fn analyze(
         units: units.len(),
         ..StdDeps::default()
     };
+    let mut target_keys: BTreeSet<(String, String)> = BTreeSet::new();
     for u in units {
         let id = u
             .get("pkg_id")
@@ -103,6 +117,9 @@ pub fn analyze(
             .ok_or("unit graph: a unit has no pkg_id")?;
         let (url, name, version) = parse_pkg_id(id)?;
         let key = (name, version);
+        if !u.get("platform").is_none_or(serde_json::Value::is_null) {
+            target_keys.insert(key.clone());
+        }
         if url == CRATES_IO {
             let from = |l: &BTreeMap<(String, String), LockEntry>| {
                 l.get(&key)
@@ -135,6 +152,12 @@ pub fn analyze(
             ));
         }
     }
+    out.host_only = out
+        .carried
+        .keys()
+        .filter(|k| !target_keys.contains(*k))
+        .cloned()
+        .collect();
     if out.std_units == 0 {
         return Err(format!(
             "no unit comes from the toolchain's library ({library_url}): std is not built from \
@@ -147,7 +170,7 @@ pub fn analyze(
 /// A Cargo.lock holding exactly `carried`, for `cargo audit --file`.
 pub fn render_lock(carried: &BTreeMap<(String, String), LockEntry>) -> String {
     let mut s = String::from(
-        "# std's crates.io dependencies compiled into the app (xtask std-deps, #386),\n\
+        "# std's crates.io dependencies compiled for the app (xtask std-deps, #386),\n\
          # copied from the pinned toolchain's library/Cargo.lock.\nversion = 4\n",
     );
     for ((n, v), e) in carried {
@@ -179,6 +202,28 @@ fn capture(dir: &str, program: &str, args: &[&str]) -> Result<String, String> {
         ));
     }
     String::from_utf8(o.stdout).map_err(|_| format!("`{program}` printed non-UTF-8"))
+}
+
+/// Variables cargo reads that would make this graph differ from another job's. Reported, not
+/// refused: inside release-attest the graph and the build share one environment.
+fn graph_env() -> String {
+    let set: Vec<String> = std::env::vars()
+        .map(|(k, _)| k)
+        .filter(|k| {
+            k == "RUSTFLAGS"
+                || k == "CARGO_ENCODED_RUSTFLAGS"
+                || k == "CARGO_TARGET_DIR"
+                || k.starts_with("CARGO_BUILD_")
+                || k.starts_with("CARGO_UNSTABLE_")
+                || k.starts_with("CARGO_PROFILE_")
+                || (k.starts_with("CARGO_TARGET_") && k.ends_with("_RUSTFLAGS"))
+        })
+        .collect();
+    if set.is_empty() {
+        "none".into()
+    } else {
+        set.join(" ")
+    }
 }
 
 fn std_deps(out_path: &str) -> Result<String, String> {
@@ -213,18 +258,36 @@ fn std_deps(out_path: &str) -> Result<String, String> {
     let app_lock = std::fs::read_to_string(format!("{APP_DIR}/Cargo.lock"))
         .map_err(|e| format!("cannot read {APP_DIR}/Cargo.lock ({e})"))?;
     let r = analyze(&graph, &app_lock, &std_lock, &library_url, "hp-thermal")?;
+    // cargo prints the graph without creating the target directory; a fresh runner has none.
+    if let Some(dir) = std::path::Path::new(out_path).parent() {
+        std::fs::create_dir_all(dir)
+            .map_err(|e| format!("cannot create {} ({e})", dir.display()))?;
+    }
     std::fs::write(out_path, render_lock(&r.carried))
         .map_err(|e| format!("cannot write {out_path} ({e})"))?;
-    let list: Vec<String> = r.carried.keys().map(|(n, v)| format!("{n}@{v}")).collect();
+    let list: Vec<String> = r
+        .carried
+        .keys()
+        .map(|k| {
+            let host = if r.host_only.contains(k) {
+                " (host only)"
+            } else {
+                ""
+            };
+            format!("{}@{}{host}", k.0, k.1)
+        })
+        .collect();
     Ok(format!(
-        "{} units ({} from std's source); std's crates.io dependencies compiled in: {} -> {out_path}",
+        "{} units ({} from std's source); std's crates.io dependencies compiled in: {} -> {out_path}\n\
+         environment that changes the graph: {}",
         r.units,
         r.std_units,
         if list.is_empty() {
             "none".into()
         } else {
             list.join(" ")
-        }
+        },
+        graph_env()
     ))
 }
 
@@ -350,8 +413,27 @@ mod tests {
     }
 
     #[test]
+    fn host_only_packages_are_labeled_not_dropped() {
+        let ids: Vec<String> = ok_ids();
+        let ids: Vec<&str> = ids.iter().map(String::as_str).collect();
+        // every unit graph() writes is a host unit (platform null)
+        let r = analyze(&graph(&ids, "[0]"), APP_LOCK, STD_LOCK, LIB, "hp-thermal").unwrap();
+        assert_eq!(r.host_only.len(), 1);
+        let target = graph(&ids, "[0]").replace(
+            "\"platform\":null",
+            "\"platform\":\"x86_64-pc-windows-msvc\"",
+        );
+        let r = analyze(&target, APP_LOCK, STD_LOCK, LIB, "hp-thermal").unwrap();
+        assert!(r.host_only.is_empty() && r.carried.len() == 1);
+    }
+
+    #[test]
     fn root_must_be_the_one_local_product() {
         assert!(run_on(&ok_ids(), "[]").is_err());
+        // two roots that are both the product (lib + bin) are fine; a root that is std is not
+        let mut ids = ok_ids();
+        ids.push(APP.into());
+        assert!(run_on(&ids, "[0,4]").is_ok());
         assert!(run_on(&ok_ids(), "[0,1]").is_err());
         assert!(run_on(&ok_ids(), "[9]").is_err());
         // root is a crates.io package
