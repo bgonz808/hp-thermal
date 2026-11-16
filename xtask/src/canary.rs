@@ -44,22 +44,33 @@ struct Canary {
     rationale: &'static str,
 }
 
-const CANARIES: &[Canary] = &[Canary {
-    tool: "cargo-audit",
-    // NO `--no-fetch`: the canary needs a REAL advisory database. On a cold runner
-    // there is none, and cargo-audit then fails to load it -- exiting non-zero while
-    // having evaluated nothing. That is precisely the state this canary exists to
-    // catch, and it is what the first CI run found (the same cold-DB defect that
-    // silently emptied the exploration reports, #287). Fetching costs a network round
-    // trip and buys the difference between a real detection and a plausible-looking one.
-    args: &["audit", "--file", "{fixture}"],
-    fixture: "supply-chain/canaries/vuln-audit.lock",
-    // The advisory ID, not a phrase like "vulnerability found": wording is cosmetic and
-    // changes between releases, whereas the ID is the finding's identity -- the same
-    // instance-tuple discipline the gate uses (#241).
-    expect_marker: "RUSTSEC-2018-0006",
-    rationale: "yaml-rust 0.4.0: a real vulnerability rather than an unmaintained notice; patched in 0.4.1 so the tuple can never become clean; and no os restriction that a Windows-targeted scan could legitimately filter out",
-}];
+const CANARIES: &[Canary] = &[
+    Canary {
+        tool: "cargo-audit",
+        // NO `--no-fetch`: the canary needs a REAL advisory database. On a cold runner
+        // there is none, and cargo-audit then fails to load it -- exiting non-zero while
+        // having evaluated nothing. That is precisely the state this canary exists to
+        // catch, and it is what the first CI run found (the same cold-DB defect that
+        // silently emptied the exploration reports, #287). Fetching costs a network round
+        // trip and buys the difference between a real detection and a plausible-looking one.
+        args: &["audit", "--file", "{fixture}"],
+        fixture: "supply-chain/canaries/vuln-audit.lock",
+        // The advisory ID, not a phrase like "vulnerability found": wording is cosmetic and
+        // changes between releases, whereas the ID is the finding's identity -- the same
+        // instance-tuple discipline the gate uses (#241).
+        expect_marker: "RUSTSEC-2018-0006",
+        rationale: "yaml-rust 0.4.0: a real vulnerability rather than an unmaintained notice; patched in 0.4.1 so the tuple can never become clean; and no os restriction that a Windows-targeted scan could legitimately filter out",
+    },
+    Canary {
+        tool: "cargo-audit",
+        args: &["audit", "--file", "{fixture}"],
+        // The shape `xtask std-deps` writes (#386): no root package, no dependency edges. An
+        // auditor that only walks a dependency tree would report it clean.
+        fixture: "supply-chain/canaries/vuln-audit-flat.lock",
+        expect_marker: "RUSTSEC-2018-0006",
+        rationale: "the vuln-audit.lock tuple in the rootless, edgeless shape std-deps emits; the release gate and the daily monitor scan that shape",
+    },
+];
 
 /// What a canary run tells us about the INSTRUMENT.
 #[derive(Debug, PartialEq, Eq)]
@@ -229,6 +240,25 @@ mod tests {
             Verdict::Broken(why) => assert!(why.contains("RUSTSEC-2018-0006")),
             other => panic!("a panic must not count as detection, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn flat_fixture_has_the_shape_std_deps_writes() {
+        let fixture = std::fs::read_to_string("../supply-chain/canaries/vuln-audit-flat.lock")
+            .or_else(|_| std::fs::read_to_string("supply-chain/canaries/vuln-audit-flat.lock"))
+            .unwrap();
+        let entries = crate::freeze::lock_entries(&fixture);
+        let body = |t: &str| -> Vec<String> {
+            t.lines()
+                .filter(|l| !l.starts_with('#'))
+                .map(str::to_string)
+                .collect()
+        };
+        assert_eq!(
+            body(&fixture),
+            body(&crate::unit_graph::render_lock(&entries))
+        );
+        assert!(entries.contains_key(&("yaml-rust".to_string(), "0.4.0".to_string())));
     }
 
     #[test]

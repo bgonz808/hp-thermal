@@ -1,38 +1,81 @@
 name: deps-audit (scheduled advisory monitor)
-
 # The CONTINUOUS axis. The in-CI/release gates check advisories at PR/build time; this catches an
-# advisory PUBLISHED AFTER a dependency merged but affecting the CURRENTLY-committed Cargo.lock —
-# the blind spot of point-in-time gating. Runs daily against app/Cargo.lock (RustSec DB) and opens
-# a tracking issue for any new advisory, so we are aware of a CVE in something already shipped
-# without waiting for the next Dependabot cycle.
+# advisory PUBLISHED AFTER a dependency merged but affecting what the app compiles today — the
+# blind spot of point-in-time gating. Daily, against a fresh RustSec DB:
+#   * app/Cargo.lock;
+#   * std's crates.io dependencies compiled in via build-std (#386), listed from cargo's unit
+#     graph and the pinned toolchain's library/Cargo.lock (`xtask std-deps`). They are in neither
+#     app/Cargo.lock nor the exe's `.dep-v0`, so no other scan sees them.
+# The auditor is the digest-pinned cargo-audit from TOOLS.lock (#221). Read-only and
+# notice-by-failure, like supply-chain-monitor.yml: a finding fails the run and the scheduled-
+# failure notification is the alert. (Before: rustsec/audit-check, which ran `cargo install
+# cargo-audit` unpinned each day and needed issues: write.)
 #
 # RustSec exports to OSV in real time and osv-scanner already runs per-PR in the `ci` scan job, so
 # this RustSec-based daily monitor is the complementary continuous check, not a duplicate.
-
 on:
   schedule:
     - cron: "0 7 * * *"   # daily 07:00 UTC
   workflow_dispatch: {}
-
+  pull_request:
+    paths:
+      - app/Cargo.toml
+      - app/Cargo.lock
+      - app/rust-toolchain.toml
+      - app/.cargo/config.toml
+      - tools/TOOLCHAIN.lock
+      - tools/TOOLS.lock
+      - supply-chain/canaries/**
+      - .github/actions/fetch-tools/**
+      - .github/actions/install-toolchain/**
+      - .github/workflows/deps-audit.yml
+      - xtask/**
 permissions:
   contents: read
-
 jobs:
   audit:
-    runs-on: ubuntu-24.04
+    # windows-2025: the pinned cargo-audit is the Windows build in TOOLS.lock (#221).
+    runs-on: windows-2025
     permissions:
       contents: read
-      issues: write   # audit-check opens an issue when a new advisory affects the lockfile
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
         with:
           persist-credentials: false
 
-      # Scans app/Cargo.lock against the RustSec advisory DB (fetched fresh each run) and, on a
-      # scheduled run, files an issue per new advisory. Pinned by SHA (v2.0.0).
-      - name: RustSec advisory audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998  # rustsec/audit-check v2.0.0
+      - name: Verify MSVC toolchain authenticity (before anything compiles)
+        uses: ./.github/actions/verify-msvc
+
+      - name: Install pinned toolchain
+        uses: ./.github/actions/install-toolchain
+
+      - name: Fetch + verify cargo-audit (digest-pinned, fail-closed)
+        id: tools
+        uses: ./.github/actions/fetch-tools
         with:
           token: ${{ github.token }}
-          working-directory: app
+          target: windows-x86_64
+          only: cargo-audit
+          verify-attestations: "true"
+
+      - name: Negative control - the auditor must still detect a known-bad
+        shell: bash
+        env:
+          PINNED_TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
+
+      - name: std's crates.io dependencies compiled into the app (unit graph, nothing built)
+        shell: bash
+        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- std-deps
+
+      - name: RustSec audit (app lock + std's compiled dependencies)
+        shell: bash
+        env:
+          TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
+        run: |
+          set -euo pipefail
+          rc=0
+          "$TOOLS_DIR/cargo-audit.exe" audit --file app/Cargo.lock || rc=1
+          "$TOOLS_DIR/cargo-audit.exe" audit --file app/target/std-deps.lock || rc=1
+          exit "$rc"

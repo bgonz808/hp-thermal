@@ -64,6 +64,8 @@ mod record_vuln;
 mod release_advance;
 /// `slsa-vsa`: SLSA Verification Summary predicate for a verified release (#419 phase 4).
 mod slsa_vsa;
+/// `std-deps`: cargo's unit graph; std's crates.io dependencies compiled in via build-std (#386).
+mod unit_graph;
 /// `vdr`: CycloneDX 1.6 Vulnerability Disclosure Report for a measured product (#396).
 mod vdr;
 /// `xtask ci` step: cargo-vet exemptions for xtask stay off every lane's build graph.
@@ -128,6 +130,7 @@ fn main() {
         Some("candidate-advance") => advance::run(&args),
         Some("release-advance") => release_advance::run(&args),
         Some("vdr") => vdr::run(&args),
+        Some("std-deps") => unit_graph::run(&args),
         Some("slsa-vsa") => slsa_vsa::run(&args),
         Some("vet-guard") => {
             if vet_guard::check() {
@@ -688,6 +691,14 @@ fn release_attest_checks() -> bool {
     );
     // xtask's cargo-vet exemptions are claims about the build graph; prove them every run.
     ok &= vet_guard::check();
+    // build-std compiles std's own crates.io dependencies into the exe; they are in neither
+    // app/Cargo.lock nor `.dep-v0`, so neither scan below sees them (#386).
+    ok &= unit_graph::std_deps_step(unit_graph::STD_DEPS_LOCK);
+    ok &= cargo_tool_step(
+        "audit std's compiled crates.io dependencies",
+        ".",
+        &["audit", "--file", unit_graph::STD_DEPS_LOCK],
+    );
     // stdout is the build record (cargo's JSON messages); json-render-diagnostics keeps
     // rustc's diagnostics rendered on stderr.
     ok &= cargo_tool_step_to(
@@ -697,6 +708,7 @@ fn release_attest_checks() -> bool {
             "auditable",
             "build",
             "--release",
+            "--locked",
             "--message-format=json-render-diagnostics",
         ],
         APP_BUILD_RECORD,
