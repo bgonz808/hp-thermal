@@ -105,7 +105,11 @@ jobs:
             # evidence tree.
             mkdir -p /tmp/base-root
             git archive "$BASE_SHA" tools | tar -x -C /tmp/base-root
+            # The policy a change is judged by is the base commit's: a change that lowers a floor
+            # takes effect for the changes after it, never for itself.
+            git show "$BASE_SHA:supply-chain/policy/floors.json" > /tmp/base-floors.json
           else
+            cp supply-chain/policy/floors.json /tmp/base-floors.json
             cp tools/TOOLS.lock /tmp/base-tools.lock
             cp -R supply-chain/evidence/. /tmp/base-evidence/
             mkdir -p /tmp/base-root && cp -R tools /tmp/base-root/
@@ -128,7 +132,7 @@ jobs:
           cargo run --locked --manifest-path xtask/Cargo.toml -- gate \
             --base /tmp/base-tools.lock --base-locks-dir /tmp/base-locks \
             --base-evidence /tmp/base-evidence --base-tools-dir /tmp/base-root/tools \
-            --report gate-report.md
+            --floors /tmp/base-floors.json --report gate-report.md
           echo "code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Post / update the evidence comment

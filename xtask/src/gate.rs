@@ -62,20 +62,34 @@ pub(crate) fn parse_tools_lock(text: &str) -> Vec<ToolLine> {
 /// `fetch_tools_reads_the_lock_as_the_gate_does` holds the two to the same verdicts). Every line,
 /// comments included, holds only ASCII graphic characters, spaces and tabs: no reader's locale,
 /// and no invisible or bidirectional character, decides what a line says. A content line (the
-/// text before `#`) is exactly five fields: name, owner/repo, 40-hex rev, target, 64-hex sha256,
-/// each of `[A-Za-z0-9._-]` (the repo one `/` more). One pin per (name, target). A line outside
-/// this is a problem, never skipped.
+/// text before `#`) is exactly five fields: name, owner/repo, 40-hex rev, target, 64-hex sha256.
+/// Each word is `[A-Za-z0-9._-]`, starting and ending alphanumeric (no `.`, `..` or trailing-dot
+/// path components); name and target are lowercase, so no case-insensitive comparison or file
+/// system has a second spelling of them. One pin per (name, target); a digest names one pin (one
+/// binary is not two); every target of a tool builds from one (repo, rev), the one frozen lock
+/// `tools/locks/<name>.lock` describes. A line outside this is a problem, never skipped.
 pub(crate) fn tools_lock_problems(text: &str) -> Vec<String> {
-    let word = |s: &str| {
-        !s.is_empty()
-            && s.bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    let word = |s: &str, lower: bool| {
+        let ok = |b: u8| {
+            b.is_ascii_digit()
+                || if lower {
+                    b.is_ascii_lowercase()
+                } else {
+                    b.is_ascii_alphabetic()
+                }
+        };
+        let b = s.as_bytes();
+        b.first().is_some_and(|&c| ok(c))
+            && b.last().is_some_and(|&c| ok(c))
+            && b.iter().all(|&c| ok(c) || b"._-".contains(&c))
     };
     let hex = |s: &str, n: usize| {
         s.len() == n && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
     };
     let mut out = Vec::new();
     let mut seen = BTreeSet::new();
+    let mut digests = BTreeSet::new();
+    let mut source: BTreeMap<&str, (&str, &str)> = BTreeMap::new();
     for (i, line) in text.split('\n').enumerate() {
         let content = line.find('#').map_or(line, |j| &line[..j]);
         if let Some(c) = line
@@ -97,12 +111,12 @@ pub(crate) fn tools_lock_problems(text: &str) -> Vec<String> {
             continue;
         }
         let ok = f.len() == 5
-            && word(f[0])
+            && word(f[0], true)
             && f[1]
                 .split_once('/')
-                .is_some_and(|(o, r)| word(o) && word(r))
+                .is_some_and(|(o, r)| word(o, false) && word(r, false))
             && hex(f[2], 40)
-            && word(f[3])
+            && word(f[3], true)
             && hex(f[4], 64);
         if !ok {
             out.push(format!(
@@ -111,6 +125,19 @@ pub(crate) fn tools_lock_problems(text: &str) -> Vec<String> {
             ));
         } else if !seen.insert((f[0], f[3])) {
             out.push(format!("line {}: {} {} pinned twice", i + 1, f[0], f[3]));
+        } else if f[4] != ZERO_DIGEST && !digests.insert(f[4]) {
+            out.push(format!(
+                "line {}: digest {} pinned twice",
+                i + 1,
+                &f[4][..12]
+            ));
+        } else if source.entry(f[0]).or_insert((f[1], f[2])) != &(f[1], f[2]) {
+            out.push(format!(
+                "line {}: {} names another source than its other targets; every target builds \
+                 from one (repo, rev)",
+                i + 1,
+                f[0]
+            ));
         }
     }
     out
@@ -118,46 +145,80 @@ pub(crate) fn tools_lock_problems(text: &str) -> Vec<String> {
 
 /// cargo-audit takes configuration from `.cargo/audit.toml` under its working directory, and an
 /// `ignore` there silences advisories. Every invocation therefore runs in a fresh, empty
-/// directory holding only a copy of the lock it scans: nothing in the checkout configures the
-/// instrument. `args` name the lock with `--file <path>`, which is replaced by the copy.
+/// directory: nothing in the checkout configures the instrument. Two forms: `audit … --file
+/// <lock>` scans a copy of the lock made in that directory; `audit bin <path>…` scans binaries,
+/// named by absolute path. The directory is created here, never reused: one that already exists
+/// (left behind, or planted) is skipped.
 pub(crate) fn audit_isolated(
     program: &str,
     args: &[String],
 ) -> Result<std::process::Output, String> {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static N: AtomicUsize = AtomicUsize::new(0);
-    let i = args
-        .iter()
-        .position(|a| a == "--file")
-        .ok_or("audit: no --file")?;
-    let lock = args.get(i + 1).ok_or("audit: --file without a path")?;
-    let dir = std::env::temp_dir().join(format!(
-        "xtask-audit-{}-{}",
-        std::process::id(),
-        N.fetch_add(1, Ordering::SeqCst)
-    ));
-    let _ = std::fs::remove_dir_all(&dir);
-    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let copy = dir.join("Cargo.lock");
-    std::fs::copy(lock, &copy).map_err(|e| format!("{lock}: {e}"))?;
-    let mut argv = args.to_vec();
-    argv[i + 1] = copy.to_string_lossy().into_owned();
-    // A program named by path is resolved before the working directory changes.
-    let prog = if Path::new(program).components().count() > 1 {
-        std::path::absolute(program).map_err(|e| format!("{program}: {e}"))?
-    } else {
-        PathBuf::from(program)
+    let dir = (0..1000)
+        .map(|_| {
+            std::env::temp_dir().join(format!(
+                "xtask-audit-{}-{}",
+                std::process::id(),
+                N.fetch_add(1, Ordering::SeqCst)
+            ))
+        })
+        .find_map(|d| match std::fs::create_dir(&d) {
+            Ok(()) => Some(Ok(d)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => None,
+            Err(e) => Some(Err(format!("{}: {e}", d.display()))),
+        })
+        .unwrap_or_else(|| Err("audit: no fresh temporary directory".into()))?;
+    let abs = |p: &str| {
+        std::path::absolute(p)
+            .map(|a| a.to_string_lossy().into_owned())
+            .map_err(|e| format!("{p}: {e}"))
     };
-    let out = Command::new(&prog)
-        .args(&argv)
-        .current_dir(&dir)
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .env_remove("CARGO")
-        .env_remove("RUSTC")
-        .output()
-        .map_err(|e| format!("cannot run {program}: {e}"));
+    let run = || -> Result<std::process::Output, String> {
+        let argv = isolated_argv(args, &dir)?;
+        // A program named by path is resolved before the working directory changes.
+        let prog = if Path::new(program).components().count() > 1 {
+            PathBuf::from(abs(program)?)
+        } else {
+            PathBuf::from(program)
+        };
+        Command::new(&prog)
+            .args(&argv)
+            .current_dir(&dir)
+            .env_remove("RUSTUP_TOOLCHAIN")
+            .env_remove("CARGO")
+            .env_remove("RUSTC")
+            .output()
+            .map_err(|e| format!("cannot run {program}: {e}"))
+    };
+    let out = run();
     let _ = std::fs::remove_dir_all(&dir);
     out
+}
+
+/// `audit_isolated`'s argv for a run in `dir`: binaries by absolute path, or the lock copied in.
+fn isolated_argv(args: &[String], dir: &Path) -> Result<Vec<String>, String> {
+    let abs = |p: &str| {
+        std::path::absolute(p)
+            .map(|a| a.to_string_lossy().into_owned())
+            .map_err(|e| format!("{p}: {e}"))
+    };
+    let mut argv = args.to_vec();
+    if args.get(1).map(String::as_str) == Some("bin") {
+        for a in argv.iter_mut().skip(2).filter(|a| !a.starts_with('-')) {
+            *a = abs(a)?;
+        }
+    } else {
+        let i = args
+            .iter()
+            .position(|a| a == "--file")
+            .ok_or("audit: neither `bin <path>` nor `--file <lock>`")?;
+        let lock = args.get(i + 1).ok_or("audit: --file without a path")?;
+        let copy = dir.join("Cargo.lock");
+        std::fs::copy(lock, &copy).map_err(|e| format!("{lock}: {e}"))?;
+        argv[i + 1] = copy.to_string_lossy().into_owned();
+    }
+    Ok(argv)
 }
 
 /// Candidates = head entries that are new or whose rev/digest changed vs base. An entry is
@@ -172,14 +233,16 @@ pub(crate) fn audit_isolated(
 fn candidates(base: &[ToolLine], head: &[ToolLine]) -> Vec<(Option<ToolLine>, ToolLine)> {
     head.iter()
         .filter_map(|h| {
-            let b = base
+            let same = base
                 .iter()
-                .find(|b| b.name == h.name && b.target == h.target)
-                .or_else(|| base.iter().find(|b| b.name == h.name));
-            match b {
-                Some(b) if b.rev == h.rev && b.sha == h.sha => None,
-                _ => Some((b.cloned(), h.clone())),
+                .find(|b| b.name == h.name && b.target == h.target);
+            // Unchanged only when the same (name, target) names the same source and bytes: the
+            // repo is part of the pin, and a new target is always a candidate.
+            if same.is_some_and(|b| b.repo == h.repo && b.rev == h.rev && b.sha == h.sha) {
+                return None;
             }
+            let b = same.or_else(|| base.iter().find(|b| b.name == h.name));
+            Some((b.cloned(), h.clone()))
         })
         .collect()
 }
@@ -1385,7 +1448,10 @@ fn blessed_root_edits(
 ///     or an app release's) changes, and then keeps its serialNumber and takes a higher version;
 ///     a superseded or historical report is frozen;
 ///   * a (serialNumber, version) names one content, in the change and across base and change;
-///   * a report the change adds takes a version above every version its serial had.
+///   * a report the change adds is a current subject's, and takes a version above every
+///     version its serial had;
+///   * every report carries its own subject's serialNumber (`vdr::serial_number` of the digest
+///     directory it sits in), so no report speaks for another subject's ledger.
 fn vdr_ledger(
     evidence_dir: &Path,
     base_evidence_dir: &Path,
@@ -1505,6 +1571,29 @@ fn vdr_ledger(
             )),
         }
     }
+    for (p, b) in &head {
+        // <tool>/<digest>/vdr.cdx.json or <tool>/<digest>/rev/<lock>/vdr.cdx.json
+        let digest = p.iter().nth(1).map(|d| d.to_string_lossy().into_owned());
+        let own = digest.as_deref().map(crate::vdr::serial_number);
+        if let Some((s, _)) = id(b)
+            && own.as_ref() != Some(&s)
+        {
+            problems.push(format!(
+                "{}: serialNumber {s} is not its subject's ({})",
+                show(p),
+                own.unwrap_or_default()
+            ));
+        }
+        if !base.contains_key(p) {
+            let dir = evidence_dir.join(p.parent().unwrap_or(Path::new("")));
+            if !is_current(&dir) {
+                problems.push(format!(
+                    "{}: added, but not the current report of a pinned subject",
+                    show(p)
+                ));
+            }
+        }
+    }
     let max_base: BTreeMap<&String, u64> =
         base_ids.keys().fold(BTreeMap::new(), |mut m, (s, v)| {
             let e = m.entry(s).or_insert(0);
@@ -1525,22 +1614,152 @@ fn vdr_ledger(
     problems
 }
 
-/// Paths in the index that differ only by case. On a case-insensitive checkout (the gate runs on
-/// Windows) only one of them reaches the disk, so the file the gate reads need not be the file
-/// that merges.
+/// Record files a reader opens by name under a digest or revision directory.
+const RECORD_FILES: &[&str] = &[
+    "revision.json",
+    "vuln.jsonl",
+    "caps.toml",
+    "caps.UNEVALUATED",
+    "build.jsonl",
+    "vdr.cdx.json",
+    "mal.jsonl",
+];
+
+/// Paths, or directory prefixes of them, that differ only by case. On a case-insensitive
+/// checkout (the gate runs on Windows) one spelling stands for the other, so the file the gate
+/// reads need not be the file a case-sensitive reader (git, the Linux producer) reads. `paths`
+/// is the index together with `opened_paths`: a file renamed by case is not a second index path,
+/// but it is a second spelling of the name a reader opens.
 pub(crate) fn case_collisions(paths: &[String]) -> Vec<String> {
-    let mut by: BTreeMap<String, Vec<&String>> = BTreeMap::new();
+    let mut by: BTreeMap<String, BTreeSet<&str>> = BTreeMap::new();
     for p in paths {
-        by.entry(p.to_lowercase()).or_default().push(p);
+        for end in p.match_indices('/').map(|(i, _)| i).chain([p.len()]) {
+            let pre = &p[..end];
+            by.entry(pre.to_lowercase()).or_default().insert(pre);
+        }
     }
     by.into_values()
         .filter(|v| v.len() > 1)
-        .map(|v| v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" / "))
+        .map(|v| v.into_iter().collect::<Vec<_>>().join(" / "))
         .collect()
 }
 
-/// `case_collisions` over the repository's index (`git ls-files`); refused when any exist.
-pub(crate) fn refuse_case_collisions() -> Result<(), String> {
+/// Paths the gate and the workflows open by a name they build rather than one they list: the
+/// fixed files, each pinned tool's producer inputs and evidence, and the records under every
+/// digest and revision directory the index holds.
+pub(crate) fn opened_paths(locks: &[&[ToolLine]], index: &[String]) -> Vec<String> {
+    let rev = crate::evidence_rev::REV_DIR;
+    let mut out: Vec<String> = [
+        "tools/TOOLS.lock",
+        "tools/TOOLCHAIN.lock",
+        "supply-chain/policy/floors.json",
+    ]
+    .map(String::from)
+    .to_vec();
+    let records =
+        |d: &str| -> Vec<String> { RECORD_FILES.iter().map(|f| format!("{d}/{f}")).collect() };
+    for l in locks.iter().flat_map(|l| l.iter()) {
+        let (n, sha) = (&l.name, &l.sha);
+        out.extend([
+            format!("tools/locks/{n}.lock"),
+            format!("tools/patches/{n}"),
+            format!("tools/build-args/{n}"),
+            format!("tools/rustflags/{n}"),
+            format!("supply-chain/evidence/{n}/acks.jsonl"),
+        ]);
+        out.extend(records(&format!("supply-chain/evidence/{n}/{sha}")));
+    }
+    // supply-chain/evidence/<tool>/<digest>/… and …/<digest>/rev/<lock>/…
+    for p in index {
+        let c: Vec<&str> = p.split('/').collect();
+        if c.len() >= 5 && c[0] == "supply-chain" && c[1] == "evidence" {
+            let digest = c[..4].join("/");
+            out.push(format!("{digest}/{rev}"));
+            out.extend(records(&digest));
+            if c.len() >= 7 && c[4] == rev {
+                out.extend(records(&c[..6].join("/")));
+            }
+        }
+    }
+    out
+}
+
+/// Under `roots`, the working tree is the index: every entry a regular file (mode 100644, stage
+/// 0) whose bytes, hashed with no filters, are its blob, and no file the index does not hold.
+/// Attributes (`eol`, `working-tree-encoding`, `filter`, `ident`), symlinks and stray files
+/// would otherwise let a reader of the working tree judge bytes other than the bytes that merge.
+pub(crate) fn checkout_problems(repo: &Path, roots: &[&str]) -> Result<Vec<String>, String> {
+    let git = |args: &[&str]| -> Result<Vec<u8>, String> {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .map_err(|e| format!("git {}: {e}", args[0]))?;
+        if !out.status.success() {
+            return Err(format!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(out.stdout)
+    };
+    let z = |b: Vec<u8>| -> Vec<String> {
+        b.split(|c| *c == 0)
+            .filter(|p| !p.is_empty())
+            .map(|p| String::from_utf8_lossy(p).into_owned())
+            .collect()
+    };
+    let mut problems = Vec::new();
+    let mut files = Vec::new();
+    for e in z(git(&[&["ls-files", "-s", "-z", "--"], roots].concat())?) {
+        let (meta, path) = e.split_once('\t').ok_or("git ls-files -s: no tab")?;
+        let m: Vec<&str> = meta.split(' ').collect();
+        if m.len() != 3 || m[0] != "100644" || m[2] != "0" {
+            problems.push(format!(
+                "{path}: index entry `{meta}`, not a regular file (100644, stage 0)"
+            ));
+        } else {
+            files.push((path.to_string(), m[1].to_string()));
+        }
+    }
+    for chunk in files.chunks(64) {
+        let mut args = vec!["hash-object", "--no-filters", "--"];
+        args.extend(chunk.iter().map(|(p, _)| p.as_str()));
+        let got = String::from_utf8_lossy(&git(&args)?).into_owned();
+        let got: Vec<&str> = got.lines().collect();
+        if got.len() != chunk.len() {
+            return Err("git hash-object: one id per path expected".into());
+        }
+        for ((p, want), have) in chunk.iter().zip(got) {
+            if have != want {
+                problems.push(format!(
+                    "{p}: the working tree holds other bytes than the index ({}, blob {})",
+                    &have[..have.len().min(12)],
+                    &want[..want.len().min(12)]
+                ));
+            }
+        }
+    }
+    for p in z(git(&[&["ls-files", "-o", "-z", "--"], roots].concat())?) {
+        problems.push(format!("{p}: in the working tree, not in the index"));
+    }
+    Ok(problems)
+}
+
+/// The checkout the gate (or `vdr check`) reads is the one that merges: `checkout_problems`
+/// under `tools/` and `supply-chain/`, and `refuse_case_collisions`. Refused on any.
+pub(crate) fn refuse_checkout(lock_texts: &[&str]) -> Result<(), String> {
+    let problems = checkout_problems(Path::new("."), &["tools", "supply-chain"])?;
+    if !problems.is_empty() {
+        return Err(problems.join("; "));
+    }
+    refuse_case_collisions(lock_texts)
+}
+
+/// No `case_collisions` among the index and the paths opened for the pins in `lock_texts`.
+pub(crate) fn refuse_case_collisions(lock_texts: &[&str]) -> Result<(), String> {
     let out = Command::new("git")
         .args(["ls-files", "-z"])
         .output()
@@ -1548,13 +1767,17 @@ pub(crate) fn refuse_case_collisions() -> Result<(), String> {
     if !out.status.success() {
         return Err("git ls-files failed: the tree cannot be checked for case collisions".into());
     }
-    let paths: Vec<String> = out
+    let index: Vec<String> = out
         .stdout
         .split(|b| *b == 0)
         .filter(|p| !p.is_empty())
         .map(|p| String::from_utf8_lossy(p).into_owned())
         .collect();
-    let c = case_collisions(&paths);
+    let locks: Vec<Vec<ToolLine>> = lock_texts.iter().map(|t| parse_tools_lock(t)).collect();
+    let refs: Vec<&[ToolLine]> = locks.iter().map(Vec::as_slice).collect();
+    let mut all = index.clone();
+    all.extend(opened_paths(&refs, &index));
+    let c = case_collisions(&all);
     if c.is_empty() {
         Ok(())
     } else {
@@ -1622,7 +1845,7 @@ fn rescan_at(header: &Value, lock: &Path, prior_db: Option<&str>) -> Result<Valu
     if have != want {
         return Err(format!(
             "vuln.jsonl was recorded by scanner {}, the pinned auditor is {}: re-measure with it",
-            &want[..12.min(want.len())],
+            want.get(..12).unwrap_or(want),
             &have[..12]
         ));
     }
@@ -1890,7 +2113,7 @@ pub fn run(args: &[String]) -> i32 {
     // Evidence revisions (evidence README rule 2): a frozen lock that changed under an unchanged
     // pinned digest makes that digest a candidate again, gated on a revision measured against
     // the new lock and compared with the record the base selected.
-    if let Err(e) = refuse_case_collisions() {
+    if let Err(e) = refuse_checkout(&[&head_text, &base_text]) {
         eprintln!("gate: {e}");
         return 2;
     }
@@ -1937,10 +2160,18 @@ pub fn run(args: &[String]) -> i32 {
     let mut first_scan = true;
 
     // Absolute floors (#241 §4). A missing/malformed policy is UNEVALUATED for every
-    // candidate: "no floors file" must never read as "no floors".
+    // candidate: "no floors file" must never read as "no floors". It is also UNEVALUATED on its
+    // own: evidence and ack edits are evaluated against the floors too, so with none loaded the
+    // change has not been evaluated, whatever else it holds.
     let floors = match crate::floors::load(&floors_path) {
         Ok(f) => Some(f),
         Err(e) => {
+            reports.push(CandidateReport {
+                name: format!("policy ({})", floors_path.display()),
+                tool: String::new(),
+                summary: String::new(),
+                axes: vec![("floors", Verdict::Unevaluated(e.clone()))],
+            });
             for (_, h) in &cands {
                 reports.push(CandidateReport {
                     name: format!("{} [{}]", h.name, h.target),
@@ -1973,7 +2204,9 @@ pub fn run(args: &[String]) -> i32 {
         // Same digest on both sides: only the lock changed (`revision_candidates`).
         // Same bytes as the base pins: the evidence it is gated on is the base's record or a
         // revision of it, whatever else the line says.
-        let is_rev = b.as_ref().is_some_and(|b| b.sha == h.sha);
+        let is_rev = b
+            .as_ref()
+            .is_some_and(|b| b.target == h.target && b.sha == h.sha);
 
         // Preconditions (#241 §4): an unblessed digest cannot be evaluated OR acked.
         if h.sha == ZERO_DIGEST || h.sha.len() != 64 {
@@ -2121,12 +2354,16 @@ pub fn run(args: &[String]) -> i32 {
                 )),
             ));
         }
-        if is_rev && b.as_ref().is_some_and(|b| b.rev != h.rev) {
+        if is_rev
+            && b.as_ref()
+                .is_some_and(|b| b.rev != h.rev || b.repo != h.repo)
+        {
             axes.push((
                 "revision",
                 Verdict::Unevaluated(
-                    "the upstream rev changed but the digest did not: the same bytes cannot \
-                     come from another commit without a producer run proving it; re-bless"
+                    "the upstream source (repo, rev) changed but the digest did not: the same \
+                     bytes cannot come from another source without a producer run proving it; \
+                     re-bless"
                         .into(),
                 ),
             ));
@@ -3305,8 +3542,9 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         let sha = "c".repeat(64);
         let lock = "f".repeat(64);
+        let serial = crate::vdr::serial_number(&sha);
         let doc = |v: u64, k: u64| {
-            serde_json::json!({"serialNumber": "urn:uuid:x", "version": v, "k": k}).to_string()
+            serde_json::json!({"serialNumber": serial, "version": v, "k": k}).to_string()
         };
         let root = PathBuf::from("t").join(&sha).join("vdr.cdx.json");
         let rev = PathBuf::from("t")
@@ -3325,8 +3563,20 @@ mod tests {
             put(side, &root, doc(5, 1));
             put(side, &rev, doc(6, 2));
         }
-        let current_dir = he.join("t").join(&sha).join("rev").join(&lock);
-        let is_current = |dir: &Path| dir == current_dir;
+        let newer = PathBuf::from("t")
+            .join(&sha)
+            .join("rev")
+            .join("e".repeat(64))
+            .join("vdr.cdx.json");
+        let other = PathBuf::from("u").join(&sha).join("vdr.cdx.json");
+        // The revision's report is current; `newer` and `other` stand for reports a change adds
+        // for a current subject.
+        let current = [
+            he.join("t").join(&sha).join("rev").join(&lock),
+            he.join(newer.parent().unwrap()),
+            he.join(other.parent().unwrap()),
+        ];
+        let is_current = |dir: &Path| current.iter().any(|c| c == dir);
         assert!(vdr_ledger(&he, &be, &is_current).is_empty());
         // the current report re-emitted forward: fine
         put(&he, &rev, doc(7, 3));
@@ -3360,11 +3610,6 @@ mod tests {
         assert!(!vdr_ledger(&he, &be, &is_current).is_empty(), "deleted");
         put(&he, &rev, doc(6, 2));
         // a new report for the same serial takes a version above all it had
-        let newer = PathBuf::from("t")
-            .join(&sha)
-            .join("rev")
-            .join("e".repeat(64))
-            .join("vdr.cdx.json");
         put(&he, &newer, doc(6, 9));
         assert!(
             !vdr_ledger(&he, &be, &is_current).is_empty(),
@@ -3386,9 +3631,38 @@ mod tests {
             vdr_ledger(&he, &be, &is_current).is_empty(),
             "a new report at v7"
         );
-        // two files in the change claiming one (serial, version) with different content
+        // a new report for the subject at a fresh version, but in a directory that is not current
+        let stale = PathBuf::from("t")
+            .join(&sha)
+            .join("rev")
+            .join("d".repeat(64))
+            .join("vdr.cdx.json");
+        put(&he, &stale, doc(8, 9));
+        assert!(
+            !vdr_ledger(&he, &be, &is_current).is_empty(),
+            "a new report, not current"
+        );
+        std::fs::remove_file(he.join(&stale)).unwrap();
+        // a report under another digest claiming this subject's serial, far ahead
+        let planted = PathBuf::from("t").join("a".repeat(64)).join("vdr.cdx.json");
+        put(&he, &planted, doc(999, 9));
+        assert!(
+            !vdr_ledger(&he, &be, &is_current).is_empty(),
+            "another subject's serial"
+        );
+        std::fs::remove_dir_all(he.join(planted.parent().unwrap())).unwrap();
+        // a current subject's new report under its own directory, but another subject's serial
+        let foreign = serde_json::json!({
+            "serialNumber": crate::vdr::serial_number(&"a".repeat(64)), "version": 8, "k": 9
+        });
+        put(&he, &newer, foreign.to_string());
+        assert!(
+            !vdr_ledger(&he, &be, &is_current).is_empty(),
+            "a report naming another subject"
+        );
         put(&he, &newer, doc(7, 9));
-        let other = PathBuf::from("u").join(&sha).join("vdr.cdx.json");
+        assert!(vdr_ledger(&he, &be, &is_current).is_empty(), "restored");
+        // two files in the change claiming one (serial, version) with different content
         put(&he, &other, doc(7, 10));
         assert!(
             !vdr_ledger(&he, &be, &is_current).is_empty(),
@@ -3403,6 +3677,7 @@ mod tests {
         let rev = "e7109a3174378976ea881f1883439ba82524f061";
         let sha = "87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7";
         let pin = format!("cargo-acl cackle-rs/cackle {rev} linux-x86_64 {sha}");
+        let (rev2, sha2, zero) = ("f".repeat(40), "e".repeat(64), ZERO_DIGEST);
         let s = |t: String| t.into_bytes();
         vec![
             (
@@ -3430,11 +3705,78 @@ mod tests {
             (
                 "two targets",
                 s(format!(
-                    "{pin}\ncargo-acl cackle-rs/cackle {rev} windows-x86_64 {sha}\n"
+                    "{pin}\ncargo-acl cackle-rs/cackle {rev} windows-x86_64 {sha2}\n"
                 )),
                 true,
             ),
             ("empty", Vec::new(), true),
+            (
+                "mixed-case owner/repo",
+                s(format!(
+                    "cargo-x Cackle-RS/Cackle {rev} linux-x86_64 {sha}\n"
+                )),
+                true,
+            ),
+            (
+                "two unset digests",
+                s(format!(
+                    "{pin}\na o/r {rev} t {zero}\nb o/r {rev} t {zero}\n"
+                )),
+                true,
+            ),
+            (
+                "uppercase name",
+                s(format!(
+                    "Cargo-acl cackle-rs/cackle {rev} linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            (
+                "uppercase target",
+                s(format!(
+                    "cargo-acl cackle-rs/cackle {rev} Linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            ("dot name", s(format!(". o/r {rev} t {sha}\n")), false),
+            ("dot-dot name", s(format!(".. o/r {rev} t {sha}\n")), false),
+            (
+                "trailing-dot name",
+                s(format!("cargo-acl. o/r {rev} t {sha}\n")),
+                false,
+            ),
+            (
+                "leading-hyphen target",
+                s(format!("x o/r {rev} -t {sha}\n")),
+                false,
+            ),
+            ("dot-dot repo", s(format!("x o/.. {rev} t {sha}\n")), false),
+            (
+                "leading-dot owner",
+                s(format!("x .o/r {rev} t {sha}\n")),
+                false,
+            ),
+            (
+                "one digest, two pins",
+                s(format!(
+                    "{pin}\ncargo-x cackle-rs/cackle {rev} linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            (
+                "two targets, two revs",
+                s(format!(
+                    "{pin}\ncargo-acl cackle-rs/cackle {rev2} windows-x86_64 {sha2}\n"
+                )),
+                false,
+            ),
+            (
+                "two targets, two repos",
+                s(format!(
+                    "{pin}\ncargo-acl evil/cackle {rev} windows-x86_64 {sha2}\n"
+                )),
+                false,
+            ),
             (
                 "nbsp",
                 s(format!(
@@ -3632,7 +3974,339 @@ mod tests {
             case_collisions(&p(&["tools/TOOLS.lock", "tools/tools.lock", "x"])),
             vec!["tools/TOOLS.lock / tools/tools.lock"]
         );
-        assert_eq!(case_collisions(&p(&["A/b", "a/B"])).len(), 1);
+        // the directory and the file both collide
+        assert_eq!(case_collisions(&p(&["A/b", "a/B"])).len(), 2);
+        // two files in one directory spelled two ways: the directories collide
+        assert_eq!(
+            case_collisions(&p(&[
+                "tools/patches/cargo-acl/a.patch",
+                "tools/patches/Cargo-Acl/b.patch"
+            ])),
+            vec!["tools/patches/Cargo-Acl / tools/patches/cargo-acl"]
+        );
+    }
+
+    /// A name a reader builds (from a pin, or a record name under a digest directory) and an
+    /// index path that spells it another way: on Windows the gate reads the index path through
+    /// the built name; git and the Linux producer do not.
+    #[test]
+    fn a_second_spelling_of_a_name_a_reader_opens_is_found() {
+        let sha = "c".repeat(64);
+        let lock = parse_tools_lock(&format!(
+            "cargo-acl cackle-rs/cackle {} linux-x86_64 {sha}\n",
+            "a".repeat(40)
+        ));
+        let found = |index: &[String]| {
+            let mut all = index.to_vec();
+            all.extend(opened_paths(&[&lock], index));
+            case_collisions(&all)
+        };
+        let ev = format!("supply-chain/evidence/cargo-acl/{sha}");
+        let clean = vec![
+            "tools/TOOLS.lock".to_string(),
+            "tools/locks/cargo-acl.lock".into(),
+            "tools/patches/cargo-acl/a.patch".into(),
+            format!("{ev}/vuln.jsonl"),
+            format!("{ev}/caps.UNEVALUATED"),
+            format!("{ev}/rev/{}/vuln.jsonl", "f".repeat(64)),
+        ];
+        assert!(found(&clean).is_empty(), "{:?}", found(&clean));
+        // A rename replaces the path: the index alone then has one spelling, and only the name
+        // a reader builds is the second.
+        let rv = format!("{ev}/rev/{}", "f".repeat(64));
+        for (what, gone, path) in [
+            (
+                "lock renamed",
+                vec!["tools/locks/cargo-acl.lock".to_string()],
+                "tools/locks/CARGO-ACL.lock".to_string(),
+            ),
+            (
+                "build args added respelled",
+                vec![],
+                "tools/build-args/Cargo-Acl".into(),
+            ),
+            (
+                "rustflags added respelled",
+                vec![],
+                "tools/rustflags/cargo-ACL".into(),
+            ),
+            (
+                "patches renamed",
+                vec!["tools/patches/cargo-acl/a.patch".into()],
+                "tools/patches/Cargo-Acl/a.patch".into(),
+            ),
+            (
+                "record renamed",
+                vec![format!("{ev}/vuln.jsonl")],
+                format!("{ev}/VULN.jsonl"),
+            ),
+            (
+                "marker respelled",
+                vec![format!("{ev}/caps.UNEVALUATED")],
+                format!("{ev}/caps.unevaluated"),
+            ),
+            (
+                "digest in capitals",
+                vec![
+                    format!("{ev}/vuln.jsonl"),
+                    format!("{ev}/caps.UNEVALUATED"),
+                    format!("{rv}/vuln.jsonl"),
+                ],
+                format!(
+                    "supply-chain/evidence/cargo-acl/{}/vuln.jsonl",
+                    sha.to_uppercase()
+                ),
+            ),
+            (
+                "rev dir respelled",
+                vec![format!("{rv}/vuln.jsonl")],
+                format!("{ev}/REV/{}/vuln.jsonl", "f".repeat(64)),
+            ),
+            (
+                "revision record renamed",
+                vec![format!("{rv}/vuln.jsonl")],
+                format!("{rv}/Vuln.jsonl"),
+            ),
+            (
+                "historical digest's rev dir respelled",
+                vec![],
+                format!(
+                    "supply-chain/evidence/cargo-acl/{}/REV/{}/vuln.jsonl",
+                    "b".repeat(64),
+                    "f".repeat(64)
+                ),
+            ),
+            (
+                "historical digest record renamed",
+                vec![],
+                format!(
+                    "supply-chain/evidence/cargo-acl/{}/Mal.jsonl",
+                    "b".repeat(64)
+                ),
+            ),
+            (
+                "lock file renamed",
+                vec!["tools/TOOLS.lock".into()],
+                "tools/tools.lock".into(),
+            ),
+        ] {
+            let mut index: Vec<String> = clean
+                .iter()
+                .filter(|p| !gone.contains(p))
+                .cloned()
+                .collect();
+            index.push(path);
+            assert!(
+                case_collisions(&index).is_empty(),
+                "{what}: the index alone collides"
+            );
+            assert!(!found(&index).is_empty(), "{what}");
+        }
+        // The committed index and lock have none.
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(&repo)
+            .args(["ls-files", "-z"])
+            .output()
+            .unwrap();
+        let index: Vec<String> = out
+            .stdout
+            .split(|b| *b == 0)
+            .filter(|p| !p.is_empty())
+            .map(|p| String::from_utf8_lossy(p).into_owned())
+            .collect();
+        let real =
+            parse_tools_lock(&std::fs::read_to_string(repo.join("tools/TOOLS.lock")).unwrap());
+        let mut all = index.clone();
+        all.extend(opened_paths(&[&real], &index));
+        assert!(
+            case_collisions(&all).is_empty(),
+            "{:?}",
+            case_collisions(&all)
+        );
+    }
+
+    /// The working tree under the gate's roots is the index, byte for byte.
+    #[test]
+    fn the_checkout_is_the_index() {
+        let d = std::env::temp_dir().join(format!("gate-checkout-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(d.join("tools")).unwrap();
+        let git = |args: &[&str]| {
+            let o = Command::new("git")
+                .arg("-C")
+                .arg(&d)
+                .args([
+                    "-c",
+                    "core.autocrlf=false",
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@t",
+                ])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                o.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&o.stderr)
+            );
+        };
+        git(&["init", "-q"]);
+        git(&["config", "core.autocrlf", "false"]);
+        std::fs::write(d.join("tools/a.txt"), "one\ntwo\n").unwrap();
+        std::fs::write(d.join("tools/b.txt"), "b\n").unwrap();
+        std::fs::write(d.join("other.txt"), "x\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-q", "-m", "c"]);
+        let problems = || checkout_problems(&d, &["tools"]).unwrap();
+        assert!(problems().is_empty(), "{:?}", problems());
+        // outside the roots: not this check's
+        std::fs::write(d.join("other.txt"), "y\n").unwrap();
+        std::fs::write(d.join("loose.txt"), "y\n").unwrap();
+        assert!(problems().is_empty(), "{:?}", problems());
+        // other bytes than the blob
+        std::fs::write(d.join("tools/a.txt"), "one\ntwo!\n").unwrap();
+        assert!(problems()[0].contains("tools/a.txt"));
+        git(&["checkout", "-q", "--", "tools/a.txt"]);
+        assert!(problems().is_empty());
+        // a file the index does not hold
+        std::fs::write(d.join("tools/c.txt"), "c\n").unwrap();
+        assert!(problems()[0].contains("tools/c.txt"));
+        std::fs::remove_file(d.join("tools/c.txt")).unwrap();
+        // an attribute that makes the checkout differ from the blob
+        std::fs::write(d.join(".gitattributes"), "tools/a.txt eol=crlf\n").unwrap();
+        git(&["add", ".gitattributes"]);
+        git(&["commit", "-q", "-m", "attr"]);
+        std::fs::remove_file(d.join("tools/a.txt")).unwrap();
+        git(&["checkout", "-q", "--", "tools/a.txt"]);
+        assert!(problems()[0].contains("tools/a.txt"), "{:?}", problems());
+        git(&["rm", "-q", ".gitattributes"]);
+        git(&["commit", "-q", "-m", "no attr"]);
+        std::fs::remove_file(d.join("tools/a.txt")).unwrap();
+        git(&["checkout", "-q", "--", "tools/a.txt"]);
+        assert!(problems().is_empty(), "{:?}", problems());
+        // not a regular file
+        git(&["update-index", "--chmod=+x", "tools/b.txt"]);
+        assert!(problems()[0].contains("tools/b.txt"));
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn a_pin_is_unchanged_only_when_every_field_is() {
+        let line = |name: &str, repo: &str, rev: &str, target: &str, sha: &str| ToolLine {
+            name: name.into(),
+            repo: repo.into(),
+            rev: rev.into(),
+            target: target.into(),
+            sha: sha.into(),
+        };
+        let (r, s) = ("a".repeat(40), "c".repeat(64));
+        let base = vec![line("t", "o/r", &r, "linux-x86_64", &s)];
+        assert!(candidates(&base, &base).is_empty());
+        for (what, h) in [
+            ("repo", line("t", "evil/r", &r, "linux-x86_64", &s)),
+            ("rev", line("t", "o/r", &"b".repeat(40), "linux-x86_64", &s)),
+            (
+                "digest",
+                line("t", "o/r", &r, "linux-x86_64", &"d".repeat(64)),
+            ),
+            (
+                "a new target with the same source and bytes",
+                line("t", "o/r", &r, "windows-x86_64", &s),
+            ),
+        ] {
+            let c = candidates(&base, &[h]);
+            assert_eq!(c.len(), 1, "{what}");
+        }
+        // the baseline for a new target is the tool's pin on another target
+        let c = candidates(
+            &base,
+            &[line("t", "o/r", &r, "windows-x86_64", &"e".repeat(64))],
+        );
+        assert_eq!(
+            c[0].0.as_ref().map(|b| b.target.as_str()),
+            Some("linux-x86_64")
+        );
+    }
+
+    #[test]
+    fn the_isolated_scanner_gets_absolute_binaries_or_a_copied_lock() {
+        let d = std::env::temp_dir().join(format!("gate-argv-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let v = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let bin = isolated_argv(&v(&["audit", "bin", "target/x.exe", "--json"]), &d).unwrap();
+        assert!(
+            Path::new(&bin[2]).is_absolute() && bin[2].ends_with("x.exe"),
+            "{bin:?}"
+        );
+        assert_eq!(bin[3], "--json");
+        let lock = d.join("in.lock");
+        std::fs::write(&lock, "x").unwrap();
+        let f = isolated_argv(
+            &v(&["audit", "--json", "--file", &lock.to_string_lossy()]),
+            &d,
+        )
+        .unwrap();
+        assert_eq!(Path::new(&f[3]), d.join("Cargo.lock"));
+        assert_eq!(std::fs::read(d.join("Cargo.lock")).unwrap(), b"x");
+        assert!(isolated_argv(&v(&["audit", "--json"]), &d).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// No policy, no verdict: a broken floors file blocks a change even when nothing else in it
+    /// is evaluated.
+    #[test]
+    fn a_broken_policy_blocks_a_change_with_nothing_to_evaluate() {
+        let d = std::env::temp_dir().join(format!("gate-floors-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        for sub in ["ev", "bev", "locks", "blocks", "tools", "btools"] {
+            std::fs::create_dir_all(d.join(sub)).unwrap();
+        }
+        let lock = d.join("TOOLS.lock");
+        std::fs::write(
+            &lock,
+            format!("t o/r {} linux-x86_64 {}\n", "a".repeat(40), "c".repeat(64)),
+        )
+        .unwrap();
+        std::fs::write(d.join("bad.json"), r#"{"schema":"nope"}"#).unwrap();
+        let good = Path::new(env!("CARGO_MANIFEST_DIR")).join("../supply-chain/policy/floors.json");
+        let run_with = |floors: &Path| {
+            let p = |x: &str| d.join(x).to_string_lossy().into_owned();
+            let args: Vec<String> = [
+                "gate",
+                "--base",
+                &p("TOOLS.lock"),
+                "--head",
+                &p("TOOLS.lock"),
+                "--evidence",
+                &p("ev"),
+                "--base-evidence",
+                &p("bev"),
+                "--locks-dir",
+                &p("locks"),
+                "--base-locks-dir",
+                &p("blocks"),
+                "--tools-dir",
+                &p("tools"),
+                "--base-tools-dir",
+                &p("btools"),
+                "--floors",
+                &floors.to_string_lossy(),
+                "--report",
+                &p("report.md"),
+            ]
+            .map(String::from)
+            .to_vec();
+            run(&args)
+        };
+        assert_eq!(run_with(&good), 0);
+        assert_eq!(run_with(&d.join("bad.json")), 1);
+        assert_eq!(run_with(&d.join("missing.json")), 1);
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
 

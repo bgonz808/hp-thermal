@@ -430,6 +430,16 @@ fn fetch_verified(
     raw_sha256: &str,
     run_id: &str,
 ) -> Result<Verified, String> {
+    // These reach file names and a download pattern: checked here, whatever the caller checked.
+    if !is_hex64(raw_sha256)
+        || !is_hex64(digest)
+        || run_id.is_empty()
+        || !run_id.bytes().all(|b| b.is_ascii_digit())
+    {
+        return Err(format!(
+            "build record: malformed raw sha256, digest or run id ({raw_sha256}, {digest}, {run_id})"
+        ));
+    }
     let asset = asset_name(tool, target, digest, raw_sha256);
     let dir = std::env::temp_dir().join(format!("build-record-{}", &raw_sha256[..12]));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;

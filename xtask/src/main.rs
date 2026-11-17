@@ -627,7 +627,8 @@ fn cargo_tool_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
 }
 
 /// cargo-audit, isolated from the checkout's configuration (`gate::audit_isolated`): a committed
-/// `.cargo/audit.toml` must not decide what it reports. `--file` is read relative to `cwd`.
+/// `.cargo/audit.toml` must not decide what it reports. `--file` and `bin` paths are read
+/// relative to `cwd`.
 fn audit_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
     use std::io::Write as _;
     eprintln!(
@@ -642,7 +643,8 @@ fn audit_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
         .iter()
         .enumerate()
         .map(|(i, a)| {
-            if i > 0 && args[i - 1] == "--file" {
+            let bin_path = args.get(1) == Some(&"bin") && i > 1 && !a.starts_with('-');
+            if bin_path || (i > 0 && args[i - 1] == "--file") {
                 std::path::Path::new(cwd).join(a).display().to_string()
             } else {
                 (*a).to_string()

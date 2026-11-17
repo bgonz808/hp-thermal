@@ -141,8 +141,9 @@ tool's report and every release's report and fails on any difference, admitting 
 SBOM only after its provenance verifies. When a bless supersedes a tool digest, that digest's last
 report stays committed as history and is no longer regenerated. A revision (rule 2) carries its
 own report: the same `serialNumber`, the version after the superseded record's. The gate holds
-every committed report to that ledger: never deleted, and a changed one keeps its
-`serialNumber` and takes a higher version.
+every committed report to that ledger: never deleted, a changed one keeps its `serialNumber`
+and takes a higher version, a new one is a current subject's, and each carries the
+`serialNumber` derived from the digest directory it sits in.
 A release's report is published by `release-vdr.yml` as an attestation to the shipped exe, never
 as a release asset (a published release is immutable); `release-advance anchor` records each
 revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
@@ -187,7 +188,9 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
 3. Consumer: `cargo xtask gate` (first-party Rust — no external pinned tool, no python runtime)
    diffs baseline↔candidate, applies the #241 verdict algebra, and fails a bump PR until every
    RAISE item is covered by a committed ack, printing the exact ack lines to add. Committing them
-   **is** the sign-off; closing the PR is the reject.
+   **is** the sign-off; closing the PR is the reject. The floors it judges by are the base
+   commit's (`supply-chain/policy/floors.json`): a change that lowers one takes effect for the
+   changes after it, never for itself, and a policy that does not load blocks every change.
 4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
    digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
    on the axes it touched, against the base commit's record (the workflow extracts that tree). An
@@ -198,14 +201,21 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
 5. **Every reader reads the same input.** `tools/TOOLS.lock` has one grammar
    (`gate::tools_lock_problems`): every line, comments included, holds only ASCII graphic
    characters, spaces and tabs, so no locale or invisible character decides what a line says;
-   the text before `#` is five fields; one pin per (name, target). Any other file is refused,
-   never partly read. `fetch-tools` refuses the same files before any line is used (a test runs
-   its bash against the gate's cases), and the workflows' `grep | sed | read` readers of the pins
-   agree on a file that passes. Paths that differ only by case are refused, since the gate's Windows
-   checkout keeps one of them. `cargo-audit` reads `.cargo/audit.toml` from its working
+   the text before `#` is five fields; name and target are lowercase and every word starts and
+   ends alphanumeric; one pin per (name, target); a digest names one pin; every target of a tool
+   builds from one (repo, rev). Any other file is refused, never partly read. `fetch-tools`
+   refuses the same files before any line is used (a test runs its bash against the gate's
+   cases), and the workflows' `grep | sed | read` readers of the pins agree on a file that
+   passes. A pin is unchanged only when the same (name, target) has the same repo, rev and
+   digest; the same digest under another repo or rev is refused.
+   The gate and `vdr check` read the working tree only when it is the index under `tools/` and
+   `supply-chain/`: regular files whose bytes, unfiltered, are their blobs, nothing untracked.
+   They refuse two spellings, differing only by case, of a path or of a name a reader opens
+   (a pin's lock, patches, build args, rustflags, evidence records): the Windows checkout would
+   read one through the other. `cargo-audit` reads `.cargo/audit.toml` from its working
    directory, so every xtask scan (`gate::audit_isolated`) and `deps-audit` scan a copy of the
-   lock in an empty temporary directory. The producer's pre-build posture scan (evidence, not a gate) does
-   not yet.
+   lock, or the binary by absolute path, in a fresh empty directory. The producer's pre-build
+   posture scan (evidence, not a gate) does not yet.
 
 ## Known open items (bootstrap, 2026-08-21)
 
