@@ -1564,6 +1564,8 @@ fn touching_commits(
         let out = Command::new("git")
             .arg("-C")
             .arg(repo)
+            // A path names itself: directory names from the change are not pathspec magic.
+            .arg("--literal-pathspecs")
             .args(args)
             .output()
             .map_err(|e| format!("git {}: {e}", args[0]))?;
@@ -1612,6 +1614,21 @@ fn change_repo_problem(here: Option<&str>, change: Option<&str>) -> Option<Strin
             "sign-offs come only from a branch of {}; this change's branch is in {}",
             here.unwrap_or("this repository (unknown here)"),
             change.unwrap_or("an unknown repository")
+        )),
+    }
+}
+
+/// A branch of this repository can hold a sign-off its signer has withdrawn (a closed pull
+/// request leaves its branch), and anyone who can read the repository can open a pull request
+/// from it. So the pull request itself must be a signer's: its opener is a listed signer.
+fn opener_problem(opener: Option<&str>, logins: &[String]) -> Option<String> {
+    match opener {
+        Some(o) if logins.iter().any(|l| l == o) => None,
+        _ => Some(format!(
+            "the pull request was opened by {}, not a listed signer",
+            opener
+                .filter(|o| !o.is_empty())
+                .unwrap_or("an unknown account")
         )),
     }
 }
@@ -2865,6 +2882,8 @@ pub fn run(args: &[String]) -> i32 {
     let mut base_root: Option<PathBuf> = None;
     // The repository the change's head branch is in: sign-offs come only from this one's.
     let mut change_repo: Option<String> = None;
+    // Who opened the pull request: sign-offs come only from a signer's.
+    let mut change_opener: Option<String> = None;
     let mut floors_path = PathBuf::from(crate::floors::DEFAULT_PATH);
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
@@ -2896,6 +2915,7 @@ pub fn run(args: &[String]) -> i32 {
             "--base-tools-dir" => base_tools_dir = it.next().map(PathBuf::from),
             "--base-root" => base_root = it.next().map(PathBuf::from),
             "--change-repo" => change_repo = it.next().cloned(),
+            "--change-opener" => change_opener = it.next().cloned(),
             "--floors" => {
                 if let Some(v) = it.next() {
                     floors_path = PathBuf::from(v);
@@ -3516,7 +3536,16 @@ pub fn run(args: &[String]) -> i32 {
             .as_ref()
             .ok_or_else(|| "no base tree (--base-root), so no signer policy".to_string())
             .and_then(|r| signer_logins(&r.join("supply-chain/policy/signers.json")))
-            .and_then(|logins| ack_commits(&paths).map(|c| ack_signer_problems(&c, &logins)))
+            .map(|logins| {
+                let mut p: Vec<String> = opener_problem(change_opener.as_deref(), &logins)
+                    .into_iter()
+                    .collect();
+                match ack_commits(&paths) {
+                    Ok(c) => p.extend(ack_signer_problems(&c, &logins)),
+                    Err(e) => p.push(e),
+                }
+                p
+            })
             .unwrap_or_else(|e| vec![e]);
         let mut problems = problems;
         let here = std::env::var("GITHUB_REPOSITORY").ok();
@@ -6009,12 +6038,28 @@ mod tests {
             ack_commits_in(&d, &fetch, &paths).is_err(),
             "not a test merge"
         );
+        // a directory name that reads as a glob names itself only: `x[1]` is not `x1`
+        std::fs::create_dir_all(d.join("x1")).unwrap();
+        put("x1/acks.jsonl", "one\n");
+        let x1 = commit("x1: a sibling the glob would match");
+        let glob = vec!["x[1]/acks.jsonl".to_string()];
+        assert!(
+            !touching_commits(&d, &tip, &x1, &glob)
+                .unwrap()
+                .contains(&x1),
+            "a literal path, not a pattern"
+        );
         let _ = std::fs::remove_dir_all(&d);
     }
 
-    /// Sign-offs come only from a branch of this repository.
+    /// Sign-offs come only from a branch of this repository, in a pull request a signer opened.
     #[test]
     fn sign_offs_come_only_from_this_repositorys_branches() {
+        let logins = vec!["me".to_string()];
+        assert!(opener_problem(Some("me"), &logins).is_none());
+        for opener in [Some("someone"), Some(""), None, Some("Me")] {
+            assert!(opener_problem(opener, &logins).is_some(), "{opener:?}");
+        }
         assert!(change_repo_problem(Some("o/r"), Some("o/r")).is_none());
         for (here, change) in [
             (Some("o/r"), Some("fork/r")),
@@ -6115,6 +6160,8 @@ mod tests {
         .unwrap();
         let floors =
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../supply-chain/policy/floors.json");
+        // the base tree: this repository's, for its signer policy
+        let base_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
         let run_it = || {
             let p = |x: &str| d.join(x).to_string_lossy().into_owned();
             let args: Vec<String> = [
@@ -6135,6 +6182,8 @@ mod tests {
                 &p("tools"),
                 "--base-tools-dir",
                 &p("btools"),
+                "--base-root",
+                &base_root.to_string_lossy(),
                 "--floors",
                 &floors.to_string_lossy(),
                 "--report",
@@ -6174,17 +6223,20 @@ mod tests {
             report.contains("sign-offs are added, never rewritten"),
             "{report}"
         );
-        // a sign-off added in order, but with no signed commit to show for it (no test merge
-        // here, no signer policy given): it does not count
+        // a sign-off added in order, but with nothing to show it is a signer's (no test merge
+        // here, no branch of this repository, no opener given): it does not count
         acks("bev", format!("{}\n", lines[0]));
         acks("ev", format!("{}\n{}\n", lines[0], lines[1]));
         assert_eq!(run_it(), 1, "an unattributed sign-off");
         let report = std::fs::read_to_string(d.join("report.md")).unwrap();
-        assert!(report.contains("signed by a listed signer"), "{report}");
-        assert!(
-            report.contains("sign-offs come only from a branch of"),
-            "{report}"
-        );
+        for why in [
+            "signed by a listed signer",
+            "sign-offs come only from a branch of",
+            "not a listed signer",
+            "is the checkout a test merge?",
+        ] {
+            assert!(report.contains(why), "{why}: {report}");
+        }
         let _ = std::fs::remove_dir_all(&d);
     }
 
