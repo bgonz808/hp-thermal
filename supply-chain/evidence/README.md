@@ -33,6 +33,11 @@ parseable. The schema borrows established vocabularies rather than inventing one
   and read as `UNSTATED`. A `malicious` sandbox verdict is a floor; `suspicious` is UNEVALUATED
   until #347's per-item sign-off exists. The monitor prints each pinned digest's line ready to
   append verbatim. Written from schedule/dispatch runs only — PR workflows never call VT.
+  Custody: a panel that would let a digest through counts only as the monitor's own line. Its
+  `source` names one `supply-chain-monitor` run on `main` (scheduled or dispatched), and that
+  run's log holds exactly one record line for the digest, byte for byte the committed one; a
+  line composed or edited by hand, or whose run log is gone, is UNEVALUATED until a fresh panel
+  is appended. A panel that blocks keeps blocking regardless.
 - **caps.toml** — the cackle-generated capability inventory; its `[api.*]` sections ARE the
   instrument it was measured with, so it stays native TOML (converting would sever that
   identity). A `caps.UNEVALUATED` file in its place records *why* no data exists — fail-secure:
@@ -47,6 +52,8 @@ parseable. The schema borrows established vocabularies rather than inventing one
   `<binary asset without .exe>.build-<sha256:0:12>.jsonl`, and is a subject of the same producer
   provenance statement as the binary. `candidate-advance digest` writes it for a candidate;
   `build-record baseline --run <id>` writes it for every pin that producer run reproduced.
+  The gate also holds the pin to the source the run built: the `TOOLS.lock` at the run's commit
+  pins the same (name, target) to the same repo and rev.
 - **acks.jsonl** — sign-offs aligned to **OpenVEX** (`status` ∈ not_affected/affected/fixed/
   under_investigation, `justification`, `impact_statement`/`status_notes`, `action_statement`,
   `author`, `timestamp`). Our records are an OpenVEX-*aligned profile* (a `schema` field names
