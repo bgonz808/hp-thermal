@@ -176,7 +176,9 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    scanner at that commit. A change that pins or revises a blessed digest leaves its root records
    byte for byte; an edit to them is its own PR (rule 4). Records under `rev/` are append-only and
    an admitted revision takes no new record; its `vdr.cdx.json` is re-emitted like any report.
-   `candidate-advance digest --reason …` writes one.
+   A revision only narrows: a lock never widens under one digest, so a narrowing is never undone,
+   and a wider build is a new digest. A change that pins a digest anew may select only a revision
+   the base commit already holds. `candidate-advance digest --reason …` writes one.
    **Candidate evidence is retired with the candidate**: a digest that was measured on a
    candidate branch but never blessed (its lock was re-frozen, its producer run superseded)
    has its evidence directory, its stored raw payload and any ack bound to it removed on that
@@ -193,6 +195,17 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    flow and backed by a stored raw payload, never edited in place. Changed `acks.jsonl` files are
    quality-checked even when nothing else changed; edits under non-frontier digests are listed in
    the report and not evaluated.
+5. **Every reader reads the same input.** `tools/TOOLS.lock` has one grammar
+   (`gate::tools_lock_problems`): every line, comments included, holds only ASCII graphic
+   characters, spaces and tabs, so no locale or invisible character decides what a line says;
+   the text before `#` is five fields; one pin per (name, target). Any other file is refused,
+   never partly read. `fetch-tools` refuses the same files before any line is used (a test runs
+   its bash against the gate's cases), and the workflows' `grep | sed | read` readers of the pins
+   agree on a file that passes. Paths that differ only by case are refused, since the gate's Windows
+   checkout keeps one of them. `cargo-audit` reads `.cargo/audit.toml` from its working
+   directory, so every xtask scan (`gate::audit_isolated`) and `deps-audit` scan a copy of the
+   lock in an empty temporary directory. The producer's pre-build posture scan (evidence, not a gate) does
+   not yet.
 
 ## Known open items (bootstrap, 2026-08-21)
 

@@ -57,6 +57,109 @@ pub(crate) fn parse_tools_lock(text: &str) -> Vec<ToolLine> {
         .collect()
 }
 
+/// The TOOLS.lock grammar every reader must agree on (`parse_tools_lock` here, the `grep | sed |
+/// read` pipelines in the workflows; `fetch-tools`' `tools_lock_grammar` enforces it in bash, and
+/// `fetch_tools_reads_the_lock_as_the_gate_does` holds the two to the same verdicts). Every line,
+/// comments included, holds only ASCII graphic characters, spaces and tabs: no reader's locale,
+/// and no invisible or bidirectional character, decides what a line says. A content line (the
+/// text before `#`) is exactly five fields: name, owner/repo, 40-hex rev, target, 64-hex sha256,
+/// each of `[A-Za-z0-9._-]` (the repo one `/` more). One pin per (name, target). A line outside
+/// this is a problem, never skipped.
+pub(crate) fn tools_lock_problems(text: &str) -> Vec<String> {
+    let word = |s: &str| {
+        !s.is_empty()
+            && s.bytes()
+                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
+    };
+    let hex = |s: &str, n: usize| {
+        s.len() == n && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    };
+    let mut out = Vec::new();
+    let mut seen = BTreeSet::new();
+    for (i, line) in text.split('\n').enumerate() {
+        let content = line.find('#').map_or(line, |j| &line[..j]);
+        if let Some(c) = line
+            .chars()
+            .find(|c| !(c.is_ascii_graphic() || *c == ' ' || *c == '\t'))
+        {
+            out.push(format!(
+                "line {}: U+{:04X} is outside the grammar",
+                i + 1,
+                c as u32
+            ));
+            continue;
+        }
+        let f: Vec<&str> = content
+            .split([' ', '\t'])
+            .filter(|s| !s.is_empty())
+            .collect();
+        if f.is_empty() {
+            continue;
+        }
+        let ok = f.len() == 5
+            && word(f[0])
+            && f[1]
+                .split_once('/')
+                .is_some_and(|(o, r)| word(o) && word(r))
+            && hex(f[2], 40)
+            && word(f[3])
+            && hex(f[4], 64);
+        if !ok {
+            out.push(format!(
+                "line {}: not `name owner/repo <40-hex rev> target <64-hex sha256>`",
+                i + 1
+            ));
+        } else if !seen.insert((f[0], f[3])) {
+            out.push(format!("line {}: {} {} pinned twice", i + 1, f[0], f[3]));
+        }
+    }
+    out
+}
+
+/// cargo-audit takes configuration from `.cargo/audit.toml` under its working directory, and an
+/// `ignore` there silences advisories. Every invocation therefore runs in a fresh, empty
+/// directory holding only a copy of the lock it scans: nothing in the checkout configures the
+/// instrument. `args` name the lock with `--file <path>`, which is replaced by the copy.
+pub(crate) fn audit_isolated(
+    program: &str,
+    args: &[String],
+) -> Result<std::process::Output, String> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static N: AtomicUsize = AtomicUsize::new(0);
+    let i = args
+        .iter()
+        .position(|a| a == "--file")
+        .ok_or("audit: no --file")?;
+    let lock = args.get(i + 1).ok_or("audit: --file without a path")?;
+    let dir = std::env::temp_dir().join(format!(
+        "xtask-audit-{}-{}",
+        std::process::id(),
+        N.fetch_add(1, Ordering::SeqCst)
+    ));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let copy = dir.join("Cargo.lock");
+    std::fs::copy(lock, &copy).map_err(|e| format!("{lock}: {e}"))?;
+    let mut argv = args.to_vec();
+    argv[i + 1] = copy.to_string_lossy().into_owned();
+    // A program named by path is resolved before the working directory changes.
+    let prog = if Path::new(program).components().count() > 1 {
+        std::path::absolute(program).map_err(|e| format!("{program}: {e}"))?
+    } else {
+        PathBuf::from(program)
+    };
+    let out = Command::new(&prog)
+        .args(&argv)
+        .current_dir(&dir)
+        .env_remove("RUSTUP_TOOLCHAIN")
+        .env_remove("CARGO")
+        .env_remove("RUSTC")
+        .output()
+        .map_err(|e| format!("cannot run {program}: {e}"));
+    let _ = std::fs::remove_dir_all(&dir);
+    out
+}
+
 /// Candidates = head entries that are new or whose rev/digest changed vs base. An entry is
 /// identified by (name, target): one tool may be produced for several targets (#386 step 3,
 /// cargo-auditable on both lanes), and each target's bytes are their own candidate.
@@ -1017,13 +1120,7 @@ pub(crate) fn run_audit(lockfile: &Path, no_fetch: bool) -> Result<Value, String
     }
     args.push("--file".into());
     args.push(lockfile.display().to_string());
-    let out = Command::new(&prog)
-        .args(&args)
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .env_remove("CARGO")
-        .env_remove("RUSTC")
-        .output()
-        .map_err(|e| format!("cannot run {prog}: {e}"))?;
+    let out = audit_isolated(&prog, &args)?;
     serde_json::from_slice(&out.stdout).map_err(|e| {
         format!(
             "cargo-audit output not parseable as JSON ({e}); stderr: {}",
@@ -1281,57 +1378,148 @@ fn blessed_root_edits(
         .collect()
 }
 
-/// Every committed `vdr.cdx.json` (a digest's, or a revision's) as a CycloneDX ledger: a report
-/// the base commit has is never deleted, and a changed one keeps its serialNumber and takes a
-/// higher version, so a version once committed never names other content.
-fn vdr_ledger(evidence_dir: &Path, base_evidence_dir: &Path) -> Vec<String> {
-    let mut reports = Vec::new();
-    let dirs = |p: &Path| -> Vec<PathBuf> {
-        std::fs::read_dir(p)
-            .map(|r| {
-                r.flatten()
-                    .map(|e| e.path())
-                    .filter(|p| p.is_dir())
-                    .collect()
-            })
-            .unwrap_or_default()
-    };
-    for t in dirs(base_evidence_dir) {
-        for d in dirs(&t) {
-            reports.push(d.join("vdr.cdx.json"));
-            for l in dirs(&d.join(crate::evidence_rev::REV_DIR)) {
-                reports.push(l.join("vdr.cdx.json"));
+/// Every committed `vdr.cdx.json` (a digest's, or a revision's) as one CycloneDX ledger per
+/// serialNumber, across all its files:
+///   * a report the base commit has is never deleted;
+///   * only the current report of a subject (`is_current`: the record a pinned digest selects,
+///     or an app release's) changes, and then keeps its serialNumber and takes a higher version;
+///     a superseded or historical report is frozen;
+///   * a (serialNumber, version) names one content, in the change and across base and change;
+///   * a report the change adds takes a version above every version its serial had.
+fn vdr_ledger(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+    is_current: &dyn Fn(&Path) -> bool,
+) -> Vec<String> {
+    fn reports(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+        let dirs = |p: &Path| -> Vec<PathBuf> {
+            std::fs::read_dir(p)
+                .map(|r| {
+                    r.flatten()
+                        .map(|e| e.path())
+                        .filter(|p| p.is_dir())
+                        .collect()
+                })
+                .unwrap_or_default()
+        };
+        let mut out = BTreeMap::new();
+        for t in dirs(root) {
+            for d in dirs(&t) {
+                let mut files = vec![d.join("vdr.cdx.json")];
+                files.extend(
+                    dirs(&d.join(crate::evidence_rev::REV_DIR))
+                        .into_iter()
+                        .map(|l| l.join("vdr.cdx.json")),
+                );
+                for f in files {
+                    if let (Ok(rel), Ok(b)) = (f.strip_prefix(root), std::fs::read(&f)) {
+                        out.insert(rel.to_path_buf(), b);
+                    }
+                }
             }
         }
+        out
     }
+    fn show(p: &Path) -> String {
+        p.to_string_lossy().replace('\\', "/")
+    }
+    fn id(b: &[u8]) -> Option<(String, u64)> {
+        let v: Value = serde_json::from_slice(b).ok()?;
+        Some((
+            v["serialNumber"].as_str()?.to_string(),
+            v["version"].as_u64()?,
+        ))
+    }
+    type Names<'a> = BTreeMap<(String, u64), (&'a PathBuf, &'a Vec<u8>)>;
+    /// (serial, version) -> the one content naming it, per side.
+    fn names<'a>(
+        side: &'a BTreeMap<PathBuf, Vec<u8>>,
+        label: &str,
+        problems: &mut Vec<String>,
+    ) -> Names<'a> {
+        let mut m: Names<'a> = BTreeMap::new();
+        for (p, b) in side {
+            match id(b) {
+                None => problems.push(format!("{} ({label}): no serialNumber/version", show(p))),
+                Some(k) => match m.get(&k) {
+                    Some((q, c)) if *c != b => problems.push(format!(
+                        "{} and {} both claim {} version {} with different content",
+                        show(q),
+                        show(p),
+                        k.0,
+                        k.1
+                    )),
+                    _ => {
+                        m.insert(k, (p, b));
+                    }
+                },
+            }
+        }
+        m
+    }
+    let (base, head) = (reports(base_evidence_dir), reports(evidence_dir));
     let mut problems = Vec::new();
-    for base in reports.into_iter().filter(|p| p.is_file()) {
-        let Ok(rel) = base.strip_prefix(base_evidence_dir) else {
-            continue;
-        };
-        let shown = rel.to_string_lossy().replace('\\', "/");
-        let head = evidence_dir.join(rel);
-        let (Some(bb), hb) = (read_opt(&base), read_opt(&head)) else {
-            continue;
-        };
-        let Some(hb) = hb else {
-            problems.push(format!("{shown}: deleted; a committed report is history"));
+    let base_ids = names(&base, "base", &mut problems);
+    // Implied by the rules below (one content per version within the change, history frozen,
+    // no deletion, forward-only changes, new reports above the serial's maximum); stated
+    // directly as the property it protects.
+    let head_ids = names(&head, "change", &mut problems);
+    for (k, (p, c)) in &head_ids {
+        if let Some((_, bc)) = base_ids.get(k)
+            && bc != c
+        {
+            problems.push(format!(
+                "{}: {} version {} already named other content",
+                show(p),
+                k.0,
+                k.1
+            ));
+        }
+    }
+    for (p, bb) in &base {
+        let Some(hb) = head.get(p) else {
+            problems.push(format!(
+                "{}: deleted; a committed report is history",
+                show(p)
+            ));
             continue;
         };
         if hb == bb {
             continue;
         }
-        let parse = |b: &[u8]| serde_json::from_slice::<Value>(b).ok();
-        match (parse(&bb), parse(&hb)) {
-            (Some(o), Some(n))
-                if o["serialNumber"] == n["serialNumber"]
-                    && n["version"].as_u64() > o["version"].as_u64() => {}
-            (Some(o), Some(n)) => problems.push(format!(
-                "{shown}: changed under serialNumber {} version {} -> {} {}; a changed report \
-                 keeps its serialNumber and takes a higher version",
-                o["serialNumber"], o["version"], n["serialNumber"], n["version"]
+        let dir = evidence_dir.join(p.parent().unwrap_or(Path::new("")));
+        if !is_current(&dir) {
+            problems.push(format!(
+                "{}: changed, but it is not the current report of a pinned subject; history is frozen",
+                show(p)
+            ));
+            continue;
+        }
+        match (id(bb), id(hb)) {
+            (Some((s0, v0)), Some((s1, v1))) if s0 == s1 && v1 > v0 => {}
+            (o, n) => problems.push(format!(
+                "{}: {:?} -> {:?}; a changed report keeps its serialNumber and takes a higher version",
+                show(p),
+                o,
+                n
             )),
-            _ => problems.push(format!("{shown}: not JSON")),
+        }
+    }
+    let max_base: BTreeMap<&String, u64> =
+        base_ids.keys().fold(BTreeMap::new(), |mut m, (s, v)| {
+            let e = m.entry(s).or_insert(0);
+            *e = (*e).max(*v);
+            m
+        });
+    for (p, b) in head.iter().filter(|(p, _)| !base.contains_key(*p)) {
+        if let Some((s, v)) = id(b)
+            && let Some(m) = max_base.get(&s)
+            && v <= *m
+        {
+            problems.push(format!(
+                "{}: new report {s} version {v}, but that serial already reached version {m}",
+                show(p)
+            ));
         }
     }
     problems
@@ -1482,14 +1670,12 @@ fn rescan_at(header: &Value, lock: &Path, prior_db: Option<&str>) -> Result<Valu
             )
         })?;
     }
-    let out = Command::new(&exe)
-        .args(["audit", "--db", &t, "--no-fetch", "--json", "--file"])
-        .arg(lock)
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .env_remove("CARGO")
-        .env_remove("RUSTC")
-        .output()
-        .map_err(|e| format!("cannot run {}: {e}", exe.display()))?;
+    let argv: Vec<String> = ["audit", "--db", &t, "--no-fetch", "--json", "--file"]
+        .iter()
+        .map(|a| a.to_string())
+        .chain([lock.display().to_string()])
+        .collect();
+    let out = audit_isolated(&exe.to_string_lossy(), &argv)?;
     let _ = std::fs::remove_dir_all(&tmp);
     serde_json::from_slice(&out.stdout).map_err(|e| {
         format!(
@@ -1691,6 +1877,13 @@ pub fn run(args: &[String]) -> i32 {
             return 2;
         }
     };
+    for (side, t) in [("head", &head_text), ("base", &base_text)] {
+        let p = tools_lock_problems(t);
+        if !p.is_empty() {
+            eprintln!("gate: {side} TOOLS.lock: {}", p.join("; "));
+            return 2;
+        }
+    }
     let base = parse_tools_lock(&base_text);
     let head = parse_tools_lock(&head_text);
     let cands = candidates(&base, &head);
@@ -1952,7 +2145,13 @@ pub fn run(args: &[String]) -> i32 {
                     },
                 ),
             ));
-        } else if revision.is_some() {
+        } else if revision.is_some()
+            && !head_rec
+                .as_ref()
+                .ok()
+                .and_then(|r| r.dir.strip_prefix(&evidence_dir).ok())
+                .is_some_and(|rel| base_evidence_dir.join(rel).is_dir())
+        {
             axes.push((
                 "revision",
                 Verdict::Unevaluated(
@@ -2002,10 +2201,23 @@ pub fn run(args: &[String]) -> i32 {
             let mut axes = Vec::new();
             let base_rec = base_evidence_dir.join(&h.name).join(&h.sha);
             let root = evidence_dir.join(&h.name).join(&h.sha);
-            let current = crate::evidence_rev::current(&evidence_dir, &locks_dir, &h.name, &h.sha);
-            if current.as_ref().is_ok_and(|r| r.dir != root)
-                && changed.iter().any(|f| f != "mal.jsonl")
-            {
+            let head_cur = crate::evidence_rev::current(&evidence_dir, &locks_dir, &h.name, &h.sha);
+            let base_cur = base_locks_dir
+                .as_deref()
+                .map(|l| crate::evidence_rev::current(&base_evidence_dir, l, &h.name, &h.sha));
+            // Superseded if either side selects a revision: an edit that breaks the head's
+            // selection must not make revision 1 look current again.
+            let superseded = matches!(&base_cur, Some(Ok(r)) if r.dir != base_rec)
+                || matches!(&head_cur, Ok(r) if r.dir != root);
+            if let Err(e) = &head_cur {
+                axes.push((
+                    "record",
+                    Verdict::Unevaluated(format!(
+                        "after this change no record matches the current lock: {e}"
+                    )),
+                ));
+            }
+            if superseded && changed.iter().any(|f| f != "mal.jsonl") {
                 axes.push((
                     "revision",
                     Verdict::Unevaluated(format!(
@@ -2137,7 +2349,25 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
 
-    let ledger = vdr_ledger(&evidence_dir, &base_evidence_dir);
+    let is_current = |dir: &Path| -> bool {
+        let Ok(rel) = dir.strip_prefix(&evidence_dir) else {
+            return false;
+        };
+        let mut parts = rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned());
+        let (Some(tool), Some(digest)) = (parts.next(), parts.next()) else {
+            return false;
+        };
+        // App reports are per release; each stays current (its release is published).
+        if tool == "hp-thermal" {
+            return parts.next().is_none();
+        }
+        head.iter().any(|l| l.name == tool && l.sha == digest)
+            && crate::evidence_rev::current(&evidence_dir, &locks_dir, &tool, &digest)
+                .is_ok_and(|r| r.dir == dir)
+    };
+    let ledger = vdr_ledger(&evidence_dir, &base_evidence_dir, &is_current);
     if !ledger.is_empty() {
         reports.push(CandidateReport {
             name: "VDR ledger".into(),
@@ -3078,44 +3308,318 @@ mod tests {
         let doc = |v: u64, k: u64| {
             serde_json::json!({"serialNumber": "urn:uuid:x", "version": v, "k": k}).to_string()
         };
-        let paths = [
-            PathBuf::from("t").join(&sha).join("vdr.cdx.json"),
-            PathBuf::from("t")
-                .join(&sha)
-                .join("rev")
-                .join(&lock)
-                .join("vdr.cdx.json"),
-        ];
-        for side in ["head", "base"] {
-            for p in &paths {
-                let f = d.join(side).join(p);
-                std::fs::create_dir_all(f.parent().unwrap()).unwrap();
-                std::fs::write(f, doc(3, 1)).unwrap();
-            }
-        }
+        let root = PathBuf::from("t").join(&sha).join("vdr.cdx.json");
+        let rev = PathBuf::from("t")
+            .join(&sha)
+            .join("rev")
+            .join(&lock)
+            .join("vdr.cdx.json");
         let (he, be) = (d.join("head"), d.join("base"));
-        assert!(vdr_ledger(&he, &be).is_empty());
-        for p in &paths {
-            let f = he.join(p);
-            std::fs::write(&f, doc(4, 2)).unwrap();
-            assert!(vdr_ledger(&he, &be).is_empty(), "a forward re-emit");
-            std::fs::write(&f, doc(2, 1)).unwrap();
-            assert_eq!(vdr_ledger(&he, &be).len(), 1, "a lowered version");
-            std::fs::write(&f, doc(3, 2)).unwrap();
-            assert_eq!(
-                vdr_ledger(&he, &be).len(),
-                1,
-                "new content under a used version"
-            );
-            std::fs::write(
-                &f,
+        let put = |side: &Path, p: &Path, body: String| {
+            let f = side.join(p);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(f, body).unwrap();
+        };
+        // base: revision 1's report at v5 (superseded), the revision's at v6 (current)
+        for side in [&he, &be] {
+            put(side, &root, doc(5, 1));
+            put(side, &rev, doc(6, 2));
+        }
+        let current_dir = he.join("t").join(&sha).join("rev").join(&lock);
+        let is_current = |dir: &Path| dir == current_dir;
+        assert!(vdr_ledger(&he, &be, &is_current).is_empty());
+        // the current report re-emitted forward: fine
+        put(&he, &rev, doc(7, 3));
+        assert!(
+            vdr_ledger(&he, &be, &is_current).is_empty(),
+            "a forward re-emit"
+        );
+        for (what, body) in [
+            ("lowered", doc(5, 3)),
+            ("used version, new content", doc(6, 3)),
+            (
+                "another serial",
                 serde_json::json!({"serialNumber": "urn:uuid:y", "version": 9}).to_string(),
-            )
-            .unwrap();
-            assert_eq!(vdr_ledger(&he, &be).len(), 1, "another serial");
-            std::fs::remove_file(&f).unwrap();
-            assert_eq!(vdr_ledger(&he, &be).len(), 1, "deleted");
-            std::fs::write(&f, doc(3, 1)).unwrap();
+            ),
+        ] {
+            put(&he, &rev, body);
+            assert!(!vdr_ledger(&he, &be, &is_current).is_empty(), "{what}");
+        }
+        put(&he, &rev, doc(6, 2));
+        // the superseded report is frozen, even moving "forward", even to a fresh version
+        for body in [doc(6, 9), doc(8, 9), doc(4, 1)] {
+            put(&he, &root, body);
+            assert!(
+                !vdr_ledger(&he, &be, &is_current).is_empty(),
+                "history rewritten"
+            );
+        }
+        put(&he, &root, doc(5, 1));
+        // deleting either is refused
+        std::fs::remove_file(he.join(&rev)).unwrap();
+        assert!(!vdr_ledger(&he, &be, &is_current).is_empty(), "deleted");
+        put(&he, &rev, doc(6, 2));
+        // a new report for the same serial takes a version above all it had
+        let newer = PathBuf::from("t")
+            .join(&sha)
+            .join("rev")
+            .join("e".repeat(64))
+            .join("vdr.cdx.json");
+        put(&he, &newer, doc(6, 9));
+        assert!(
+            !vdr_ledger(&he, &be, &is_current).is_empty(),
+            "a new report reusing v6"
+        );
+        put(&he, &newer, doc(4, 9));
+        assert!(
+            !vdr_ledger(&he, &be, &is_current).is_empty(),
+            "a new report below v6, unused v4"
+        );
+        // a copy of the current report: one content per version holds, the version does not move
+        put(&he, &newer, doc(6, 2));
+        assert!(
+            !vdr_ledger(&he, &be, &is_current).is_empty(),
+            "a new report copying v6"
+        );
+        put(&he, &newer, doc(7, 9));
+        assert!(
+            vdr_ledger(&he, &be, &is_current).is_empty(),
+            "a new report at v7"
+        );
+        // two files in the change claiming one (serial, version) with different content
+        put(&he, &newer, doc(7, 9));
+        let other = PathBuf::from("u").join(&sha).join("vdr.cdx.json");
+        put(&he, &other, doc(7, 10));
+        assert!(
+            !vdr_ledger(&he, &be, &is_current).is_empty(),
+            "two contents, one version"
+        );
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// TOOLS.lock files and whether the grammar accepts them, as bytes: the gate reads the file
+    /// as UTF-8, and a file that is not is refused before any line is looked at.
+    fn grammar_cases() -> Vec<(&'static str, Vec<u8>, bool)> {
+        let rev = "e7109a3174378976ea881f1883439ba82524f061";
+        let sha = "87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7";
+        let pin = format!("cargo-acl cackle-rs/cackle {rev} linux-x86_64 {sha}");
+        let s = |t: String| t.into_bytes();
+        vec![
+            (
+                "good",
+                s(format!(
+                    "# header -- any comment\ncargo-acl  cackle-rs/cackle  {rev}  linux-x86_64  {sha}  # note\n\n"
+                )),
+                true,
+            ),
+            (
+                "tabs, indent",
+                s(format!(
+                    "\tcargo-acl\tcackle-rs/cackle\t{rev}\tlinux-x86_64\t{sha}\t# x\n"
+                )),
+                true,
+            ),
+            ("no final newline", s(pin.clone()), true),
+            (
+                "bad last line, no final newline",
+                s(format!("{pin}\nx")),
+                false,
+            ),
+            ("comment touching", s(format!("{pin}#x\n")), true),
+            ("blank lines", s(format!("   \n\t\n{pin}\n#\n")), true),
+            (
+                "two targets",
+                s(format!(
+                    "{pin}\ncargo-acl cackle-rs/cackle {rev} windows-x86_64 {sha}\n"
+                )),
+                true,
+            ),
+            ("empty", Vec::new(), true),
+            (
+                "nbsp",
+                s(format!(
+                    "cargo-acl cackle-rs/cackle\u{a0}x {rev} linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            (
+                "form feed",
+                s(format!(
+                    "cargo-acl cackle-rs/cackle\u{c}x {rev} linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            (
+                "vertical tab",
+                s(format!(
+                    "cargo-acl\u{b}cackle-rs/cackle {rev} linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            ("form feed line", s(format!("\u{c}\n{pin}\n")), false),
+            ("cr", s(format!("{pin}\r\n")), false),
+            ("cr in a comment", s(format!("{pin} # c\r\n")), false),
+            (
+                "form feed before a comment",
+                s(format!("{pin}\u{c}# c\n")),
+                false,
+            ),
+            (
+                "non-ascii comment",
+                s(format!("# caf\u{e9}\n{pin}\n")),
+                false,
+            ),
+            (
+                "bidi control in a comment",
+                s(format!("{pin} # \u{202e}x\n")),
+                false,
+            ),
+            ("nul in a comment", s(format!("{pin} # a\0b\n")), false),
+            (
+                "nul in a field",
+                s(format!(
+                    "cargo-acl\0 cackle-rs/cackle {rev} linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            ("not utf-8", [pin.as_bytes(), b" # \xff\n"].concat(), false),
+            (
+                "six fields",
+                s(format!(
+                    "cargo-acl cackle-rs/cackle x {rev} linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            ("trailing field", s(format!("{pin} extra\n")), false),
+            (
+                "four fields",
+                s(format!("cargo-acl cackle-rs/cackle {rev} {sha}\n")),
+                false,
+            ),
+            ("one field", s("cargo-acl\n".into()), false),
+            (
+                "short rev",
+                s(format!(
+                    "cargo-acl cackle-rs/cackle e7109a3 linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            (
+                "upper sha",
+                s(format!(
+                    "cargo-acl cackle-rs/cackle {rev} linux-x86_64 {}\n",
+                    sha.to_uppercase()
+                )),
+                false,
+            ),
+            (
+                "no owner",
+                s(format!("cargo-acl cackle {rev} linux-x86_64 {sha}\n")),
+                false,
+            ),
+            (
+                "two slashes",
+                s(format!("cargo-acl a/b/c {rev} linux-x86_64 {sha}\n")),
+                false,
+            ),
+            (
+                "odd char",
+                s(format!(
+                    "cargo;acl cackle-rs/cackle {rev} linux-x86_64 {sha}\n"
+                )),
+                false,
+            ),
+            (
+                "pinned twice",
+                s(format!("{pin}\ncargo-acl o/r {rev} linux-x86_64 {sha}\n")),
+                false,
+            ),
+        ]
+    }
+
+    fn gate_accepts(bytes: &[u8]) -> bool {
+        std::str::from_utf8(bytes).is_ok_and(|t| tools_lock_problems(t).is_empty())
+    }
+
+    #[test]
+    fn tools_lock_lines_follow_one_grammar() {
+        let real = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../tools/TOOLS.lock"),
+        )
+        .unwrap();
+        assert!(
+            tools_lock_problems(&real).is_empty(),
+            "{:?}",
+            tools_lock_problems(&real)
+        );
+        for (what, bytes, ok) in grammar_cases() {
+            assert_eq!(gate_accepts(&bytes), ok, "{what}");
+        }
+        // The field checks would refuse some of these too; the character check is what names
+        // the code point, so a reviewer sees which invisible character a line carries.
+        let rev = "e7109a3174378976ea881f1883439ba82524f061";
+        let sha = "87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7";
+        let nbsp = format!("cargo-acl cackle-rs/cackle\u{a0}x {rev} linux-x86_64 {sha}");
+        assert!(tools_lock_problems(&nbsp)[0].contains("U+00A0"));
+        let twice = format!(
+            "cargo-acl a/b {rev} linux-x86_64 {sha}\ncargo-acl o/r {rev} linux-x86_64 {sha}\n"
+        );
+        assert!(tools_lock_problems(&twice)[0].contains("pinned twice"));
+    }
+
+    /// `fetch-tools` refuses exactly what the gate refuses: its `tools_lock_grammar`, taken from
+    /// the action itself and run by bash the way the action runs it, against every case above
+    /// and the committed lock. On Windows, Git's bash by path: `bash` on PATH can be WSL's.
+    #[test]
+    fn fetch_tools_reads_the_lock_as_the_gate_does() {
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let action =
+            std::fs::read_to_string(repo.join(".github/actions/fetch-tools/action.yml")).unwrap();
+        let (b, e) = (
+            action
+                .find("# BEGIN tools-lock-grammar")
+                .expect("BEGIN marker"),
+            action.find("# END tools-lock-grammar").expect("END marker"),
+        );
+        let bash = if cfg!(windows) {
+            PathBuf::from(std::env::var_os("ProgramFiles").expect("ProgramFiles"))
+                .join("Git")
+                .join("bin")
+                .join("bash.exe")
+        } else {
+            PathBuf::from("bash")
+        };
+        let d = std::env::temp_dir().join(format!("gate-grammar-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let script = d.join("grammar.sh");
+        std::fs::write(
+            &script,
+            format!(
+                "set -euo pipefail\nexport LC_ALL=C\n{}\nif ! problem=$(tools_lock_grammar \"$1\"); \
+                 then echo \"$problem\"; exit 1; fi\n",
+                &action[b..e]
+            ),
+        )
+        .unwrap();
+        let fwd = |p: &Path| p.to_string_lossy().replace('\\', "/");
+        let bash_accepts = |bytes: &[u8]| {
+            let lock = d.join("TOOLS.lock");
+            std::fs::write(&lock, bytes).unwrap();
+            let out = std::process::Command::new(&bash)
+                .arg(fwd(&script))
+                .arg(fwd(&lock))
+                .output()
+                .unwrap_or_else(|e| panic!("{}: {e}", bash.display()));
+            let err = String::from_utf8_lossy(&out.stderr).into_owned();
+            assert!(err.is_empty(), "bash wrote to stderr: {err}");
+            out.status.success()
+        };
+        let real = std::fs::read(repo.join("tools/TOOLS.lock")).unwrap();
+        assert!(bash_accepts(&real), "the committed TOOLS.lock");
+        for (what, bytes, ok) in grammar_cases() {
+            assert_eq!(bash_accepts(&bytes), ok, "{what}");
+            assert_eq!(gate_accepts(&bytes), ok, "{what}");
         }
         let _ = std::fs::remove_dir_all(&d);
     }
