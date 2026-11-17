@@ -915,19 +915,7 @@ fn monitor_run_ok(run: &Value) -> Result<bool, String> {
 /// record prefix at its start; two such lines would mean text posing as a record, and neither
 /// is accepted.
 fn record_in_log(log: &str, tool: &str, digest: &str, line: &str) -> Result<(), String> {
-    let key = format!("record (mal.jsonl line for supply-chain/evidence/{tool}/{digest}/): ");
-    let found: Vec<&str> = log
-        .lines()
-        .filter_map(|l| {
-            let mut f = l.splitn(3, '\t');
-            let (job, _step, rest) = (f.next()?, f.next()?, f.next()?);
-            let message = rest.split_once(' ')?.1.trim_start();
-            (job == "vt-monitor")
-                .then(|| message.strip_prefix(key.as_str()))
-                .flatten()
-                .map(str::trim_end)
-        })
-        .collect();
+    let found = record_lines(log, tool, digest);
     let committed = line.trim_end();
     let canonical = |printed: &str| {
         serde_json::from_str::<Value>(printed)
@@ -943,6 +931,25 @@ fn record_in_log(log: &str, tool: &str, digest: &str, line: &str) -> Result<(), 
             many.len()
         )),
     }
+}
+
+/// The record lines a monitor run's log (`gh run view --log`) holds for (tool, digest): whole
+/// messages of the `vt-monitor` job that start with the record prefix. The one reading of the log
+/// for the gate (`record_in_log`) and for `candidate-advance`/`release-advance`, which record what
+/// the gate will accept.
+pub(crate) fn record_lines<'a>(log: &'a str, tool: &str, digest: &str) -> Vec<&'a str> {
+    let key = format!("record (mal.jsonl line for supply-chain/evidence/{tool}/{digest}/): ");
+    log.lines()
+        .filter_map(|l| {
+            let mut f = l.splitn(3, '\t');
+            let (job, _step, rest) = (f.next()?, f.next()?, f.next()?);
+            let message = rest.split_once(' ')?.1.trim_start();
+            (job == "vt-monitor")
+                .then(|| message.strip_prefix(key.as_str()))
+                .flatten()
+                .map(str::trim_end)
+        })
+        .collect()
 }
 
 fn mal_verdict(
@@ -1487,6 +1494,71 @@ pub(crate) fn evidence_candidates(
     out
 }
 
+/// The signer logins of `supply-chain/policy/signers.json` (`hp-thermal/signers/v1`): at least
+/// one, each non-empty.
+fn signer_logins(path: &Path) -> Result<Vec<String>, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    if s(&v, &["schema"]) != "hp-thermal/signers/v1" {
+        return Err(format!(
+            "{}: schema is not hp-thermal/signers/v1",
+            path.display()
+        ));
+    }
+    let logins: Vec<String> = v["logins"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|l| l.as_str().filter(|l| !l.is_empty()).map(str::to_string))
+        .collect();
+    if logins.is_empty() || Some(logins.len()) != v["logins"].as_array().map(Vec::len) {
+        return Err(format!(
+            "{}: logins must be non-empty strings",
+            path.display()
+        ));
+    }
+    Ok(logins)
+}
+
+/// The change's commits (the test merge's second parent, less its first) that touch `paths`,
+/// each with what GitHub says of it.
+fn ack_commits(paths: &[String]) -> Result<Vec<(String, Value)>, String> {
+    crate::advance::git(&["rev-parse", "--verify", "-q", "HEAD^2"])
+        .map_err(|_| "the checkout is not a test merge, so the change's commits are unknown")?;
+    let mut args = vec!["rev-list", "HEAD^1..HEAD^2", "--"];
+    args.extend(paths.iter().map(String::as_str));
+    crate::advance::git(&args)?
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|sha| {
+            let sha = sha.trim();
+            crate::advance::gh_json(&["api", &format!("repos/{{owner}}/{{repo}}/commits/{sha}")])
+                .map(|c| (sha.to_string(), c))
+        })
+        .collect()
+}
+
+/// Every commit is GitHub-verified, and authored and committed by a listed signer.
+fn ack_signer_problems(commits: &[(String, Value)], logins: &[String]) -> Vec<String> {
+    commits
+        .iter()
+        .filter_map(|(sha, c)| {
+            let verified = c.pointer("/commit/verification/verified") == Some(&Value::Bool(true));
+            let login = |k: &str| c.pointer(&format!("/{k}/login")).and_then(Value::as_str);
+            let signer = |l: Option<&str>| l.is_some_and(|l| logins.iter().any(|x| x == l));
+            (!(verified && signer(login("author")) && signer(login("committer")))).then(|| {
+                format!(
+                    "{}: not a GitHub-verified commit authored and committed by a listed signer \
+                     (verified {verified}, author {}, committer {})",
+                    sha.get(..12).unwrap_or(sha),
+                    login("author").unwrap_or("none"),
+                    login("committer").unwrap_or("none")
+                )
+            })
+        })
+        .collect()
+}
+
 /// Products (every directory of the store, either side: the tools and the app) whose
 /// acks.jsonl differs from the base commit's — loaded and quality-checked even when nothing else
 /// changed, so a malformed or placeholder sign-off cannot land unnoticed.
@@ -1549,9 +1621,8 @@ fn mal_history(head: Option<&[u8]>, base: Option<&[u8]>) -> Result<(), String> {
         if p.trim_end() == new.trim_end() {
             return Err("the new panel is one already recorded".into());
         }
-        let Ok(pv) = serde_json::from_str::<Value>(p) else {
-            continue;
-        };
+        // An unreadable earlier panel has neither a date nor a run: nothing orders after it.
+        let pv = serde_json::from_str::<Value>(p).unwrap_or_default();
         let pd = s(&pv, &["panelDate"]);
         if !pd.is_empty() && date.as_str() < pd {
             return Err(format!(
@@ -1559,12 +1630,23 @@ fn mal_history(head: Option<&[u8]>, base: Option<&[u8]>) -> Result<(), String> {
             ));
         }
         let pr = monitor_run_id(p).ok().and_then(|r| r.parse::<u64>().ok());
-        if let (Some(n), Some(o)) = (run, pr)
-            && n <= o
-        {
-            return Err(format!(
-                "the new panel's monitor run {n} is not after an earlier panel's ({o})"
-            ));
+        match (run, pr) {
+            // Both name monitor runs: run ids only grow.
+            (Some(n), Some(o)) if n <= o => {
+                return Err(format!(
+                    "the new panel's monitor run {n} is not after an earlier panel's ({o})"
+                ));
+            }
+            (Some(_), Some(_)) => {}
+            // No run to order by: a later day, or nothing.
+            _ if pd.is_empty() || date.as_str() <= pd => {
+                return Err(format!(
+                    "the new panel ({date}) is not after an earlier panel with no monitor run to \
+                     order by ({})",
+                    if pd.is_empty() { "undated" } else { pd }
+                ));
+            }
+            _ => {}
         }
     }
     Ok(())
@@ -3342,6 +3424,34 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
     }
+    // A sign-off is the signer's: ack lines a change adds count only from commits GitHub verifies
+    // as signed by a listed signer (the base's `supply-chain/policy/signers.json`).
+    if !changed_acks.is_empty() {
+        let paths: Vec<String> = changed_acks
+            .iter()
+            .map(|t| format!("supply-chain/evidence/{t}/acks.jsonl"))
+            .collect();
+        let problems = base_root
+            .as_ref()
+            .ok_or_else(|| "no base tree (--base-root), so no signer policy".to_string())
+            .and_then(|r| signer_logins(&r.join("supply-chain/policy/signers.json")))
+            .and_then(|logins| ack_commits(&paths).map(|c| ack_signer_problems(&c, &logins)))
+            .unwrap_or_else(|e| vec![e]);
+        if !problems.is_empty() {
+            reports.push(CandidateReport {
+                name: "ack sign-off".into(),
+                tool: String::new(),
+                summary: String::new(),
+                axes: vec![(
+                    "acks",
+                    Verdict::Unevaluated(format!(
+                        "acks.jsonl lines count only from commits signed by a listed signer:\n{}",
+                        problems.join("\n")
+                    )),
+                )],
+            });
+        }
+    }
 
     let is_current = |dir: &Path| -> bool {
         let Ok(rel) = dir.strip_prefix(&evidence_dir) else {
@@ -4359,7 +4469,7 @@ mod tests {
             std::fs::write(p, body).unwrap();
         };
         let panel = format!(
-            r#"{{"subject":{{"sha256":"{d}"}},"detections":{{"malicious":0,"total":70}},"flags":[],"sandbox":{{"state":"ANALYZED","verdicts":[]}}}}"#
+            r#"{{"subject":{{"sha256":"{d}"}},"panelDate":"2026-01-01","detections":{{"malicious":0,"total":70}},"flags":[],"sandbox":{{"state":"ANALYZED","verdicts":[]}}}}"#
         );
         for side in [&he, &be] {
             put(side, "provenance.sigstore.jsonl", "p\n");
@@ -4398,7 +4508,7 @@ mod tests {
         put(&he, "vdr.cdx.json", "{}");
         assert!(verdicts(&ok).is_empty());
         // a later panel appended: evaluated, and only the monitor's own line counts
-        let later = panel.replace(r#""flags":[]"#, r#""flags":[],"panelDate":"2099-01-01""#);
+        let later = panel.replace("2026-01-01", "2099-01-01");
         put(&he, "mal.jsonl", &format!("{panel}\n{later}\n"));
         assert!(!blocked(&verdicts(&ok)));
         assert!(blocked(&verdicts(&refused)), "an unproved panel");
@@ -4701,6 +4811,57 @@ mod tests {
         assert_eq!(one_line("a\nb\r\tc"), "a b  c");
     }
 
+    /// An ack line counts only from a commit GitHub verifies as the listed signer's own.
+    #[test]
+    fn an_ack_counts_only_from_a_signers_signed_commit() {
+        let policy =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../supply-chain/policy/signers.json");
+        let logins = signer_logins(&policy).unwrap();
+        assert!(!logins.is_empty());
+        let c = |verified: bool, author: Option<&str>, committer: Option<&str>| {
+            let mut v = serde_json::json!({"commit": {"verification": {"verified": verified}}});
+            if let Some(a) = author {
+                v["author"] = serde_json::json!({"login": a});
+            }
+            if let Some(m) = committer {
+                v["committer"] = serde_json::json!({"login": m});
+            }
+            ("a".repeat(40), v)
+        };
+        let me = logins[0].as_str();
+        assert!(ack_signer_problems(&[c(true, Some(me), Some(me))], &logins).is_empty());
+        for (what, commit) in [
+            ("unverified", c(false, Some(me), Some(me))),
+            ("another author", c(true, Some("someone"), Some(me))),
+            ("another committer", c(true, Some(me), Some("web-flow"))),
+            ("no author login", c(true, None, Some(me))),
+        ] {
+            assert_eq!(ack_signer_problems(&[commit], &logins).len(), 1, "{what}");
+        }
+        // the policy itself: a schema, and non-empty logins only
+        let d = std::env::temp_dir().join(format!("gate-signers-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        for (what, body) in [
+            ("no schema", r#"{"logins":["a"]}"#),
+            (
+                "no logins",
+                r#"{"schema":"hp-thermal/signers/v1","logins":[]}"#,
+            ),
+            (
+                "an empty login",
+                r#"{"schema":"hp-thermal/signers/v1","logins":["a",""]}"#,
+            ),
+            (
+                "not a string",
+                r#"{"schema":"hp-thermal/signers/v1","logins":["a",1]}"#,
+            ),
+        ] {
+            std::fs::write(d.join("s.json"), body).unwrap();
+            assert!(signer_logins(&d.join("s.json")).is_err(), "{what}");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     /// Panel history moves forward: one new panel, newer than all before it.
     #[test]
     fn panel_history_only_moves_forward() {
@@ -4767,6 +4928,36 @@ mod tests {
             assert!(ok(&h).is_err(), "{what}");
         }
         assert!(mal_history(None, b).is_err(), "removed");
+        // an earlier panel with no monitor run to order by: only a later day follows it
+        let legacy = r#"{"panelDate":"2026-10-05","source":"vt-submit run 1 + monitor run 2"}"#;
+        let lb = format!("{legacy}\n");
+        let after = |h: String| mal_history(Some(h.as_bytes()), Some(lb.as_bytes()));
+        assert!(
+            after(format!("{lb}{}\n", p("2026-10-06", 5))).is_ok(),
+            "a later day"
+        );
+        assert!(
+            after(format!("{lb}{}\n", p("2026-10-05", 999))).is_err(),
+            "the same day"
+        );
+        let undated = "{\"source\":\"x\"}\n";
+        assert!(
+            mal_history(
+                Some(format!("{undated}{}\n", p("2026-10-06", 5)).as_bytes()),
+                Some(undated.as_bytes())
+            )
+            .is_err(),
+            "nothing to order by"
+        );
+        let unreadable = "not json\n";
+        assert!(
+            mal_history(
+                Some(format!("{unreadable}{}\n", p("2026-10-06", 5)).as_bytes()),
+                Some(unreadable.as_bytes())
+            )
+            .is_err(),
+            "an unreadable earlier panel"
+        );
         let unfinished = p("2026-10-01", 10);
         assert!(
             mal_history(
@@ -5783,6 +5974,13 @@ mod tests {
             report.contains("sign-offs are added, never rewritten"),
             "{report}"
         );
+        // a sign-off added in order, but with no signed commit to show for it (no test merge
+        // here, no signer policy given): it does not count
+        acks("bev", format!("{}\n", lines[0]));
+        acks("ev", format!("{}\n{}\n", lines[0], lines[1]));
+        assert_eq!(run_it(), 1, "an unattributed sign-off");
+        let report = std::fs::read_to_string(d.join("report.md")).unwrap();
+        assert!(report.contains("signed by a listed signer"), "{report}");
         let _ = std::fs::remove_dir_all(&d);
     }
 

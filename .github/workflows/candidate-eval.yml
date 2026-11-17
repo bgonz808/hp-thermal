@@ -48,13 +48,30 @@ on:
 
 permissions: {}
 
-concurrency:
-  group: candidate-eval-${{ github.event.pull_request.number || github.event.inputs.pr || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
+  # Every event posts `pending` at once, in a job outside the evaluation's concurrency group: an
+  # evaluation that a later event cancels while queued runs no step, and the head is never left
+  # without the status (where a check run of the same name would otherwise stand alone).
+  pending:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-24.04
+    permissions:
+      statuses: write
+    steps:
+      - name: Verdict pending
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERDICT_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$VERDICT_SHA" -f state=pending \
+            -f context=candidate-eval/gate -f description="evaluating" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
+
   evaluate:
     runs-on: windows-2025
+    concurrency:
+      group: candidate-eval-${{ github.event.pull_request.number || github.event.inputs.pr || github.run_id }}
+      cancel-in-progress: true
     permissions:
       contents: read
       pull-requests: write # the evidence comment
@@ -62,18 +79,9 @@ jobs:
     env:
       # Where the verdict goes: from the event for a pull request (never from a step's output).
       VERDICT_SHA: ${{ github.event.pull_request.head.sha }}
+      VERDICT_PR: ${{ github.event.pull_request.number }}
       VERDICT_CONTEXT: ${{ github.event_name == 'pull_request_target' && 'candidate-eval/gate' || 'candidate-eval/gate-dispatch' }}
     steps:
-      - name: Verdict pending
-        if: github.event_name == 'pull_request_target'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$VERDICT_SHA" -f state=pending \
-            -f context="$VERDICT_CONTEXT" -f description="evaluating" \
-            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
-
       - name: Checkout the gate's code (main; the change is fetched as data below)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
         with:
@@ -179,7 +187,8 @@ jobs:
           # Build record custody: the raw record from the tools store, its producer statement.
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -uo pipefail
+          # The runner's bash runs with -e: the gate's exit code is captured, not fatal.
+          set +e -uo pipefail
           gate="$GITHUB_WORKSPACE/xtask/target/debug/xtask.exe"
           base="$RUNNER_TEMP/base"
           cd "$RUNNER_TEMP/change"
@@ -200,24 +209,36 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.pull_request.number }}
+          BASE: ${{ steps.change.outputs.base }}
         run: |
           set -euo pipefail
           marker='<!-- candidate-eval -->'
-          report="$RUNNER_TEMP/gate-report.md"
-          if [ ! -f "$report" ]; then
-            # A run that wrote no report must not leave an earlier verdict standing.
-            printf '%s\n## Candidate evaluation\n\nThe gate wrote no report for this head; see %s.\n' \
-              "$marker" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$report"
+          report="$RUNNER_TEMP/gate-report.md" body="$RUNNER_TEMP/comment.md"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          judged="_Judged: head \`$VERDICT_SHA\` against main \`${BASE:-unresolved}\`._"
+          # A run that wrote no report, or one too long for a comment, must not leave an earlier
+          # verdict standing: the comment then says so.
+          fallback() {
+            printf '%s\n## Candidate evaluation\n\n%s\n\nThe gate wrote no report for this head that fits a comment; see %s.\n' \
+              "$marker" "$judged" "$run_url" > "$body"
+          }
+          if [ -f "$report" ] && [ "$(wc -c < "$report")" -le 60000 ]; then
+            { echo "$marker"; echo; echo "$judged"; tail -n +2 "$report"; } > "$body"
+          else
+            fallback
           fi
           # Only this workflow's own comment carries the report.
           cid=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
-                 --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -1)
-          if [ -n "${cid:-}" ]; then
-            gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" \
-              -F body=@"$report" > /dev/null
-          else
-            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$report"
-          fi
+                 --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" \
+                 | sed -n 1p)
+          post() {
+            if [ -n "${cid:-}" ]; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -F body=@"$body" > /dev/null
+            else
+              gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+            fi
+          }
+          post || { fallback; post; }
 
       - name: Enforce the verdict
         if: always()
@@ -242,6 +263,15 @@ jobs:
           sha="$VERDICT_SHA"
           if [ "$GITHUB_EVENT_NAME" != pull_request_target ]; then
             sha=""; [ -n "${DISPATCH_PR:-}" ] && sha="${DISPATCH_HEAD:-}"
+          else
+            # A status belongs to the SHA, shared by every pull request with that head: post only
+            # while this pull request is still that head on main. Otherwise the run for its current
+            # state posts, and this one leaves the SHA as it found it.
+            now=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$VERDICT_PR" --jq '[.head.sha, .base.ref] | @tsv' || true)
+            if [ "$now" != "$VERDICT_SHA"$'\t'"main" ]; then
+              echo "::warning::#$VERDICT_PR is no longer head $VERDICT_SHA on main; no verdict posted from this run"
+              sha=""
+            fi
           fi
           if [ -n "$sha" ]; then
             gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state="$state" \
