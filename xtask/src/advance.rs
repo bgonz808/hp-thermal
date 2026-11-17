@@ -121,9 +121,9 @@ impl Ctx {
             pinned,
         )
     }
-    /// The record the branch's lock selects, for reading; the digest's directory when none does
-    /// yet (stages still to run).
-    fn read_dir(&self, digest: &str) -> PathBuf {
+    /// The record the branch's lock selects; while stages are still running, the directory
+    /// they write. Never a record measured under another lock.
+    fn read_dir(&self, digest: &str) -> Result<PathBuf, String> {
         crate::evidence_rev::current(
             Path::new("supply-chain/evidence"),
             Path::new("tools/locks"),
@@ -131,7 +131,7 @@ impl Ctx {
             digest,
         )
         .map(|r| r.dir)
-        .unwrap_or_else(|_| self.evidence_dir(digest))
+        .or_else(|e| self.record_dir(digest).map(|(d, _)| d).map_err(|_| e))
     }
     fn acks_path(&self) -> PathBuf {
         PathBuf::from("supply-chain/evidence")
@@ -566,6 +566,9 @@ fn stage_status(ctx: &Ctx) -> Result<(), String> {
     println!("  digest  {}", e.sha);
     let dir = ctx.read_dir(&e.sha);
     let lock_sha = ctx.lock_sha()?;
+    if let Err(err) = &dir {
+        println!("  lock-bound records: none under this branch's lock ({err})");
+    }
     match crate::evidence_rev::current(
         Path::new("supply-chain/evidence"),
         Path::new("tools/locks"),
@@ -585,10 +588,10 @@ fn stage_status(ctx: &Ctx) -> Result<(), String> {
         Err(err) => println!("  record  NONE SELECTED: {err}"),
     }
     for f in ["vuln.jsonl", "caps.toml", "mal.jsonl"] {
-        let p = if f == "mal.jsonl" {
-            ctx.evidence_dir(&e.sha).join(f)
-        } else {
-            dir.join(f)
+        let p = match (&dir, f) {
+            (_, "mal.jsonl") => ctx.evidence_dir(&e.sha).join(f),
+            (Ok(d), _) => d.join(f),
+            (Err(_), _) => continue,
         };
         if !p.exists() {
             println!("  {f:<10} MISSING");
@@ -716,8 +719,16 @@ fn stage_digest(ctx: &Ctx, run_id: &str, reason: Option<&str>) -> Result<(), Str
         Ok(x) => x,
         // Pinned on main under an unchanged lock: nothing to revise; what is recorded is
         // re-verified below, never rewritten.
-        Err(_) if main_pins(&ctx.tool, &new)? => (ctx.evidence_dir(&new), false),
-        Err(e) => return Err(e),
+        Err(e) => {
+            let root = ctx.evidence_dir(&new);
+            let measured = crate::evidence_rev::record_lock(&root, &ctx.tool, &new).ok();
+            if main_pins(&ctx.tool, &new)? && measured.as_deref() == Some(ctx.lock_sha()?.as_str())
+            {
+                (root, false)
+            } else {
+                return Err(e);
+            }
+        }
     };
     if is_rev {
         // Same bytes, another lock: a revision (evidence README rule 2). The run above built
@@ -1056,7 +1067,13 @@ fn stage_summary(ctx: &Ctx, pr: Option<&str>) -> Result<(), String> {
     if e.sha == ZERO {
         return Err("digest is ZERO — nothing to summarise".into());
     }
-    let dir = ctx.read_dir(&e.sha);
+    let dir = crate::evidence_rev::current(
+        Path::new("supply-chain/evidence"),
+        Path::new("tools/locks"),
+        &ctx.tool,
+        &e.sha,
+    )?
+    .dir;
     let vuln = read_jsonl(&dir.join("vuln.jsonl"));
     let caps = std::fs::read_to_string(dir.join("caps.toml")).unwrap_or_default();
     let mal = read_jsonl(&ctx.evidence_dir(&e.sha).join("mal.jsonl"));

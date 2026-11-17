@@ -382,10 +382,17 @@ fn parse_lock(text: &str) -> Result<(Pkgs, Vec<String>), String> {
             continue;
         };
         match k {
-            "name" => *name = q(val),
-            "version" => *version = q(val),
-            "source" => p.source = q(val),
-            "checksum" => p.checksum = q(val),
+            "name" | "version" | "source" | "checksum" => {
+                // Cargo writes basic strings. A literal string ('...') or anything else would
+                // read as absent and compare equal to a missing field: refused.
+                let v = q(val).ok_or_else(|| format!("`{t}`: not a double-quoted string"))?;
+                match k {
+                    "name" => *name = Some(v),
+                    "version" => *version = Some(v),
+                    "source" => p.source = Some(v),
+                    _ => p.checksum = Some(v),
+                }
+            }
             "dependencies" if val.trim() == "[" => in_deps = true,
             "dependencies" => {
                 let inner = val
@@ -434,11 +441,21 @@ fn resolve_deps(pkgs: &Pkgs) -> Result<BTreeMap<Key, BTreeSet<Key>>, String> {
                     }
                 },
             };
-            if !pkgs.contains_key(&(name.to_string(), version.clone())) {
+            let Some(dep) = pkgs.get(&(name.to_string(), version.clone())) else {
                 return Err(format!(
                     "{}@{}: dependency `{d}` is not in the lock",
                     k.0, k.1
                 ));
+            };
+            // `"name version (source)"`: the source names which package; it must be that one's.
+            if let Some(src) = parts.next() {
+                let named = src.strip_prefix('(').and_then(|x| x.strip_suffix(')'));
+                if named.is_none() || named != dep.source.as_deref() {
+                    return Err(format!(
+                        "{}@{}: dependency `{d}` names another source than the package's",
+                        k.0, k.1
+                    ));
+                }
             }
             set.insert((name.to_string(), version));
         }
@@ -719,19 +736,30 @@ fn rev_files(root: &Path) -> (BTreeMap<String, Vec<u8>>, Vec<String>) {
     (files, odd)
 }
 
-/// Revisions are append-only (rule 2): every file under a `rev/` directory in the base tree is
-/// byte-identical in the change. Returns the revision directories the change adds and every
-/// violation: a modified or deleted file, a file that is not a revision record, a misshapen path.
+/// The derived report: re-emitted when an ack adds a ruling (`vdr check` regenerates it from the
+/// records), so it may change; the gate's VDR ledger rule keeps its versions moving forward.
+const REV_DERIVED: &str = "vdr.cdx.json";
+
+/// Revisions are append-only (rule 2). Every measured record under a `rev/` directory in the
+/// base tree is byte-identical in the change, and none is deleted; the derived `vdr.cdx.json` may
+/// be re-emitted, never deleted. A revision directory the base already has takes no new record
+/// but its report. Returns the revision directories the change adds, and every violation.
 pub fn rev_changes(head_root: &Path, base_root: &Path) -> (BTreeSet<Added>, Vec<String>) {
-    let (head, mut problems) = rev_files(head_root);
+    let (head, odd) = rev_files(head_root);
     let (base, _) = rev_files(base_root);
-    problems = problems
+    let mut problems: Vec<String> = odd
         .into_iter()
         .map(|p| format!("{p}: not <tool>/<digest>/rev/<lock-sha256>/<file>"))
         .collect();
+    let dir_of = |rel: &str| {
+        rel.rsplit_once('/')
+            .map_or(String::new(), |(d, _)| d.to_string())
+    };
+    let base_dirs: BTreeSet<String> = base.keys().map(|r| dir_of(r)).collect();
     for (rel, b) in &base {
         match head.get(rel) {
             Some(h) if h == b => {}
+            Some(_) if rel.ends_with(&format!("/{REV_DERIVED}")) => {}
             Some(_) => problems.push(format!(
                 "{rel}: modified; revisions are append-only (rule 2)"
             )),
@@ -754,6 +782,15 @@ pub fn rev_changes(head_root: &Path, base_root: &Path) -> (BTreeSet<Added>, Vec<
                 "{rel}: not <tool>/<digest>/rev/<lock-sha256>/<one of {}>",
                 REV_FILES.join(", ")
             ));
+            continue;
+        }
+        if base_dirs.contains(&dir_of(rel)) {
+            // An admitted revision is complete; only its report may arrive later.
+            if *file != REV_DERIVED {
+                problems.push(format!(
+                    "{rel}: added to a revision already admitted; a revision is not amended (rule 2)"
+                ));
+            }
             continue;
         }
         added.insert(Added {
@@ -881,6 +918,35 @@ pub fn check_vuln_rows(rows: &[Value], raw: &Value, lock: &str) -> Result<(), St
     Ok(())
 }
 
+/// The advisory-db commit a vulnerability record was measured at. The header is written by the
+/// change; the raw payload is custody-verified. They must name the same commit, or the header's
+/// claim is unbacked and a re-scan at it proves nothing about this payload.
+pub fn record_db(header: &Value, raw: &Value) -> Result<String, String> {
+    let h = header
+        .pointer("/scanner/db/version")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    let r = raw
+        .pointer("/database/last-commit")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if h.len() != 40 || !h.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+        return Err("vuln.jsonl names no advisory-db commit".into());
+    }
+    if h != r {
+        return Err(format!(
+            "vuln.jsonl names advisory-db {}, its raw payload {}: the header's claim is unbacked",
+            &h[..12],
+            if r.is_empty() {
+                "none (a --no-fetch scan?)"
+            } else {
+                r
+            }
+        ));
+    }
+    Ok(h.to_string())
+}
+
 /// Rows a re-scan must reproduce: all but `yanked`, which reads crates.io's state at scan time,
 /// not the advisory database.
 fn db_rows(rows: &[Value]) -> BTreeSet<String> {
@@ -977,7 +1043,7 @@ pub fn run(args: &[String]) -> i32 {
             };
             let locks = Path::new("tools/locks");
             match current(Path::new("supply-chain/evidence"), locks, &tool, &digest).and_then(|r| {
-                crate::gate::verify_vuln_record(&r.dir, &locks.join(format!("{tool}.lock")))
+                crate::gate::verify_vuln_record(&r.dir, &locks.join(format!("{tool}.lock")), None)
                     .map(|m| (r.dir, m))
             }) {
                 Ok((dir, m)) => {
@@ -1829,5 +1895,102 @@ mod tests {
         assert!(patches_of(&repo, "none").unwrap().is_empty());
         std::fs::create_dir_all(d.join("sub")).unwrap();
         assert!(patches_of(&repo, "t").is_err());
+    }
+
+    #[test]
+    fn a_revisions_report_may_move_forward_its_records_may_not() {
+        let c = Case::new();
+        let old = "f".repeat(64);
+        for root in [&c.head, &c.base] {
+            let d = root.join(T).join(D).join(REV_DIR).join(&old);
+            std::fs::create_dir_all(&d).unwrap();
+            std::fs::write(d.join("vuln.jsonl"), "x\n").unwrap();
+            std::fs::write(d.join("vdr.cdx.json"), "v1\n").unwrap();
+        }
+        let d = c.head.join(T).join(D).join(REV_DIR).join(&old);
+        std::fs::write(d.join("vdr.cdx.json"), "v2\n").unwrap();
+        assert!(
+            rev_changes(&c.head, &c.base).1.is_empty(),
+            "a re-emitted report"
+        );
+        std::fs::remove_file(d.join("vdr.cdx.json")).unwrap();
+        assert!(
+            rev_changes(&c.head, &c.base)
+                .1
+                .iter()
+                .any(|p| p.contains("deleted"))
+        );
+        std::fs::write(d.join("vdr.cdx.json"), "v1\n").unwrap();
+        // an admitted revision takes no new record, and its arrival is not a new revision
+        std::fs::write(d.join("caps.toml"), "x").unwrap();
+        let (added, problems) = rev_changes(&c.head, &c.base);
+        assert!(
+            problems.iter().any(|p| p.contains("already admitted")),
+            "{problems:?}"
+        );
+        assert!(added.iter().all(|a| a.lock != old));
+        std::fs::remove_file(d.join("caps.toml")).unwrap();
+        // a report arriving later for an admitted revision is fine and adds no revision
+        let late = c.head.join(T).join(D).join(REV_DIR).join("e".repeat(64));
+        let late_base = c.base.join(T).join(D).join(REV_DIR).join("e".repeat(64));
+        std::fs::create_dir_all(&late_base).unwrap();
+        std::fs::write(late_base.join("vuln.jsonl"), "x\n").unwrap();
+        std::fs::create_dir_all(&late).unwrap();
+        std::fs::write(late.join("vuln.jsonl"), "x\n").unwrap();
+        std::fs::write(late.join("vdr.cdx.json"), "v\n").unwrap();
+        let (added, problems) = rev_changes(&c.head, &c.base);
+        assert!(problems.is_empty(), "{problems:?}");
+        assert!(added.iter().all(|a| a.lock != "e".repeat(64)));
+    }
+
+    #[test]
+    fn lock_values_are_cargos_basic_strings_and_sources_bind() {
+        // A literal string reads as no value; it must not compare equal to an absent field.
+        let sneaky = narrowed().replace(
+            "name = \"app\"\nversion = \"1.0.0\"\n",
+            "name = \"app\"\nversion = \"1.0.0\"\nsource = 'registry+https://evil.example/index'\n",
+        );
+        assert!(
+            strict_subset(BASE_LOCK, &sneaky)
+                .unwrap_err()
+                .contains("double-quoted")
+        );
+        let literal_sum = narrowed().replace("checksum = \"bb\"", "checksum = 'bb'");
+        assert!(strict_subset(BASE_LOCK, &literal_sum).is_err());
+        // `"name version (source)"` must name the package's own source
+        let good = narrowed().replace(
+            " \"obj\",\n]",
+            " \"obj 0.40.0 (registry+https://github.com/rust-lang/crates.io-index)\",\n]",
+        );
+        assert!(strict_subset(BASE_LOCK, &good).is_ok());
+        let bad = good.replace(
+            "(registry+https://github.com/rust-lang/crates.io-index)",
+            "(registry+https://evil.example/index)",
+        );
+        assert!(
+            strict_subset(BASE_LOCK, &bad)
+                .unwrap_err()
+                .contains("another source")
+        );
+    }
+
+    #[test]
+    fn the_headers_advisory_db_is_the_raw_payloads() {
+        let commit = "a".repeat(40);
+        let h = serde_json::json!({"scanner": {"db": {"version": commit}}});
+        let raw = |c: Option<&str>| serde_json::json!({"database": {"last-commit": c}});
+        assert_eq!(record_db(&h, &raw(Some(&commit))).unwrap(), commit);
+        assert!(
+            record_db(&h, &raw(Some(&"b".repeat(40))))
+                .unwrap_err()
+                .contains("unbacked")
+        );
+        assert!(
+            record_db(&h, &raw(None))
+                .unwrap_err()
+                .contains("--no-fetch")
+        );
+        let short = serde_json::json!({"scanner": {"db": {"version": "abc"}}});
+        assert!(record_db(&short, &raw(Some("abc"))).is_err());
     }
 }

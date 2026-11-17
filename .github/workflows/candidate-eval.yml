@@ -24,10 +24,12 @@ on:
     paths:
       - "tools/TOOLS.lock"
       - "supply-chain/evidence/**"
-      # A lock change under an unchanged digest needs an evidence revision (evidence README
-      # rule 2), and this gate is what admits one.
+      # A producer-input change under an unchanged digest needs an evidence revision (evidence
+      # README rule 2), and this gate is what admits or refuses one.
       - "tools/locks/**"
       - "tools/patches/**"
+      - "tools/build-args/**"
+      - "tools/rustflags/**"
   workflow_dispatch: {}
 
 permissions:
@@ -98,9 +100,15 @@ jobs:
             # without this tree such a PR looked like "nothing to evaluate". No `|| true` here:
             # the gate REQUIRES this directory, and a failed extraction must fail the gate.
             git archive "$BASE_SHA" supply-chain/evidence | tar -x -C /tmp/base-evidence --strip-components=2
+            # The base commit's per-tool producer inputs (patches, build args, rustflags): a change
+            # to any of them under an unchanged digest is a revision candidate. Required, like the
+            # evidence tree.
+            mkdir -p /tmp/base-root
+            git archive "$BASE_SHA" tools | tar -x -C /tmp/base-root
           else
             cp tools/TOOLS.lock /tmp/base-tools.lock
             cp -R supply-chain/evidence/. /tmp/base-evidence/
+            mkdir -p /tmp/base-root && cp -R tools /tmp/base-root/
             # A silent failure here leaves /tmp/base-locks EMPTY, and the gate would then compare the
             # head's FROZEN locks against the base's UPSTREAM resolution -- a wrong baseline that can
             # hide a regression. A missing glob (base had no frozen locks) is the ONLY acceptable
@@ -119,7 +127,8 @@ jobs:
           set +e
           cargo run --locked --manifest-path xtask/Cargo.toml -- gate \
             --base /tmp/base-tools.lock --base-locks-dir /tmp/base-locks \
-            --base-evidence /tmp/base-evidence --report gate-report.md
+            --base-evidence /tmp/base-evidence --base-tools-dir /tmp/base-root/tools \
+            --report gate-report.md
           echo "code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Post / update the evidence comment

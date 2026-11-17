@@ -18,7 +18,7 @@
 //! workflow is a thin invoker. JSON is parsed with serde_json (zero RustSec
 //! advisories on record; adopted over a bespoke parser deliberately — see #241).
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -1190,16 +1190,54 @@ pub(crate) fn non_frontier_changes(
 
 // ---------- evidence revisions (evidence README rule 2) ----------
 
-/// Pinned digests whose tool's frozen lock differs from the base commit's while the digest is
-/// unchanged. Without the base commit's locks no lock change can be seen; CI always passes them.
+/// Where one side's per-tool producer inputs live: the frozen locks, and the `tools/` tree with
+/// patches, build args and rustflags (`build_record::producer_inputs`, per-tool part).
+#[derive(Clone, Copy)]
+struct ToolInputs<'a> {
+    locks: &'a Path,
+    tools: Option<&'a Path>,
+}
+
+impl ToolInputs<'_> {
+    fn of(&self, tool: &str) -> BTreeMap<String, Option<Vec<u8>>> {
+        let mut m = BTreeMap::new();
+        m.insert(
+            "locks".to_string(),
+            read_opt(&self.locks.join(format!("{tool}.lock"))),
+        );
+        if let Some(t) = self.tools {
+            for d in ["build-args", "rustflags"] {
+                m.insert(d.to_string(), read_opt(&t.join(d).join(tool)));
+            }
+            if let Ok(rd) = std::fs::read_dir(t.join("patches").join(tool)) {
+                for e in rd.flatten() {
+                    m.insert(
+                        format!("patches/{}", e.file_name().to_string_lossy()),
+                        read_opt(&e.path()),
+                    );
+                }
+            }
+        }
+        m
+    }
+}
+
+/// Pinned lines whose digest is unchanged while one of the tool's producer inputs (frozen lock,
+/// patches, build args, rustflags) differs from the base commit's: the evidence they are gated on
+/// must be a revision for the new inputs, or nothing admits them. Without the base commit's
+/// inputs no change can be seen; CI always passes them.
 fn revision_candidates(
     head: &[ToolLine],
     cands: &[(Option<ToolLine>, ToolLine)],
-    locks_dir: &Path,
-    base_locks_dir: Option<&Path>,
+    head_in: ToolInputs,
+    base_in: Option<ToolInputs>,
 ) -> Vec<ToolLine> {
-    let Some(base_locks_dir) = base_locks_dir else {
+    let Some(base_in) = base_in else {
         return Vec::new();
+    };
+    let head_in = ToolInputs {
+        tools: base_in.tools.and(head_in.tools),
+        ..head_in
     };
     head.iter()
         .filter(|h| h.sha != ZERO_DIGEST && h.sha.len() == 64)
@@ -1208,12 +1246,135 @@ fn revision_candidates(
                 .iter()
                 .any(|(_, c)| c.name == h.name && c.target == h.target)
         })
-        .filter(|h| {
-            let f = format!("{}.lock", h.name);
-            read_opt(&locks_dir.join(&f)) != read_opt(&base_locks_dir.join(&f))
-        })
+        .filter(|h| head_in.of(&h.name) != base_in.of(&h.name))
         .cloned()
         .collect()
+}
+
+/// Root records of a digest the base commit holds evidence for, changed by this change. Blessed
+/// evidence is never edited (rule 2); a change that re-pins or revises a digest leaves them byte
+/// for byte, and an edit is its own PR, evaluated as an evidence edit (rule 4).
+fn blessed_root_edits(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+    h: &ToolLine,
+    with_report: bool,
+) -> Vec<&'static str> {
+    if !base_evidence_dir.join(&h.name).join(&h.sha).is_dir() {
+        return Vec::new();
+    }
+    let mut files = vec![
+        "vuln.jsonl",
+        "caps.toml",
+        "caps.UNEVALUATED",
+        crate::build_record::FILE,
+    ];
+    if with_report {
+        files.push("vdr.cdx.json");
+    }
+    files
+        .into_iter()
+        .filter(|f| {
+            let rel = Path::new(&h.name).join(&h.sha).join(f);
+            read_opt(&evidence_dir.join(&rel)) != read_opt(&base_evidence_dir.join(&rel))
+        })
+        .collect()
+}
+
+/// Every committed `vdr.cdx.json` (a digest's, or a revision's) as a CycloneDX ledger: a report
+/// the base commit has is never deleted, and a changed one keeps its serialNumber and takes a
+/// higher version, so a version once committed never names other content.
+fn vdr_ledger(evidence_dir: &Path, base_evidence_dir: &Path) -> Vec<String> {
+    let mut reports = Vec::new();
+    let dirs = |p: &Path| -> Vec<PathBuf> {
+        std::fs::read_dir(p)
+            .map(|r| {
+                r.flatten()
+                    .map(|e| e.path())
+                    .filter(|p| p.is_dir())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    for t in dirs(base_evidence_dir) {
+        for d in dirs(&t) {
+            reports.push(d.join("vdr.cdx.json"));
+            for l in dirs(&d.join(crate::evidence_rev::REV_DIR)) {
+                reports.push(l.join("vdr.cdx.json"));
+            }
+        }
+    }
+    let mut problems = Vec::new();
+    for base in reports.into_iter().filter(|p| p.is_file()) {
+        let Ok(rel) = base.strip_prefix(base_evidence_dir) else {
+            continue;
+        };
+        let shown = rel.to_string_lossy().replace('\\', "/");
+        let head = evidence_dir.join(rel);
+        let (Some(bb), hb) = (read_opt(&base), read_opt(&head)) else {
+            continue;
+        };
+        let Some(hb) = hb else {
+            problems.push(format!("{shown}: deleted; a committed report is history"));
+            continue;
+        };
+        if hb == bb {
+            continue;
+        }
+        let parse = |b: &[u8]| serde_json::from_slice::<Value>(b).ok();
+        match (parse(&bb), parse(&hb)) {
+            (Some(o), Some(n))
+                if o["serialNumber"] == n["serialNumber"]
+                    && n["version"].as_u64() > o["version"].as_u64() => {}
+            (Some(o), Some(n)) => problems.push(format!(
+                "{shown}: changed under serialNumber {} version {} -> {} {}; a changed report \
+                 keeps its serialNumber and takes a higher version",
+                o["serialNumber"], o["version"], n["serialNumber"], n["version"]
+            )),
+            _ => problems.push(format!("{shown}: not JSON")),
+        }
+    }
+    problems
+}
+
+/// Paths in the index that differ only by case. On a case-insensitive checkout (the gate runs on
+/// Windows) only one of them reaches the disk, so the file the gate reads need not be the file
+/// that merges.
+pub(crate) fn case_collisions(paths: &[String]) -> Vec<String> {
+    let mut by: BTreeMap<String, Vec<&String>> = BTreeMap::new();
+    for p in paths {
+        by.entry(p.to_lowercase()).or_default().push(p);
+    }
+    by.into_values()
+        .filter(|v| v.len() > 1)
+        .map(|v| v.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(" / "))
+        .collect()
+}
+
+/// `case_collisions` over the repository's index (`git ls-files`); refused when any exist.
+pub(crate) fn refuse_case_collisions() -> Result<(), String> {
+    let out = Command::new("git")
+        .args(["ls-files", "-z"])
+        .output()
+        .map_err(|e| format!("git ls-files: {e}"))?;
+    if !out.status.success() {
+        return Err("git ls-files failed: the tree cannot be checked for case collisions".into());
+    }
+    let paths: Vec<String> = out
+        .stdout
+        .split(|b| *b == 0)
+        .filter(|p| !p.is_empty())
+        .map(|p| String::from_utf8_lossy(p).into_owned())
+        .collect();
+    let c = case_collisions(&paths);
+    if c.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "paths differing only by case (a case-insensitive checkout keeps one): {}",
+            c.join("; ")
+        ))
+    }
 }
 
 /// A head record that cannot be selected under the current lock. A recorded `caps.UNEVALUATED`
@@ -1262,7 +1423,7 @@ fn advisory_db_dir() -> Option<PathBuf> {
 /// Re-scan `lock` with the pinned auditor at the advisory-database commit `header` names. The
 /// header must name that auditor's digest: another scanner is another instrument, and its rows
 /// are not this one's to reproduce. No pinned auditor, no database commit: refused.
-fn rescan_at(header: &Value, lock: &Path) -> Result<Value, String> {
+fn rescan_at(header: &Value, lock: &Path, prior_db: Option<&str>) -> Result<Value, String> {
     let dir = std::env::var("PINNED_TOOLS_DIR")
         .map_err(|_| "PINNED_TOOLS_DIR is unset: no pinned auditor to re-scan with")?;
     let exe = PathBuf::from(format!("{dir}/cargo-audit{}", std::env::consts::EXE_SUFFIX));
@@ -1312,6 +1473,15 @@ fn rescan_at(header: &Value, lock: &Path) -> Result<Value, String> {
         commit,
     ])
     .map_err(|_| format!("advisory-db commit {} is not in the clone", &commit[..12]))?;
+    if let Some(p) = prior_db {
+        git(&["-C", &t, "merge-base", "--is-ancestor", p, commit]).map_err(|_| {
+            format!(
+                "advisory-db {} does not descend from the superseded record's {}: a revision is                  measured against advisory data at least as new",
+                &commit[..12],
+                &p[..12.min(p.len())]
+            )
+        })?;
+    }
     let out = Command::new(&exe)
         .args(["audit", "--db", &t, "--no-fetch", "--json", "--file"])
         .arg(lock)
@@ -1332,7 +1502,14 @@ fn rescan_at(header: &Value, lock: &Path) -> Result<Value, String> {
 /// A record's vulnerability rows are its custody-verified raw payload's, that payload is
 /// consistent with `lock` (`evidence_rev::check_vuln_rows`), and the same scanner finds the same
 /// rows in `lock` at the recorded advisory-db commit (`evidence_rev::check_rescan`).
-pub(crate) fn verify_vuln_record(dir: &Path, lock: &Path) -> Result<String, String> {
+///
+/// `prior_db`: for a revision, the superseded record's advisory-db commit. The revision's must
+/// descend from it: a correction is measured against advisory data at least as new.
+pub(crate) fn verify_vuln_record(
+    dir: &Path,
+    lock: &Path,
+    prior_db: Option<&str>,
+) -> Result<String, String> {
     let read = |p: &Path| std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()));
     let lock_text = read(lock)?;
     let rows: Vec<Value> = read(&dir.join("vuln.jsonl"))?
@@ -1342,8 +1519,9 @@ pub(crate) fn verify_vuln_record(dir: &Path, lock: &Path) -> Result<String, Stri
         .collect::<Result<_, _>>()?;
     let header = rows.first().ok_or("vuln.jsonl: no header")?;
     let raw = crate::vdr::fetch_raw(header)?;
+    crate::evidence_rev::record_db(header, &raw)?;
     crate::evidence_rev::check_vuln_rows(&rows[1..], &raw, &lock_text)?;
-    let rescan = rescan_at(header, lock)?;
+    let rescan = rescan_at(header, lock, prior_db)?;
     crate::evidence_rev::check_rescan(&rows[1..], &rescan)?;
     Ok(format!(
         "{} vulnerability row(s) equal raw payload {} and a re-scan of the lock by the same \
@@ -1399,7 +1577,14 @@ fn revision_verdict(
             },
         )?;
         let removed = crate::evidence_rev::strict_subset(&base_lock, &head_lock)?.len();
-        let vuln = verify_vuln_record(&rec.dir, &i.locks_dir.join(&f))?;
+        let prior =
+            crate::evidence_rev::select(i.base_evidence_dir, &h.name, &h.sha, &r.supersedes)?;
+        let prior_header: Value = std::fs::read_to_string(prior.dir.join("vuln.jsonl"))
+            .ok()
+            .and_then(|t| t.lines().next().and_then(|l| serde_json::from_str(l).ok()))
+            .ok_or("superseded record: vuln.jsonl has no header")?;
+        let prior_db = s(&prior_header, &["scanner", "db", "version"]);
+        let vuln = verify_vuln_record(&rec.dir, &i.locks_dir.join(&f), Some(prior_db))?;
         Ok(format!(
             "revision {} supersedes lock {} ({}, {}): {removed} package(s) removed, nothing else \
              changed; {vuln}",
@@ -1440,6 +1625,9 @@ pub fn run(args: &[String]) -> i32 {
     // #380 part 2: the BASE commit's evidence tree, so edits to a blessed digest's evidence
     // (no TOOLS.lock change) are evaluated rather than waved through as "evidence-only".
     let mut base_evidence_dir: Option<PathBuf> = None;
+    // Per-tool producer inputs beyond the lock (patches, build args, rustflags), both sides.
+    let mut tools_dir = PathBuf::from("tools");
+    let mut base_tools_dir: Option<PathBuf> = None;
     let mut floors_path = PathBuf::from(crate::floors::DEFAULT_PATH);
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
@@ -1463,6 +1651,12 @@ pub fn run(args: &[String]) -> i32 {
             }
             "--base-locks-dir" => base_locks_dir = it.next().map(PathBuf::from),
             "--base-evidence" => base_evidence_dir = it.next().map(PathBuf::from),
+            "--tools-dir" => {
+                if let Some(v) = it.next() {
+                    tools_dir = PathBuf::from(v);
+                }
+            }
+            "--base-tools-dir" => base_tools_dir = it.next().map(PathBuf::from),
             "--floors" => {
                 if let Some(v) = it.next() {
                     floors_path = PathBuf::from(v);
@@ -1503,7 +1697,22 @@ pub fn run(args: &[String]) -> i32 {
     // Evidence revisions (evidence README rule 2): a frozen lock that changed under an unchanged
     // pinned digest makes that digest a candidate again, gated on a revision measured against
     // the new lock and compared with the record the base selected.
-    let rev_cands = revision_candidates(&head, &cands, &locks_dir, base_locks_dir.as_deref());
+    if let Err(e) = refuse_case_collisions() {
+        eprintln!("gate: {e}");
+        return 2;
+    }
+    let rev_cands = revision_candidates(
+        &head,
+        &cands,
+        ToolInputs {
+            locks: &locks_dir,
+            tools: Some(&tools_dir),
+        },
+        base_locks_dir.as_deref().map(|l| ToolInputs {
+            locks: l,
+            tools: base_tools_dir.as_deref(),
+        }),
+    );
     let (rev_added, mut rev_problems) =
         crate::evidence_rev::rev_changes(&evidence_dir, &base_evidence_dir);
     for a in &rev_added {
@@ -1569,7 +1778,9 @@ pub fn run(args: &[String]) -> i32 {
         let mut axes = Vec::new();
         let mut summary = String::new();
         // Same digest on both sides: only the lock changed (`revision_candidates`).
-        let is_rev = b.as_ref().is_some_and(|b| b.rev == h.rev && b.sha == h.sha);
+        // Same bytes as the base pins: the evidence it is gated on is the base's record or a
+        // revision of it, whatever else the line says.
+        let is_rev = b.as_ref().is_some_and(|b| b.sha == h.sha);
 
         // Preconditions (#241 §4): an unblessed digest cannot be evaluated OR acked.
         if h.sha == ZERO_DIGEST || h.sha.len() != 64 {
@@ -1705,7 +1916,28 @@ pub fn run(args: &[String]) -> i32 {
                 }
             },
         ));
-        if is_rev {
+        let edited = blessed_root_edits(&evidence_dir, &base_evidence_dir, h, is_rev);
+        if !edited.is_empty() {
+            axes.push((
+                "evidence",
+                Verdict::Unevaluated(format!(
+                    "{} of {} changed: blessed evidence is never edited in a change that pins \
+                     or revises it (evidence README rules 2 and 4)",
+                    edited.join(", "),
+                    &h.sha[..12]
+                )),
+            ));
+        }
+        if is_rev && b.as_ref().is_some_and(|b| b.rev != h.rev) {
+            axes.push((
+                "revision",
+                Verdict::Unevaluated(
+                    "the upstream rev changed but the digest did not: the same bytes cannot \
+                     come from another commit without a producer run proving it; re-bless"
+                        .into(),
+                ),
+            ));
+        } else if is_rev {
             axes.push((
                 "revision",
                 revision_verdict(
@@ -1905,6 +2137,21 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
 
+    let ledger = vdr_ledger(&evidence_dir, &base_evidence_dir);
+    if !ledger.is_empty() {
+        reports.push(CandidateReport {
+            name: "VDR ledger".into(),
+            tool: String::new(),
+            summary: String::new(),
+            axes: vec![(
+                "vdr",
+                Verdict::Unevaluated(format!(
+                    "committed reports only move forward:\n    {}",
+                    ledger.join("\n    ")
+                )),
+            )],
+        });
+    }
     if !rev_problems.is_empty() {
         reports.push(CandidateReport {
             name: "evidence revisions".into(),
@@ -2719,32 +2966,169 @@ mod tests {
         assert!(matches!(v, Verdict::HardStop(_)), "got {v:?}");
     }
     #[test]
-    fn a_lock_change_under_an_unchanged_digest_is_a_revision_candidate() {
+    fn a_producer_input_change_under_an_unchanged_digest_is_a_revision_candidate() {
         let d = std::env::temp_dir().join(format!("gate-revcand-{}", std::process::id()));
-        let (head_locks, base_locks) = (d.join("head"), d.join("base"));
-        for (dir, acl) in [(&head_locks, "narrow"), (&base_locks, "wide")] {
-            std::fs::create_dir_all(dir).unwrap();
-            std::fs::write(dir.join("cargo-acl.lock"), acl).unwrap();
-            std::fs::write(dir.join("cargo-deny.lock"), "same").unwrap();
+        let _ = std::fs::remove_dir_all(&d);
+        let (head, base) = (d.join("head"), d.join("base"));
+        for (root, acl) in [(&head, "narrow"), (&base, "wide")] {
+            std::fs::create_dir_all(root.join("locks")).unwrap();
+            std::fs::create_dir_all(root.join("patches/cargo-deny")).unwrap();
+            std::fs::write(root.join("locks/cargo-acl.lock"), acl).unwrap();
+            std::fs::write(root.join("locks/cargo-deny.lock"), "same").unwrap();
+            std::fs::write(root.join("patches/cargo-deny/0001.patch"), "p").unwrap();
         }
+        let side = |r: &PathBuf| ToolInputs {
+            locks: Box::leak(r.join("locks").into_boxed_path()),
+            tools: Some(Box::leak(r.clone().into_boxed_path())),
+        };
+        let (hi, bi) = (side(&head), side(&base));
         let acl = tl("cargo-acl", &"a".repeat(64));
         let deny = tl("cargo-deny", &"b".repeat(64));
-        let head = vec![acl.clone(), deny.clone()];
-        let got = revision_candidates(&head, &[], &head_locks, Some(&base_locks));
-        assert_eq!(got, vec![acl.clone()], "only the tool whose lock changed");
-        // a digest the change re-pins is a TOOLS.lock candidate, not a revision
-        let cands = vec![(Some(acl.clone()), acl.clone())];
-        assert!(revision_candidates(&head, &cands, &head_locks, Some(&base_locks)).is_empty());
-        // a lock added or removed in the change counts as changed
-        std::fs::remove_file(base_locks.join("cargo-deny.lock")).unwrap();
+        let lines = vec![acl.clone(), deny.clone()];
+        let names = |v: Vec<ToolLine>| v.into_iter().map(|t| t.name).collect::<Vec<_>>();
         assert_eq!(
-            revision_candidates(&head, &[], &head_locks, Some(&base_locks)).len(),
+            names(revision_candidates(&lines, &[], hi, Some(bi))),
+            vec!["cargo-acl"],
+            "only the tool whose lock changed"
+        );
+        // a digest the change re-pins is a TOOLS.lock candidate, not also a revision
+        let cands = vec![(Some(acl.clone()), acl.clone())];
+        assert!(revision_candidates(&lines, &cands, hi, Some(bi)).is_empty());
+        // a patch, build-args or rustflags change is a producer input change too
+        for (what, path) in [
+            ("patch edited", head.join("patches/cargo-deny/0001.patch")),
+            ("patch added", head.join("patches/cargo-deny/0002.patch")),
+            ("build-args", head.join("build-args/cargo-deny")),
+            ("rustflags", head.join("rustflags/cargo-deny")),
+        ] {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            let before = std::fs::read(&path).ok();
+            std::fs::write(&path, "changed").unwrap();
+            assert_eq!(
+                revision_candidates(&lines, &[], hi, Some(bi)).len(),
+                2,
+                "{what} not seen"
+            );
+            match before {
+                Some(b) => std::fs::write(&path, b).unwrap(),
+                None => std::fs::remove_file(&path).unwrap(),
+            }
+        }
+        // without the base tools tree only the lock can be compared
+        let lock_only = ToolInputs { tools: None, ..bi };
+        std::fs::write(head.join("patches/cargo-deny/0001.patch"), "x").unwrap();
+        assert_eq!(
+            revision_candidates(&lines, &[], hi, Some(lock_only)).len(),
+            1
+        );
+        // a lock removed in the change counts as changed; unset digests never are revisions
+        std::fs::remove_file(base.join("locks/cargo-deny.lock")).unwrap();
+        assert_eq!(
+            revision_candidates(&lines, &[], hi, Some(lock_only)).len(),
             2
         );
-        // unset digests are preconditions failures elsewhere, never revisions
         let zero = vec![tl("cargo-acl", ZERO_DIGEST)];
-        assert!(revision_candidates(&zero, &[], &head_locks, Some(&base_locks)).is_empty());
+        assert!(revision_candidates(&zero, &[], hi, Some(bi)).is_empty());
+        assert!(revision_candidates(&lines, &[], hi, None).is_empty());
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn blessed_root_records_are_not_edited_by_a_change_that_pins_them() {
+        let d = std::env::temp_dir().join(format!("gate-rootedit-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let sha = "c".repeat(64);
+        let h = tl("t", &sha);
+        for side in ["head", "base"] {
+            let r = d.join(side).join("t").join(&sha);
+            std::fs::create_dir_all(&r).unwrap();
+            for f in ["vuln.jsonl", "caps.toml", "build.jsonl", "vdr.cdx.json"] {
+                std::fs::write(r.join(f), "x").unwrap();
+            }
+        }
+        let (he, be) = (d.join("head"), d.join("base"));
+        assert!(blessed_root_edits(&he, &be, &h, true).is_empty());
+        for f in ["vuln.jsonl", "caps.toml", "build.jsonl"] {
+            std::fs::write(he.join("t").join(&sha).join(f), "y").unwrap();
+            assert_eq!(blessed_root_edits(&he, &be, &h, false), vec![f]);
+            std::fs::write(he.join("t").join(&sha).join(f), "x").unwrap();
+        }
+        // a marker added under a blessed digest is an edit too
+        std::fs::write(he.join("t").join(&sha).join("caps.UNEVALUATED"), "why").unwrap();
+        assert_eq!(
+            blessed_root_edits(&he, &be, &h, false),
+            vec!["caps.UNEVALUATED"]
+        );
+        std::fs::remove_file(he.join("t").join(&sha).join("caps.UNEVALUATED")).unwrap();
+        // the report is frozen only for a revision's admission
+        std::fs::write(he.join("t").join(&sha).join("vdr.cdx.json"), "v2").unwrap();
+        assert!(blessed_root_edits(&he, &be, &h, false).is_empty());
+        assert_eq!(blessed_root_edits(&he, &be, &h, true), vec!["vdr.cdx.json"]);
+        // a digest the base holds no evidence for is a new candidate: nothing is blessed yet
+        assert!(blessed_root_edits(&he, &be, &tl("t", &"e".repeat(64)), true).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn committed_reports_only_move_forward() {
+        let d = std::env::temp_dir().join(format!("gate-ledger-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let sha = "c".repeat(64);
+        let lock = "f".repeat(64);
+        let doc = |v: u64, k: u64| {
+            serde_json::json!({"serialNumber": "urn:uuid:x", "version": v, "k": k}).to_string()
+        };
+        let paths = [
+            PathBuf::from("t").join(&sha).join("vdr.cdx.json"),
+            PathBuf::from("t")
+                .join(&sha)
+                .join("rev")
+                .join(&lock)
+                .join("vdr.cdx.json"),
+        ];
+        for side in ["head", "base"] {
+            for p in &paths {
+                let f = d.join(side).join(p);
+                std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+                std::fs::write(f, doc(3, 1)).unwrap();
+            }
+        }
+        let (he, be) = (d.join("head"), d.join("base"));
+        assert!(vdr_ledger(&he, &be).is_empty());
+        for p in &paths {
+            let f = he.join(p);
+            std::fs::write(&f, doc(4, 2)).unwrap();
+            assert!(vdr_ledger(&he, &be).is_empty(), "a forward re-emit");
+            std::fs::write(&f, doc(2, 1)).unwrap();
+            assert_eq!(vdr_ledger(&he, &be).len(), 1, "a lowered version");
+            std::fs::write(&f, doc(3, 2)).unwrap();
+            assert_eq!(
+                vdr_ledger(&he, &be).len(),
+                1,
+                "new content under a used version"
+            );
+            std::fs::write(
+                &f,
+                serde_json::json!({"serialNumber": "urn:uuid:y", "version": 9}).to_string(),
+            )
+            .unwrap();
+            assert_eq!(vdr_ledger(&he, &be).len(), 1, "another serial");
+            std::fs::remove_file(&f).unwrap();
+            assert_eq!(vdr_ledger(&he, &be).len(), 1, "deleted");
+            std::fs::write(&f, doc(3, 1)).unwrap();
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn paths_differing_only_by_case_are_found() {
+        let p = |v: &[&str]| v.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert!(case_collisions(&p(&["tools/TOOLS.lock", "tools/locks/a.lock"])).is_empty());
+        assert_eq!(
+            case_collisions(&p(&["tools/TOOLS.lock", "tools/tools.lock", "x"])),
+            vec!["tools/TOOLS.lock / tools/tools.lock"]
+        );
+        assert_eq!(case_collisions(&p(&["A/b", "a/B"])).len(), 1);
     }
 }
 
