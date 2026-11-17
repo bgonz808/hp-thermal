@@ -718,16 +718,37 @@ fn mal_verdict(
     }
 }
 
-/// The prior blessed inventory for a TOOLS.lock candidate: the base entry's caps.toml.
-fn base_caps_of(evidence_dir: &Path, tool: &str, base: Option<&ToolLine>) -> Option<String> {
-    base.and_then(|b| {
-        std::fs::read_to_string(evidence_dir.join(tool).join(&b.sha).join("caps.toml")).ok()
-    })
+/// The base commit's record for its pinned digest, selected under the base commit's lock
+/// (evidence README rule 2). `None` when it cannot be selected: the axes then have no prior,
+/// which raises and never allows.
+fn base_record_dir(
+    base_evidence_dir: &Path,
+    base_locks_dir: Option<&Path>,
+    tool: &str,
+    base: Option<&ToolLine>,
+) -> Option<PathBuf> {
+    let b = base?;
+    let none = PathBuf::from("<no base locks dir>");
+    crate::evidence_rev::current(
+        base_evidence_dir,
+        base_locks_dir.unwrap_or(&none),
+        tool,
+        &b.sha,
+    )
+    .map(|r| r.dir)
+    .map_err(|e| eprintln!("gate: base record for {tool}: {e}"))
+    .ok()
 }
 
+/// The prior blessed inventory for a candidate: the base record's caps.toml.
+fn base_caps_of(base_dir: Option<&Path>) -> Option<String> {
+    std::fs::read_to_string(base_dir?.join("caps.toml")).ok()
+}
+
+/// `dir` is the record the head selects under its lock (`evidence_rev::current`).
 fn caps_verdict(
     tool: &str,
-    evidence_dir: &Path,
+    dir: &Path,
     base_caps: Option<String>,
     head: &ToolLine,
     acks: &Acks,
@@ -736,7 +757,6 @@ fn caps_verdict(
 ) -> Verdict {
     let (head_lock, base_lock) = locks;
     let digest = head.sha.as_str();
-    let dir = evidence_dir.join(tool).join(digest);
     if dir.join("caps.toml").exists() {
         let head_bytes = std::fs::read(dir.join("caps.toml")).unwrap_or_default();
         // #380: an ack signs CONTENT. The hash of the exact bytes under review is what a
@@ -789,20 +809,12 @@ fn caps_verdict(
 /// from the BASE commit's evidence tree (a PR cannot rewrite the prior it is compared against),
 /// and only for the same target (another target's build scripts emit other cfgs).
 fn base_record_of(
-    base_evidence_dir: &Path,
-    tool: &str,
+    base_dir: Option<&Path>,
     base: Option<&ToolLine>,
     head: &ToolLine,
 ) -> Option<String> {
-    base.filter(|b| b.target == head.target).and_then(|b| {
-        std::fs::read_to_string(
-            base_evidence_dir
-                .join(tool)
-                .join(&b.sha)
-                .join(crate::build_record::FILE),
-        )
-        .ok()
-    })
+    base.filter(|b| b.target == head.target)?;
+    std::fs::read_to_string(base_dir?.join(crate::build_record::FILE)).ok()
 }
 
 /// Custody of a committed build record, as the gate runs it: the raw record in the store, one
@@ -834,8 +846,10 @@ struct Prior {
 ///     RAISE, signed by a `build` ack bound to the record's bytes. The template lists what is
 ///     new under `finding`.
 ///   * otherwise ALLOW.
+///
+/// `dir` is the record the head selects under its lock (`evidence_rev::current`).
 fn build_verdict(
-    evidence_dir: &Path,
+    dir: &Path,
     prior: Prior,
     head: &ToolLine,
     acks: &Acks,
@@ -844,10 +858,7 @@ fn build_verdict(
     custody: Custody,
 ) -> Verdict {
     let tool = head.name.as_str();
-    let path = evidence_dir
-        .join(tool)
-        .join(&head.sha)
-        .join(crate::build_record::FILE);
+    let path = dir.join(crate::build_record::FILE);
     let Ok(bytes) = std::fs::read(&path) else {
         return Verdict::Unevaluated(format!(
             "no build record at {} — `candidate-advance digest` records it from the producer run",
@@ -905,8 +916,7 @@ fn build_verdict(
         .unwrap_or_default();
     // Instrument reconciliation: what this record and this digest's inventory disagree on, less
     // what the prior record and prior inventory already disagreed on (and were signed with).
-    let head_caps =
-        std::fs::read_to_string(evidence_dir.join(tool).join(&head.sha).join("caps.toml")).ok();
+    let head_caps = std::fs::read_to_string(dir.join("caps.toml")).ok();
     let disagree = |m: &[Value], c: &str| crate::floors::reconcile(m, c);
     let head_dis = match head_caps.as_deref().map(|c| disagree(&msgs, c)) {
         None => BTreeSet::new(),
@@ -1178,6 +1188,233 @@ pub(crate) fn non_frontier_changes(
     seen.into_iter().collect()
 }
 
+// ---------- evidence revisions (evidence README rule 2) ----------
+
+/// Pinned digests whose tool's frozen lock differs from the base commit's while the digest is
+/// unchanged. Without the base commit's locks no lock change can be seen; CI always passes them.
+fn revision_candidates(
+    head: &[ToolLine],
+    cands: &[(Option<ToolLine>, ToolLine)],
+    locks_dir: &Path,
+    base_locks_dir: Option<&Path>,
+) -> Vec<ToolLine> {
+    let Some(base_locks_dir) = base_locks_dir else {
+        return Vec::new();
+    };
+    head.iter()
+        .filter(|h| h.sha != ZERO_DIGEST && h.sha.len() == 64)
+        .filter(|h| {
+            !cands
+                .iter()
+                .any(|(_, c)| c.name == h.name && c.target == h.target)
+        })
+        .filter(|h| {
+            let f = format!("{}.lock", h.name);
+            read_opt(&locks_dir.join(&f)) != read_opt(&base_locks_dir.join(&f))
+        })
+        .cloned()
+        .collect()
+}
+
+/// A head record that cannot be selected under the current lock. A recorded `caps.UNEVALUATED`
+/// keeps its own reason.
+fn unselected(evidence_dir: &Path, h: &ToolLine, why: &str) -> Verdict {
+    let marker = evidence_dir
+        .join(&h.name)
+        .join(&h.sha)
+        .join("caps.UNEVALUATED");
+    match std::fs::read_to_string(marker) {
+        Ok(r) => Verdict::Unevaluated(format!("caps recorded UNEVALUATED: {}", r.trim())),
+        Err(_) => Verdict::Unevaluated(format!("no caps record under the current lock: {why}")),
+    }
+}
+
+/// Custody of a revision's build record: `record_custody`, plus the producer run, and the lock
+/// and patches it built from, bound to the revision (`evidence_rev::bind_producer`).
+fn revision_custody(
+    text: &str,
+    h: &ToolLine,
+    r: &crate::evidence_rev::Revision,
+) -> Result<Vec<Value>, String> {
+    let v = crate::build_record::verify_custody(text, &h.name, &h.target, &h.sha)?;
+    crate::build_record::same_producer(&v.source_commit, &h.name)?;
+    let (hdr, _) = crate::build_record::read_evidence(text)?;
+    let (lock, patches) =
+        crate::evidence_rev::producer_tree(Path::new("."), &v.source_commit, &h.name)?;
+    crate::evidence_rev::bind_producer(r, s(&hdr, &["producerRun"]), &lock, &patches)?;
+    Ok(v.messages)
+}
+
+/// cargo-audit's advisory-db clone: `$CARGO_HOME/advisory-db`, else `~/.cargo/advisory-db`.
+/// The gate's first paired scan fetched it.
+fn advisory_db_dir() -> Option<PathBuf> {
+    let home = std::env::var_os("CARGO_HOME")
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("USERPROFILE")
+                .or_else(|| std::env::var_os("HOME"))
+                .map(|h| PathBuf::from(h).join(".cargo"))
+        })?;
+    let p = home.join("advisory-db");
+    p.is_dir().then_some(p)
+}
+
+/// Re-scan `lock` with the pinned auditor at the advisory-database commit `header` names. The
+/// header must name that auditor's digest: another scanner is another instrument, and its rows
+/// are not this one's to reproduce. No pinned auditor, no database commit: refused.
+fn rescan_at(header: &Value, lock: &Path) -> Result<Value, String> {
+    let dir = std::env::var("PINNED_TOOLS_DIR")
+        .map_err(|_| "PINNED_TOOLS_DIR is unset: no pinned auditor to re-scan with")?;
+    let exe = PathBuf::from(format!("{dir}/cargo-audit{}", std::env::consts::EXE_SUFFIX));
+    let have = crate::sha256::sha256_hex(
+        &std::fs::read(&exe).map_err(|e| format!("{}: {e}", exe.display()))?,
+    );
+    let want = s(header, &["scanner", "digest"]);
+    if have != want {
+        return Err(format!(
+            "vuln.jsonl was recorded by scanner {}, the pinned auditor is {}: re-measure with it",
+            &want[..12.min(want.len())],
+            &have[..12]
+        ));
+    }
+    let commit = s(header, &["scanner", "db", "version"]);
+    if commit.len() != 40 || !commit.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("vuln.jsonl names no advisory-db commit".into());
+    }
+    let src = advisory_db_dir().ok_or("no advisory-db clone to re-scan from")?;
+    let tmp = std::env::temp_dir().join(format!("gate-advisory-db-{}", &commit[..12]));
+    let _ = std::fs::remove_dir_all(&tmp);
+    let git = |args: &[&str]| -> Result<(), String> {
+        let st = Command::new("git")
+            .args(args)
+            .status()
+            .map_err(|e| format!("git: {e}"))?;
+        st.success()
+            .then_some(())
+            .ok_or_else(|| format!("git {} failed", args.join(" ")))
+    };
+    let t = tmp.to_string_lossy().into_owned();
+    git(&[
+        "clone",
+        "--quiet",
+        "--no-checkout",
+        &src.to_string_lossy(),
+        &t,
+    ])?;
+    git(&[
+        "-C",
+        &t,
+        "-c",
+        "advice.detachedHead=false",
+        "checkout",
+        "--quiet",
+        "--detach",
+        commit,
+    ])
+    .map_err(|_| format!("advisory-db commit {} is not in the clone", &commit[..12]))?;
+    let out = Command::new(&exe)
+        .args(["audit", "--db", &t, "--no-fetch", "--json", "--file"])
+        .arg(lock)
+        .env_remove("RUSTUP_TOOLCHAIN")
+        .env_remove("CARGO")
+        .env_remove("RUSTC")
+        .output()
+        .map_err(|e| format!("cannot run {}: {e}", exe.display()))?;
+    let _ = std::fs::remove_dir_all(&tmp);
+    serde_json::from_slice(&out.stdout).map_err(|e| {
+        format!(
+            "re-scan output is not JSON ({e}); stderr: {}",
+            String::from_utf8_lossy(&out.stderr)
+        )
+    })
+}
+
+/// A record's vulnerability rows are its custody-verified raw payload's, that payload is
+/// consistent with `lock` (`evidence_rev::check_vuln_rows`), and the same scanner finds the same
+/// rows in `lock` at the recorded advisory-db commit (`evidence_rev::check_rescan`).
+pub(crate) fn verify_vuln_record(dir: &Path, lock: &Path) -> Result<String, String> {
+    let read = |p: &Path| std::fs::read_to_string(p).map_err(|e| format!("{}: {e}", p.display()));
+    let lock_text = read(lock)?;
+    let rows: Vec<Value> = read(&dir.join("vuln.jsonl"))?
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).map_err(|e| format!("vuln.jsonl: {e}")))
+        .collect::<Result<_, _>>()?;
+    let header = rows.first().ok_or("vuln.jsonl: no header")?;
+    let raw = crate::vdr::fetch_raw(header)?;
+    crate::evidence_rev::check_vuln_rows(&rows[1..], &raw, &lock_text)?;
+    let rescan = rescan_at(header, lock)?;
+    crate::evidence_rev::check_rescan(&rows[1..], &rescan)?;
+    Ok(format!(
+        "{} vulnerability row(s) equal raw payload {} and a re-scan of the lock by the same \
+         scanner at advisory-db {}",
+        rows.len() - 1,
+        s(header, &["rawPayload", "asset"]),
+        &s(header, &["scanner", "db", "version"])[..12]
+    ))
+}
+
+struct RevisionInputs<'a> {
+    evidence_dir: &'a Path,
+    base_evidence_dir: &'a Path,
+    base_tools_lock: &'a str,
+    locks_dir: &'a Path,
+    base_locks_dir: Option<&'a Path>,
+}
+
+/// The revision axis: `evidence_rev::admit_offline`, and the revision's vulnerability rows
+/// re-derived from its custody-verified raw payload (`evidence_rev::check_vuln_rows`). The build
+/// record's binding to the revision is the build axis's custody (`revision_custody`). Anything
+/// short of all of it is UNEVALUATED, never acked.
+fn revision_verdict(
+    h: &ToolLine,
+    head_rec: &Result<crate::evidence_rev::Record, String>,
+    i: RevisionInputs,
+) -> Verdict {
+    let res = (|| -> Result<String, String> {
+        let rec = head_rec.as_ref().map_err(String::clone)?;
+        let base_locks_dir = i
+            .base_locks_dir
+            .ok_or("no base locks dir: the superseded lock is unknown")?;
+        let read =
+            |p: PathBuf| std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()));
+        let f = format!("{}.lock", h.name);
+        let head_lock = read(i.locks_dir.join(&f))?;
+        let base_lock = read(base_locks_dir.join(&f))?;
+        let patches = crate::evidence_rev::patches_of(Path::new("."), &h.name)?;
+        let added = crate::evidence_rev::Added {
+            tool: h.name.clone(),
+            digest: h.sha.clone(),
+            lock: crate::sha256::sha256_hex(head_lock.as_bytes()),
+        };
+        let r = crate::evidence_rev::admit_offline(
+            &added,
+            &crate::evidence_rev::Inputs {
+                root: i.evidence_dir,
+                base_root: i.base_evidence_dir,
+                base_tools_lock: i.base_tools_lock,
+                base_lock: &base_lock,
+                head_lock: &head_lock,
+                head_patches: &patches,
+            },
+        )?;
+        let removed = crate::evidence_rev::strict_subset(&base_lock, &head_lock)?.len();
+        let vuln = verify_vuln_record(&rec.dir, &i.locks_dir.join(&f))?;
+        Ok(format!(
+            "revision {} supersedes lock {} ({}, {}): {removed} package(s) removed, nothing else \
+             changed; {vuln}",
+            &r.lock[..12],
+            &r.supersedes[..12],
+            r.date,
+            r.reason,
+        ))
+    })();
+    match res {
+        Ok(m) => Verdict::Allow(m),
+        Err(e) => Verdict::Unevaluated(e),
+    }
+}
+
 // ---------- the gate ----------
 
 struct CandidateReport {
@@ -1263,6 +1500,32 @@ pub fn run(args: &[String]) -> i32 {
     let base = parse_tools_lock(&base_text);
     let head = parse_tools_lock(&head_text);
     let cands = candidates(&base, &head);
+    // Evidence revisions (evidence README rule 2): a frozen lock that changed under an unchanged
+    // pinned digest makes that digest a candidate again, gated on a revision measured against
+    // the new lock and compared with the record the base selected.
+    let rev_cands = revision_candidates(&head, &cands, &locks_dir, base_locks_dir.as_deref());
+    let (rev_added, mut rev_problems) =
+        crate::evidence_rev::rev_changes(&evidence_dir, &base_evidence_dir);
+    for a in &rev_added {
+        let lock_now = read_opt(&locks_dir.join(format!("{}.lock", a.tool)))
+            .map(|b| crate::sha256::sha256_hex(&b));
+        let expected = rev_cands
+            .iter()
+            .any(|h| h.name == a.tool && h.sha == a.digest)
+            && lock_now.as_deref() == Some(a.lock.as_str());
+        if !expected {
+            rev_problems.push(format!(
+                "{}/{}/rev/{}: added, but this change does not make that lock current for a pinned digest whose lock it changes",
+                a.tool,
+                &a.digest[..12],
+                &a.lock[..12]
+            ));
+        }
+    }
+    let cands: Vec<(Option<ToolLine>, ToolLine)> = cands
+        .into_iter()
+        .chain(rev_cands.iter().map(|h| (Some(h.clone()), h.clone())))
+        .collect();
     let ev_cands = evidence_candidates(&head, &cands, &evidence_dir, &base_evidence_dir);
     let changed_acks = changed_ack_files(&head, &evidence_dir, &base_evidence_dir);
     let historical = non_frontier_changes(&head, &evidence_dir, &base_evidence_dir);
@@ -1305,6 +1568,8 @@ pub fn run(args: &[String]) -> i32 {
         };
         let mut axes = Vec::new();
         let mut summary = String::new();
+        // Same digest on both sides: only the lock changed (`revision_candidates`).
+        let is_rev = b.as_ref().is_some_and(|b| b.rev == h.rev && b.sha == h.sha);
 
         // Preconditions (#241 §4): an unblessed digest cannot be evaluated OR acked.
         if h.sha == ZERO_DIGEST || h.sha.len() != 64 {
@@ -1385,7 +1650,15 @@ pub fn run(args: &[String]) -> i32 {
         .unwrap_or_else(Verdict::Unevaluated);
         axes.push(("vuln", vuln));
 
-        // --- caps + mal: consume the recorded evidence store ---
+        // --- caps + mal + build: consume the recorded evidence store. Lock-bound records are
+        //     the ones each side selects under its own lock (evidence README rule 2). ---
+        let head_rec = crate::evidence_rev::current(&evidence_dir, &locks_dir, &h.name, &h.sha);
+        let base_dir = base_record_dir(
+            &base_evidence_dir,
+            base_locks_dir.as_deref(),
+            &h.name,
+            b.as_ref(),
+        );
         let head_lock_path = head_res.as_ref().ok().map(|(p, _)| p.clone());
         let base_lock_path = base_res
             .as_ref()
@@ -1393,32 +1666,70 @@ pub fn run(args: &[String]) -> i32 {
             .map(|(p, _)| p.clone());
         axes.push((
             "caps",
-            caps_verdict(
-                &h.name,
-                &evidence_dir,
-                base_caps_of(&base_evidence_dir, &h.name, b.as_ref()),
-                h,
-                &acks,
-                floors,
-                (head_lock_path.as_deref(), base_lock_path.as_deref()),
-            ),
+            match &head_rec {
+                Ok(r) => caps_verdict(
+                    &h.name,
+                    &r.dir,
+                    base_caps_of(base_dir.as_deref()),
+                    h,
+                    &acks,
+                    floors,
+                    (head_lock_path.as_deref(), base_lock_path.as_deref()),
+                ),
+                Err(e) => unselected(&evidence_dir, h, e),
+            },
         ));
         axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
+        let revision = head_rec.as_ref().ok().and_then(|r| r.revision.clone());
+        let custody = |text: &str, line: &ToolLine| match &revision {
+            Some(r) => revision_custody(text, line, r),
+            None => record_custody(text, line),
+        };
         axes.push((
             "build",
-            build_verdict(
-                &evidence_dir,
-                Prior {
-                    record: base_record_of(&base_evidence_dir, &h.name, b.as_ref(), h),
-                    caps: base_caps_of(&base_evidence_dir, &h.name, b.as_ref()),
-                },
-                h,
-                &acks,
-                floors,
-                false,
-                &record_custody,
-            ),
+            match &head_rec {
+                Ok(r) => build_verdict(
+                    &r.dir,
+                    Prior {
+                        record: base_record_of(base_dir.as_deref(), b.as_ref(), h),
+                        caps: base_caps_of(base_dir.as_deref()),
+                    },
+                    h,
+                    &acks,
+                    floors,
+                    false,
+                    &custody,
+                ),
+                Err(e) => {
+                    Verdict::Unevaluated(format!("no build record under the current lock: {e}"))
+                }
+            },
         ));
+        if is_rev {
+            axes.push((
+                "revision",
+                revision_verdict(
+                    h,
+                    &head_rec,
+                    RevisionInputs {
+                        evidence_dir: &evidence_dir,
+                        base_evidence_dir: &base_evidence_dir,
+                        base_tools_lock: &base_text,
+                        locks_dir: &locks_dir,
+                        base_locks_dir: base_locks_dir.as_deref(),
+                    },
+                ),
+            ));
+        } else if revision.is_some() {
+            axes.push((
+                "revision",
+                Verdict::Unevaluated(
+                    "a revision is selected for a digest this change pins anew: a candidate is \
+                     measured in place, a revision is only for a digest the base commit pins"
+                        .into(),
+                ),
+            ));
+        }
 
         if !acks.rejected.is_empty() {
             axes.push((
@@ -1458,6 +1769,21 @@ pub fn run(args: &[String]) -> i32 {
             };
             let mut axes = Vec::new();
             let base_rec = base_evidence_dir.join(&h.name).join(&h.sha);
+            let root = evidence_dir.join(&h.name).join(&h.sha);
+            let current = crate::evidence_rev::current(&evidence_dir, &locks_dir, &h.name, &h.sha);
+            if current.as_ref().is_ok_and(|r| r.dir != root)
+                && changed.iter().any(|f| f != "mal.jsonl")
+            {
+                axes.push((
+                    "revision",
+                    Verdict::Unevaluated(format!(
+                        "{} changed under revision 1 of {}, which a revision supersedes: blessed \
+                         evidence is never edited (evidence README rule 2)",
+                        changed.join(", "),
+                        &h.sha[..12]
+                    )),
+                ));
+            }
             if changed.iter().any(|f| f.starts_with("caps.")) {
                 // Same rev on both sides: the lock the inventory was measured with is the lock
                 // the digest was built from, on both sides of the comparison.
@@ -1482,7 +1808,7 @@ pub fn run(args: &[String]) -> i32 {
                     "caps",
                     caps_verdict(
                         &h.name,
-                        &evidence_dir,
+                        &root,
                         base_caps,
                         h,
                         &acks,
@@ -1501,15 +1827,7 @@ pub fn run(args: &[String]) -> i32 {
                 };
                 axes.push((
                     "build",
-                    build_verdict(
-                        &evidence_dir,
-                        prior,
-                        h,
-                        &acks,
-                        floors,
-                        true,
-                        &record_custody,
-                    ),
+                    build_verdict(&root, prior, h, &acks, floors, true, &record_custody),
                 ));
             }
             if changed.iter().any(|f| f == "vuln.jsonl") {
@@ -1585,6 +1903,21 @@ pub fn run(args: &[String]) -> i32 {
                 }),
             }
         }
+    }
+
+    if !rev_problems.is_empty() {
+        reports.push(CandidateReport {
+            name: "evidence revisions".into(),
+            tool: String::new(),
+            summary: String::new(),
+            axes: vec![(
+                "revision",
+                Verdict::Unevaluated(format!(
+                    "revisions are append-only and only for a lock this change makes current:\n    {}",
+                    rev_problems.join("\n    ")
+                )),
+            )],
+        });
     }
 
     // ---------- report ----------
@@ -1967,7 +2300,7 @@ mod tests {
         let signed_sha = crate::sha256::sha256_hex(signed.as_bytes());
         let acks = ack(&caps_ack(full, Some(&signed_sha)));
         let h = tl("t", full);
-        let v = caps_verdict("t", &dir, None, &h, &acks, &floors(), (None, None));
+        let v = caps_verdict("t", &rec, None, &h, &acks, &floors(), (None, None));
         assert!(
             matches!(v, Verdict::RaiseCovered(_)),
             "signed content is covered: {v:?}"
@@ -1979,7 +2312,7 @@ mod tests {
             "{signed}\n[pkg.ring.build]\nallow_build_instructions = [\"cargo:rustc-link-lib=static=ring\"]\n"
         );
         std::fs::write(rec.join("caps.toml"), &rewritten).unwrap();
-        let v = caps_verdict("t", &dir, None, &h, &acks, &floors(), (None, None));
+        let v = caps_verdict("t", &rec, None, &h, &acks, &floors(), (None, None));
         let Verdict::RaiseUncovered { needed, .. } = &v else {
             panic!("rewritten inventory must be uncovered: {v:?}")
         };
@@ -2029,7 +2362,7 @@ mod tests {
         };
         let verdict = |prior: Option<String>, acks: &Acks, edit: bool| {
             build_verdict(
-                &dir,
+                &rec,
                 Prior {
                     record: prior,
                     caps: None,
@@ -2050,7 +2383,7 @@ mod tests {
         };
         assert!(matches!(
             build_verdict(
-                &dir,
+                &rec,
                 Prior {
                     record: None,
                     caps: None,
@@ -2125,7 +2458,7 @@ mod tests {
         };
         assert!(matches!(
             build_verdict(
-                &dir,
+                &rec,
                 with_caps(&base, caps),
                 &h,
                 &none,
@@ -2137,7 +2470,7 @@ mod tests {
         ));
         let quiet = "[pkg.serde_json]\nbuild.allow_build_instructions = [\n]\n";
         let Verdict::RaiseUncovered { needed, .. } = build_verdict(
-            &dir,
+            &rec,
             with_caps(&base, quiet),
             &h,
             &none,
@@ -2384,6 +2717,34 @@ mod tests {
             r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0,"total":70},"flags":[],"sandbox":{"state":"ANALYZED","verdicts":[{"name":"Zenbox","category":"malicious"}]}}"#,
         );
         assert!(matches!(v, Verdict::HardStop(_)), "got {v:?}");
+    }
+    #[test]
+    fn a_lock_change_under_an_unchanged_digest_is_a_revision_candidate() {
+        let d = std::env::temp_dir().join(format!("gate-revcand-{}", std::process::id()));
+        let (head_locks, base_locks) = (d.join("head"), d.join("base"));
+        for (dir, acl) in [(&head_locks, "narrow"), (&base_locks, "wide")] {
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(dir.join("cargo-acl.lock"), acl).unwrap();
+            std::fs::write(dir.join("cargo-deny.lock"), "same").unwrap();
+        }
+        let acl = tl("cargo-acl", &"a".repeat(64));
+        let deny = tl("cargo-deny", &"b".repeat(64));
+        let head = vec![acl.clone(), deny.clone()];
+        let got = revision_candidates(&head, &[], &head_locks, Some(&base_locks));
+        assert_eq!(got, vec![acl.clone()], "only the tool whose lock changed");
+        // a digest the change re-pins is a TOOLS.lock candidate, not a revision
+        let cands = vec![(Some(acl.clone()), acl.clone())];
+        assert!(revision_candidates(&head, &cands, &head_locks, Some(&base_locks)).is_empty());
+        // a lock added or removed in the change counts as changed
+        std::fs::remove_file(base_locks.join("cargo-deny.lock")).unwrap();
+        assert_eq!(
+            revision_candidates(&head, &[], &head_locks, Some(&base_locks)).len(),
+            2
+        );
+        // unset digests are preconditions failures elsewhere, never revisions
+        let zero = vec![tl("cargo-acl", ZERO_DIGEST)];
+        assert!(revision_candidates(&zero, &[], &head_locks, Some(&base_locks)).is_empty());
+        let _ = std::fs::remove_dir_all(&d);
     }
 }
 

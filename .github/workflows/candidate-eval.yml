@@ -24,6 +24,10 @@ on:
     paths:
       - "tools/TOOLS.lock"
       - "supply-chain/evidence/**"
+      # A lock change under an unchanged digest needs an evidence revision (evidence README
+      # rule 2), and this gate is what admits one.
+      - "tools/locks/**"
+      - "tools/patches/**"
   workflow_dispatch: {}
 
 permissions:

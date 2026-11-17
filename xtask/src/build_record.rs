@@ -729,7 +729,13 @@ fn check(args: &[String]) -> Result<(), String> {
 fn reconcile_cmd(args: &[String]) -> Result<(), String> {
     let tool = flag(args, "--tool").ok_or("reconcile: --tool is required")?;
     let digest = flag(args, "--digest").ok_or("reconcile: --digest is required")?;
-    let dir = Path::new("supply-chain/evidence").join(&tool).join(&digest);
+    let dir = crate::evidence_rev::current(
+        Path::new("supply-chain/evidence"),
+        Path::new("tools/locks"),
+        &tool,
+        &digest,
+    )?
+    .dir;
     let rec = std::fs::read_to_string(dir.join(FILE))
         .map_err(|e| format!("{}: {e}", dir.join(FILE).display()))?;
     let caps = std::fs::read_to_string(dir.join("caps.toml"))
@@ -753,9 +759,13 @@ fn baseline(args: &[String]) -> Result<(), String> {
     let lock = std::fs::read_to_string("tools/TOOLS.lock").map_err(|e| e.to_string())?;
     let mut missing = Vec::new();
     for t in crate::gate::parse_tools_lock(&lock) {
-        let dir = Path::new("supply-chain/evidence")
-            .join(&t.name)
-            .join(&t.sha);
+        let dir = crate::evidence_rev::current(
+            Path::new("supply-chain/evidence"),
+            Path::new("tools/locks"),
+            &t.name,
+            &t.sha,
+        )?
+        .dir;
         match record_line(&log, &t.name, &t.target, &t.sha)? {
             Some(raw) => {
                 let text = fetch_evidence(&t.name, &t.target, &t.sha, &raw, &run_id)?;

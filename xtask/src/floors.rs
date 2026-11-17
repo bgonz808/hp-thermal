@@ -1334,11 +1334,15 @@ build.allow_build_instructions = [\"cargo:x=1
         let mut seen_dirs = 0;
         let mut seen_inv = 0;
         for t in crate::gate::parse_tools_lock(&lock) {
-            let p = root
-                .join("supply-chain/evidence")
-                .join(&t.name)
-                .join(&t.sha)
-                .join("caps.toml");
+            let p = crate::evidence_rev::current(
+                &root.join("supply-chain/evidence"),
+                &root.join("tools/locks"),
+                &t.name,
+                &t.sha,
+            )
+            .unwrap()
+            .dir
+            .join("caps.toml");
             let Ok(caps) = std::fs::read_to_string(&p) else {
                 continue;
             };
@@ -1484,11 +1488,15 @@ build.allow_build_instructions = [\"cargo:x=1
         let lock = std::fs::read_to_string(root.join("tools/TOOLS.lock")).unwrap();
         let mut seen = 0;
         for t in crate::gate::parse_tools_lock(&lock) {
-            let p = root
-                .join("supply-chain/evidence")
-                .join(&t.name)
-                .join(&t.sha)
-                .join(crate::build_record::FILE);
+            let p = crate::evidence_rev::current(
+                &root.join("supply-chain/evidence"),
+                &root.join("tools/locks"),
+                &t.name,
+                &t.sha,
+            )
+            .unwrap()
+            .dir
+            .join(crate::build_record::FILE);
             let Ok(text) = std::fs::read_to_string(&p) else {
                 continue;
             };

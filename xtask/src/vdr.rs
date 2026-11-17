@@ -34,10 +34,44 @@ use crate::advance::{gh, read_jsonl, s};
 
 const SPEC: &str = "1.6";
 
-fn evidence_dir(product: &str, digest: &str) -> PathBuf {
-    PathBuf::from("supply-chain/evidence")
-        .join(product)
-        .join(digest)
+const EVIDENCE: &str = "supply-chain/evidence";
+const LOCKS: &str = "tools/locks";
+
+/// The record a report is built from and written beside: the one the product's frozen lock
+/// selects (evidence README rule 2). The app has no frozen lock; its record is per digest.
+fn record(product: &str, digest: &str) -> Result<crate::evidence_rev::Record, String> {
+    crate::evidence_rev::current(Path::new(EVIDENCE), Path::new(LOCKS), product, digest)
+}
+
+/// A revision's report continues its subject's: same serialNumber, a version after the
+/// superseded record's, so no (serialNumber, version) ever names two documents.
+fn continue_version(
+    mut doc: Value,
+    product: &str,
+    digest: &str,
+    supersedes: &str,
+) -> Result<Value, String> {
+    let prior = crate::evidence_rev::select(Path::new(EVIDENCE), product, digest, supersedes)
+        .map_err(|e| format!("superseded record: {e}"))?;
+    let p = prior.dir.join("vdr.cdx.json");
+    let v: Value = serde_json::from_str(
+        &std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?,
+    )
+    .map_err(|e| format!("{}: {e}", p.display()))?;
+    if v["serialNumber"] != doc["serialNumber"] {
+        return Err(format!(
+            "{}: another serialNumber; not this subject's report",
+            p.display()
+        ));
+    }
+    let pv = v["version"]
+        .as_u64()
+        .filter(|v| *v >= 1)
+        .ok_or_else(|| format!("{}: no version", p.display()))?;
+    if doc["version"].as_u64().unwrap_or(0) <= pv {
+        doc["version"] = json!(pv + 1);
+    }
+    Ok(doc)
 }
 
 /// Components from a frozen Cargo.lock: name, version, checksum (crates.io registry entries).
@@ -638,7 +672,7 @@ fn fetch_tool_binary(product: &str, digest: &str) -> Result<(String, Vec<u8>), S
     Ok((asset, bytes))
 }
 
-fn fetch_raw(header: &Value) -> Result<Value, String> {
+pub(crate) fn fetch_raw(header: &Value) -> Result<Value, String> {
     let asset = s(header, &["rawPayload", "asset"]);
     let want = s(header, &["rawPayload", "sha256"]);
     if s(header, &["rawPayload", "store"]) != "tools release" || asset.is_empty() {
@@ -695,7 +729,14 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("vdr: --product and a 64-hex --digest are required\n{usage}");
         return 2;
     }
-    let dir = evidence_dir(&product, &digest);
+    let rec = match record(&product, &digest) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("vdr: {e}");
+            return 1;
+        }
+    };
+    let dir = rec.dir.clone();
     let out = out.unwrap_or_else(|| dir.join("vdr.cdx.json"));
     let res = (|| -> Result<(Value, Vec<String>), String> {
         let mut graph: Option<DepGraph> = None;
@@ -826,6 +867,16 @@ pub fn run(args: &[String]) -> i32 {
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok());
     let doc = settle_version(doc, existing.as_ref());
+    let doc = match &rec.revision {
+        None => doc,
+        Some(r) => match continue_version(doc, &product, &digest, &r.supersedes) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("vdr: {e}");
+                return 1;
+            }
+        },
+    };
     let text = serde_json::to_string_pretty(&doc).unwrap() + "\n";
     for b in &burn_down {
         eprintln!("vdr: no native CycloneDX ruling in acks for {b} — analysis omitted (burn-down)");

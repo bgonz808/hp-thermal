@@ -48,6 +48,8 @@ mod sha256;
 // #376: EoX tracking — OpenEoX Core documents for every runner image / OS / toolchain channel
 // in use, validated against the digest-pinned schema; fails inside the deprecation window.
 mod eox;
+/// `evidence-rev`: lock-bound revisions of a blessed digest's evidence (rule 2).
+mod evidence_rev;
 
 // #405: tier 1 of the strictly-better fix automation — propose frozen-lock fixes as data.
 mod propose;
@@ -131,6 +133,7 @@ fn main() {
         Some("release-advance") => release_advance::run(&args),
         Some("vdr") => vdr::run(&args),
         Some("std-deps") => unit_graph::run(&args),
+        Some("evidence-rev") => evidence_rev::run(&args),
         Some("slsa-vsa") => slsa_vsa::run(&args),
         Some("vet-guard") => {
             if vet_guard::check() {

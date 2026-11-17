@@ -84,6 +84,10 @@ pub(crate) fn is_hex64(x: &str) -> bool {
     x.len() == 64 && x.bytes().all(|b| b.is_ascii_hexdigit())
 }
 
+fn lock_rel_of(ctx: &Ctx) -> String {
+    crate::evidence_rev::lock_rel(&ctx.tool)
+}
+
 pub(crate) fn short(d: &str) -> &str {
     &d[..d.len().min(12)]
 }
@@ -102,6 +106,32 @@ impl Ctx {
         PathBuf::from("supply-chain/evidence")
             .join(&self.tool)
             .join(digest)
+    }
+    /// Where this branch records the lock-bound evidence of `digest` (`vuln.jsonl`, `caps.toml`,
+    /// `build.jsonl`): in place for a candidate, `rev/<lock>/` for a digest main pins whose
+    /// revision 1 was measured against another lock (evidence README rule 2). The second value
+    /// is whether that is a revision.
+    fn record_dir(&self, digest: &str) -> Result<(PathBuf, bool), String> {
+        let pinned = main_pins(&self.tool, digest)?;
+        crate::evidence_rev::write_dir(
+            Path::new("supply-chain/evidence"),
+            &self.tool,
+            digest,
+            &self.lock_sha()?,
+            pinned,
+        )
+    }
+    /// The record the branch's lock selects, for reading; the digest's directory when none does
+    /// yet (stages still to run).
+    fn read_dir(&self, digest: &str) -> PathBuf {
+        crate::evidence_rev::current(
+            Path::new("supply-chain/evidence"),
+            Path::new("tools/locks"),
+            &self.tool,
+            digest,
+        )
+        .map(|r| r.dir)
+        .unwrap_or_else(|_| self.evidence_dir(digest))
     }
     fn acks_path(&self) -> PathBuf {
         PathBuf::from("supply-chain/evidence")
@@ -508,6 +538,15 @@ fn blessed_on_main(ctx: &Ctx, digest: &str) -> Result<bool, String> {
         .unwrap_or(false))
 }
 
+/// Whether main's TOOLS.lock pins `digest` for `tool` (any target).
+fn main_pins(tool: &str, digest: &str) -> Result<bool, String> {
+    git(&["fetch", "--quiet", "origin", "main"])?;
+    let text = git(&["show", &format!("origin/main:{TOOLS_LOCK}")])?;
+    Ok(parse_tools_lock(&text)
+        .iter()
+        .any(|l| l.name == tool && l.sha == digest))
+}
+
 fn main_entry(ctx: &Ctx) -> Result<Option<ToolLine>, String> {
     git(&["fetch", "--quiet", "origin", "main"])?;
     let text = git(&["show", &format!("origin/main:{TOOLS_LOCK}")])?;
@@ -525,10 +564,32 @@ fn stage_status(ctx: &Ctx) -> Result<(), String> {
         return Ok(());
     }
     println!("  digest  {}", e.sha);
-    let dir = ctx.evidence_dir(&e.sha);
+    let dir = ctx.read_dir(&e.sha);
     let lock_sha = ctx.lock_sha()?;
+    match crate::evidence_rev::current(
+        Path::new("supply-chain/evidence"),
+        Path::new("tools/locks"),
+        &ctx.tool,
+        &e.sha,
+    ) {
+        Ok(r) => match r.revision {
+            Some(rv) => println!(
+                "  record  revision for lock {} (supersedes {}; {}: {})",
+                short(&rv.lock),
+                short(&rv.supersedes),
+                rv.date,
+                rv.reason
+            ),
+            None => println!("  record  revision 1"),
+        },
+        Err(err) => println!("  record  NONE SELECTED: {err}"),
+    }
     for f in ["vuln.jsonl", "caps.toml", "mal.jsonl"] {
-        let p = dir.join(f);
+        let p = if f == "mal.jsonl" {
+            ctx.evidence_dir(&e.sha).join(f)
+        } else {
+            dir.join(f)
+        };
         if !p.exists() {
             println!("  {f:<10} MISSING");
             continue;
@@ -585,7 +646,7 @@ fn stage_status(ctx: &Ctx) -> Result<(), String> {
     Ok(())
 }
 
-fn stage_digest(ctx: &Ctx, run_id: &str) -> Result<(), String> {
+fn stage_digest(ctx: &Ctx, run_id: &str, reason: Option<&str>) -> Result<(), String> {
     let e = ctx.entry()?;
     let v = gh_json(&[
         "run",
@@ -651,7 +712,41 @@ fn stage_digest(ctx: &Ctx, run_id: &str) -> Result<(), String> {
         let out = rewrite_tools_lock(&text, &ctx.tool, &ctx.target, &new, &comment)?;
         std::fs::write(TOOLS_LOCK, out).map_err(|e| e.to_string())?;
     }
-    let record = ctx.evidence_dir(&new).join(crate::build_record::FILE);
+    let (dir, is_rev) = match ctx.record_dir(&new) {
+        Ok(x) => x,
+        // Pinned on main under an unchanged lock: nothing to revise; what is recorded is
+        // re-verified below, never rewritten.
+        Err(_) if main_pins(&ctx.tool, &new)? => (ctx.evidence_dir(&new), false),
+        Err(e) => return Err(e),
+    };
+    if is_rev {
+        // Same bytes, another lock: a revision (evidence README rule 2). The run above built
+        // this branch's lock and reproduced the pinned digest; its record goes in the revision.
+        let reason = reason
+            .filter(|r| !r.trim().is_empty())
+            .ok_or("a revision needs --reason <why the lock changed>")?;
+        let main_lock = git(&["show", &format!("origin/main:{}", lock_rel_of(ctx))])?;
+        let url = s(&v, &["url"]);
+        let text = crate::evidence_rev::revision_json(
+            &ctx.tool,
+            &new,
+            &ctx.lock_sha()?,
+            &crate::sha256::sha256_hex(main_lock.as_bytes()),
+            reason,
+            &crate::eox::fmt_days(crate::eox::today_days()),
+            &url,
+            &crate::evidence_rev::patches_of(Path::new("."), &ctx.tool)?,
+        );
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        std::fs::write(dir.join(crate::evidence_rev::REVISION_FILE), text)
+            .map_err(|e| e.to_string())?;
+        println!(
+            "  revision {} for lock {}",
+            dir.display(),
+            short(&ctx.lock_sha()?)
+        );
+    }
+    let record = dir.join(crate::build_record::FILE);
     if let Ok(text) = std::fs::read_to_string(&record) {
         // Already recorded: proven, not assumed.
         crate::build_record::verify_custody(&text, &ctx.tool, &ctx.target, &new)
@@ -743,8 +838,11 @@ fn stage_vuln(ctx: &Ctx, auditor: &Path, provenance: &str) -> Result<(), String>
     git(&["fetch", "--quiet", "origin", "main"])?;
     let main_text = git(&["show", "origin/main:tools/TOOLS.lock"])?;
     std::fs::write(&main_lock, main_text).map_err(|e| format!("{}: {e}", main_lock.display()))?;
+    let (dir, _) = ctx.record_dir(&e.sha)?;
     let args: Vec<String> = [
         "record-vuln",
+        "--record-dir",
+        &dir.to_string_lossy(),
         "--tools-lock",
         &main_lock.to_string_lossy(),
         "--tool",
@@ -766,7 +864,7 @@ fn stage_vuln(ctx: &Ctx, auditor: &Path, provenance: &str) -> Result<(), String>
     if crate::record_vuln::run(&args) != 0 {
         return Err("record-vuln failed".into());
     }
-    let header = read_jsonl(&ctx.evidence_dir(&e.sha).join("vuln.jsonl"))
+    let header = read_jsonl(&dir.join("vuln.jsonl"))
         .into_iter()
         .next()
         .ok_or("vuln.jsonl has no header")?;
@@ -794,7 +892,7 @@ fn stage_vuln(ctx: &Ctx, auditor: &Path, provenance: &str) -> Result<(), String>
         }
     }
     ctx.commit(
-        &[&ctx.evidence_dir(&e.sha)],
+        &[&dir],
         &format!(
             "candidate: {} {} vuln baseline (record-vuln, measured)",
             ctx.tool,
@@ -842,7 +940,8 @@ fn stage_caps(
             "caps.toml header names another lock ({subject}); the branch lock is {lock_sha} — not recorded"
         ));
     }
-    let dest = ctx.evidence_dir(&e.sha).join("caps.toml");
+    let (dir, _) = ctx.record_dir(&e.sha)?;
+    let dest = dir.join("caps.toml");
     std::fs::create_dir_all(dest.parent().unwrap()).map_err(|e| e.to_string())?;
     std::fs::copy(&f, &dest).map_err(|e| e.to_string())?;
     let seed_line = caps_header(&text, "seed").unwrap_or_default();
@@ -859,7 +958,7 @@ fn stage_caps(
         .take(12)
         .collect::<String>();
     ctx.commit(
-        &[&ctx.evidence_dir(&e.sha)],
+        &[&dir],
         &format!(
             "candidate: {} {} caps measured (run {id}, seed {seed12})",
             ctx.tool,
@@ -957,10 +1056,10 @@ fn stage_summary(ctx: &Ctx, pr: Option<&str>) -> Result<(), String> {
     if e.sha == ZERO {
         return Err("digest is ZERO — nothing to summarise".into());
     }
-    let dir = ctx.evidence_dir(&e.sha);
+    let dir = ctx.read_dir(&e.sha);
     let vuln = read_jsonl(&dir.join("vuln.jsonl"));
     let caps = std::fs::read_to_string(dir.join("caps.toml")).unwrap_or_default();
-    let mal = read_jsonl(&dir.join("mal.jsonl"));
+    let mal = read_jsonl(&ctx.evidence_dir(&e.sha).join("mal.jsonl"));
     let prior = main_entry(ctx)?;
     let header = vuln.first().cloned().unwrap_or(Value::Null);
     let instances: Vec<String> = vuln
@@ -1120,7 +1219,7 @@ fn stage_summary(ctx: &Ctx, pr: Option<&str>) -> Result<(), String> {
 
 pub fn run(args: &[String]) -> i32 {
     let usage = "usage: cargo xtask candidate-advance <status|digest|vuln|caps|mal|summary> --tool <name> [--target windows-x86_64] [--no-commit]\n\
-                 \x20 digest  --run <producer run id>\n\
+                 \x20 digest  --run <producer run id> [--reason <text>: required when it records a revision]\n\
                  \x20 vuln    --auditor <digest-pinned cargo-audit exe> --lock-provenance <text>\n\
                  \x20 caps    [--seed <digest>] [--run <existing caps-measure run>] [--wait-minutes N]\n\
                  \x20 mal     [--no-submit] [--panel-wait-seconds N] [--wait-minutes N]\n\
@@ -1140,6 +1239,7 @@ pub fn run(args: &[String]) -> i32 {
     let mut panel_wait = 540u64;
     let mut wait_minutes = 60u64;
     let mut pr: Option<String> = None;
+    let mut reason: Option<String> = None;
     let mut it = args.iter().skip(2);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -1161,6 +1261,7 @@ pub fn run(args: &[String]) -> i32 {
                     .unwrap_or(wait_minutes)
             }
             "--pr" => pr = it.next().cloned(),
+            "--reason" => reason = it.next().cloned(),
             other => {
                 eprintln!("candidate-advance: unknown argument {other}\n{usage}");
                 return 2;
@@ -1188,7 +1289,7 @@ pub fn run(args: &[String]) -> i32 {
     let res = match stage {
         "status" => stage_status(&ctx),
         "digest" => match run_id {
-            Some(id) => stage_digest(&ctx, &id),
+            Some(id) => stage_digest(&ctx, &id, reason.as_deref()),
             None => Err("digest needs --run <producer run id>".into()),
         },
         "vuln" => match auditor {
