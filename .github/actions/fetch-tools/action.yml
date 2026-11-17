@@ -81,8 +81,12 @@ runs:
         # BEGIN tools-lock-grammar
         tools_lock_grammar() {
           local f=$1 line content n=0 name repo rev target sha extra key
-          local -A seen=()
+          local -A seen=() digests=() source=()
           local ascii=$'^[\t -~]*$'
+          # Words start and end alphanumeric; name and target are lowercase.
+          local lower='^[a-z0-9]([a-z0-9._-]*[a-z0-9])?$'
+          local mixed='[A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?'
+          local zero=0000000000000000000000000000000000000000000000000000000000000000
           # `read` drops NUL bytes unseen: count them on their own.
           if [ "$(tr -cd '\000' < "$f" | wc -c)" -ne 0 ]; then
             echo "$f: a NUL byte is outside the grammar"; return 1
@@ -95,10 +99,10 @@ runs:
             content=${line%%#*}
             read -r name repo rev target sha extra <<< "$content"
             [ -n "$name" ] || continue
-            if [ -n "$extra" ] || ! [[ $name =~ ^[A-Za-z0-9._-]+$ &&
-                                       $repo =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ &&
+            if [ -n "$extra" ] || ! [[ $name =~ $lower &&
+                                       $repo =~ ^$mixed/$mixed$ &&
                                        $rev =~ ^[0-9a-f]{40}$ &&
-                                       $target =~ ^[A-Za-z0-9._-]+$ &&
+                                       $target =~ $lower &&
                                        $sha =~ ^[0-9a-f]{64}$ ]]; then
               echo "$f line $n: not \`name owner/repo <40-hex rev> target <64-hex sha256>\`"; return 1
             fi
@@ -107,6 +111,16 @@ runs:
               echo "$f line $n: $key pinned twice"; return 1
             fi
             seen[$key]=1
+            if [ "$sha" != "$zero" ]; then
+              if [ -n "${digests[$sha]:-}" ]; then
+                echo "$f line $n: digest ${sha:0:12} pinned twice"; return 1
+              fi
+              digests[$sha]=1
+            fi
+            if [ "${source[$name]:-$repo $rev}" != "$repo $rev" ]; then
+              echo "$f line $n: $name names another source than its other targets"; return 1
+            fi
+            source[$name]="$repo $rev"
           done < "$f"
         }
         # END tools-lock-grammar

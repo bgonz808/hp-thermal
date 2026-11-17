@@ -300,7 +300,7 @@ fn affected_versions(pver: &str, versions: &Value) -> Vec<Value> {
     out
 }
 
-fn serial_number(digest: &str) -> String {
+pub(crate) fn serial_number(digest: &str) -> String {
     // Deterministic per subject: the first 16 bytes of sha256("vdr:" + digest) laid out as a UUID.
     let h = crate::sha256::sha256(format!("vdr:{digest}").as_bytes());
     format!(
@@ -672,11 +672,20 @@ fn fetch_tool_binary(product: &str, digest: &str) -> Result<(String, Vec<u8>), S
     Ok((asset, bytes))
 }
 
+/// The raw `cargo audit --json` payload a vuln header names, from the tools release, refused
+/// unless its bytes hash to the header's sha256. The asset name is the one `record-vuln` gives
+/// that sha256 and nothing else: a header is change content, and its text reaches a file name.
 pub(crate) fn fetch_raw(header: &Value) -> Result<Value, String> {
     let asset = s(header, &["rawPayload", "asset"]);
     let want = s(header, &["rawPayload", "sha256"]);
     if s(header, &["rawPayload", "store"]) != "tools release" || asset.is_empty() {
         return Err("vuln.jsonl header names no raw payload in the tools release".into());
+    }
+    if !raw_asset_named(&asset, &want) {
+        return Err(format!(
+            "vuln.jsonl header names raw payload `{asset}` for sha256 `{want}`: not \
+             audit-raw-<first 12 of a 64-hex sha256>.json"
+        ));
     }
     let tmp = std::env::temp_dir().join(format!("vdr-{asset}"));
     let _ = std::fs::remove_file(&tmp);
@@ -698,6 +707,13 @@ pub(crate) fn fetch_raw(header: &Value) -> Result<Value, String> {
         ));
     }
     serde_json::from_slice(&bytes).map_err(|e| format!("{asset}: {e}"))
+}
+
+/// `asset` is the name `record-vuln` gives the raw payload whose sha256 is `sha`.
+fn raw_asset_named(asset: &str, sha: &str) -> bool {
+    sha.len() == 64
+        && sha.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        && asset == format!("audit-raw-{}.json", &sha[..12])
 }
 
 pub fn run(args: &[String]) -> i32 {
@@ -729,7 +745,15 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("vdr: --product and a 64-hex --digest are required\n{usage}");
         return 2;
     }
-    if let Err(e) = crate::gate::refuse_case_collisions() {
+    // `check` judges committed reports and reads the checkout git would merge; `emit` writes
+    // one on the maintainer's tree, where new evidence is not committed yet.
+    let lock = std::fs::read_to_string("tools/TOOLS.lock").unwrap_or_default();
+    let checked = if cmd == "check" {
+        crate::gate::refuse_checkout(&[&lock])
+    } else {
+        crate::gate::refuse_case_collisions(&[&lock])
+    };
+    if let Err(e) = checked {
         eprintln!("vdr: {e}");
         return 1;
     }
@@ -928,6 +952,27 @@ pub fn run(args: &[String]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A header's raw payload name is the one `record-vuln` gives its sha256, or nothing is
+    /// fetched: the name reaches a file path and a download pattern.
+    #[test]
+    fn a_raw_payload_is_named_by_its_digest_only() {
+        let sha = "0277701ae8db".to_string() + &"a".repeat(52);
+        assert!(raw_asset_named("audit-raw-0277701ae8db.json", &sha));
+        for (asset, sha) in [
+            ("audit-raw-0277701ae8db.json", "0277701ae8db"),
+            ("audit-raw-0277701ae8dc.json", sha.as_str()),
+            ("x/../../audit-raw-0277701ae8db.json", sha.as_str()),
+            ("audit-raw-*.json", sha.as_str()),
+            ("audit-raw-0277701AE8DB.json", &sha.to_uppercase()),
+            ("", sha.as_str()),
+        ] {
+            assert!(!raw_asset_named(asset, sha), "{asset} for {sha}");
+        }
+        let header = json!({"rawPayload": {"store": "tools release", "sha256": sha,
+                            "asset": "x/../../audit-raw-0277701ae8db.json"}});
+        assert!(fetch_raw(&header).unwrap_err().contains("not audit-raw-"));
+    }
 
     const LOCK: &str = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"ab\"\n\n[[package]]\nname = \"b\"\nversion = \"2.0.0\"\n\n[metadata]\nk = \"v\"\n";
 
