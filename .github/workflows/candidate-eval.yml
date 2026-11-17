@@ -2,51 +2,130 @@ name: Candidate evaluation
 
 # 3-AXIS GATE (#241) — THIN INVOKER ONLY. The verdict algebra (policy) lives in
 # xtask/src/gate.rs: reviewed, unit-tested Rust — never workflow bash (bash+jq stays
-# display glue at most). Runs on every PR touching TOOLS.lock or the evidence store,
-# evaluates each candidate (base vs head) per #241, and posts the evidence table as a
-# PR comment. The job FAILS while any RAISE item lacks a committed ack in
-# supply-chain/evidence/<tool>/acks.jsonl — the maintainer signs residual risk by committing
-# the exact ack line the report prints (attributed, in-history), after which the
-# re-run goes green; merging then completes the record. HARD-STOP and UNEVALUATED
-# cannot be acked (fail-secure, #241 §3-4).
+# display glue at most). Runs on every PR, evaluates each candidate (base vs head) per #241, and
+# posts the evidence table as a PR comment. The verdict FAILS while any RAISE item lacks a
+# committed ack in supply-chain/evidence/<product>/acks.jsonl — the maintainer signs residual
+# risk by committing the exact ack line the report prints (attributed, in-history), after which
+# the re-run goes green; merging then completes the record. HARD-STOP and UNEVALUATED cannot be
+# acked (fail-secure, #241 §3-4).
 #
-# VT is NEVER called here (VT_API_KEY is schedule/dispatch-only): the mal axis reads
-# the persisted per-digest evidence. The vuln axis re-scans BOTH revs in this run
-# against one advisory-DB state (#241 §5) using the PRIOR-blessed cargo-audit,
-# digest- and attestation-verified before execution (#221) — which is why this runs
-# on windows-2025: the blessed auditor is a Windows PE.
+# JUDGED FROM THE BASE. Everything that runs is the base commit's: this workflow
+# (`pull_request_target` takes it from the base branch, so a change's edits to it apply only
+# after it merges), the gate's code (xtask, built here with the base's cargo configuration), the
+# composite actions and the floors. The change is the GitHub test merge, checked out into its
+# own directory as data, with no hooks and no filter drivers; nothing in it is built or run, and
+# the gate reads it there. The verdict is the commit status `candidate-eval/gate` on the
+# change's head. A fork's own workflows hold a read-only token and cannot post it; a check run
+# of the same name does not stand in for it (a required name with both a status and a check
+# run needs both to pass).
 #
-# Streams (#241 §1): v1 covers TOOLS.lock bumps. The Dependabot-PR and release
-# streams reuse the same gate with different (baseline, candidate) selectors.
+# A maintainer dispatch evaluates a pull request with the gate at the dispatched ref (testing a
+# gate change before it merges) and posts `candidate-eval/gate-dispatch`, never the required
+# context. Without a pull request it evaluates the ref against itself (plumbing only).
+#
+# VT is NEVER called here (VT_API_KEY is schedule/dispatch-only): the mal axis reads the
+# persisted per-digest evidence. The vuln axis re-scans BOTH revs in this run against one
+# advisory-DB state (#241 §5) using the PRIOR-blessed cargo-audit, digest- and
+# attestation-verified before execution (#221) — which is why this runs on windows-2025: the
+# blessed auditor is a Windows PE.
 
 on:
-  pull_request:
-    paths:
-      - "tools/TOOLS.lock"
-      - "supply-chain/evidence/**"
-      # A producer-input change under an unchanged digest needs an evidence revision (evidence
-      # README rule 2), and this gate is what admits or refuses one.
-      - "tools/locks/**"
-      - "tools/patches/**"
-      - "tools/build-args/**"
-      - "tools/rustflags/**"
-  workflow_dispatch: {}
+  # The change is read, never run: see the header.
+  pull_request_target: # zizmor: ignore[dangerous-triggers]
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: "Pull request to evaluate with the gate at this ref (empty: the ref against itself)"
+        required: false
+        default: ""
 
-permissions:
-  contents: read
+permissions: {}
+
+concurrency:
+  group: candidate-eval-${{ github.event.pull_request.number || github.event.inputs.pr || github.run_id }}
+  cancel-in-progress: true
 
 jobs:
   evaluate:
     runs-on: windows-2025
     permissions:
       contents: read
-      pull-requests: write # the evidence comment on the bump PR
+      pull-requests: write # the evidence comment
+      statuses: write # the verdict
     steps:
-      - name: Checkout (full history for the base TOOLS.lock)
+      - name: Checkout the gate's code (the base; the change is fetched as data below)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
+
+      - name: Resolve the change, its base and the gate's code
+        id: change
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_EVENT: ${{ github.event.pull_request.number }}
+          PR_INPUT: ${{ github.event.inputs.pr }}
+          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          pr="${PR_EVENT:-${PR_INPUT:-}}"
+          if [ -n "$pr" ]; then
+            [[ $pr =~ ^[1-9][0-9]*$ ]] || { echo "::error::pull request number '$pr'"; exit 1; }
+            # GitHub computes the test merge lazily; asking for the pull request starts it.
+            merge="" head=""
+            for _ in 1 2 3 4 5 6; do
+              gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq .mergeable > /dev/null
+              if git fetch -q --no-tags origin "+refs/pull/$pr/merge:refs/change/merge" \
+                   "+refs/pull/$pr/head:refs/change/head"; then
+                merge=$(git rev-parse refs/change/merge) head=$(git rev-parse refs/change/head)
+                if [ "$(git rev-parse "$merge^2")" = "$head" ] \
+                   && { [ -z "$EVENT_HEAD" ] || [ "$head" = "$EVENT_HEAD" ]; }; then
+                  break
+                fi
+              fi
+              merge="" head=""
+              sleep 10
+            done
+            [ -n "$merge" ] || { echo "::error::no test merge of #$pr at its head (conflicted, or the change moved on)"; exit 1; }
+            base=$(git rev-parse "$merge^1")
+          else
+            merge=$GITHUB_SHA head=$GITHUB_SHA base=$GITHUB_SHA
+          fi
+          if [ "$GITHUB_EVENT_NAME" = pull_request_target ]; then
+            code=$base context=candidate-eval/gate
+          else
+            code=$GITHUB_SHA context=candidate-eval/gate-dispatch
+          fi
+          git checkout -q --detach "$code"
+          # Data trees: no hooks, no filter drivers (LFS included), no runner line-ending defaults,
+          # so checking out the change runs nothing; the gate then holds each tree to its index
+          # (gate::checkout_problems).
+          nohooks="$RUNNER_TEMP/no-hooks"; mkdir -p "$nohooks"
+          for t in change:"$merge" base:"$base"; do
+            GIT_LFS_SKIP_SMUDGE=1 git -c core.hooksPath="$nohooks" -c core.fsmonitor=false \
+              -c core.autocrlf=false -c core.eol=lf \
+              -c filter.lfs.smudge= -c filter.lfs.process= -c filter.lfs.required=false \
+              worktree add -q --detach "$RUNNER_TEMP/${t%%:*}" "${t#*:}"
+          done
+          {
+            echo "pr=$pr"; echo "merge=$merge"; echo "head=$head"; echo "base=$base"
+            echo "code=$code"; echo "context=$context"
+          } >> "$GITHUB_OUTPUT"
+          echo "change ${merge:0:12} (head ${head:0:12}) on base ${base:0:12}; gate code ${code:0:12}"
+
+      - name: Verdict pending
+        if: steps.change.outputs.pr != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ steps.change.outputs.head }}
+          CONTEXT: ${{ steps.change.outputs.context }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=pending \
+            -f context="$CONTEXT" -f description="evaluating" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
 
       - name: Verify MSVC toolchain authenticity (before anything compiles)
         uses: ./.github/actions/verify-msvc
@@ -59,7 +138,11 @@ jobs:
           target: windows-x86_64
           only: cargo-audit
           verify-attestations: "true"
-          lock-ref: ${{ github.event.pull_request.base.sha || 'main' }}
+          lock-ref: ${{ steps.change.outputs.base }}
+
+      - name: Build the gate (the code checked out above)
+        shell: bash
+        run: cargo build --locked --quiet --manifest-path xtask/Cargo.toml
 
       # NEGATIVE CONTROL BEFORE THE VERDICT (#223). The gate's vuln axis is only as good as
       # the auditor it calls, and a sabotaged or simply broken auditor fails by reporting
@@ -71,9 +154,9 @@ jobs:
         shell: bash
         env:
           PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
-        run: cargo run --locked --quiet --manifest-path xtask/Cargo.toml -- canary --tool cargo-audit
+        run: xtask/target/debug/xtask.exe canary --tool cargo-audit
 
-      - name: Run the gate
+      - name: Run the gate (base code, the change as data)
         id: gate
         shell: bash
         env:
@@ -82,94 +165,62 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # The base is the first parent of the checked-out test merge: exactly the commit the
-          # change was merged into, which `pull_request.base.sha` need not be.
-          BASE_SHA=""
-          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
-            git rev-parse --verify -q 'HEAD^2' > /dev/null \
-              || { echo "::error::the checkout is not the change's test merge"; exit 1; }
-            BASE_SHA=$(git rev-parse 'HEAD^1')
-          fi
-          # Base = the PR base commit's TOOLS.lock. On workflow_dispatch there is no
-          # base — evaluate head against itself (no candidates; proves the plumbing).
-          # #255 §5: also extract the BASE commit's frozen locks (tools/locks/) — each side
-          # of the paired scan evaluates the lock its digest was built from. A frozen lock
-          # added in THIS PR must not be retro-applied to the baseline digest; the head side
-          # reads the working tree's tools/locks/ (gate default), the base side reads these.
-          mkdir -p /tmp/base-locks /tmp/base-evidence
-          if [ -n "${BASE_SHA:-}" ]; then
-            git show "$BASE_SHA:tools/TOOLS.lock" > /tmp/base-tools.lock
-            git archive "$BASE_SHA" tools/locks 2>/dev/null \
-              | tar -x -C /tmp/base-locks --strip-components=2 2>/dev/null \
-              || true   # base has no tools/locks -> empty dir -> gate falls back to upstream
-            # #380 part 2: the BASE commit's evidence tree. An edit to a blessed digest's
-            # caps.toml / mal.jsonl (no TOOLS.lock change) is a candidate for the axes it touches;
-            # without this tree such a PR looked like "nothing to evaluate". No `|| true` here:
-            # the gate REQUIRES this directory, and a failed extraction must fail the gate.
-            git archive "$BASE_SHA" supply-chain/evidence | tar -x -C /tmp/base-evidence --strip-components=2
-            # The base commit's per-tool producer inputs (patches, build args, rustflags): a change
-            # to any of them under an unchanged digest is a revision candidate. Required, like the
-            # evidence tree.
-            mkdir -p /tmp/base-root
-            git archive "$BASE_SHA" tools | tar -x -C /tmp/base-root
-            # The policy a change is judged by is the base commit's: a change that lowers a floor
-            # takes effect for the changes after it, never for itself.
-            git show "$BASE_SHA:supply-chain/policy/floors.json" > /tmp/base-floors.json
-          else
-            cp supply-chain/policy/floors.json /tmp/base-floors.json
-            cp tools/TOOLS.lock /tmp/base-tools.lock
-            cp -R supply-chain/evidence/. /tmp/base-evidence/
-            mkdir -p /tmp/base-root && cp -R tools /tmp/base-root/
-            # A silent failure here leaves /tmp/base-locks EMPTY, and the gate would then compare the
-            # head's FROZEN locks against the base's UPSTREAM resolution -- a wrong baseline that can
-            # hide a regression. A missing glob (base had no frozen locks) is the ONLY acceptable
-            # reason for zero files, so distinguish it from a real copy failure.
-            if compgen -G 'tools/locks/*.lock' > /dev/null; then
-              if ! cp tools/locks/*.lock /tmp/base-locks/; then
-                echo "::error::failed to stage base frozen locks - refusing to gate on a wrong baseline"
-                exit 1
-              fi
-            else
-              echo "base commit has no tools/locks/*.lock - base side will use upstream locks"
-            fi
-          fi
-          # Capture the verdict, always produce the report; enforcement is the last step
-          # so the comment posts even when the gate blocks.
+          gate="$GITHUB_WORKSPACE/xtask/target/debug/xtask.exe"
+          base="$RUNNER_TEMP/base"
+          cd "$RUNNER_TEMP/change"
+          # Capture the verdict, always produce the report; enforcement is the last step so the
+          # comment posts even when the gate blocks.
           set +e
-          cargo run --locked --manifest-path xtask/Cargo.toml -- gate \
-            --base /tmp/base-tools.lock --base-locks-dir /tmp/base-locks \
-            --base-evidence /tmp/base-evidence --base-tools-dir /tmp/base-root/tools \
-            --floors /tmp/base-floors.json --report gate-report.md
+          "$gate" gate --base "$base/tools/TOOLS.lock" --base-locks-dir "$base/tools/locks" \
+            --base-evidence "$base/supply-chain/evidence" --base-tools-dir "$base/tools" \
+            --floors "$base/supply-chain/policy/floors.json" --report "$RUNNER_TEMP/gate-report.md"
           echo "code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Post / update the evidence comment
-        if: always() && github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request_target'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
+          PR: ${{ steps.change.outputs.pr }}
         run: |
           set -euo pipefail
-          [ -f gate-report.md ] || { echo "no report produced (gate crashed before writing)"; exit 0; }
+          report="$RUNNER_TEMP/gate-report.md"
+          [ -f "$report" ] || { echo "no report produced (gate crashed before writing)"; exit 0; }
           marker='<!-- candidate-eval -->'
           cid=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
                  --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
           if [ -n "${cid:-}" ]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" \
-              -F body=@gate-report.md >/dev/null
+              -F body=@"$report" > /dev/null
           else
-            gh pr comment "$PR" --body-file gate-report.md
+            gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$report"
           fi
 
       - name: Enforce the verdict
+        if: always()
         shell: bash
         env:
           CODE: ${{ steps.gate.outputs.code }}
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ steps.change.outputs.pr }}
+          HEAD_SHA: ${{ steps.change.outputs.head }}
+          CONTEXT: ${{ steps.change.outputs.context }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          report="$RUNNER_TEMP/gate-report.md"
+          [ -f "$report" ] && cat "$report" >> "$GITHUB_STEP_SUMMARY"
           echo "gate exit: ${CODE:-missing}"
-          [ "${CODE:-1}" = "0" ]
           # A pass is a written verdict, not only an exit status: a gate that never ran to its
           # report has not judged the change.
-          grep -qxF '**Gate: PASS** — all axes ALLOW or signed; merging records the sign-off' gate-report.md \
-            || { echo "::error::no PASS verdict in gate-report.md"; exit 1; }
+          state=failure desc="blocked or not evaluated: see the run"
+          if [ "${CODE:-1}" = "0" ] && [ -f "$report" ] \
+             && grep -qxF '**Gate: PASS** — all axes ALLOW or signed; merging records the sign-off' "$report"; then
+            state=success desc="all axes ALLOW or signed"
+          fi
+          if [ -n "${PR:-}" ] && [ -n "${HEAD_SHA:-}" ]; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$state" \
+              -f context="$CONTEXT" -f description="$desc" \
+              -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null \
+              || { echo "::error::could not post the verdict status"; exit 1; }
+          fi
+          [ "$state" = success ] || { echo "::error::$desc"; exit 1; }
