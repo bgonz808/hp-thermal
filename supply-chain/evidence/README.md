@@ -140,7 +140,9 @@ A `vdr.cdx.json` is committed beside the evidence of every live-frontier digest 
 tool's report and every release's report and fails on any difference, admitting the app's release
 SBOM only after its provenance verifies. When a bless supersedes a tool digest, that digest's last
 report stays committed as history and is no longer regenerated. A revision (rule 2) carries its
-own report: the same `serialNumber`, the version after the superseded record's.
+own report: the same `serialNumber`, the version after the superseded record's. The gate holds
+every committed report to that ledger: never deleted, and a changed one keeps its
+`serialNumber` and takes a higher version.
 A release's report is published by `release-vdr.yml` as an attestation to the shipped exe, never
 as a release asset (a published release is immutable); `release-advance anchor` records each
 revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
@@ -163,13 +165,18 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    Every reader of the lock-bound records (`vuln.jsonl`, `caps.toml`, `build.jsonl`,
    `vdr.cdx.json`) takes the one measured against the current `tools/locks/<tool>.lock`; none
    matching is an error, never a fallback. `mal.jsonl` stays at the digest: it describes bytes.
-   The gate admits a revision only when the lock changed under an unchanged pinned digest, the
-   new lock removes packages and changes nothing else, `revision.json` supersedes the base lock
-   and names the patches the change carries, the build record is custody-verified from a producer
-   run that rebuilt the same digest from exactly that lock and those patches and matches the
-   superseded record message for message, and the vulnerability rows equal the raw payload and a
-   re-scan of the lock by the same scanner at the recorded advisory-db commit. Files under
-   `rev/` are append-only. `candidate-advance digest --reason …` writes one.
+   A line whose digest the base commit already pins is a revision candidate whenever any of the
+   tool's producer inputs changed (frozen lock, patches, build args, rustflags), and its upstream
+   rev may not change. The gate admits a revision only when the new lock removes packages and
+   changes nothing else, `revision.json` supersedes the base lock and names the patches the
+   change carries, the build record is custody-verified from a producer run that rebuilt the same
+   digest from exactly that lock and those patches and matches the superseded record message for
+   message, and the vulnerability rows equal the raw payload, whose advisory-db commit is the
+   header's and descends from the superseded record's, and a re-scan of the lock by the same
+   scanner at that commit. A change that pins or revises a blessed digest leaves its root records
+   byte for byte; an edit to them is its own PR (rule 4). Records under `rev/` are append-only and
+   an admitted revision takes no new record; its `vdr.cdx.json` is re-emitted like any report.
+   `candidate-advance digest --reason …` writes one.
    **Candidate evidence is retired with the candidate**: a digest that was measured on a
    candidate branch but never blessed (its lock was re-frozen, its producer run superseded)
    has its evidence directory, its stored raw payload and any ack bound to it removed on that

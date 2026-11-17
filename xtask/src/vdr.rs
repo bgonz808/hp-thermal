@@ -729,6 +729,10 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("vdr: --product and a 64-hex --digest are required\n{usage}");
         return 2;
     }
+    if let Err(e) = crate::gate::refuse_case_collisions() {
+        eprintln!("vdr: {e}");
+        return 1;
+    }
     let rec = match record(&product, &digest) {
         Ok(r) => r,
         Err(e) => {
