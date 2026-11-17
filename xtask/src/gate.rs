@@ -989,7 +989,40 @@ fn base_record_of(
 fn record_custody(text: &str, h: &ToolLine) -> Result<Vec<Value>, String> {
     let v = crate::build_record::verify_custody(text, &h.name, &h.target, &h.sha)?;
     crate::build_record::same_producer(&v.source_commit, &h.name)?;
+    source_custody(&v.source_commit, h)?;
     Ok(v.messages)
+}
+
+/// The pin names the source its producer built from: custody proves the bytes came from a
+/// producer run at `commit`, and that run built the row its own `tools/TOOLS.lock` holds for
+/// the pin's (name, target). That row's repo and rev must be the pin's.
+fn source_custody(commit: &str, h: &ToolLine) -> Result<(), String> {
+    let text = crate::advance::git(&["show", &format!("{commit}:tools/TOOLS.lock")])?;
+    producer_source(&text, h)
+}
+
+fn producer_source(lock_at_commit: &str, h: &ToolLine) -> Result<(), String> {
+    let row = parse_tools_lock(lock_at_commit)
+        .into_iter()
+        .find(|r| r.name == h.name && r.target == h.target)
+        .ok_or_else(|| {
+            format!(
+                "the producer commit's TOOLS.lock pins no {} [{}]",
+                h.name, h.target
+            )
+        })?;
+    if row.repo != h.repo || row.rev != h.rev {
+        return Err(format!(
+            "the producer built {} [{}] from {}@{}; the pin names {}@{}",
+            h.name,
+            h.target,
+            row.repo,
+            &row.rev[..row.rev.len().min(12)],
+            h.repo,
+            &h.rev[..h.rev.len().min(12)]
+        ));
+    }
+    Ok(())
 }
 
 /// Verifies a committed build record's custody; returns its messages.
@@ -1807,6 +1840,7 @@ fn revision_custody(
 ) -> Result<Vec<Value>, String> {
     let v = crate::build_record::verify_custody(text, &h.name, &h.target, &h.sha)?;
     crate::build_record::same_producer(&v.source_commit, &h.name)?;
+    source_custody(&v.source_commit, h)?;
     let (hdr, _) = crate::build_record::read_evidence(text)?;
     let (lock, patches) =
         crate::evidence_rev::producer_tree(Path::new("."), &v.source_commit, &h.name)?;
@@ -4199,6 +4233,37 @@ mod tests {
         git(&["update-index", "--chmod=+x", "tools/b.txt"]);
         assert!(problems()[0].contains("tools/b.txt"));
         let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// A pin names the source its producer run built: the producer commit's row for the same
+    /// (name, target) has the pin's repo and rev.
+    #[test]
+    fn a_pin_names_the_source_its_producer_built() {
+        let (r, s) = ("a".repeat(40), "c".repeat(64));
+        let at_commit = format!(
+            "# producer commit\nt o/r {r} linux-x86_64 {}\nt o/r {r} windows-x86_64 {s}\n",
+            ZERO_DIGEST
+        );
+        let pin = |repo: &str, rev: &str, target: &str| ToolLine {
+            name: "t".into(),
+            repo: repo.into(),
+            rev: rev.into(),
+            target: target.into(),
+            sha: s.clone(),
+        };
+        // the digest is the one the run produced; the commit's row may still be unset
+        assert!(producer_source(&at_commit, &pin("o/r", &r, "linux-x86_64")).is_ok());
+        assert!(producer_source(&at_commit, &pin("o/r", &r, "windows-x86_64")).is_ok());
+        for (what, p) in [
+            ("another repo", pin("evil/r", &r, "linux-x86_64")),
+            ("another rev", pin("o/r", &"b".repeat(40), "linux-x86_64")),
+            (
+                "a target the commit does not pin",
+                pin("o/r", &r, "macos-aarch64"),
+            ),
+        ] {
+            assert!(producer_source(&at_commit, &p).is_err(), "{what}");
+        }
     }
 
     #[test]
