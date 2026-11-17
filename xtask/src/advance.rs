@@ -342,14 +342,15 @@ pub(crate) fn producer_digest(log: &str, entry: &ToolLine) -> Result<String, Str
 }
 
 /// The monitor prints `record (mal.jsonl line for <evidence dir>/): {json}` for each frontier
-/// digest it read, and `... not in VT corpus ...` for one VT has never seen.
+/// digest it read, and `... not in VT corpus ...` for one VT has never seen. Read as the gate
+/// reads it (`gate::record_lines`): exactly one such line, or none is taken.
 pub(crate) fn mal_record_line(log: &str, tool: &str, digest: &str) -> Option<Value> {
-    let key = format!("record (mal.jsonl line for supply-chain/evidence/{tool}/{digest}/): ");
-    log.lines()
-        .map(log_message)
-        .filter_map(|m| m.find(&key).map(|i| m[i + key.len()..].trim().to_string()))
-        .filter_map(|j| serde_json::from_str::<Value>(&j).ok())
-        .find(|v| s(v, &["subject", "sha256"]) == digest)
+    match crate::gate::record_lines(log, tool, digest).as_slice() {
+        [one] => serde_json::from_str::<Value>(one)
+            .ok()
+            .filter(|v| s(v, &["subject", "sha256"]) == digest),
+        _ => None,
+    }
 }
 
 pub(crate) fn mal_absent(log: &str, digest: &str) -> bool {
@@ -1422,7 +1423,7 @@ cargo-auditable  rust-secure-code/cargo-auditable  ccccccccccccccccccccccccccccc
     fn mal_record_and_absence_are_read_from_the_monitor_log() {
         let d = "d".repeat(64);
         let rec = format!(
-            "monitor\tLookup\t2026-11-12T19:00:00.0000000Z       record (mal.jsonl line for supply-chain/evidence/cargo-vet/{d}/): {{\"schema\":\"hp-thermal/evidence-mal/v1\",\"subject\":{{\"name\":\"cargo-vet\",\"sha256\":\"{d}\"}},\"detections\":{{\"malicious\":0,\"total\":71}}}}\n"
+            "vt-monitor\tUNKNOWN STEP\t2026-11-12T19:00:00.0000000Z       record (mal.jsonl line for supply-chain/evidence/cargo-vet/{d}/): {{\"schema\":\"hp-thermal/evidence-mal/v1\",\"subject\":{{\"name\":\"cargo-vet\",\"sha256\":\"{d}\"}},\"detections\":{{\"malicious\":0,\"total\":71}}}}\n"
         );
         let v = mal_record_line(&rec, "cargo-vet", &d).unwrap();
         assert_eq!(v["detections"]["total"], 71);
@@ -1430,6 +1431,11 @@ cargo-auditable  rust-secure-code/cargo-auditable  ccccccccccccccccccccccccccccc
             mal_record_line(&rec, "cargo-deny", &d).is_none(),
             "another tool's line is not ours"
         );
+        // read as the gate reads it: another job's line, or two lines, give nothing
+        assert!(
+            mal_record_line(&rec.replacen("vt-monitor", "other", 1), "cargo-vet", &d).is_none()
+        );
+        assert!(mal_record_line(&format!("{rec}{rec}"), "cargo-vet", &d).is_none());
         let absent = format!(
             "monitor\tLookup\t2026-11-12T19:00:00.0000000Z ##[warning]tool:cargo-vet:windows-x86_64 ({d}): not in VT corpus - dispatch vt-submit.yml\n"
         );
