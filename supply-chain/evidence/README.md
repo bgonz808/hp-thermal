@@ -191,6 +191,9 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    **is** the sign-off; closing the PR is the reject. The floors it judges by are the base
    commit's (`supply-chain/policy/floors.json`): a change that lowers one takes effect for the
    changes after it, never for itself, and a policy that does not load blocks every change.
+   Its code is not yet the base commit's: the job builds and runs the change's own `xtask/`,
+   `.cargo/config.toml` and workflow, so the gate judges a change made in good faith, not one
+   written to defeat it.
 4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
    digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
    on the axes it touched, against the base commit's record (the workflow extracts that tree). An
