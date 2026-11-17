@@ -1645,8 +1645,10 @@ pub(crate) fn case_collisions(paths: &[String]) -> Vec<String> {
 }
 
 /// Paths the gate and the workflows open by a name they build rather than one they list: the
-/// fixed files, each pinned tool's producer inputs and evidence, and the records under every
-/// digest and revision directory the index holds.
+/// fixed files, each pinned tool's producer inputs (`build_record::producer_inputs`: its lock,
+/// patches, build args and rustflags, and the toolchain, cargo config and producer workflows
+/// every build reads) and evidence, and the records under every digest and revision directory
+/// the index holds.
 pub(crate) fn opened_paths(locks: &[&[ToolLine]], index: &[String]) -> Vec<String> {
     let rev = crate::evidence_rev::REV_DIR;
     let mut out: Vec<String> = [
@@ -1660,13 +1662,8 @@ pub(crate) fn opened_paths(locks: &[&[ToolLine]], index: &[String]) -> Vec<Strin
         |d: &str| -> Vec<String> { RECORD_FILES.iter().map(|f| format!("{d}/{f}")).collect() };
     for l in locks.iter().flat_map(|l| l.iter()) {
         let (n, sha) = (&l.name, &l.sha);
-        out.extend([
-            format!("tools/locks/{n}.lock"),
-            format!("tools/patches/{n}"),
-            format!("tools/build-args/{n}"),
-            format!("tools/rustflags/{n}"),
-            format!("supply-chain/evidence/{n}/acks.jsonl"),
-        ]);
+        out.extend(crate::build_record::producer_inputs(n));
+        out.push(format!("supply-chain/evidence/{n}/acks.jsonl"));
         out.extend(records(&format!("supply-chain/evidence/{n}/{sha}")));
     }
     // supply-chain/evidence/<tool>/<digest>/… and …/<digest>/rev/<lock>/…
@@ -4026,6 +4023,16 @@ mod tests {
                 "tools/build-args/Cargo-Acl".into(),
             ),
             (
+                "cargo config respelled",
+                vec![],
+                ".cargo/Config.toml".into(),
+            ),
+            (
+                "toolchain pin respelled",
+                vec![],
+                "app/Rust-Toolchain.toml".into(),
+            ),
+            (
                 "rustflags added respelled",
                 vec![],
                 "tools/rustflags/cargo-ACL".into(),
@@ -4303,8 +4310,30 @@ mod tests {
             .to_vec();
             run(&args)
         };
+        // The workflow enforces a written PASS line, not only the exit status: it is the line a
+        // passing run writes, and a blocked run does not.
+        let wf = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../.github/workflows/candidate-eval.yml"),
+        )
+        .unwrap();
+        let required = wf
+            .lines()
+            .find_map(|l| {
+                l.split_once("grep -qxF '")
+                    .and_then(|(_, r)| r.split_once('\''))
+            })
+            .map(|(line, _)| line.to_string())
+            .expect("candidate-eval enforces a PASS line");
+        let has = || {
+            std::fs::read_to_string(d.join("report.md"))
+                .unwrap()
+                .lines()
+                .any(|l| l == required)
+        };
         assert_eq!(run_with(&good), 0);
+        assert!(has(), "a passing report carries `{required}`");
         assert_eq!(run_with(&d.join("bad.json")), 1);
+        assert!(!has(), "a blocked report does not");
         assert_eq!(run_with(&d.join("missing.json")), 1);
         let _ = std::fs::remove_dir_all(&d);
     }
