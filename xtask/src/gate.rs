@@ -786,12 +786,95 @@ fn vuln_verdict(
     Verdict::RaiseCovered(covered)
 }
 
+/// Verifies that a committed mal record is the line a monitor run printed for (tool, digest).
+type MalCustody<'a> = &'a dyn Fn(&str, &str, &str) -> Result<(), String>;
+
+/// Custody of a mal record (the last line of `mal.jsonl`): its `source` names one run of
+/// `supply-chain-monitor.yml` on `main` of this repository, scheduled or dispatched, and that run's
+/// log holds exactly one record line for (tool, digest), byte for byte the committed one. A record
+/// composed or edited by hand, or printed by a run anywhere else, is not the monitor's; a log
+/// past its retention leaves the record unverifiable, and a fresh panel is recorded instead.
+fn monitor_custody(tool: &str, digest: &str, line: &str) -> Result<(), String> {
+    let id = monitor_run_id(line)?;
+    let run = crate::advance::gh_json(&[
+        "api",
+        &format!("repos/{{owner}}/{{repo}}/actions/runs/{id}"),
+    ])?;
+    monitor_run_ok(&run)?;
+    let log = crate::advance::gh(&["run", "view", &id, "--log"])
+        .map_err(|e| format!("monitor run {id}: no log ({e}); record a fresh panel"))?;
+    record_in_log(&log, tool, digest, line)
+}
+
+/// The monitor run a record names: `source` is exactly `supply-chain-monitor run <id> (lookup)`.
+fn monitor_run_id(line: &str) -> Result<String, String> {
+    let v: Value = serde_json::from_str(line).map_err(|e| format!("record: {e}"))?;
+    let src = s(&v, &["source"]);
+    src.strip_prefix("supply-chain-monitor run ")
+        .and_then(|r| r.strip_suffix(" (lookup)"))
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()))
+        .map(str::to_string)
+        .ok_or_else(|| format!("source `{src}` names no single supply-chain-monitor run"))
+}
+
+/// The run is the monitor workflow on this repository's `main`, scheduled or dispatched, and done.
+fn monitor_run_ok(run: &Value) -> Result<(), String> {
+    let field = |k: &str| run.get(k).and_then(Value::as_str).unwrap_or("");
+    let repo = run.pointer("/repository/full_name").and_then(Value::as_str);
+    let head_repo = run
+        .pointer("/head_repository/full_name")
+        .and_then(Value::as_str);
+    let checks = [
+        (
+            field("path") == ".github/workflows/supply-chain-monitor.yml",
+            "not supply-chain-monitor.yml",
+        ),
+        (field("head_branch") == "main", "not on main"),
+        (
+            matches!(field("event"), "schedule" | "workflow_dispatch"),
+            "not scheduled or dispatched",
+        ),
+        (field("status") == "completed", "not completed"),
+        (
+            repo.is_some() && repo == head_repo,
+            "not this repository's own code",
+        ),
+    ];
+    match checks.iter().find(|(ok, _)| !ok) {
+        Some((_, why)) => Err(format!(
+            "run {}: {why}",
+            run.get("id").unwrap_or(&Value::Null)
+        )),
+        None => Ok(()),
+    }
+}
+
+/// The run's log holds exactly one record line for (tool, digest), and it is `line`. Two would
+/// mean text in the log (a panel's free-text field) posing as a record; neither is accepted.
+fn record_in_log(log: &str, tool: &str, digest: &str, line: &str) -> Result<(), String> {
+    let key = format!("record (mal.jsonl line for supply-chain/evidence/{tool}/{digest}/): ");
+    let found: Vec<&str> = log
+        .lines()
+        .filter_map(|l| l.find(&key).map(|i| l[i + key.len()..].trim_end()))
+        .collect();
+    match found.as_slice() {
+        [one] if *one == line.trim_end() => Ok(()),
+        [] => Err("the run's log holds no record line for this digest".into()),
+        [_] => Err("the run printed another record for this digest than the committed one".into()),
+        many => Err(format!(
+            "the run's log holds {} record lines for this digest; one is expected",
+            many.len()
+        )),
+    }
+}
+
 fn mal_verdict(
     tool: &str,
     evidence_dir: &Path,
     head: &ToolLine,
     acks: &Acks,
     floors: &crate::floors::Floors,
+    custody: MalCustody,
 ) -> Verdict {
     let digest = head.sha.as_str();
     let path = evidence_dir.join(tool).join(digest).join("mal.jsonl");
@@ -843,6 +926,11 @@ fn mal_verdict(
             "sandbox {name} verdict suspicious: per-item behaviour sign-off is #347's next \
              step; not readable as clean"
         ));
+    }
+    // A record that blocks needs no custody to block; one that would let the digest through
+    // must be the monitor's own.
+    if let Err(e) = custody(tool, digest, last) {
+        return Verdict::Unevaluated(format!("{}: mal record custody: {e}", path.display()));
     }
     let total = v
         .pointer("/detections/total")
@@ -2347,7 +2435,10 @@ pub fn run(args: &[String]) -> i32 {
                 Err(e) => unselected(&evidence_dir, h, e),
             },
         ));
-        axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
+        axes.push((
+            "mal",
+            mal_verdict(&h.name, &evidence_dir, h, &acks, floors, &monitor_custody),
+        ));
         let revision = head_rec.as_ref().ok().and_then(|r| r.revision.clone());
         let custody = |text: &str, line: &ToolLine| match &revision {
             Some(r) => revision_custody(text, line, r),
@@ -2530,7 +2621,10 @@ pub fn run(args: &[String]) -> i32 {
                 ));
             }
             if changed.iter().any(|f| f == "mal.jsonl") {
-                axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
+                axes.push((
+                    "mal",
+                    mal_verdict(&h.name, &evidence_dir, h, &acks, floors, &monitor_custody),
+                ));
             }
             if changed.iter().any(|f| f == crate::build_record::FILE) {
                 let prior = Prior {
@@ -3384,13 +3478,17 @@ mod tests {
         };
         let floors =
             crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
-        let v = mal_verdict("t", &dir, &h, &acks, &floors);
+        let v = mal_verdict("t", &dir, &h, &acks, &floors, &|_, _, _| Ok(()));
         assert!(matches!(v, Verdict::Unevaluated(_)), "got {v:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// One mal record on disk → its gate verdict (#347 step 1 cases).
+    /// One mal record on disk → its gate verdict (#347 step 1 cases), its custody granted.
     fn mal_verdict_for(tag: &str, record: &str) -> Verdict {
+        mal_verdict_with(tag, record, &|_, _, _| Ok(()))
+    }
+
+    fn mal_verdict_with(tag: &str, record: &str, custody: MalCustody) -> Verdict {
         let dir = std::env::temp_dir().join(format!("gate-mal-{tag}-{}", std::process::id()));
         let full = "bbbbbbbbbbbb000000000000000000000000000000000000000000000000000b";
         let tool_dir = dir.join("t").join(full);
@@ -3409,9 +3507,83 @@ mod tests {
         };
         let floors =
             crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
-        let v = mal_verdict("t", &dir, &h, &acks, &floors);
+        let v = mal_verdict("t", &dir, &h, &acks, &floors, custody);
         let _ = std::fs::remove_dir_all(&dir);
         v
+    }
+
+    /// A clean panel lets a digest through only as the monitor's own line; a panel that blocks
+    /// keeps blocking whatever its custody.
+    #[test]
+    fn a_clean_panel_counts_only_as_the_monitors_own_line() {
+        let clean = r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0,"total":70},"flags":[],"sandbox":{"state":"ANALYZED","verdicts":[]}}"#;
+        let refused: MalCustody = &|_, _, _| Err("hand-composed".into());
+        assert!(matches!(mal_verdict_for("c-ok", clean), Verdict::Allow(_)));
+        let v = mal_verdict_with("c-no", clean, refused);
+        assert!(
+            matches!(v, Verdict::Unevaluated(ref w) if w.contains("custody")),
+            "got {v:?}"
+        );
+        let bad = r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":9,"total":70},"flags":[],"sandbox":{"state":"ANALYZED","verdicts":[]}}"#;
+        assert!(matches!(
+            mal_verdict_with("c-bad", bad, refused),
+            Verdict::HardStop(_)
+        ));
+    }
+
+    #[test]
+    fn a_monitor_record_names_its_run_and_is_in_its_log_once() {
+        let line = |src: &str| {
+            format!(
+                r#"{{"schema":"hp-thermal/evidence-mal/v1","subject":{{"name":"t","sha256":"d"}},"source":"{src}"}}"#
+            )
+        };
+        let ok = line("supply-chain-monitor run 123 (lookup)");
+        assert_eq!(monitor_run_id(&ok).unwrap(), "123");
+        for src in [
+            "vt-submit run 1 (lookup-first; first panel) + monitor run 2 (lookup)",
+            "supply-chain-monitor run (lookup)",
+            "supply-chain-monitor run 12a (lookup)",
+            "supply-chain-monitor run 1 (lookup) ",
+            "",
+        ] {
+            assert!(monitor_run_id(&line(src)).is_err(), "{src}");
+        }
+        let run = serde_json::json!({
+            "id": 123, "path": ".github/workflows/supply-chain-monitor.yml", "head_branch": "main",
+            "event": "schedule", "status": "completed",
+            "repository": {"full_name": "o/r"}, "head_repository": {"full_name": "o/r"}
+        });
+        assert!(monitor_run_ok(&run).is_ok());
+        for (k, v) in [
+            ("/path", ".github/workflows/vt-submit.yml"),
+            ("/head_branch", "candidate/x"),
+            ("/event", "pull_request"),
+            ("/status", "in_progress"),
+            ("/head_repository/full_name", "fork/r"),
+        ] {
+            let mut r = run.clone();
+            *r.pointer_mut(k).unwrap() = Value::from(v);
+            assert!(monitor_run_ok(&r).is_err(), "{k}={v}");
+        }
+        let key = "record (mal.jsonl line for supply-chain/evidence/t/d/): ";
+        let log = format!("monitor\tLookup\t2026-11-17T00:00:00Z       {key}{ok}\r\nother\n");
+        assert!(record_in_log(&log, "t", "d", &ok).is_ok());
+        assert!(
+            record_in_log(&log, "t", "e", &ok).is_err(),
+            "another digest"
+        );
+        assert!(record_in_log(&log, "u", "d", &ok).is_err(), "another tool");
+        let edited = ok.replace("123", "124");
+        assert!(
+            record_in_log(&log, "t", "d", &edited).is_err(),
+            "an edited line"
+        );
+        let twice = format!("{log}        T1 [-] x\n      {key}{ok}\n");
+        assert!(
+            record_in_log(&twice, "t", "d", &ok).is_err(),
+            "a second record line"
+        );
     }
 
     #[test]
