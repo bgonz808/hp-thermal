@@ -300,9 +300,9 @@ fn stage_mal(
 
 /// Release workflows whose signature at `refs/tags/<tag>` can make an attestation an original:
 /// `release-pipeline.yml` from v0.3.3, `release.yml` before it.
-const RELEASE_SIGNERS: [&str; 2] = ["release-pipeline.yml", "release.yml"];
-const PROVENANCE: &str = "https://slsa.dev/provenance/v1";
-const CYCLONEDX: &str = "https://cyclonedx.org/bom";
+pub(crate) const RELEASE_SIGNERS: [&str; 2] = ["release-pipeline.yml", "release.yml"];
+pub(crate) const PROVENANCE: &str = "https://slsa.dev/provenance/v1";
+pub(crate) const CYCLONEDX: &str = "https://cyclonedx.org/bom";
 /// Issues VDR revisions from `main` after a release (never a release asset: a published release
 /// is immutable). Anchored as `vdr.v<version>.sigstore.jsonl`.
 const VDR_SIGNER: &str = "release-vdr.yml";
