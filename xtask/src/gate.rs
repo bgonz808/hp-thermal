@@ -790,18 +790,69 @@ fn vuln_verdict(
 type MalCustody<'a> = &'a dyn Fn(&str, &str, &str) -> Result<(), String>;
 
 /// Custody of a mal record (the last line of `mal.jsonl`): its `source` names one run of
-/// `supply-chain-monitor.yml` on `main` of this repository, scheduled or dispatched, and that run's
-/// log holds exactly one record line for (tool, digest), byte for byte the committed one. A record
+/// `supply-chain-monitor.yml` of this repository, scheduled or dispatched, on `main`, or on a
+/// `candidate/*` branch whose monitor workflow at the run's commit is the base commit's
+/// (`base_monitor`; none given, candidate runs are not accepted); and that run's `vt-monitor` log
+/// holds exactly one record line for (tool, digest), which the committed line is, verbatim or as
+/// its canonical serialization (`candidate-advance` and `release-advance` write that). A record
 /// composed or edited by hand, or printed by a run anywhere else, is not the monitor's; a log
 /// past its retention leaves the record unverifiable, and a fresh panel is recorded instead.
-fn monitor_custody(tool: &str, digest: &str, line: &str) -> Result<(), String> {
+fn monitor_custody(
+    tool: &str,
+    digest: &str,
+    line: &str,
+    base_monitor: Option<&str>,
+) -> Result<(), String> {
+    let source = MonitorSource {
+        run: &|id| {
+            crate::advance::gh_json(&[
+                "api",
+                &format!("repos/{{owner}}/{{repo}}/actions/runs/{id}"),
+            ])
+        },
+        workflow_at: &|sha| {
+            crate::advance::gh(&[
+                "api",
+                &format!(
+                    "repos/{{owner}}/{{repo}}/contents/.github/workflows/supply-chain-monitor.yml?ref={sha}"
+                ),
+                "-H",
+                "Accept: application/vnd.github.raw+json",
+            ])
+        },
+        log: &|id| crate::advance::gh(&["run", "view", id, "--log"]),
+    };
+    monitor_custody_from(&source, tool, digest, line, base_monitor)
+}
+
+/// Where `monitor_custody` reads a run: its metadata, the monitor workflow at a commit, its log.
+struct MonitorSource<'a> {
+    run: &'a dyn Fn(&str) -> Result<Value, String>,
+    workflow_at: &'a dyn Fn(&str) -> Result<String, String>,
+    log: &'a dyn Fn(&str) -> Result<String, String>,
+}
+
+fn monitor_custody_from(
+    source: &MonitorSource,
+    tool: &str,
+    digest: &str,
+    line: &str,
+    base_monitor: Option<&str>,
+) -> Result<(), String> {
     let id = monitor_run_id(line)?;
-    let run = crate::advance::gh_json(&[
-        "api",
-        &format!("repos/{{owner}}/{{repo}}/actions/runs/{id}"),
-    ])?;
-    monitor_run_ok(&run)?;
-    let log = crate::advance::gh(&["run", "view", &id, "--log"])
+    let run = (source.run)(&id)?;
+    if monitor_run_ok(&run)? {
+        let sha = run.get("head_sha").and_then(Value::as_str).unwrap_or("");
+        if sha.len() != 40 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(format!("monitor run {id}: no head commit"));
+        }
+        if base_monitor != Some((source.workflow_at)(sha)?.as_str()) {
+            return Err(format!(
+                "monitor run {id} ran on a candidate branch whose monitor workflow is not the base's"
+            ));
+        }
+    }
+    let log = (source.log)(&id)
         .map_err(|e| format!("monitor run {id}: no log ({e}); record a fresh panel"))?;
     record_in_log(&log, tool, digest, line)
 }
@@ -817,19 +868,28 @@ fn monitor_run_id(line: &str) -> Result<String, String> {
         .ok_or_else(|| format!("source `{src}` names no single supply-chain-monitor run"))
 }
 
-/// The run is the monitor workflow on this repository's `main`, scheduled or dispatched, and done.
-fn monitor_run_ok(run: &Value) -> Result<(), String> {
+/// The run is this repository's monitor workflow, scheduled or dispatched, done, on `main` or a
+/// `candidate/*` branch. `Ok(true)`: a candidate branch, whose monitor workflow must still be
+/// shown to be the base's.
+fn monitor_run_ok(run: &Value) -> Result<bool, String> {
     let field = |k: &str| run.get(k).and_then(Value::as_str).unwrap_or("");
     let repo = run.pointer("/repository/full_name").and_then(Value::as_str);
     let head_repo = run
         .pointer("/head_repository/full_name")
         .and_then(Value::as_str);
+    let branch = field("head_branch");
+    let candidate = branch
+        .strip_prefix("candidate/")
+        .is_some_and(|b| !b.is_empty());
     let checks = [
         (
             field("path") == ".github/workflows/supply-chain-monitor.yml",
             "not supply-chain-monitor.yml",
         ),
-        (field("head_branch") == "main", "not on main"),
+        (
+            branch == "main" || candidate,
+            "not on main or a candidate branch",
+        ),
         (
             matches!(field("event"), "schedule" | "workflow_dispatch"),
             "not scheduled or dispatched",
@@ -845,20 +905,37 @@ fn monitor_run_ok(run: &Value) -> Result<(), String> {
             "run {}: {why}",
             run.get("id").unwrap_or(&Value::Null)
         )),
-        None => Ok(()),
+        None => Ok(candidate),
     }
 }
 
-/// The run's log holds exactly one record line for (tool, digest), and it is `line`. Two would
-/// mean text in the log (a panel's free-text field) posing as a record; neither is accepted.
+/// The run's log holds exactly one record line for (tool, digest), and the committed `line` is
+/// it, verbatim or as its canonical serialization. A record line is a whole message of the
+/// `vt-monitor` job (`gh run view --log`: job, step, then a timestamp and the message), the
+/// record prefix at its start; two such lines would mean text posing as a record, and neither
+/// is accepted.
 fn record_in_log(log: &str, tool: &str, digest: &str, line: &str) -> Result<(), String> {
     let key = format!("record (mal.jsonl line for supply-chain/evidence/{tool}/{digest}/): ");
     let found: Vec<&str> = log
         .lines()
-        .filter_map(|l| l.find(&key).map(|i| l[i + key.len()..].trim_end()))
+        .filter_map(|l| {
+            let mut f = l.splitn(3, '\t');
+            let (job, _step, rest) = (f.next()?, f.next()?, f.next()?);
+            let message = rest.split_once(' ')?.1.trim_start();
+            (job == "vt-monitor")
+                .then(|| message.strip_prefix(key.as_str()))
+                .flatten()
+                .map(str::trim_end)
+        })
         .collect();
+    let committed = line.trim_end();
+    let canonical = |printed: &str| {
+        serde_json::from_str::<Value>(printed)
+            .ok()
+            .and_then(|v| serde_json::to_string(&v).ok())
+    };
     match found.as_slice() {
-        [one] if *one == line.trim_end() => Ok(()),
+        [one] if *one == committed || canonical(one).as_deref() == Some(committed) => Ok(()),
         [] => Err("the run's log holds no record line for this digest".into()),
         [_] => Err("the run printed another record for this digest than the committed one".into()),
         many => Err(format!(
@@ -1430,17 +1507,71 @@ pub(crate) fn changed_ack_files(evidence_dir: &Path, base_evidence_dir: &Path) -
         .collect()
 }
 
-/// Panel history only grows: the change's `mal.jsonl` begins with the base commit's bytes.
-fn appended_only(head: Option<&[u8]>, base: Option<&[u8]>) -> bool {
+/// A record that is history grows by lines: unchanged, new, or the base's complete lines
+/// followed by more. Removed, edited, or extending the base's unfinished last line, it does not.
+fn grows_by_lines(head: Option<&[u8]>, base: Option<&[u8]>) -> bool {
     match (head, base) {
-        (Some(h), Some(b)) => h.starts_with(b),
-        (Some(_), None) => true,
         (None, _) => false,
+        (Some(_), None) => true,
+        (Some(h), Some(b)) => h == b || b.is_empty() || (b.ends_with(b"\n") && h.starts_with(b)),
     }
 }
 
-/// A product's edited `mal.jsonl` (`tool/digest` from `h`): its history only grows, and its new
-/// last panel is judged as any panel is (`mal_verdict`).
+/// Panel history moves forward. Unchanged, or new, it stands as it is. Otherwise the change
+/// appends exactly one panel to the base's complete lines, and that panel is newer than every
+/// panel before it: a later monitor run, and no earlier panel date. A panel already recorded,
+/// replayed after a later one, would read an old verdict as the current one.
+fn mal_history(head: Option<&[u8]>, base: Option<&[u8]>) -> Result<(), String> {
+    let head = head.ok_or("mal.jsonl removed; panel history is never removed")?;
+    let Some(base) = base.filter(|b| !b.is_empty()) else {
+        return Ok(());
+    };
+    if head == base {
+        return Ok(());
+    }
+    // (A base without its final newline cannot be extended to one valid new panel line: what
+    // follows it is either the rest of that line, which is no panel, or a newline and then more.)
+    let added = head
+        .strip_prefix(base)
+        .ok_or("panel history is append-only; a panel is added, never rewritten or removed")?;
+    let added = std::str::from_utf8(added).map_err(|e| e.to_string())?;
+    let new = added.strip_suffix('\n').unwrap_or(added);
+    if new.trim().is_empty() || new.contains('\n') {
+        return Err("a change appends exactly one panel".into());
+    }
+    let prior = std::str::from_utf8(base).map_err(|e| e.to_string())?;
+    let v: Value = serde_json::from_str(new).map_err(|e| format!("the new panel: {e}"))?;
+    let (date, run) = (
+        s(&v, &["panelDate"]).to_string(),
+        monitor_run_id(new).ok().and_then(|r| r.parse::<u64>().ok()),
+    );
+    for p in prior.lines().filter(|l| !l.trim().is_empty()) {
+        if p.trim_end() == new.trim_end() {
+            return Err("the new panel is one already recorded".into());
+        }
+        let Ok(pv) = serde_json::from_str::<Value>(p) else {
+            continue;
+        };
+        let pd = s(&pv, &["panelDate"]);
+        if !pd.is_empty() && date.as_str() < pd {
+            return Err(format!(
+                "the new panel ({date}) is older than one before it ({pd})"
+            ));
+        }
+        let pr = monitor_run_id(p).ok().and_then(|r| r.parse::<u64>().ok());
+        if let (Some(n), Some(o)) = (run, pr)
+            && n <= o
+        {
+            return Err(format!(
+                "the new panel's monitor run {n} is not after an earlier panel's ({o})"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// A product's `mal.jsonl` (`tool/digest` from `h`): its history moves forward
+/// (`mal_history`), and its last panel is judged as any panel is (`mal_verdict`).
 fn mal_edit_verdict(
     evidence_dir: &Path,
     base_evidence_dir: &Path,
@@ -1454,14 +1585,12 @@ fn mal_edit_verdict(
         read_opt(&evidence_dir.join(&rel)),
         read_opt(&base_evidence_dir.join(&rel)),
     );
-    if appended_only(head.as_deref(), base.as_deref()) {
-        mal_verdict(&h.name, evidence_dir, h, acks, floors, custody)
-    } else {
-        Verdict::Unevaluated(
-            "mal.jsonl: panel history is append-only; a panel is added, never rewritten or \
-             removed"
-                .into(),
-        )
+    if head.is_none() && base.is_none() {
+        return mal_verdict(&h.name, evidence_dir, h, acks, floors, custody);
+    }
+    match mal_history(head.as_deref(), base.as_deref()) {
+        Ok(()) => mal_verdict(&h.name, evidence_dir, h, acks, floors, custody),
+        Err(e) => Verdict::Unevaluated(format!("mal.jsonl: {e}")),
     }
 }
 
@@ -1670,7 +1799,13 @@ fn anchors_in_store(
     {
         let at = |e: String| format!("line {}: {e}", i + 1);
         let b: Value = serde_json::from_str(l).map_err(|e| at(e.to_string()))?;
-        if !stored.iter().any(|s| **s == b) {
+        // Byte for byte the store's bundle, canonically serialized (as release-advance writes
+        // it): a line that only parses to it (a repeated key, another spelling) is not it.
+        let line = l.trim_end();
+        if !stored
+            .iter()
+            .any(|s| serde_json::to_string(s).is_ok_and(|c| c == line))
+        {
             return Err(at(format!(
                 "not a bundle GitHub's attestation store holds for {}",
                 &digest[..12]
@@ -1780,8 +1915,10 @@ fn release_commit(dir: &Path) -> Result<String, String> {
 }
 
 /// A release's first vulnerability record: about this exe, its rows the custody-verified raw
-/// payload's, measured at the advisory-db commit that payload names, and that payload a scan of
-/// `app/Cargo.lock` at the commit the release's provenance names.
+/// payload's, measured at the advisory-db commit that payload names, and a scan of
+/// `app/Cargo.lock` at the commit the release's provenance names: the pinned auditor, re-scanning
+/// that lock at that commit, finds exactly the recorded rows (`evidence_rev::check_rescan`), so a
+/// payload of another lock, however alike in size, does not stand in.
 fn app_vuln_custody(dir: &Path, digest: &str) -> Result<String, String> {
     let rows: Vec<Value> = std::fs::read_to_string(dir.join("vuln.jsonl"))
         .map_err(|e| e.to_string())?
@@ -1798,8 +1935,17 @@ fn app_vuln_custody(dir: &Path, digest: &str) -> Result<String, String> {
     let raw = crate::vdr::fetch_raw(header)?;
     crate::evidence_rev::record_db(header, &raw)?;
     crate::evidence_rev::check_vuln_rows(&rows[1..], &raw, &lock)?;
+    let file = std::env::temp_dir().join(format!(
+        "gate-app-lock-{}-{}.lock",
+        std::process::id(),
+        &digest[..12]
+    ));
+    std::fs::write(&file, &lock).map_err(|e| format!("{}: {e}", file.display()))?;
+    let rescan = rescan_at(header, &file, None);
+    let _ = std::fs::remove_file(&file);
+    crate::evidence_rev::check_rescan(&rows[1..], &rescan?)?;
     Ok(format!(
-        "{} row(s) equal raw payload {}, a scan of app/Cargo.lock at the release commit {}",
+        "{} row(s) equal raw payload {} and a re-scan of app/Cargo.lock at the release commit {}",
         rows.len() - 1,
         s(header, &["rawPayload", "asset"]),
         &commit[..12]
@@ -2519,6 +2665,25 @@ struct CandidateReport {
     axes: Vec<(&'static str, Verdict)>,
 }
 
+/// Report text on one line: control characters (line breaks included) in text a change can
+/// supply become spaces.
+fn one_line(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect()
+}
+
+/// A report bullet, every further line of `d` indented under it: no text a change supplies
+/// starts a line of the report. The verdict line the workflow enforces is the report's last line,
+/// and a line starting `::` is a workflow command.
+fn bullet(md: &mut String, prefix: &str, d: &str) {
+    let mut lines = d.split('\n');
+    let _ = writeln!(md, "  - {prefix}{}", one_line(lines.next().unwrap_or("")));
+    for l in lines {
+        let _ = writeln!(md, "    {}", one_line(l));
+    }
+}
+
 pub fn run(args: &[String]) -> i32 {
     let mut base_path = None;
     let mut head_path = PathBuf::from("tools/TOOLS.lock");
@@ -2536,6 +2701,8 @@ pub fn run(args: &[String]) -> i32 {
     // Per-tool producer inputs beyond the lock (patches, build args, rustflags), both sides.
     let mut tools_dir = PathBuf::from("tools");
     let mut base_tools_dir: Option<PathBuf> = None;
+    // The base commit's tree: the monitor workflow a candidate branch's run must have run.
+    let mut base_root: Option<PathBuf> = None;
     let mut floors_path = PathBuf::from(crate::floors::DEFAULT_PATH);
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
@@ -2565,6 +2732,7 @@ pub fn run(args: &[String]) -> i32 {
                 }
             }
             "--base-tools-dir" => base_tools_dir = it.next().map(PathBuf::from),
+            "--base-root" => base_root = it.next().map(PathBuf::from),
             "--floors" => {
                 if let Some(v) = it.next() {
                     floors_path = PathBuf::from(v);
@@ -2654,6 +2822,11 @@ pub fn run(args: &[String]) -> i32 {
     let changed_acks = changed_ack_files(&evidence_dir, &base_evidence_dir);
     let app = app_changes(&evidence_dir, &base_evidence_dir);
     let historical = non_frontier_changes(&head, &evidence_dir, &base_evidence_dir);
+    // A monitor run on a candidate branch counts only if that branch ran the base's monitor.
+    let base_monitor = base_root.as_ref().and_then(|r| {
+        std::fs::read_to_string(r.join(".github/workflows/supply-chain-monitor.yml")).ok()
+    });
+    let mal_custody = |t: &str, d: &str, l: &str| monitor_custody(t, d, l, base_monitor.as_deref());
 
     let mut reports = Vec::new();
     let mut db_stamp = String::new();
@@ -2818,7 +2991,14 @@ pub fn run(args: &[String]) -> i32 {
         ));
         axes.push((
             "mal",
-            mal_verdict(&h.name, &evidence_dir, h, &acks, floors, &monitor_custody),
+            mal_edit_verdict(
+                &evidence_dir,
+                &base_evidence_dir,
+                h,
+                &acks,
+                floors,
+                &mal_custody,
+            ),
         ));
         let revision = head_rec.as_ref().ok().and_then(|r| r.revision.clone());
         let custody = |text: &str, line: &ToolLine| match &revision {
@@ -3010,7 +3190,7 @@ pub fn run(args: &[String]) -> i32 {
                         h,
                         &acks,
                         floors,
-                        &monitor_custody,
+                        &mal_custody,
                     ),
                 ));
             }
@@ -3060,7 +3240,7 @@ pub fn run(args: &[String]) -> i32 {
         let custody = AppCustody {
             anchors: &store_anchor_custody,
             vuln: &app_vuln_custody,
-            mal: &monitor_custody,
+            mal: &mal_custody,
         };
         for (digest, changes) in &app {
             let axes = match load_acks(&evidence_dir.join(APP).join("acks.jsonl")) {
@@ -3090,6 +3270,34 @@ pub fn run(args: &[String]) -> i32 {
                     .collect::<Vec<_>>()
                     .join(", "),
                 axes,
+            });
+        }
+        // Sign-offs are history: an acks.jsonl grows by lines, never edited or removed (removing
+        // a later, narrower sign-off would revive an earlier one).
+        let rewritten: Vec<&str> = changed_acks
+            .iter()
+            .filter(|t| {
+                let rel = Path::new(t.as_str()).join("acks.jsonl");
+                let (h, b) = (
+                    read_opt(&evidence_dir.join(&rel)),
+                    read_opt(&base_evidence_dir.join(&rel)),
+                );
+                !grows_by_lines(h.as_deref(), b.as_deref())
+            })
+            .map(String::as_str)
+            .collect();
+        if !rewritten.is_empty() {
+            reports.push(CandidateReport {
+                name: "acks history".into(),
+                tool: String::new(),
+                summary: String::new(),
+                axes: vec![(
+                    "acks",
+                    Verdict::Unevaluated(format!(
+                        "acks.jsonl of {} edited or removed: sign-offs are added, never rewritten",
+                        rewritten.join(", ")
+                    )),
+                )],
             });
         }
         // Ack-file edits with nothing else to evaluate: the quality bar still applies.
@@ -3200,22 +3408,20 @@ pub fn run(args: &[String]) -> i32 {
     }
     let mut pass = true;
     for r in &reports {
-        let _ = writeln!(md, "### `{}`  {}", r.name, r.summary);
+        let _ = writeln!(md, "### `{}`  {}", one_line(&r.name), one_line(&r.summary));
         for (axis, v) in &r.axes {
             pass &= v.passes();
             let _ = writeln!(md, "- **{axis}: {}**", v.label());
             match v {
-                Verdict::Allow(d) => {
-                    let _ = writeln!(md, "  - {d}");
-                }
+                Verdict::Allow(d) => bullet(&mut md, "", d),
                 Verdict::RaiseCovered(items) => {
                     for i in items {
-                        let _ = writeln!(md, "  - signed: {i}");
+                        bullet(&mut md, "signed: ", i);
                     }
                 }
                 Verdict::RaiseUncovered { covered, needed } => {
                     for i in covered {
-                        let _ = writeln!(md, "  - signed: {i}");
+                        bullet(&mut md, "signed: ", i);
                     }
                     let _ = writeln!(
                         md,
@@ -3226,12 +3432,10 @@ pub fn run(args: &[String]) -> i32 {
                         r.tool
                     );
                     for n in needed {
-                        let _ = writeln!(md, "\n    ```json\n    {n}\n    ```");
+                        let _ = writeln!(md, "\n    ```json\n    {}\n    ```", one_line(n));
                     }
                 }
-                Verdict::Unevaluated(why) | Verdict::HardStop(why) => {
-                    let _ = writeln!(md, "  - {why}");
-                }
+                Verdict::Unevaluated(why) | Verdict::HardStop(why) => bullet(&mut md, "", why),
             }
         }
         md.push('\n');
@@ -3241,7 +3445,7 @@ pub fn run(args: &[String]) -> i32 {
             md,
             "*Changed evidence under {} non-frontier digest file(s) — history, not evaluated (no gate consumes a record about bytes nobody runs): {}*\n",
             historical.len(),
-            historical.join(", ")
+            one_line(&historical.join(", "))
         );
     }
     let _ = writeln!(
@@ -4038,6 +4242,20 @@ mod tests {
             .is_err(),
             "another repository's release workflow"
         );
+        // the same bundle spelled another way (spacing, a repeated key): not the store's bytes
+        let spaced = serde_json::to_string_pretty(&prov)
+            .unwrap()
+            .replace('\n', "");
+        assert!(
+            anchors_in_store(&d, "provenance.sigstore.jsonl", &spaced, &stored, "o/r").is_err(),
+            "another spelling"
+        );
+        let canonical = serde_json::to_string(&prov).unwrap();
+        let repeated = format!(r#"{{"mediaType":"x",{}"#, &canonical[1..]);
+        assert!(
+            anchors_in_store(&d, "provenance.sigstore.jsonl", &repeated, &stored, "o/r").is_err(),
+            "a repeated key"
+        );
         let other_subject = bundle(statement(
             &"e".repeat(64),
             PROVENANCE,
@@ -4179,8 +4397,9 @@ mod tests {
         // the report alone changed: the ledger judges it
         put(&he, "vdr.cdx.json", "{}");
         assert!(verdicts(&ok).is_empty());
-        // a panel appended: evaluated, and only the monitor's own line counts
-        put(&he, "mal.jsonl", &format!("{panel}\n{panel}\n"));
+        // a later panel appended: evaluated, and only the monitor's own line counts
+        let later = panel.replace(r#""flags":[]"#, r#""flags":[],"panelDate":"2099-01-01""#);
+        put(&he, "mal.jsonl", &format!("{panel}\n{later}\n"));
         assert!(!blocked(&verdicts(&ok)));
         assert!(blocked(&verdicts(&refused)), "an unproved panel");
         // a valid, clean, custody-granted panel that replaces the history instead of growing it
@@ -4250,7 +4469,8 @@ mod tests {
             put(&he, "mal.jsonl", body);
             mal_edit_verdict(&he, &be, &tool, &acks, &floors, &|_, _, _| Ok(()))
         };
-        assert!(mal(&format!("{panel}\n{panel}\n")).passes(), "appended");
+        assert!(mal(&format!("{panel}\n{later}\n")).passes(), "appended");
+        assert!(!mal(&format!("{panel}\n{panel}\n")).passes(), "replayed");
         assert!(!mal(&rewritten).passes(), "rewritten");
         let _ = std::fs::remove_dir_all(&root);
     }
@@ -4265,6 +4485,7 @@ mod tests {
             .join(APP);
         let mut failures = Vec::new();
         let mut checked = 0;
+        let mut skipped: Vec<String> = Vec::new();
         for d in std::fs::read_dir(&root)
             .unwrap()
             .flatten()
@@ -4279,6 +4500,20 @@ mod tests {
                     let text = std::fs::read_to_string(f.path()).unwrap();
                     store_anchor_custody(&digest, &name, &text)
                 } else if name == "vuln.jsonl" {
+                    // The re-scan is the scanner the record names; PINNED_TOOLS_DIR holds one.
+                    let header: Value = std::fs::read_to_string(f.path())
+                        .ok()
+                        .and_then(|t| t.lines().next().and_then(|l| serde_json::from_str(l).ok()))
+                        .unwrap_or_default();
+                    let have = std::env::var("PINNED_TOOLS_DIR").ok().and_then(|p| {
+                        std::fs::read(format!("{p}/cargo-audit{}", std::env::consts::EXE_SUFFIX))
+                            .ok()
+                            .map(|b| crate::sha256::sha256_hex(&b))
+                    });
+                    if have.as_deref() != Some(s(&header, &["scanner", "digest"])) {
+                        skipped.push(format!("{}/{name}", &digest[..12]));
+                        continue;
+                    }
                     app_vuln_custody(&d.path(), &digest)
                 } else {
                     continue;
@@ -4289,6 +4524,9 @@ mod tests {
                 }
             }
         }
+        eprintln!(
+            "{checked} checked; recorded by another scanner than PINNED_TOOLS_DIR's: {skipped:?}"
+        );
         assert!(checked > 0);
         assert!(
             failures.is_empty(),
@@ -4320,10 +4558,16 @@ mod tests {
             "event": "schedule", "status": "completed",
             "repository": {"full_name": "o/r"}, "head_repository": {"full_name": "o/r"}
         });
-        assert!(monitor_run_ok(&run).is_ok());
+        assert_eq!(monitor_run_ok(&run), Ok(false));
+        // a candidate branch's run counts, its monitor workflow still to be shown to be the base's
+        let mut cand = run.clone();
+        cand["head_branch"] = Value::from("candidate/x");
+        assert_eq!(monitor_run_ok(&cand), Ok(true));
         for (k, v) in [
             ("/path", ".github/workflows/vt-submit.yml"),
-            ("/head_branch", "candidate/x"),
+            ("/head_branch", "feature/x"),
+            ("/head_branch", "candidate/"),
+            ("/head_branch", "x/candidate/y"),
             ("/event", "pull_request"),
             ("/status", "in_progress"),
             ("/head_repository/full_name", "fork/r"),
@@ -4333,8 +4577,26 @@ mod tests {
             assert!(monitor_run_ok(&r).is_err(), "{k}={v}");
         }
         let key = "record (mal.jsonl line for supply-chain/evidence/t/d/): ";
-        let log = format!("monitor\tLookup\t2026-11-17T00:00:00Z       {key}{ok}\r\nother\n");
+        let at =
+            |job: &str, msg: &str| format!("{job}\tUNKNOWN STEP\t2026-11-17T00:00:00.0Z {msg}\n");
+        let log = format!("{}other\n", at("vt-monitor", &format!("      {key}{ok}\r")));
         assert!(record_in_log(&log, "t", "d", &ok).is_ok());
+        // the canonical serialization of the printed line (what candidate-advance writes)
+        let printed = r#"{"source":"supply-chain-monitor run 123 (lookup)","b":1,"a":2}"#;
+        let canonical =
+            serde_json::to_string(&serde_json::from_str::<Value>(printed).unwrap()).unwrap();
+        assert_ne!(printed, canonical);
+        let log2 = at("vt-monitor", &format!("      {key}{printed}"));
+        assert!(record_in_log(&log2, "t", "d", printed).is_ok(), "verbatim");
+        assert!(
+            record_in_log(&log2, "t", "d", &canonical).is_ok(),
+            "canonical"
+        );
+        let respelled = r#"{"a":2,"b":1, "source":"supply-chain-monitor run 123 (lookup)"}"#;
+        assert!(
+            record_in_log(&log2, "t", "d", respelled).is_err(),
+            "another spelling"
+        );
         assert!(
             record_in_log(&log, "t", "e", &ok).is_err(),
             "another digest"
@@ -4345,10 +4607,183 @@ mod tests {
             record_in_log(&log, "t", "d", &edited).is_err(),
             "an edited line"
         );
-        let twice = format!("{log}        T1 [-] x\n      {key}{ok}\n");
+        let twice = format!("{log}{}", at("vt-monitor", &format!("      {key}{ok}")));
         assert!(
             record_in_log(&twice, "t", "d", &ok).is_err(),
             "a second record line"
+        );
+        // only a whole message of the vt-monitor job is a record line
+        for (what, l) in [
+            ("another job", at("toolchain", &format!("      {key}{ok}"))),
+            (
+                "text before the prefix",
+                at("vt-monitor", &format!("E [malicious] {key}{ok}")),
+            ),
+            ("no log framing", format!("      {key}{ok}\n")),
+        ] {
+            assert!(record_in_log(&l, "t", "d", &ok).is_err(), "{what}");
+        }
+    }
+
+    /// A run on a candidate branch counts only if it ran the base's monitor workflow; a run on
+    /// main is not asked.
+    #[test]
+    fn a_candidate_branch_run_must_have_run_the_bases_monitor() {
+        let line = r#"{"source":"supply-chain-monitor run 7 (lookup)"}"#;
+        let key = "record (mal.jsonl line for supply-chain/evidence/t/d/): ";
+        let log = format!("vt-monitor\tS\t2026-11-17T00:00:00Z       {key}{line}\n");
+        let run_on = |branch: &str| {
+            serde_json::json!({"id": 7, "path": ".github/workflows/supply-chain-monitor.yml",
+                "head_branch": branch, "head_sha": "a".repeat(40), "event": "workflow_dispatch",
+                "status": "completed", "repository": {"full_name": "o/r"},
+                "head_repository": {"full_name": "o/r"}})
+        };
+        let check = |branch: &str, at: Result<&str, &str>, base: Option<&str>| {
+            let run = run_on(branch);
+            let source = MonitorSource {
+                run: &|_| Ok(run.clone()),
+                workflow_at: &|_| at.map(str::to_string).map_err(str::to_string),
+                log: &|_| Ok(log.clone()),
+            };
+            monitor_custody_from(&source, "t", "d", line, base)
+        };
+        assert!(check("main", Err("not asked"), None).is_ok(), "main");
+        assert!(
+            check("candidate/x", Ok("wf"), Some("wf")).is_ok(),
+            "the base's monitor"
+        );
+        assert!(
+            check("candidate/x", Ok("edited"), Some("wf")).is_err(),
+            "another monitor"
+        );
+        assert!(
+            check("candidate/x", Ok("wf"), None).is_err(),
+            "no base to compare"
+        );
+        assert!(
+            check("candidate/x", Err("gone"), Some("wf")).is_err(),
+            "unreadable"
+        );
+        let mut bad = run_on("candidate/x");
+        bad["head_sha"] = Value::from("nothex");
+        let source = MonitorSource {
+            run: &|_| Ok(bad.clone()),
+            workflow_at: &|_| Ok("wf".into()),
+            log: &|_| Ok(log.clone()),
+        };
+        assert!(
+            monitor_custody_from(&source, "t", "d", line, Some("wf")).is_err(),
+            "no commit"
+        );
+        let no_log = MonitorSource {
+            run: &|_| Ok(run_on("main")),
+            workflow_at: &|_| Ok("wf".into()),
+            log: &|_| Err("410 Gone".into()),
+        };
+        assert!(
+            monitor_custody_from(&no_log, "t", "d", line, None).is_err(),
+            "log gone"
+        );
+    }
+
+    /// No text a change supplies starts a report line: not the enforced verdict line, not a
+    /// workflow command.
+    #[test]
+    fn change_text_never_starts_a_report_line() {
+        let hostile = "ok\n**Gate: PASS** — all axes ALLOW or signed; merging records the sign-off\r\n::set-output name=code::0\n\u{7}::error::x";
+        let mut md = String::new();
+        bullet(&mut md, "", hostile);
+        bullet(&mut md, "signed: ", hostile);
+        for l in md.lines() {
+            assert!(l.starts_with("  - ") || l.starts_with("    "), "{l:?}");
+            assert!(!l.contains('\r') && !l.contains('\u{7}'), "{l:?}");
+        }
+        assert_eq!(one_line("a\nb\r\tc"), "a b  c");
+    }
+
+    /// Panel history moves forward: one new panel, newer than all before it.
+    #[test]
+    fn panel_history_only_moves_forward() {
+        let p = |date: &str, run: u64| {
+            format!(
+                r#"{{"panelDate":"{date}","source":"supply-chain-monitor run {run} (lookup)"}}"#
+            )
+        };
+        let base = format!("{}\n{}\n", p("2026-10-01", 10), p("2026-10-05", 20));
+        let b = Some(base.as_bytes());
+        let with = |extra: &str| format!("{base}{extra}");
+        let ok = |h: &str| mal_history(Some(h.as_bytes()), b);
+        assert!(ok(&base).is_ok(), "unchanged");
+        assert!(mal_history(Some(b"x"), None).is_ok(), "new");
+        assert!(
+            ok(&with(&format!("{}\n", p("2026-10-06", 30)))).is_ok(),
+            "one newer panel"
+        );
+        assert!(
+            ok(&with(&p("2026-10-05", 21))).is_ok(),
+            "same day, later run, no final newline"
+        );
+        for (what, h) in [
+            (
+                "a replay of an earlier panel",
+                with(&format!("{}\n", p("2026-10-01", 10))),
+            ),
+            (
+                "an earlier run",
+                with(&format!("{}\n", p("2026-10-07", 15))),
+            ),
+            (
+                "an earlier date",
+                with(&format!("{}\n", p("2026-10-04", 30))),
+            ),
+            (
+                "two panels",
+                with(&format!(
+                    "{}\n{}\n",
+                    p("2026-10-06", 30),
+                    p("2026-10-07", 40)
+                )),
+            ),
+            ("a blank line", with("\n")),
+            (
+                "a newer panel and a blank line",
+                with(&format!("{}\n\n", p("2026-10-06", 30))),
+            ),
+            (
+                "history rewritten to its own length, then a newer panel",
+                format!(
+                    "{}\n{}\n{}\n",
+                    p("2026-10-01", 19),
+                    p("2026-10-05", 29),
+                    p("2026-10-06", 30)
+                ),
+            ),
+            ("a rewrite", format!("{}\n", p("2026-10-06", 30))),
+            (
+                "an earlier panel removed",
+                format!("{}\n", p("2026-10-05", 20)),
+            ),
+        ] {
+            assert!(ok(&h).is_err(), "{what}");
+        }
+        assert!(mal_history(None, b).is_err(), "removed");
+        let unfinished = p("2026-10-01", 10);
+        assert!(
+            mal_history(
+                Some(format!("{unfinished}x\n").as_bytes()),
+                Some(unfinished.as_bytes())
+            )
+            .is_err(),
+            "extending an unfinished last line"
+        );
+        // sign-off history grows by lines too
+        assert!(grows_by_lines(Some(b"a\nb\n"), Some(b"a\n")));
+        assert!(grows_by_lines(Some(b"a\n"), Some(b"a\n")));
+        assert!(!grows_by_lines(Some(b"b\n"), Some(b"a\n")), "edited");
+        assert!(!grows_by_lines(None, Some(b"a\n")), "removed");
+        assert!(
+            !grows_by_lines(Some(b"ab\n"), Some(b"a")),
+            "extending an unfinished line"
         );
     }
 
@@ -5323,6 +5758,31 @@ mod tests {
         assert_eq!(run_it(), 1);
         let report = std::fs::read_to_string(d.join("report.md")).unwrap();
         assert!(report.contains("not one of the app's records"), "{report}");
+        std::fs::remove_file(d.join("ev").join(APP).join(&digest).join("notes.txt")).unwrap();
+        // sign-offs are history: quality-passing ack lines, one of them removed
+        let real = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../supply-chain/evidence/cargo-vet/acks.jsonl"),
+        )
+        .unwrap();
+        let lines: Vec<&str> = real
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .take(2)
+            .collect();
+        let acks = |side: &str, body: String| {
+            std::fs::write(d.join(side).join(APP).join("acks.jsonl"), body).unwrap()
+        };
+        acks("bev", format!("{}\n{}\n", lines[0], lines[1]));
+        acks("ev", format!("{}\n{}\n", lines[0], lines[1]));
+        assert_eq!(run_it(), 0, "unchanged");
+        acks("ev", format!("{}\n", lines[0]));
+        assert_eq!(run_it(), 1, "a sign-off removed");
+        let report = std::fs::read_to_string(d.join("report.md")).unwrap();
+        assert!(
+            report.contains("sign-offs are added, never rewritten"),
+            "{report}"
+        );
         let _ = std::fs::remove_dir_all(&d);
     }
 
@@ -5372,8 +5832,8 @@ mod tests {
             .to_vec();
             run(&args)
         };
-        // The workflow enforces a written PASS line, not only the exit status: it is the line a
-        // passing run writes, and a blocked run does not.
+        // The workflow enforces a written PASS line as the report's last line, not only the exit
+        // status: it is the line a passing run ends with, and a blocked run does not.
         let wf = std::fs::read_to_string(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../.github/workflows/candidate-eval.yml"),
         )
@@ -5381,8 +5841,9 @@ mod tests {
         let required = wf
             .lines()
             .find_map(|l| {
-                l.split_once("grep -qxF '")
-                    .and_then(|(_, r)| r.split_once('\''))
+                l.trim_start()
+                    .strip_prefix("pass='")
+                    .and_then(|r| r.split_once('\''))
             })
             .map(|(line, _)| line.to_string())
             .expect("candidate-eval enforces a PASS line");
@@ -5390,7 +5851,8 @@ mod tests {
             std::fs::read_to_string(d.join("report.md"))
                 .unwrap()
                 .lines()
-                .any(|l| l == required)
+                .last()
+                .is_some_and(|l| l == required)
         };
         assert_eq!(run_with(&good), 0);
         assert!(has(), "a passing report carries `{required}`");

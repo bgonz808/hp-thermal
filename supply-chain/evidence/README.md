@@ -34,10 +34,14 @@ parseable. The schema borrows established vocabularies rather than inventing one
   until #347's per-item sign-off exists. The monitor prints each pinned digest's line ready to
   append verbatim. Written from schedule/dispatch runs only — PR workflows never call VT.
   Custody: a panel that would let a digest through counts only as the monitor's own line. Its
-  `source` names one `supply-chain-monitor` run on `main` (scheduled or dispatched), and that
-  run's log holds exactly one record line for the digest, byte for byte the committed one; a
-  line composed or edited by hand, or whose run log is gone, is UNEVALUATED until a fresh panel
-  is appended. A panel that blocks keeps blocking regardless.
+  `source` names one `supply-chain-monitor` run, scheduled or dispatched, on `main` or on a
+  `candidate/*` branch whose monitor workflow at the run's commit is the base commit's; that
+  run's `vt-monitor` log holds exactly one record line for the digest (a whole message, the
+  monitor printing VT's own text one line per field), and the committed line is it, verbatim or
+  as its canonical serialization. A line composed or edited by hand, or whose run log is gone, is
+  UNEVALUATED until a fresh panel is appended. A panel that blocks keeps blocking regardless.
+  The history moves forward: a change appends one panel, newer than every panel before it (a
+  later monitor run, no earlier date), never a replay of one already recorded.
 - **caps.toml** — the cackle-generated capability inventory; its `[api.*]` sections ARE the
   instrument it was measured with, so it stays native TOML (converting would sever that
   identity). A `caps.UNEVALUATED` file in its place records *why* no data exists — fail-secure:
@@ -195,22 +199,27 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
 3. Consumer: `cargo xtask gate` (first-party Rust — no external pinned tool, no python runtime)
    diffs baseline↔candidate, applies the #241 verdict algebra, and fails a bump PR until every
    RAISE item is covered by a committed ack, printing the exact ack lines to add. Committing them
-   **is** the sign-off; closing the PR is the reject. A change is judged by the base commit:
-   the workflow (`candidate-eval.yml`, on `pull_request_target`), the gate's code and cargo
-   configuration, and the floors (`supply-chain/policy/floors.json`) are the base's, so a change
-   to any of them takes effect for the changes after it, never for itself; a policy that does
-   not load blocks every change. The change is checked out as data in its own directory, with
-   no hooks and no filter drivers, and nothing in it is built or run. The verdict is the commit
-   status `candidate-eval/gate` on the change's head; every pull request gets one.
+   **is** the sign-off; closing the PR is the reject. A change to `main` is judged by `main`:
+   the workflow (`candidate-eval.yml`, on `pull_request_target` for pull requests to `main`
+   only), the gate's code and cargo configuration, and the floors
+   (`supply-chain/policy/floors.json`), so a change to any of them takes effect for the changes
+   after it, never for itself; a policy that does not load blocks every change. The change is
+   GitHub's test merge into `main`'s current tip, checked out as data in its own directory, with
+   no hooks and no filter drivers; nothing in it is built or run, and nothing it prints is a
+   workflow command. The verdict is the commit status `candidate-eval/gate` on the pull
+   request's head, taken from the event: `success` only when the gate exits 0 and the report's
+   last line is the PASS line, `failure` on anything else. The report indents everything a
+   change supplies, so no text from the change starts one of its lines.
 4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
    digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
    on the axes it touched, against the base commit's record (the workflow extracts that tree). An
    edited `vuln.jsonl` under a pinned digest is UNEVALUATED: baselines are written by the bless
-   flow and backed by a stored raw payload, never edited in place. `mal.jsonl` grows by appended
-   panels; a rewritten or removed panel is UNEVALUATED. Every product's changed `acks.jsonl`
-   (the app's included) is quality-checked even when nothing else changed; edits under tool
-   digests off the frontier are listed in the report and not evaluated. The app's records are
-   judged as below (Products).
+   flow and backed by a stored raw payload, never edited in place. `mal.jsonl` history moves
+   forward (above); a rewritten, removed or replayed panel is UNEVALUATED. Every product's
+   changed `acks.jsonl` (the app's included) is quality-checked even when nothing else changed,
+   and grows by lines: an edited or removed sign-off is UNEVALUATED (removing a later, narrower
+   one would revive an earlier one). Edits under tool digests off the frontier are listed in the
+   report and not evaluated. The app's records are judged as below (Products).
 5. **Every reader reads the same input.** `tools/TOOLS.lock` has one grammar
    (`gate::tools_lock_problems`): every line, comments included, holds only ASCII graphic
    characters, spaces and tabs, so no locale or invisible character decides what a line says;
@@ -252,13 +261,15 @@ The app's records are written by `cargo xtask release-advance <status|vuln|mal|a
 on an `evidence/*` branch (digest from the Release's SHA256SUMS; lock from the tag; VT lookup
 first, submit only if absent), the counterpart of `candidate-advance` for tools.
 The gate judges a change under an app digest as `release-advance` writes it. The digest carries
-a provenance anchor. An anchor is added, never replaced or removed, and each bundle in it is one
-GitHub's attestation store holds for the digest, of the file's kind, with `hp-thermal.exe` at
-the digest among its subjects (provenance from one of this repository's release workflows at a
-tag; `vdr.v<N>` the subject's own VDR at version N). A first `vuln.jsonl` has the rows of its
-custody-verified raw payload, and that payload is a scan of `app/Cargo.lock` at the commit the
-release's provenance names. `mal.jsonl` grows by appended panels, each held to the monitor
-custody above. `vdr.cdx.json` follows the report ledger. Anything else is UNEVALUATED.
+a provenance anchor. An anchor is added, never replaced or removed, and each line in it is, byte
+for byte, the canonical serialization of a bundle GitHub's attestation store holds for the
+digest, of the file's kind, with `hp-thermal.exe` at the digest among its subjects (provenance
+from one of this repository's release workflows at a tag; `vdr.v<N>` the subject's own VDR at
+version N). A first `vuln.jsonl` has the rows of its custody-verified raw payload, and those
+rows are exactly what the pinned auditor finds re-scanning `app/Cargo.lock` at the commit the
+release's provenance names, at the payload's advisory-db commit (a record made by another
+scanner is not re-scanned and is refused). `mal.jsonl` moves forward under the monitor custody
+above. `vdr.cdx.json` follows the report ledger. Anything else is UNEVALUATED.
 
 `anchor` copies a release's original attestations, the Sigstore bundles GitHub stores for the
 exe's digest, into `provenance.sigstore.jsonl`, `sbom.sigstore.jsonl`, and where the release has
