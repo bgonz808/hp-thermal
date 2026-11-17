@@ -206,9 +206,11 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
    on the axes it touched, against the base commit's record (the workflow extracts that tree). An
    edited `vuln.jsonl` under a pinned digest is UNEVALUATED: baselines are written by the bless
-   flow and backed by a stored raw payload, never edited in place. Changed `acks.jsonl` files are
-   quality-checked even when nothing else changed; edits under non-frontier digests are listed in
-   the report and not evaluated.
+   flow and backed by a stored raw payload, never edited in place. `mal.jsonl` grows by appended
+   panels; a rewritten or removed panel is UNEVALUATED. Every product's changed `acks.jsonl`
+   (the app's included) is quality-checked even when nothing else changed; edits under tool
+   digests off the frontier are listed in the report and not evaluated. The app's records are
+   judged as below (Products).
 5. **Every reader reads the same input.** `tools/TOOLS.lock` has one grammar
    (`gate::tools_lock_problems`): every line, comments included, holds only ASCII graphic
    characters, spaces and tabs, so no locale or invisible character decides what a line says;
@@ -249,6 +251,14 @@ cackle (Windows-only crate tree), so there is no `caps.toml` for `hp-thermal`.
 The app's records are written by `cargo xtask release-advance <status|vuln|mal|anchor> --tag vX.Y.Z`
 on an `evidence/*` branch (digest from the Release's SHA256SUMS; lock from the tag; VT lookup
 first, submit only if absent), the counterpart of `candidate-advance` for tools.
+The gate judges a change under an app digest as `release-advance` writes it. The digest carries
+a provenance anchor. An anchor is added, never replaced or removed, and each bundle in it is one
+GitHub's attestation store holds for the digest, of the file's kind, with `hp-thermal.exe` at
+the digest among its subjects (provenance from one of this repository's release workflows at a
+tag; `vdr.v<N>` the subject's own VDR at version N). A first `vuln.jsonl` has the rows of its
+custody-verified raw payload, and that payload is a scan of `app/Cargo.lock` at the commit the
+release's provenance names. `mal.jsonl` grows by appended panels, each held to the monitor
+custody above. `vdr.cdx.json` follows the report ledger. Anything else is UNEVALUATED.
 
 `anchor` copies a release's original attestations, the Sigstore bundles GitHub stores for the
 exe's digest, into `provenance.sigstore.jsonl`, `sbom.sigstore.jsonl`, and where the release has

@@ -1410,23 +1410,400 @@ pub(crate) fn evidence_candidates(
     out
 }
 
-/// Tools whose acks.jsonl differs from the base commit's — loaded and quality-checked even
-/// when nothing else changed, so a malformed or placeholder sign-off cannot land unnoticed.
-pub(crate) fn changed_ack_files(
-    head: &[ToolLine],
-    evidence_dir: &Path,
-    base_evidence_dir: &Path,
-) -> Vec<String> {
-    let mut tools: Vec<String> = head.iter().map(|h| h.name.clone()).collect();
-    tools.sort();
-    tools.dedup();
-    tools
+/// Products (every directory of the store, either side: the tools and the app) whose
+/// acks.jsonl differs from the base commit's — loaded and quality-checked even when nothing else
+/// changed, so a malformed or placeholder sign-off cannot land unnoticed.
+pub(crate) fn changed_ack_files(evidence_dir: &Path, base_evidence_dir: &Path) -> Vec<String> {
+    let products: BTreeSet<String> = [evidence_dir, base_evidence_dir]
+        .iter()
+        .filter_map(|r| std::fs::read_dir(r).ok())
+        .flat_map(|d| d.flatten())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    products
         .into_iter()
         .filter(|t| {
             let rel = Path::new(t).join("acks.jsonl");
             read_opt(&evidence_dir.join(&rel)) != read_opt(&base_evidence_dir.join(&rel))
         })
         .collect()
+}
+
+/// Panel history only grows: the change's `mal.jsonl` begins with the base commit's bytes.
+fn appended_only(head: Option<&[u8]>, base: Option<&[u8]>) -> bool {
+    match (head, base) {
+        (Some(h), Some(b)) => h.starts_with(b),
+        (Some(_), None) => true,
+        (None, _) => false,
+    }
+}
+
+/// A product's edited `mal.jsonl` (`tool/digest` from `h`): its history only grows, and its new
+/// last panel is judged as any panel is (`mal_verdict`).
+fn mal_edit_verdict(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+    h: &ToolLine,
+    acks: &Acks,
+    floors: &crate::floors::Floors,
+    custody: MalCustody,
+) -> Verdict {
+    let rel = Path::new(&h.name).join(&h.sha).join("mal.jsonl");
+    let (head, base) = (
+        read_opt(&evidence_dir.join(&rel)),
+        read_opt(&base_evidence_dir.join(&rel)),
+    );
+    if appended_only(head.as_deref(), base.as_deref()) {
+        mal_verdict(&h.name, evidence_dir, h, acks, floors, custody)
+    } else {
+        Verdict::Unevaluated(
+            "mal.jsonl: panel history is append-only; a panel is added, never rewritten or \
+             removed"
+                .into(),
+        )
+    }
+}
+
+// ---------- the app's records (hp-thermal) ----------
+
+/// The app product: its records describe a published release's exe, by digest
+/// (`release-advance`).
+const APP: &str = "hp-thermal";
+
+/// A release's original attestations, by kind (`release_advance::anchor_file`).
+const APP_ANCHORS: &[&str] = &[
+    "provenance.sigstore.jsonl",
+    "sbom.sigstore.jsonl",
+    "sarif.sigstore.jsonl",
+    "vsa.sigstore.jsonl",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Change {
+    Added,
+    Modified,
+    Deleted,
+}
+
+/// The app's digest directories whose entries differ from the base commit's, each with what
+/// changed. A directory inside a digest directory is listed as `<name>/`, added: the app's
+/// records are files.
+fn app_changes(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+) -> BTreeMap<String, Vec<(String, Change)>> {
+    let entries = |root: &Path| -> BTreeMap<String, BTreeMap<String, Option<Vec<u8>>>> {
+        let mut out = BTreeMap::new();
+        for d in std::fs::read_dir(root.join(APP))
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if !d.path().is_dir() {
+                continue;
+            }
+            let files = std::fs::read_dir(d.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|f| {
+                    let name = f.file_name().to_string_lossy().into_owned();
+                    if f.path().is_dir() {
+                        (format!("{name}/"), None)
+                    } else {
+                        (name, std::fs::read(f.path()).ok())
+                    }
+                })
+                .collect();
+            out.insert(d.file_name().to_string_lossy().into_owned(), files);
+        }
+        out
+    };
+    let (head, base) = (entries(evidence_dir), entries(base_evidence_dir));
+    let empty = BTreeMap::new();
+    let mut out: BTreeMap<String, Vec<(String, Change)>> = BTreeMap::new();
+    for d in head.keys().chain(base.keys()).collect::<BTreeSet<_>>() {
+        let (h, b) = (head.get(d).unwrap_or(&empty), base.get(d).unwrap_or(&empty));
+        for f in h.keys().chain(b.keys()).collect::<BTreeSet<_>>() {
+            let change = match (h.get(f), b.get(f)) {
+                (Some(_), None) => Change::Added,
+                (None, Some(_)) => Change::Deleted,
+                (Some(x), Some(y)) if f.ends_with('/') || x != y => Change::Modified,
+                _ => continue,
+            };
+            out.entry(d.clone()).or_default().push((f.clone(), change));
+        }
+    }
+    out
+}
+
+/// How each new app record proves itself (network-backed in the gate; injected in tests).
+struct AppCustody<'a> {
+    /// (digest, file, text): an anchor file's bundles (`store_anchor_custody`).
+    anchors: &'a dyn Fn(&str, &str, &str) -> Result<String, String>,
+    /// (digest directory, digest): a vulnerability record (`app_vuln_custody`).
+    vuln: &'a dyn Fn(&Path, &str) -> Result<String, String>,
+    mal: MalCustody<'a>,
+}
+
+/// `vdr.v<N>.sigstore.jsonl`: a VDR revision's anchor, N its version.
+fn vdr_anchor_version(file: &str) -> Option<u64> {
+    file.strip_prefix("vdr.v")?
+        .strip_suffix(".sigstore.jsonl")
+        .filter(|n| !n.is_empty() && !n.starts_with('0') && n.bytes().all(|b| b.is_ascii_digit()))?
+        .parse()
+        .ok()
+}
+
+/// Verdicts for one app digest directory's changes. The records are written once by
+/// `release-advance` and only these change: an anchor is added (never replaced or removed), a
+/// first `vuln.jsonl` is added, `mal.jsonl` grows by appended panels, `vdr.cdx.json` follows the
+/// report ledger (`vdr_ledger`). The digest must be a release's: its provenance anchor is there.
+/// Anything else is UNEVALUATED.
+fn app_verdicts(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+    digest: &str,
+    changes: &[(String, Change)],
+    acks: &Acks,
+    floors: &crate::floors::Floors,
+    c: &AppCustody,
+) -> Vec<(&'static str, Verdict)> {
+    let dir = evidence_dir.join(APP).join(digest);
+    let mut axes = Vec::new();
+    if !crate::advance::is_hex64(digest) || digest.bytes().any(|b| b.is_ascii_uppercase()) {
+        axes.push((
+            "release",
+            Verdict::Unevaluated(format!("{digest}: not a lowercase sha256 digest directory")),
+        ));
+        return axes;
+    }
+    if !dir.join("provenance.sigstore.jsonl").is_file() {
+        axes.push((
+            "release",
+            Verdict::Unevaluated(
+                "no provenance anchor for this digest: the app's records describe a published \
+                 release's exe"
+                    .into(),
+            ),
+        ));
+    }
+    for (f, ch) in changes {
+        let anchor = APP_ANCHORS.contains(&f.as_str()) || vdr_anchor_version(f).is_some();
+        let text = || std::fs::read_to_string(dir.join(f)).map_err(|e| format!("{f}: {e}"));
+        let (axis, v) = match (f.as_str(), *ch) {
+            ("vdr.cdx.json", _) => continue, // the report ledger and `vdr check`
+            (_, Change::Added) if anchor => (
+                "anchor",
+                match text().and_then(|t| (c.anchors)(digest, f, &t)) {
+                    Ok(m) => Verdict::Allow(format!("{f}: {m}")),
+                    Err(e) => Verdict::Unevaluated(format!("{f}: {e}")),
+                },
+            ),
+            (_, ch) if anchor => (
+                "anchor",
+                Verdict::Unevaluated(format!(
+                    "{f} {ch:?}: an anchor is never replaced or removed"
+                )),
+            ),
+            ("vuln.jsonl", Change::Added) => (
+                "vuln",
+                match (c.vuln)(&dir, digest) {
+                    Ok(m) => Verdict::Allow(m),
+                    Err(e) => Verdict::Unevaluated(format!("vuln.jsonl: {e}")),
+                },
+            ),
+            ("vuln.jsonl", ch) => (
+                "vuln",
+                Verdict::Unevaluated(format!(
+                    "vuln.jsonl {ch:?}: written once by release-advance, never edited"
+                )),
+            ),
+            ("mal.jsonl", _) => {
+                let line = ToolLine {
+                    name: APP.into(),
+                    repo: String::new(),
+                    rev: String::new(),
+                    target: String::new(),
+                    sha: digest.into(),
+                };
+                let v =
+                    mal_edit_verdict(evidence_dir, base_evidence_dir, &line, acks, floors, c.mal);
+                ("mal", v)
+            }
+            (f, ch) => (
+                "record",
+                Verdict::Unevaluated(format!("{f} {ch:?}: not one of the app's records")),
+            ),
+        };
+        axes.push((axis, v));
+    }
+    axes
+}
+
+/// A DSSE bundle's in-toto statement.
+fn bundle_statement(bundle: &Value) -> Option<Value> {
+    let p = bundle.pointer("/dsseEnvelope/payload")?.as_str()?;
+    serde_json::from_slice(&crate::release_advance::b64decode(p)?).ok()
+}
+
+/// Every line of an anchor file is a bundle GitHub's attestation store holds for the digest
+/// (`stored`), and of the kind the file is named for. Each statement's subjects include
+/// `hp-thermal.exe` at the digest. Provenance is SLSA v1 from one of this repository's release
+/// workflows at a tag; sbom, sarif and vsa go by predicate type, and an sbom is not the
+/// subject's VDR; `vdr.v<N>` is the subject's own VDR (its serialNumber) at version N.
+fn anchors_in_store(
+    digest: &str,
+    file: &str,
+    text: &str,
+    stored: &[&Value],
+    repo: &str,
+) -> Result<String, String> {
+    use crate::release_advance::{CYCLONEDX, PROVENANCE, RELEASE_SIGNERS, anchor_file};
+    let serial = crate::vdr::serial_number(digest);
+    let mut n = 0;
+    for (i, l) in text
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| !l.trim().is_empty())
+    {
+        let at = |e: String| format!("line {}: {e}", i + 1);
+        let b: Value = serde_json::from_str(l).map_err(|e| at(e.to_string()))?;
+        if !stored.iter().any(|s| **s == b) {
+            return Err(at(format!(
+                "not a bundle GitHub's attestation store holds for {}",
+                &digest[..12]
+            )));
+        }
+        let st = bundle_statement(&b).ok_or_else(|| at("no in-toto statement".into()))?;
+        let exe = st["subject"].as_array().is_some_and(|a| {
+            a.iter().any(|x| {
+                x["name"] == "hp-thermal.exe"
+                    && x.pointer("/digest/sha256").and_then(Value::as_str) == Some(digest)
+            })
+        });
+        if !exe {
+            return Err(at(
+                "its subjects do not include hp-thermal.exe at this digest".into(),
+            ));
+        }
+        let pt = s(&st, &["predicateType"]);
+        let pred_serial = st
+            .pointer("/predicate/serialNumber")
+            .and_then(Value::as_str);
+        if let Some(v) = vdr_anchor_version(file) {
+            let version = st.pointer("/predicate/version").and_then(Value::as_u64);
+            if pt != CYCLONEDX || pred_serial != Some(serial.as_str()) || version != Some(v) {
+                return Err(at(format!("not this subject's VDR at version {v}")));
+            }
+        } else if anchor_file(pt) != Some(file) {
+            return Err(at(format!("predicate type {pt} is not {file}'s kind")));
+        } else if file == "sbom.sigstore.jsonl" && pred_serial == Some(serial.as_str()) {
+            return Err(at("the subject's VDR, not its SBOM".into()));
+        } else if pt == PROVENANCE {
+            let wf = st.pointer("/predicate/buildDefinition/externalParameters/workflow");
+            let field = |k: &str| wf.and_then(|w| w.get(k)).and_then(Value::as_str);
+            let path_ok = field("path").is_some_and(|p| {
+                RELEASE_SIGNERS
+                    .iter()
+                    .any(|w| p == format!(".github/workflows/{w}"))
+            });
+            if field("repository") != Some(format!("https://github.com/{repo}").as_str())
+                || !path_ok
+                || !field("ref").is_some_and(|r| r.starts_with("refs/tags/"))
+            {
+                return Err(at(
+                    "not provenance from this repository's release workflow at a tag".into(),
+                ));
+            }
+        }
+        n += 1;
+    }
+    if n == 0 {
+        return Err("no bundle".into());
+    }
+    Ok(format!(
+        "{n} bundle(s), each in GitHub's attestation store for this digest and of this file's kind"
+    ))
+}
+
+/// `anchors_in_store` against the attestations GitHub stores for the digest.
+fn store_anchor_custody(digest: &str, file: &str, text: &str) -> Result<String, String> {
+    let list = crate::advance::gh_json(&[
+        "api",
+        &format!("repos/{{owner}}/{{repo}}/attestations/sha256:{digest}?per_page=100"),
+    ])?;
+    let atts = list["attestations"]
+        .as_array()
+        .ok_or("attestations API: no `attestations` array")?;
+    if atts.len() >= 100 {
+        return Err("100 or more attestations for one digest: the list may be truncated".into());
+    }
+    let stored: Vec<&Value> = atts.iter().map(|a| &a["bundle"]).collect();
+    let repo = crate::advance::gh(&[
+        "repo",
+        "view",
+        "--json",
+        "nameWithOwner",
+        "--jq",
+        ".nameWithOwner",
+    ])?;
+    anchors_in_store(digest, file, text, &stored, repo.trim())
+}
+
+/// The commit a release's exe was built from: the source its provenance anchor resolved.
+fn release_commit(dir: &Path) -> Result<String, String> {
+    let text = std::fs::read_to_string(dir.join("provenance.sigstore.jsonl"))
+        .map_err(|e| format!("provenance anchor: {e}"))?;
+    let first = text
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .ok_or("provenance anchor: empty")?;
+    let st = serde_json::from_str::<Value>(first)
+        .ok()
+        .and_then(|b| bundle_statement(&b))
+        .ok_or("provenance anchor: no statement")?;
+    st.pointer("/predicate/buildDefinition/resolvedDependencies")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|d| {
+            d["uri"]
+                .as_str()
+                .is_some_and(|u| u.starts_with("git+https://github.com/"))
+        })
+        .filter_map(|d| d.pointer("/digest/gitCommit").and_then(Value::as_str))
+        .find(|c| c.len() == 40 && c.bytes().all(|b| b.is_ascii_hexdigit()))
+        .map(str::to_string)
+        .ok_or_else(|| "provenance anchor: no resolved source commit".into())
+}
+
+/// A release's first vulnerability record: about this exe, its rows the custody-verified raw
+/// payload's, measured at the advisory-db commit that payload names, and that payload a scan of
+/// `app/Cargo.lock` at the commit the release's provenance names.
+fn app_vuln_custody(dir: &Path, digest: &str) -> Result<String, String> {
+    let rows: Vec<Value> = std::fs::read_to_string(dir.join("vuln.jsonl"))
+        .map_err(|e| e.to_string())?
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).map_err(|e| e.to_string()))
+        .collect::<Result<_, _>>()?;
+    let header = rows.first().ok_or("no header")?;
+    if s(header, &["subject", "name"]) != APP || s(header, &["subject", "sha256"]) != digest {
+        return Err("the header's subject is not this exe".into());
+    }
+    let commit = release_commit(dir)?;
+    let lock = crate::advance::git(&["show", &format!("{commit}:app/Cargo.lock")])?;
+    let raw = crate::vdr::fetch_raw(header)?;
+    crate::evidence_rev::record_db(header, &raw)?;
+    crate::evidence_rev::check_vuln_rows(&rows[1..], &raw, &lock)?;
+    Ok(format!(
+        "{} row(s) equal raw payload {}, a scan of app/Cargo.lock at the release commit {}",
+        rows.len() - 1,
+        s(header, &["rawPayload", "asset"]),
+        &commit[..12]
+    ))
 }
 
 /// Changed evidence files under digests that are NOT on the frontier: reported, not evaluated
@@ -1448,6 +1825,9 @@ pub(crate) fn non_frontier_changes(
         };
         for t in tools.filter_map(Result::ok).filter(|e| e.path().is_dir()) {
             let tool = t.file_name().to_string_lossy().into_owned();
+            if tool == APP {
+                continue; // evaluated: `app_verdicts`
+            }
             let Ok(digests) = std::fs::read_dir(t.path()) else {
                 continue;
             };
@@ -2271,7 +2651,8 @@ pub fn run(args: &[String]) -> i32 {
         .chain(rev_cands.iter().map(|h| (Some(h.clone()), h.clone())))
         .collect();
     let ev_cands = evidence_candidates(&head, &cands, &evidence_dir, &base_evidence_dir);
-    let changed_acks = changed_ack_files(&head, &evidence_dir, &base_evidence_dir);
+    let changed_acks = changed_ack_files(&evidence_dir, &base_evidence_dir);
+    let app = app_changes(&evidence_dir, &base_evidence_dir);
     let historical = non_frontier_changes(&head, &evidence_dir, &base_evidence_dir);
 
     let mut reports = Vec::new();
@@ -2623,7 +3004,14 @@ pub fn run(args: &[String]) -> i32 {
             if changed.iter().any(|f| f == "mal.jsonl") {
                 axes.push((
                     "mal",
-                    mal_verdict(&h.name, &evidence_dir, h, &acks, floors, &monitor_custody),
+                    mal_edit_verdict(
+                        &evidence_dir,
+                        &base_evidence_dir,
+                        h,
+                        &acks,
+                        floors,
+                        &monitor_custody,
+                    ),
                 ));
             }
             if changed.iter().any(|f| f == crate::build_record::FILE) {
@@ -2665,6 +3053,42 @@ pub fn run(args: &[String]) -> i32 {
                     &h.sha[..12],
                     changed.join(", ")
                 ),
+                axes,
+            });
+        }
+        // The app's records: a published release's exe, by digest (`app_verdicts`).
+        let custody = AppCustody {
+            anchors: &store_anchor_custody,
+            vuln: &app_vuln_custody,
+            mal: &monitor_custody,
+        };
+        for (digest, changes) in &app {
+            let axes = match load_acks(&evidence_dir.join(APP).join("acks.jsonl")) {
+                Ok(acks) => app_verdicts(
+                    &evidence_dir,
+                    &base_evidence_dir,
+                    digest,
+                    changes,
+                    &acks,
+                    floors,
+                    &custody,
+                ),
+                Err(e) => vec![("acks", Verdict::Unevaluated(e))],
+            };
+            if axes.is_empty() {
+                continue; // only the report changed: the ledger above judges it
+            }
+            reports.push(CandidateReport {
+                name: format!(
+                    "{APP} {} (release records)",
+                    digest.get(..12).unwrap_or(digest)
+                ),
+                tool: APP.into(),
+                summary: changes
+                    .iter()
+                    .map(|(f, c)| format!("{f} {c:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
                 axes,
             });
         }
@@ -2762,7 +3186,7 @@ pub fn run(args: &[String]) -> i32 {
     // ---------- report ----------
     let mut md =
         String::from("<!-- candidate-eval -->\n## Candidate evaluation (3-axis gate, #241)\n\n");
-    if cands.is_empty() && ev_cands.is_empty() && changed_acks.is_empty() {
+    if cands.is_empty() && ev_cands.is_empty() && changed_acks.is_empty() && app.is_empty() {
         md.push_str(
             "No TOOLS.lock candidates, no frontier evidence changes, no ack changes in this change.\n",
         );
@@ -3417,12 +3841,20 @@ mod tests {
         let hist = non_frontier_changes(&head, &head_ev, &base_ev);
         assert_eq!(hist, vec![format!("t/{}/mal.jsonl", &old[..12])]);
         // acks unchanged -> no ack-file candidate; changed -> named
-        assert!(changed_ack_files(&head, &head_ev, &base_ev).is_empty());
+        assert!(changed_ack_files(&head_ev, &base_ev).is_empty());
         std::fs::write(head_ev.join("t").join("acks.jsonl"), "{}\n").unwrap();
+        assert_eq!(changed_ack_files(&head_ev, &base_ev), vec!["t".to_string()]);
+        // a product TOOLS.lock does not name (the app) is checked too
+        std::fs::create_dir_all(head_ev.join(APP)).unwrap();
+        std::fs::write(head_ev.join(APP).join("acks.jsonl"), "x\n").unwrap();
         assert_eq!(
-            changed_ack_files(&head, &head_ev, &base_ev),
-            vec!["t".to_string()]
+            changed_ack_files(&head_ev, &base_ev),
+            vec![APP.to_string(), "t".to_string()]
         );
+        // the app's records are evaluated, not listed as history
+        std::fs::create_dir_all(head_ev.join(APP).join(&old)).unwrap();
+        std::fs::write(head_ev.join(APP).join(&old).join("mal.jsonl"), "x\n").unwrap();
+        assert_eq!(non_frontier_changes(&head, &head_ev, &base_ev), hist);
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -3529,6 +3961,340 @@ mod tests {
             mal_verdict_with("c-bad", bad, refused),
             Verdict::HardStop(_)
         ));
+    }
+
+    fn b64(bytes: &[u8]) -> String {
+        const A: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for c in bytes.chunks(3) {
+            let n = (c[0] as u32) << 16
+                | (*c.get(1).unwrap_or(&0) as u32) << 8
+                | *c.get(2).unwrap_or(&0) as u32;
+            for i in 0..4 {
+                if i <= c.len() {
+                    out.push(A[(n >> (18 - 6 * i) & 63) as usize] as char);
+                } else {
+                    out.push('=');
+                }
+            }
+        }
+        out
+    }
+
+    /// A DSSE bundle carrying `statement`, as the attestation store returns it.
+    fn bundle(statement: Value) -> Value {
+        serde_json::json!({"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+            "dsseEnvelope": {"payloadType": "application/vnd.in-toto+json",
+                             "payload": b64(statement.to_string().as_bytes()), "signatures": []}})
+    }
+
+    fn statement(digest: &str, pt: &str, predicate: Value) -> Value {
+        serde_json::json!({"_type": "https://in-toto.io/Statement/v1",
+            "subject": [{"name": "hp-thermal.exe", "digest": {"sha256": digest}}],
+            "predicateType": pt, "predicate": predicate})
+    }
+
+    #[test]
+    fn an_anchor_is_a_stored_bundle_of_its_files_kind() {
+        use crate::release_advance::{CYCLONEDX, PROVENANCE};
+        let d = "d".repeat(64);
+        let wf = |path: &str, r: &str| {
+            serde_json::json!({"buildDefinition": {"externalParameters": {"workflow": {
+                "ref": r, "repository": "https://github.com/o/r", "path": path}}}})
+        };
+        let prov = bundle(statement(
+            &d,
+            PROVENANCE,
+            wf(".github/workflows/release.yml", "refs/tags/v1"),
+        ));
+        let serial = crate::vdr::serial_number(&d);
+        let vdr1 = bundle(statement(
+            &d,
+            CYCLONEDX,
+            serde_json::json!({"serialNumber": serial, "version": 1}),
+        ));
+        let sbom = bundle(statement(
+            &d,
+            CYCLONEDX,
+            serde_json::json!({"serialNumber": "urn:uuid:other", "version": 1}),
+        ));
+        let stored = [&prov, &vdr1, &sbom];
+        let check = |file: &str, b: &Value, stored: &[&Value]| {
+            anchors_in_store(&d, file, &format!("{b}\n"), stored, "o/r")
+        };
+        assert!(check("provenance.sigstore.jsonl", &prov, &stored).is_ok());
+        assert!(check("vdr.v1.sigstore.jsonl", &vdr1, &stored).is_ok());
+        assert!(check("sbom.sigstore.jsonl", &sbom, &stored).is_ok());
+        // the same statement, judged for a repository whose workflow did not make it
+        let prov_line = format!("{prov}\n");
+        assert!(
+            anchors_in_store(
+                &d,
+                "provenance.sigstore.jsonl",
+                &prov_line,
+                &stored,
+                "evil/r"
+            )
+            .is_err(),
+            "another repository's release workflow"
+        );
+        let other_subject = bundle(statement(
+            &"e".repeat(64),
+            PROVENANCE,
+            wf(".github/workflows/release.yml", "refs/tags/v1"),
+        ));
+        let other_workflow = bundle(statement(
+            &d,
+            PROVENANCE,
+            wf(".github/workflows/ci.yml", "refs/tags/v1"),
+        ));
+        let branch = bundle(statement(
+            &d,
+            PROVENANCE,
+            wf(".github/workflows/release.yml", "refs/heads/main"),
+        ));
+        let every = [
+            &prov,
+            &vdr1,
+            &sbom,
+            &other_subject,
+            &other_workflow,
+            &branch,
+        ];
+        for (what, file, b, stored) in [
+            (
+                "not in the store",
+                "provenance.sigstore.jsonl",
+                &prov,
+                &[&vdr1][..],
+            ),
+            (
+                "another exe",
+                "provenance.sigstore.jsonl",
+                &other_subject,
+                &every[..],
+            ),
+            (
+                "not a release workflow",
+                "provenance.sigstore.jsonl",
+                &other_workflow,
+                &every[..],
+            ),
+            (
+                "not at a tag",
+                "provenance.sigstore.jsonl",
+                &branch,
+                &every[..],
+            ),
+            (
+                "the VDR filed as the SBOM",
+                "sbom.sigstore.jsonl",
+                &vdr1,
+                &every[..],
+            ),
+            (
+                "the SBOM filed as a VDR",
+                "vdr.v1.sigstore.jsonl",
+                &sbom,
+                &every[..],
+            ),
+            (
+                "a VDR at another version",
+                "vdr.v2.sigstore.jsonl",
+                &vdr1,
+                &every[..],
+            ),
+            (
+                "provenance filed as a sarif",
+                "sarif.sigstore.jsonl",
+                &prov,
+                &every[..],
+            ),
+        ] {
+            assert!(check(file, b, stored).is_err(), "{what}");
+        }
+        assert!(
+            anchors_in_store(&d, "sbom.sigstore.jsonl", "\n", &stored, "o/r").is_err(),
+            "empty"
+        );
+        assert_eq!(vdr_anchor_version("vdr.v12.sigstore.jsonl"), Some(12));
+        for f in [
+            "vdr.v.sigstore.jsonl",
+            "vdr.v01.sigstore.jsonl",
+            "vdr.v1.json",
+            "vdr.vx.sigstore.jsonl",
+        ] {
+            assert_eq!(vdr_anchor_version(f), None, "{f}");
+        }
+    }
+
+    /// The app's records change only as release-advance writes them; each new one proves itself.
+    #[test]
+    fn the_apps_records_change_only_as_release_advance_writes_them() {
+        let root = std::env::temp_dir().join(format!("gate-app-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (he, be) = (root.join("head"), root.join("base"));
+        let d = "a".repeat(64);
+        let put = |side: &Path, f: &str, body: &str| {
+            let p = side.join(APP).join(&d).join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, body).unwrap();
+        };
+        let panel = format!(
+            r#"{{"subject":{{"sha256":"{d}"}},"detections":{{"malicious":0,"total":70}},"flags":[],"sandbox":{{"state":"ANALYZED","verdicts":[]}}}}"#
+        );
+        for side in [&he, &be] {
+            put(side, "provenance.sigstore.jsonl", "p\n");
+            put(side, "mal.jsonl", &format!("{panel}\n"));
+            put(side, "vuln.jsonl", "v\n");
+        }
+        let floors =
+            crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
+        let acks = Acks {
+            entries: vec![],
+            rejected: vec![],
+        };
+        let ok = AppCustody {
+            anchors: &|_, _, _| Ok("ok".into()),
+            vuln: &|_, _| Ok("ok".into()),
+            mal: &|_, _, _| Ok(()),
+        };
+        let refused = AppCustody {
+            anchors: &|_, _, _| Err("no".into()),
+            vuln: &|_, _| Err("no".into()),
+            mal: &|_, _, _| Err("no".into()),
+        };
+        let verdicts = |c: &AppCustody| {
+            let changes = app_changes(&he, &be);
+            let ch = changes.get(&d).cloned().unwrap_or_default();
+            app_verdicts(&he, &be, &d, &ch, &acks, &floors, c)
+        };
+        let blocked = |v: &[(&str, Verdict)]| v.iter().any(|(_, v)| !v.passes());
+        assert!(app_changes(&he, &be).is_empty());
+        // a new anchor, proved; then unproved
+        put(&he, "vdr.v1.sigstore.jsonl", "x\n");
+        assert!(!blocked(&verdicts(&ok)));
+        assert!(blocked(&verdicts(&refused)), "an unproved anchor");
+        put(&be, "vdr.v1.sigstore.jsonl", "x\n");
+        // the report alone changed: the ledger judges it
+        put(&he, "vdr.cdx.json", "{}");
+        assert!(verdicts(&ok).is_empty());
+        // a panel appended: evaluated, and only the monitor's own line counts
+        put(&he, "mal.jsonl", &format!("{panel}\n{panel}\n"));
+        assert!(!blocked(&verdicts(&ok)));
+        assert!(blocked(&verdicts(&refused)), "an unproved panel");
+        // a valid, clean, custody-granted panel that replaces the history instead of growing it
+        let rewritten = format!(
+            "{}\n",
+            panel.replace(r#""flags":[]"#, r#""flags":[],"x":1"#)
+        );
+        for (what, f, body) in [
+            ("an anchor replaced", "provenance.sigstore.jsonl", "q\n"),
+            ("a panel rewritten", "mal.jsonl", rewritten.as_str()),
+            ("the vuln record edited", "vuln.jsonl", "w\n"),
+            ("a file that is no record", "notes.txt", "hi\n"),
+            ("a directory inside", "sub/x", "x\n"),
+        ] {
+            let before = std::fs::read(he.join(APP).join(&d).join(f)).ok();
+            put(&he, f, body);
+            assert!(blocked(&verdicts(&ok)), "{what}");
+            let p = he.join(APP).join(&d).join(f);
+            match before {
+                Some(b) => std::fs::write(&p, b).unwrap(),
+                None => {
+                    let _ = std::fs::remove_dir_all(he.join(APP).join(&d).join("sub"));
+                    let _ = std::fs::remove_file(&p);
+                }
+            }
+        }
+        // removing an anchor or the panels
+        std::fs::remove_file(he.join(APP).join(&d).join("vdr.v1.sigstore.jsonl")).unwrap();
+        assert!(blocked(&verdicts(&ok)), "an anchor removed");
+        put(&he, "vdr.v1.sigstore.jsonl", "x\n");
+        // a new digest whose records arrive without a provenance anchor
+        let fresh = |name: &str, panel_digest: &str| {
+            let p = he.join(APP).join(name);
+            std::fs::create_dir_all(&p).unwrap();
+            std::fs::write(
+                p.join("mal.jsonl"),
+                format!("{}\n", panel.replace(&d, panel_digest)),
+            )
+            .unwrap();
+            let changes = app_changes(&he, &be);
+            let v = app_verdicts(&he, &be, name, &changes[name], &acks, &floors, &ok);
+            std::fs::remove_dir_all(&p).unwrap();
+            v
+        };
+        let e = "e".repeat(64);
+        assert!(blocked(&fresh(&e, &e)), "no provenance");
+        // a directory that is no lowercase sha256, its records otherwise in order
+        let z = "z".repeat(64);
+        let p = he.join(APP).join(&z);
+        std::fs::create_dir_all(&p).unwrap();
+        std::fs::write(p.join("provenance.sigstore.jsonl"), "p\n").unwrap();
+        assert!(blocked(&fresh(&z, &z)), "not a digest");
+        let upper = "B".repeat(64);
+        let p = he.join(APP).join(&upper);
+        std::fs::create_dir_all(&p).unwrap();
+        std::fs::write(p.join("provenance.sigstore.jsonl"), "p\n").unwrap();
+        assert!(blocked(&fresh(&upper, &upper)), "a digest in capitals");
+        // and the tools' panels follow the same rule
+        let tool = ToolLine {
+            name: APP.into(),
+            repo: String::new(),
+            rev: String::new(),
+            target: String::new(),
+            sha: d.clone(),
+        };
+        let mal = |body: &str| {
+            put(&he, "mal.jsonl", body);
+            mal_edit_verdict(&he, &be, &tool, &acks, &floors, &|_, _, _| Ok(()))
+        };
+        assert!(mal(&format!("{panel}\n{panel}\n")).passes(), "appended");
+        assert!(!mal(&rewritten).passes(), "rewritten");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Network (gh, GitHub's attestation store, the tools release): every committed app record
+    /// passes the custody a new one is held to. `cargo test -- --ignored committed_app_records`.
+    #[test]
+    #[ignore]
+    fn committed_app_records_pass_their_custody() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../supply-chain/evidence")
+            .join(APP);
+        let mut failures = Vec::new();
+        let mut checked = 0;
+        for d in std::fs::read_dir(&root)
+            .unwrap()
+            .flatten()
+            .filter(|d| d.path().is_dir())
+        {
+            let digest = d.file_name().to_string_lossy().into_owned();
+            for f in std::fs::read_dir(d.path()).unwrap().flatten() {
+                let name = f.file_name().to_string_lossy().into_owned();
+                let r = if APP_ANCHORS.contains(&name.as_str())
+                    || vdr_anchor_version(&name).is_some()
+                {
+                    let text = std::fs::read_to_string(f.path()).unwrap();
+                    store_anchor_custody(&digest, &name, &text)
+                } else if name == "vuln.jsonl" {
+                    app_vuln_custody(&d.path(), &digest)
+                } else {
+                    continue;
+                };
+                checked += 1;
+                if let Err(e) = r {
+                    failures.push(format!("{}/{name}: {e}", &digest[..12]));
+                }
+            }
+        }
+        assert!(checked > 0);
+        assert!(
+            failures.is_empty(),
+            "{checked} checked:\n{}",
+            failures.join("\n")
+        );
     }
 
     #[test]
@@ -4498,6 +5264,65 @@ mod tests {
         assert_eq!(Path::new(&f[3]), d.join("Cargo.lock"));
         assert_eq!(std::fs::read(d.join("Cargo.lock")).unwrap(), b"x");
         assert!(isolated_argv(&v(&["audit", "--json"]), &d).is_err());
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// The gate judges the app's records: a change under a release's digest that is not one of
+    /// its records blocks, with no TOOLS.lock change at all.
+    #[test]
+    fn the_gate_judges_the_apps_records() {
+        let d = std::env::temp_dir().join(format!("gate-app-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let digest = "a".repeat(64);
+        for side in ["ev", "bev"] {
+            let rel = d.join(side).join(APP).join(&digest);
+            std::fs::create_dir_all(&rel).unwrap();
+            std::fs::write(rel.join("provenance.sigstore.jsonl"), "p\n").unwrap();
+        }
+        for sub in ["locks", "blocks", "tools", "btools"] {
+            std::fs::create_dir_all(d.join(sub)).unwrap();
+        }
+        std::fs::write(
+            d.join("TOOLS.lock"),
+            format!("t o/r {} linux-x86_64 {}\n", "a".repeat(40), "c".repeat(64)),
+        )
+        .unwrap();
+        let floors =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../supply-chain/policy/floors.json");
+        let run_it = || {
+            let p = |x: &str| d.join(x).to_string_lossy().into_owned();
+            let args: Vec<String> = [
+                "gate",
+                "--base",
+                &p("TOOLS.lock"),
+                "--head",
+                &p("TOOLS.lock"),
+                "--evidence",
+                &p("ev"),
+                "--base-evidence",
+                &p("bev"),
+                "--locks-dir",
+                &p("locks"),
+                "--base-locks-dir",
+                &p("blocks"),
+                "--tools-dir",
+                &p("tools"),
+                "--base-tools-dir",
+                &p("btools"),
+                "--floors",
+                &floors.to_string_lossy(),
+                "--report",
+                &p("report.md"),
+            ]
+            .map(String::from)
+            .to_vec();
+            run(&args)
+        };
+        assert_eq!(run_it(), 0);
+        std::fs::write(d.join("ev").join(APP).join(&digest).join("notes.txt"), "x").unwrap();
+        assert_eq!(run_it(), 1);
+        let report = std::fs::read_to_string(d.join("report.md")).unwrap();
+        assert!(report.contains("not one of the app's records"), "{report}");
         let _ = std::fs::remove_dir_all(&d);
     }
 
