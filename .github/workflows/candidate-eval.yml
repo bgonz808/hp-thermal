@@ -2,22 +2,27 @@ name: Candidate evaluation
 
 # 3-AXIS GATE (#241) — THIN INVOKER ONLY. The verdict algebra (policy) lives in
 # xtask/src/gate.rs: reviewed, unit-tested Rust — never workflow bash (bash+jq stays
-# display glue at most). Runs on every PR, evaluates each candidate (base vs head) per #241, and
-# posts the evidence table as a PR comment. The verdict FAILS while any RAISE item lacks a
-# committed ack in supply-chain/evidence/<product>/acks.jsonl — the maintainer signs residual
-# risk by committing the exact ack line the report prints (attributed, in-history), after which
-# the re-run goes green; merging then completes the record. HARD-STOP and UNEVALUATED cannot be
-# acked (fail-secure, #241 §3-4).
+# display glue at most). Runs on every PR to main, evaluates each candidate (base vs head) per
+# #241, and posts the evidence table as a PR comment. The verdict FAILS while any RAISE item
+# lacks a committed ack in supply-chain/evidence/<product>/acks.jsonl — the maintainer signs
+# residual risk by committing the exact ack line the report prints (attributed, in-history),
+# after which the re-run goes green; merging then completes the record. HARD-STOP and
+# UNEVALUATED cannot be acked (fail-secure, #241 §3-4).
 #
-# JUDGED FROM THE BASE. Everything that runs is the base commit's: this workflow
-# (`pull_request_target` takes it from the base branch, so a change's edits to it apply only
-# after it merges), the gate's code (xtask, built here with the base's cargo configuration), the
-# composite actions and the floors. The change is the GitHub test merge, checked out into its
-# own directory as data, with no hooks and no filter drivers; nothing in it is built or run, and
-# the gate reads it there. The verdict is the commit status `candidate-eval/gate` on the
-# change's head. A fork's own workflows hold a read-only token and cannot post it; a check run
-# of the same name does not stand in for it (a required name with both a status and a check
-# run needs both to pass).
+# JUDGED FROM THE BASE. Everything that runs is main's: this workflow (`pull_request_target`
+# takes it from the base branch, and only pull requests to main run it, so no other branch's
+# copy of it judges anything), the gate's code (xtask, built here with main's cargo
+# configuration), the composite actions and the floors. The change is GitHub's test merge of the
+# pull request into main's current tip, checked out into its own directory as data, with no
+# hooks and no filter drivers; nothing in it is built or run, and the gate reads it there with
+# workflow commands stopped (`::stop-commands::`), so nothing it prints is a command.
+#
+# The verdict is the commit status `candidate-eval/gate` on the pull request's head, taken from
+# the event, never from anything the change can print: `pending` first, then `success` only on
+# exit 0 with the report's last line the PASS line, `failure` on anything else, including a run
+# that could not resolve the change. A fork's own workflows hold a read-only token and cannot
+# post it; a check run of the same name does not stand in for it (a required name with both a
+# status and a check run needs both to pass).
 #
 # A maintainer dispatch evaluates a pull request with the gate at the dispatched ref (testing a
 # gate change before it merges) and posts `candidate-eval/gate-dispatch`, never the required
@@ -32,6 +37,7 @@ name: Candidate evaluation
 on:
   # The change is read, never run: see the header.
   pull_request_target: # zizmor: ignore[dangerous-triggers]
+    branches: [main]
     types: [opened, synchronize, reopened, edited]
   workflow_dispatch:
     inputs:
@@ -53,8 +59,22 @@ jobs:
       contents: read
       pull-requests: write # the evidence comment
       statuses: write # the verdict
+    env:
+      # Where the verdict goes: from the event for a pull request (never from a step's output).
+      VERDICT_SHA: ${{ github.event.pull_request.head.sha }}
+      VERDICT_CONTEXT: ${{ github.event_name == 'pull_request_target' && 'candidate-eval/gate' || 'candidate-eval/gate-dispatch' }}
     steps:
-      - name: Checkout the gate's code (the base; the change is fetched as data below)
+      - name: Verdict pending
+        if: github.event_name == 'pull_request_target'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$VERDICT_SHA" -f state=pending \
+            -f context="$VERDICT_CONTEXT" -f description="evaluating" \
+            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
+
+      - name: Checkout the gate's code (main; the change is fetched as data below)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
         with:
           fetch-depth: 0
@@ -67,37 +87,44 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_EVENT: ${{ github.event.pull_request.number }}
           PR_INPUT: ${{ github.event.inputs.pr }}
-          EVENT_HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
           set -euo pipefail
+          # Nothing git prints about the change (its paths, its refs) is a workflow command.
+          tok=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+          echo "::stop-commands::$tok"
+          fail() { echo "::$tok::"; echo "::error::$1"; exit 1; }
           pr="${PR_EVENT:-${PR_INPUT:-}}"
           if [ -n "$pr" ]; then
-            [[ $pr =~ ^[1-9][0-9]*$ ]] || { echo "::error::pull request number '$pr'"; exit 1; }
-            # GitHub computes the test merge lazily; asking for the pull request starts it.
+            [[ $pr =~ ^[1-9][0-9]*$ ]] || fail "pull request number '$pr'"
+            # The test merge of the pull request's head into main's current tip, as GitHub states
+            # it: mergeable, its merge commit the one fetched. GitHub computes it lazily; asking for
+            # the pull request starts it, so this retries.
             merge="" head=""
             for _ in 1 2 3 4 5 6; do
-              gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" --jq .mergeable > /dev/null
-              if git fetch -q --no-tags origin "+refs/pull/$pr/merge:refs/change/merge" \
+              info=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$pr" \
+                       --jq '[.base.ref, (.mergeable | tostring), (.merge_commit_sha // "")] | @tsv')
+              IFS=$'\t' read -r base_ref mergeable merge_sha <<< "$info"
+              [ "$base_ref" = main ] || fail "#$pr is not a pull request to main"
+              if [ "$mergeable" = true ] && git fetch -q --no-tags origin \
+                   "+refs/heads/main:refs/change/main" "+refs/pull/$pr/merge:refs/change/merge" \
                    "+refs/pull/$pr/head:refs/change/head"; then
                 merge=$(git rev-parse refs/change/merge) head=$(git rev-parse refs/change/head)
-                if [ "$(git rev-parse "$merge^2")" = "$head" ] \
-                   && { [ -z "$EVENT_HEAD" ] || [ "$head" = "$EVENT_HEAD" ]; }; then
+                if [ "$merge" = "$merge_sha" ] \
+                   && [ "$(git rev-parse "$merge^2")" = "$head" ] \
+                   && [ "$(git rev-parse "$merge^1")" = "$(git rev-parse refs/change/main)" ] \
+                   && { [ -z "$VERDICT_SHA" ] || [ "$head" = "$VERDICT_SHA" ]; }; then
                   break
                 fi
               fi
               merge="" head=""
               sleep 10
             done
-            [ -n "$merge" ] || { echo "::error::no test merge of #$pr at its head (conflicted, or the change moved on)"; exit 1; }
+            [ -n "$merge" ] || fail "no test merge of #$pr's head into main's tip (conflicted, or the change or main moved on)"
             base=$(git rev-parse "$merge^1")
           else
             merge=$GITHUB_SHA head=$GITHUB_SHA base=$GITHUB_SHA
           fi
-          if [ "$GITHUB_EVENT_NAME" = pull_request_target ]; then
-            code=$base context=candidate-eval/gate
-          else
-            code=$GITHUB_SHA context=candidate-eval/gate-dispatch
-          fi
+          if [ "$GITHUB_EVENT_NAME" = pull_request_target ]; then code=$base; else code=$GITHUB_SHA; fi
           git checkout -q --detach "$code"
           # Data trees: no hooks, no filter drivers (LFS included), no runner line-ending defaults,
           # so checking out the change runs nothing; the gate then holds each tree to its index
@@ -109,23 +136,11 @@ jobs:
               -c filter.lfs.smudge= -c filter.lfs.process= -c filter.lfs.required=false \
               worktree add -q --detach "$RUNNER_TEMP/${t%%:*}" "${t#*:}"
           done
+          echo "::$tok::"
           {
-            echo "pr=$pr"; echo "merge=$merge"; echo "head=$head"; echo "base=$base"
-            echo "code=$code"; echo "context=$context"
+            echo "pr=$pr"; echo "head=$head"; echo "base=$base"
           } >> "$GITHUB_OUTPUT"
           echo "change ${merge:0:12} (head ${head:0:12}) on base ${base:0:12}; gate code ${code:0:12}"
-
-      - name: Verdict pending
-        if: steps.change.outputs.pr != ''
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_SHA: ${{ steps.change.outputs.head }}
-          CONTEXT: ${{ steps.change.outputs.context }}
-        run: |
-          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state=pending \
-            -f context="$CONTEXT" -f description="evaluating" \
-            -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null
 
       - name: Verify MSVC toolchain authenticity (before anything compiles)
         uses: ./.github/actions/verify-msvc
@@ -164,31 +179,39 @@ jobs:
           # Build record custody: the raw record from the tools store, its producer statement.
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           gate="$GITHUB_WORKSPACE/xtask/target/debug/xtask.exe"
           base="$RUNNER_TEMP/base"
           cd "$RUNNER_TEMP/change"
-          # Capture the verdict, always produce the report; enforcement is the last step so the
-          # comment posts even when the gate blocks.
-          set +e
+          # The report quotes the change; nothing it prints is a workflow command.
+          tok=$(head -c 16 /dev/urandom | od -An -tx1 | tr -d ' \n')
+          echo "::stop-commands::$tok"
           "$gate" gate --base "$base/tools/TOOLS.lock" --base-locks-dir "$base/tools/locks" \
             --base-evidence "$base/supply-chain/evidence" --base-tools-dir "$base/tools" \
-            --floors "$base/supply-chain/policy/floors.json" --report "$RUNNER_TEMP/gate-report.md"
-          echo "code=$?" >> "$GITHUB_OUTPUT"
+            --base-root "$base" --floors "$base/supply-chain/policy/floors.json" \
+            --report "$RUNNER_TEMP/gate-report.md"
+          code=$?
+          echo "::$tok::"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
 
       - name: Post / update the evidence comment
         if: always() && github.event_name == 'pull_request_target'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ steps.change.outputs.pr }}
+          PR: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-          report="$RUNNER_TEMP/gate-report.md"
-          [ -f "$report" ] || { echo "no report produced (gate crashed before writing)"; exit 0; }
           marker='<!-- candidate-eval -->'
+          report="$RUNNER_TEMP/gate-report.md"
+          if [ ! -f "$report" ]; then
+            # A run that wrote no report must not leave an earlier verdict standing.
+            printf '%s\n## Candidate evaluation\n\nThe gate wrote no report for this head; see %s.\n' \
+              "$marker" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > "$report"
+          fi
+          # Only this workflow's own comment carries the report.
           cid=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
-                 --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+                 --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id" | head -1)
           if [ -n "${cid:-}" ]; then
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" \
               -F body=@"$report" > /dev/null
@@ -202,24 +225,27 @@ jobs:
         env:
           CODE: ${{ steps.gate.outputs.code }}
           GH_TOKEN: ${{ github.token }}
-          PR: ${{ steps.change.outputs.pr }}
-          HEAD_SHA: ${{ steps.change.outputs.head }}
-          CONTEXT: ${{ steps.change.outputs.context }}
+          DISPATCH_PR: ${{ steps.change.outputs.pr }}
+          DISPATCH_HEAD: ${{ steps.change.outputs.head }}
         run: |
           set -uo pipefail
           report="$RUNNER_TEMP/gate-report.md"
           [ -f "$report" ] && cat "$report" >> "$GITHUB_STEP_SUMMARY"
           echo "gate exit: ${CODE:-missing}"
-          # A pass is a written verdict, not only an exit status: a gate that never ran to its
-          # report has not judged the change.
+          # A pass is a written verdict, not only an exit status, and the report's last line: the
+          # change is quoted above it, never after it.
+          pass='**Gate: PASS** — all axes ALLOW or signed; merging records the sign-off'
           state=failure desc="blocked or not evaluated: see the run"
-          if [ "${CODE:-1}" = "0" ] && [ -f "$report" ] \
-             && grep -qxF '**Gate: PASS** — all axes ALLOW or signed; merging records the sign-off' "$report"; then
+          if [ "${CODE:-1}" = "0" ] && [ -f "$report" ] && [ "$(tail -n 1 "$report")" = "$pass" ]; then
             state=success desc="all axes ALLOW or signed"
           fi
-          if [ -n "${PR:-}" ] && [ -n "${HEAD_SHA:-}" ]; then
-            gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$state" \
-              -f context="$CONTEXT" -f description="$desc" \
+          sha="$VERDICT_SHA"
+          if [ "$GITHUB_EVENT_NAME" != pull_request_target ]; then
+            sha=""; [ -n "${DISPATCH_PR:-}" ] && sha="${DISPATCH_HEAD:-}"
+          fi
+          if [ -n "$sha" ]; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state="$state" \
+              -f context="$VERDICT_CONTEXT" -f description="$desc" \
               -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null \
               || { echo "::error::could not post the verdict status"; exit 1; }
           fi

@@ -164,10 +164,13 @@ jobs:
             # Engine names alone made every detection look identical, so a reviewer had to open
             # the VT GUI to learn anything. Read-only: this does not feed ack matching, which
             # still runs off engines.txt above.
-            jq -r '.data.attributes.last_analysis_results
+            # VT text is printed on one line each: a control character in it would start a log line
+            # of its own, and the gate reads this log for record lines (gate::record_in_log).
+            jq -r 'def one: tostring | gsub("[[:cntrl:]]"; " ");
+                   .data.attributes.last_analysis_results
                    | to_entries[]
                    | select(.value.category == "malicious" or .value.category == "suspicious")
-                   | "      \(.key) [\(.value.category)] \(.value.result // "-")"' resp.json || true
+                   | "      \(.key | one) [\(.value.category | one)] \(.value.result // "-" | one)"' resp.json || true
             # ONE lattice, two consumers (#278): acks come from the SAME evidence store the
             # gate reads (supply-chain/evidence/<product>/acks.jsonl), matched by the gate's
             # own code (xtask mal-acks) — per-(digest, engine, result) since #380, quality bar enforced (empty/
@@ -222,7 +225,8 @@ jobs:
                 echo "::warning::$key: sandbox NOT READY ${nr_days}d after first submission — at or past the ${nr_warn}d cadence warn bound; not pending any more: resubmit via vt-submit or ack the digest as unsandboxed"
               fi
             fi
-            jq -r '.[] | "        \(.name): \(.category) (confidence \(.confidence // "-"))\(if (.classification | length) > 0 then " " + (.classification | join(",")) else "" end)"' <<<"$sb"
+            jq -r 'def one: tostring | gsub("[[:cntrl:]]"; " ");
+                   .[] | "        \(.name | one): \(.category | one) (confidence \(.confidence // "-" | one))\(if (.classification | length) > 0 then " " + (.classification | map(one) | join(",")) else "" end)"' <<<"$sb"
             # Absolute floor (floors.json hard_stop_on_sandbox_malicious): a sandbox verdict of
             # malicious is not a false-positive profile. Never ackable.
             if jq -e '.mal.hard_stop_on_sandbox_malicious == true' supply-chain/policy/floors.json > /dev/null \
@@ -247,7 +251,8 @@ jobs:
                 "https://www.virustotal.com/api/v3/files/$h/behaviour_summary")
               if [ "$bcode" = "200" ] && jq -e '.data | type == "object"' beh.json > /dev/null 2>&1; then
                 echo "      behaviour summary: verdicts=$(jq -c '.data.verdicts // []' beh.json) tags=$(jq -c '.data.tags // []' beh.json)"
-                jq -r '.data.mitre_attack_techniques // [] | .[] | "        \(.id) [\(.severity // "-")] \(.signature_description // "")"' beh.json
+                jq -r 'def one: tostring | gsub("[[:cntrl:]]"; " ");
+                       .data.mitre_attack_techniques // [] | .[] | "        \(.id | one) [\(.severity // "-" | one)] \(.signature_description // "" | one)"' beh.json
               else
                 echo "::warning::$key: behaviour summary unavailable (HTTP $bcode) — behaviours UNREAD, not absent"
               fi
