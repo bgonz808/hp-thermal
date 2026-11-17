@@ -144,13 +144,20 @@ pub fn run(args: &[String]) -> i32 {
             .iter()
             .map(|a| a.replace("{fixture}", c.fixture))
             .collect();
-        let out = match Command::new(&prog)
-            .args(&argv)
-            .env_remove("CARGO")
-            .env_remove("RUSTC")
-            .env_remove("RUSTUP_TOOLCHAIN")
-            .output()
-        {
+        // cargo-audit runs isolated from the checkout's configuration (gate::audit_isolated):
+        // an `ignore` in a committed `.cargo/audit.toml` must not decide whether it detects.
+        let run = if argv.first().map(String::as_str) == Some("audit") {
+            crate::gate::audit_isolated(&prog, &argv)
+        } else {
+            Command::new(&prog)
+                .args(&argv)
+                .env_remove("CARGO")
+                .env_remove("RUSTC")
+                .env_remove("RUSTUP_TOOLCHAIN")
+                .output()
+                .map_err(|e| e.to_string())
+        };
+        let out = match run {
             Ok(o) => o,
             Err(e) => {
                 // Cannot run the checker at all: no evidence either way, so fail.

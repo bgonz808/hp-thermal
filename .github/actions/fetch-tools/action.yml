@@ -72,6 +72,48 @@ runs:
         rm -rf "$dest"; mkdir -p "$dest"
         zero="0000000000000000000000000000000000000000000000000000000000000000"
         : > "$dest/EXPECTED.sha256"; : > "$dest/ASSETS"
+        # C locale: the bracket ranges below mean ASCII, nothing else.
+        export LC_ALL=C
+        # The grammar the gate enforces (gate::tools_lock_problems), on the whole file before any
+        # line is used. The workflows' `grep | sed | read` readers of the pins agree with the gate
+        # on a file that passes it; xtask's fetch_tools_reads_the_lock_as_the_gate_does runs this
+        # function against the gate's cases.
+        # BEGIN tools-lock-grammar
+        tools_lock_grammar() {
+          local f=$1 line content n=0 name repo rev target sha extra key
+          local -A seen=()
+          local ascii=$'^[\t -~]*$'
+          # `read` drops NUL bytes unseen: count them on their own.
+          if [ "$(tr -cd '\000' < "$f" | wc -c)" -ne 0 ]; then
+            echo "$f: a NUL byte is outside the grammar"; return 1
+          fi
+          while IFS= read -r line || [ -n "$line" ]; do
+            n=$((n + 1))
+            if ! [[ $line =~ $ascii ]]; then
+              echo "$f line $n: a character outside the grammar (ASCII graphic, space, tab)"; return 1
+            fi
+            content=${line%%#*}
+            read -r name repo rev target sha extra <<< "$content"
+            [ -n "$name" ] || continue
+            if [ -n "$extra" ] || ! [[ $name =~ ^[A-Za-z0-9._-]+$ &&
+                                       $repo =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ &&
+                                       $rev =~ ^[0-9a-f]{40}$ &&
+                                       $target =~ ^[A-Za-z0-9._-]+$ &&
+                                       $sha =~ ^[0-9a-f]{64}$ ]]; then
+              echo "$f line $n: not \`name owner/repo <40-hex rev> target <64-hex sha256>\`"; return 1
+            fi
+            key="$name $target"
+            if [ -n "${seen[$key]:-}" ]; then
+              echo "$f line $n: $key pinned twice"; return 1
+            fi
+            seen[$key]=1
+          done < "$f"
+        }
+        # END tools-lock-grammar
+        if ! problem=$(tools_lock_grammar "$lock"); then
+          echo "::error::$problem" >&2
+          exit 1
+        fi
         # Parse the committed anchor (name repo rev target sha256). Process substitution (NOT a
         # pipe) keeps the loop in THIS shell so `exit 1` aborts the step — a `| while` subshell
         # would swallow the fail-closed and silently continue.

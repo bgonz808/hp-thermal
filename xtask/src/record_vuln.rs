@@ -230,14 +230,13 @@ pub fn run(args: &[String]) -> i32 {
         }
     };
     let lock_sha = crate::sha256::sha256_hex(&lock_bytes);
-    let out = match Command::new(&auditor)
-        .args(["audit", "--json", "--file"])
-        .arg(&lock)
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .env_remove("CARGO")
-        .env_remove("RUSTC")
-        .output()
-    {
+    let argv: Vec<String> = vec![
+        "audit".into(),
+        "--json".into(),
+        "--file".into(),
+        lock.display().to_string(),
+    ];
+    let out = match crate::gate::audit_isolated(&auditor.to_string_lossy(), &argv) {
         Ok(o) => o,
         Err(e) => {
             eprintln!("record-vuln: cannot run {}: {e}", auditor.display());

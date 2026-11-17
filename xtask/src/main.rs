@@ -614,12 +614,56 @@ fn ci_source_checks() -> bool {
 /// the same args slice works for both (verified against the pinned exes for deny/auditable/
 /// audit). Unset (local dev): fall back to `cargo <sub>` resolution.
 fn cargo_tool_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
+    if args.first() == Some(&"audit") {
+        return audit_step(desc, cwd, args);
+    }
     match std::env::var("PINNED_TOOLS_DIR") {
         Ok(dir) => {
             let exe = format!("{dir}/cargo-{}{}", args[0], std::env::consts::EXE_SUFFIX);
             step(desc, cwd, &exe, args)
         }
         Err(_) => step(desc, cwd, "cargo", args),
+    }
+}
+
+/// cargo-audit, isolated from the checkout's configuration (`gate::audit_isolated`): a committed
+/// `.cargo/audit.toml` must not decide what it reports. `--file` is read relative to `cwd`.
+fn audit_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
+    use std::io::Write as _;
+    eprintln!(
+        "
+=== {desc} ==="
+    );
+    let program = match std::env::var("PINNED_TOOLS_DIR") {
+        Ok(dir) => format!("{dir}/cargo-audit{}", std::env::consts::EXE_SUFFIX),
+        Err(_) => "cargo".to_string(),
+    };
+    let argv: Vec<String> = args
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            if i > 0 && args[i - 1] == "--file" {
+                std::path::Path::new(cwd).join(a).display().to_string()
+            } else {
+                (*a).to_string()
+            }
+        })
+        .collect();
+    match gate::audit_isolated(&program, &argv) {
+        Ok(o) => {
+            let _ = std::io::stdout().write_all(&o.stdout);
+            let _ = std::io::stderr().write_all(&o.stderr);
+            if o.status.success() {
+                true
+            } else {
+                eprintln!("FAIL: {desc} (exit {:?})", o.status.code());
+                false
+            }
+        }
+        Err(e) => {
+            eprintln!("FAIL: {desc} — {e}");
+            false
+        }
     }
 }
 
