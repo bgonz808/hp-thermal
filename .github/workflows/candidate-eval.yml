@@ -104,7 +104,7 @@ jobs:
           # The App's own status only (another source's does not count); a lookup that fails reads
           # as "there is none": pending is posted.
           have=$(gh api "repos/$GITHUB_REPOSITORY/commits/$VERDICT_SHA/statuses?per_page=100" \
-                   --jq "[.[] | select(.context == \"candidate-eval/gate\" and .creator.login == \"$APP_SLUG[bot]\")] | length" \
+                   --jq "[.[] | select(.context == \"candidate-eval/gate\" and .creator.login == \"${APP_SLUG}[bot]\")] | length" \
                  || echo 0)
           if [ "$have" != 0 ]; then
             echo "$VERDICT_SHA already has the status; this event's evaluation updates it"
@@ -286,7 +286,8 @@ jobs:
           ids=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
                  --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")
           cid=$(sed -n 1p <<< "$ids")
-          for extra in $(sed -n '2,$p' <<< "$ids"); do
+          sed -n '2,$p' <<< "$ids" | while read -r extra; do
+            [ -n "$extra" ] || continue
             gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$extra" > /dev/null || true
           done
           post() {
