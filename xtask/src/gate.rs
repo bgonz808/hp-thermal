@@ -1521,21 +1521,99 @@ fn signer_logins(path: &Path) -> Result<Vec<String>, String> {
 }
 
 /// The change's commits (the test merge's second parent, less its first) that touch `paths`,
-/// each with what GitHub says of it.
+/// each with what GitHub says of it. The acks changed, so some commit of the change changed them:
+/// none found is refused, never read as nothing to check.
 fn ack_commits(paths: &[String]) -> Result<Vec<(String, Value)>, String> {
-    crate::advance::git(&["rev-parse", "--verify", "-q", "HEAD^2"])
-        .map_err(|_| "the checkout is not a test merge, so the change's commits are unknown")?;
-    let mut args = vec!["rev-list", "HEAD^1..HEAD^2", "--"];
-    args.extend(paths.iter().map(String::as_str));
-    crate::advance::git(&args)?
-        .lines()
-        .filter(|l| !l.trim().is_empty())
-        .map(|sha| {
-            let sha = sha.trim();
+    ack_commits_in(
+        Path::new("."),
+        &|sha| {
             crate::advance::gh_json(&["api", &format!("repos/{{owner}}/{{repo}}/commits/{sha}")])
-                .map(|c| (sha.to_string(), c))
-        })
+        },
+        paths,
+    )
+}
+
+fn ack_commits_in(
+    repo: &Path,
+    fetch: &dyn Fn(&str) -> Result<Value, String>,
+    paths: &[String],
+) -> Result<Vec<(String, Value)>, String> {
+    // Not a test merge (no HEAD^2): git refuses the range, and the change's commits are unknown.
+    let shas = touching_commits(repo, "HEAD^1", "HEAD^2", paths).map_err(|e| {
+        format!("the change's commits are unknown (is the checkout a test merge?): {e}")
+    })?;
+    if shas.is_empty() {
+        return Err("acks.jsonl changed, but no commit of the change touches it".into());
+    }
+    shas.iter()
+        .map(|sha| fetch(sha).map(|c| (sha.clone(), c)))
         .collect()
+}
+
+/// Every commit in `from..to` whose tree differs from any of its parents' (or, a root, from
+/// nothing) at `paths`. Not `git rev-list -- <paths>`: its history simplification follows a merge
+/// only into a parent it is identical to, and a merge that takes a file whole from one side
+/// would not be listed at all.
+fn touching_commits(
+    repo: &Path,
+    from: &str,
+    to: &str,
+    paths: &[String],
+) -> Result<Vec<String>, String> {
+    let git = |args: &[&str]| -> Result<String, String> {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .output()
+            .map_err(|e| format!("git {}: {e}", args[0]))?;
+        if !out.status.success() {
+            return Err(format!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+    let range = format!("{from}..{to}");
+    let mut out = Vec::new();
+    for c in git(&["rev-list", &range])?
+        .lines()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+    {
+        let mut args = vec![
+            "diff-tree",
+            "-m",
+            "-r",
+            "--root",
+            "--no-commit-id",
+            "--name-only",
+            c,
+            "--",
+        ];
+        args.extend(paths.iter().map(String::as_str));
+        if !git(&args)?.trim().is_empty() {
+            out.push(c.to_string());
+        }
+    }
+    Ok(out)
+}
+
+/// A signed commit is a bearer token: anyone can carry a public one into a pull request, a
+/// sign-off its signer pushed and then withdrew included. Sign-offs therefore come only from a
+/// branch of this repository (`here`), which only its maintainers push; a change from anywhere
+/// else, or from where is unknown, does not add them.
+fn change_repo_problem(here: Option<&str>, change: Option<&str>) -> Option<String> {
+    match (here, change) {
+        (Some(h), Some(c)) if !h.is_empty() && h == c => None,
+        _ => Some(format!(
+            "sign-offs come only from a branch of {}; this change's branch is in {}",
+            here.unwrap_or("this repository (unknown here)"),
+            change.unwrap_or("an unknown repository")
+        )),
+    }
 }
 
 /// Every commit is GitHub-verified, and authored and committed by a listed signer.
@@ -2785,6 +2863,8 @@ pub fn run(args: &[String]) -> i32 {
     let mut base_tools_dir: Option<PathBuf> = None;
     // The base commit's tree: the monitor workflow a candidate branch's run must have run.
     let mut base_root: Option<PathBuf> = None;
+    // The repository the change's head branch is in: sign-offs come only from this one's.
+    let mut change_repo: Option<String> = None;
     let mut floors_path = PathBuf::from(crate::floors::DEFAULT_PATH);
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
@@ -2815,6 +2895,7 @@ pub fn run(args: &[String]) -> i32 {
             }
             "--base-tools-dir" => base_tools_dir = it.next().map(PathBuf::from),
             "--base-root" => base_root = it.next().map(PathBuf::from),
+            "--change-repo" => change_repo = it.next().cloned(),
             "--floors" => {
                 if let Some(v) = it.next() {
                     floors_path = PathBuf::from(v);
@@ -3437,6 +3518,11 @@ pub fn run(args: &[String]) -> i32 {
             .and_then(|r| signer_logins(&r.join("supply-chain/policy/signers.json")))
             .and_then(|logins| ack_commits(&paths).map(|c| ack_signer_problems(&c, &logins)))
             .unwrap_or_else(|e| vec![e]);
+        let mut problems = problems;
+        let here = std::env::var("GITHUB_REPOSITORY").ok();
+        if let Some(p) = change_repo_problem(here.as_deref(), change_repo.as_deref()) {
+            problems.insert(0, p);
+        }
         if !problems.is_empty() {
             reports.push(CandidateReport {
                 name: "ack sign-off".into(),
@@ -5830,6 +5916,120 @@ mod tests {
         }
     }
 
+    /// The commits of a change that touch the acks are all of them, a merge that takes the file
+    /// whole from one side included (path-limited `git rev-list` simplifies it away).
+    #[test]
+    fn every_commit_that_touches_the_acks_is_found() {
+        let d = std::env::temp_dir().join(format!("gate-touch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let git = |args: &[&str]| -> String {
+            let o = Command::new("git")
+                .arg("-C")
+                .arg(&d)
+                .args([
+                    "-c",
+                    "core.autocrlf=false",
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@t",
+                ])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                o.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&o.stderr)
+            );
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        };
+        let put = |f: &str, body: &str| std::fs::write(d.join(f), body).unwrap();
+        let commit = |m: &str| {
+            git(&["add", "-A"]);
+            git(&["commit", "-q", "-m", m]);
+            git(&["rev-parse", "HEAD"])
+        };
+        git(&["init", "-q", "-b", "main"]);
+        put("acks.jsonl", "old\n");
+        put("x", "0");
+        let u1 = commit("u1: the old acks");
+        put("acks.jsonl", "old\ntip\n");
+        let tip = commit("tip: main's acks");
+        git(&["checkout", "-q", "-b", "r1", &u1]);
+        put("x", "1");
+        let r1 = commit("r1: unrelated, on the old acks");
+        git(&["checkout", "-q", "-b", "r2", &tip]);
+        put("y", "2");
+        let r2 = commit("r2: unrelated, on main's tip");
+        // a merge that takes r1's acks whole: path-limited rev-list follows it into r1 and stops
+        git(&["merge", "-q", "--no-commit", "--no-ff", &r1]);
+        git(&["checkout", &r1, "--", "acks.jsonl"]);
+        let h = commit("h: merge, the old acks back");
+        let paths = vec!["acks.jsonl".to_string()];
+        assert_eq!(
+            git(&["rev-list", &format!("{tip}..{h}"), "--", "acks.jsonl"]),
+            "",
+            "git's own path-limited walk lists nothing here"
+        );
+        assert_eq!(
+            touching_commits(&d, &tip, &h, &paths).unwrap(),
+            vec![h.clone()]
+        );
+        // a plain commit that changes the acks, and one that does not
+        put("acks.jsonl", "old\ntip\nnew\n");
+        let a = commit("a: adds a line");
+        put("y", "3");
+        let b = commit("b: unrelated");
+        let found = touching_commits(&d, &tip, &b, &paths).unwrap();
+        assert!(
+            found.contains(&a) && found.contains(&h) && !found.contains(&b),
+            "{found:?}"
+        );
+        // as the gate sees a change: GitHub's test merge of the change (h) into main's tip
+        let fetch = |sha: &str| Ok(serde_json::json!({ "sha": sha }));
+        git(&["checkout", "-q", "--detach", &tip]);
+        git(&["merge", "-q", "--no-ff", "-m", "test merge", &h]);
+        let listed = ack_commits_in(&d, &fetch, &paths).unwrap();
+        assert_eq!(
+            listed.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>(),
+            vec![h.clone()]
+        );
+        // a change none of whose commits touches the acks gives no commit to show for them
+        git(&["checkout", "-q", "--detach", &tip]);
+        git(&["merge", "-q", "--no-ff", "-m", "test merge", &r2]);
+        assert!(
+            ack_commits_in(&d, &fetch, &paths).is_err(),
+            "no commit touches the acks"
+        );
+        // and a checkout that is no test merge has no commits to read
+        git(&["checkout", "-q", "--detach", &tip]);
+        assert!(
+            ack_commits_in(&d, &fetch, &paths).is_err(),
+            "not a test merge"
+        );
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Sign-offs come only from a branch of this repository.
+    #[test]
+    fn sign_offs_come_only_from_this_repositorys_branches() {
+        assert!(change_repo_problem(Some("o/r"), Some("o/r")).is_none());
+        for (here, change) in [
+            (Some("o/r"), Some("fork/r")),
+            (Some("o/r"), None),
+            (None, Some("o/r")),
+            (None, None),
+            (Some(""), Some("")),
+        ] {
+            assert!(
+                change_repo_problem(here, change).is_some(),
+                "{here:?} {change:?}"
+            );
+        }
+    }
+
     #[test]
     fn a_pin_is_unchanged_only_when_every_field_is() {
         let line = |name: &str, repo: &str, rev: &str, target: &str, sha: &str| ToolLine {
@@ -5981,6 +6181,10 @@ mod tests {
         assert_eq!(run_it(), 1, "an unattributed sign-off");
         let report = std::fs::read_to_string(d.join("report.md")).unwrap();
         assert!(report.contains("signed by a listed signer"), "{report}");
+        assert!(
+            report.contains("sign-offs come only from a branch of"),
+            "{report}"
+        );
         let _ = std::fs::remove_dir_all(&d);
     }
 
