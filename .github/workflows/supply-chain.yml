@@ -168,11 +168,22 @@ jobs:
           # immutable); its binary is no longer pinned, so it is not regenerated. App reports are
           # all checked: each belongs to a published release.
           pinned=$(grep -vE '^\s*#|^\s*$' tools/TOOLS.lock | sed 's/[[:space:]]*#.*$//' | awk '{print $1"/"$5}')
-          for f in supply-chain/evidence/*/*/vdr.cdx.json; do
+          # A pin's report lives with the record its frozen lock selects: revision 1, or a revision
+          # under rev/<lock>/ (evidence README rule 2). Every other report is history.
+          for f in supply-chain/evidence/*/*/vdr.cdx.json supply-chain/evidence/*/*/rev/*/vdr.cdx.json; do
             [ -f "$f" ] || continue
-            dir=${f%/vdr.cdx.json}; digest=${dir##*/}; product=${dir%/*}; product=${product##*/}
+            dir=${f%/vdr.cdx.json}
+            case "$dir" in */rev/*) base=${dir%/rev/*} ;; *) base=$dir ;; esac
+            digest=${base##*/}; product=${base%/*}; product=${product##*/}
             if [ "$product" != "hp-thermal" ] && ! grep -qx "$product/$digest" <<<"$pinned"; then
               echo "kept as history (superseded, not pinned): $f"; kept=$((kept+1)); continue
+            fi
+            if [ "$product" != "hp-thermal" ]; then
+              sel=$("$X" evidence-rev select --tool "$product" --digest "$digest") \
+                || { echo "::error::$product/$digest: no record under the current lock"; fail=1; continue; }
+              if [ "$sel" != "$dir" ]; then
+                echo "kept as history (superseded revision): $f"; kept=$((kept+1)); continue
+              fi
             fi
             n=$((n+1))
             args=(vdr check --product "$product" --digest "$digest")
@@ -201,7 +212,9 @@ jobs:
           # Every pin has a report. A pin without one would escape this check, and with it the
           # custody check its build record gets when the report regenerates.
           while read -r pin; do
-            [ -f "supply-chain/evidence/$pin/vdr.cdx.json" ] || { echo "::error::pinned $pin has no vdr.cdx.json"; fail=1; }
+            sel=$("$X" evidence-rev select --tool "${pin%%/*}" --digest "${pin##*/}") \
+              || { echo "::error::pinned $pin: no record under the current lock"; fail=1; continue; }
+            [ -f "$sel/vdr.cdx.json" ] || { echo "::error::pinned $pin has no vdr.cdx.json at $sel"; fail=1; }
           done <<<"$pinned"
           echo "VDR check: $n report(s) regenerated, $kept kept as history"
           [ "$n" -gt 0 ] || { echo "::error::no committed VDRs found (fail-closed)"; exit 1; }

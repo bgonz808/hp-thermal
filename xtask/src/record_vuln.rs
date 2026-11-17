@@ -98,6 +98,8 @@ pub struct Measured<'a> {
     pub scanner_version: &'a str,
     pub scanner_digest: &'a str,
     pub lock_sha256: &'a str,
+    /// Repo path of the lock, e.g. `tools/locks/<tool>.lock`.
+    pub lock_path: &'a str,
     pub lock_provenance: &'a str,
     pub raw_sha256: &'a str,
 }
@@ -109,6 +111,7 @@ pub fn header(m: &Measured<'_>, audit: &Value) -> Result<Value, String> {
         scanner_version,
         scanner_digest,
         lock_sha256,
+        lock_path,
         lock_provenance,
         raw_sha256,
     } = *m;
@@ -131,6 +134,7 @@ pub fn header(m: &Measured<'_>, audit: &Value) -> Result<Value, String> {
             "db": {"uri": "github.com/rustsec/advisory-db", "version": db_commit, "lastUpdate": db_updated},
         },
         "scanFinishedOn": today_utc(),
+        "lock": {"path": lock_path, "sha256": lock_sha256},
         "lockProvenance": format!("{lock_provenance} (lock sha256 {lock_sha256})"),
         "rawPayload": {"sha256": raw_sha256, "store": "tools release", "asset": format!("audit-raw-{}.json", &raw_sha256[..12])},
     }))
@@ -145,6 +149,7 @@ pub fn run(args: &[String]) -> i32 {
     let mut evidence = PathBuf::from("supply-chain/evidence");
     let mut provenance = String::new();
     let mut out_raw: Option<PathBuf> = None;
+    let mut record_dir: Option<PathBuf> = None;
     let mut it = args.iter().skip(1);
     while let Some(a) = it.next() {
         match a.as_str() {
@@ -156,6 +161,7 @@ pub fn run(args: &[String]) -> i32 {
             "--evidence" => evidence = it.next().map(PathBuf::from).unwrap_or(evidence),
             "--lock-provenance" => provenance = it.next().cloned().unwrap_or_default(),
             "--out-raw" => out_raw = it.next().map(PathBuf::from),
+            "--record-dir" => record_dir = it.next().map(PathBuf::from),
             other => {
                 eprintln!("record-vuln: unknown argument {other}");
                 return 2;
@@ -164,7 +170,7 @@ pub fn run(args: &[String]) -> i32 {
     }
     let (Some(auditor), Some(lock), Some(out_raw)) = (auditor, lock, out_raw) else {
         eprintln!(
-            "usage: xtask record-vuln --tool <name> --digest <sha256> --auditor <cargo-audit exe> --lock <Cargo.lock> --out-raw <dir> [--lock-provenance TEXT] [--tools-lock P] [--evidence D]"
+            "usage: xtask record-vuln --tool <name> --digest <sha256> --auditor <cargo-audit exe> --lock <Cargo.lock> --out-raw <dir> [--lock-provenance TEXT] [--tools-lock P] [--evidence D] [--record-dir D]"
         );
         return 2;
     };
@@ -251,12 +257,14 @@ pub fn run(args: &[String]) -> i32 {
         }
     };
     let raw_sha = crate::sha256::sha256_hex(&raw);
+    let lock_path = lock.to_string_lossy().replace('\\', "/");
     let measured = Measured {
         tool: &tool,
         digest: &digest,
         scanner_version: &scanner_version,
         scanner_digest: &scanner_digest,
         lock_sha256: &lock_sha,
+        lock_path: &lock_path,
         lock_provenance: &provenance,
         raw_sha256: &raw_sha,
     };
@@ -270,7 +278,8 @@ pub fn run(args: &[String]) -> i32 {
     let rows = instance_rows(&audit);
 
     // 3. Write the baseline and the raw payload (content-addressed name).
-    let dir = evidence.join(&tool).join(&digest);
+    // A revision of a blessed digest is written to its own directory (evidence README rule 2).
+    let dir = record_dir.unwrap_or_else(|| evidence.join(&tool).join(&digest));
     if let Err(e) = std::fs::create_dir_all(&dir).and_then(|_| std::fs::create_dir_all(&out_raw)) {
         eprintln!("record-vuln: mkdir: {e}");
         return 1;
@@ -334,6 +343,7 @@ mod tests {
             scanner_version: "0.22.2",
             scanner_digest: &b,
             lock_sha256: &c,
+            lock_path: "tools/locks/t.lock",
             lock_provenance: "frozen lock",
             raw_sha256: &d,
         };
@@ -341,6 +351,9 @@ mod tests {
         assert_eq!(h["scanner"]["digest"], "b".repeat(64));
         assert_eq!(h["scanner"]["version"], "0.22.2");
         assert_eq!(h["rawPayload"]["asset"], "audit-raw-dddddddddddd.json");
+        // The lock is a structured field the record selection reads, agreeing with the prose.
+        assert_eq!(h["lock"]["path"], "tools/locks/t.lock");
+        assert_eq!(crate::evidence_rev::vuln_lock(&h).unwrap(), c);
         assert!(
             h["lockProvenance"]
                 .as_str()

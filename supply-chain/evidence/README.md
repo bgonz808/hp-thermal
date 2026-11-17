@@ -139,7 +139,8 @@ A `vdr.cdx.json` is committed beside the evidence of every live-frontier digest 
 `TOOLS.lock` pin and the latest release); the supply-chain workflow regenerates each pinned
 tool's report and every release's report and fails on any difference, admitting the app's release
 SBOM only after its provenance verifies. When a bless supersedes a tool digest, that digest's last
-report stays committed as history and is no longer regenerated.
+report stays committed as history and is no longer regenerated. A revision (rule 2) carries its
+own report: the same `serialNumber`, the version after the superseded record's.
 A release's report is published by `release-vdr.yml` as an attestation to the shipped exe, never
 as a release asset (a published release is immutable); `release-advance anchor` records each
 revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
@@ -149,7 +150,26 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
 1. **Acks bind to instances, not classes** — a new digest, engine, advisory instance, inventory
    content or verdict string is never covered by an old ack.
 2. **Blessed evidence is immutable** — a digest that was ever pinned in `TOOLS.lock` on `main`
-   keeps its evidence forever (forensic history), even after a later bless supersedes it.
+   keeps its evidence forever (forensic history), even after a later bless supersedes it. It is
+   never edited: **a corrected measurement of a blessed digest is appended as a new revision
+   bound to its lock, with reason and date** (`xtask/src/evidence_rev.rs`):
+
+   ```text
+   <tool>/<digest>/                     revision 1, the bless-time record
+   <tool>/<digest>/rev/<lock-sha256>/   a later revision: revision.json, vuln.jsonl, caps.toml,
+                                        build.jsonl, vdr.cdx.json
+   ```
+
+   Every reader of the lock-bound records (`vuln.jsonl`, `caps.toml`, `build.jsonl`,
+   `vdr.cdx.json`) takes the one measured against the current `tools/locks/<tool>.lock`; none
+   matching is an error, never a fallback. `mal.jsonl` stays at the digest: it describes bytes.
+   The gate admits a revision only when the lock changed under an unchanged pinned digest, the
+   new lock removes packages and changes nothing else, `revision.json` supersedes the base lock
+   and names the patches the change carries, the build record is custody-verified from a producer
+   run that rebuilt the same digest from exactly that lock and those patches and matches the
+   superseded record message for message, and the vulnerability rows equal the raw payload and a
+   re-scan of the lock by the same scanner at the recorded advisory-db commit. Files under
+   `rev/` are append-only. `candidate-advance digest --reason …` writes one.
    **Candidate evidence is retired with the candidate**: a digest that was measured on a
    candidate branch but never blessed (its lock was re-frozen, its producer run superseded)
    has its evidence directory, its stored raw payload and any ack bound to it removed on that
