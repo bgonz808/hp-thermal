@@ -210,8 +210,9 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    request's head, taken from the event: `pending` at once for every event (a job outside the
    evaluation's concurrency group), then `success` only when the gate exits 0 and the report's
    last line is the PASS line, `failure` on anything else, posted only while the pull request is
-   still that head on `main`. A status belongs to the SHA, so another pull request with the same
-   head can leave it `pending` until this one re-runs; it cannot make it `success`. The report
+   still that head on `main`, and never from a cancelled run. A status belongs to the SHA: when
+   another open pull request to `main` already has the head, its runs keep the status, and a new
+   pull request's events do not reset it. The report
    indents everything a change supplies, so no text from the change starts one of its lines; the
    comment names the head and base it judged.
 4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
@@ -223,9 +224,12 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    changed `acks.jsonl` (the app's included) is quality-checked even when nothing else changed,
    and grows by lines: an edited or removed sign-off is UNEVALUATED (removing a later, narrower
    one would revive an earlier one). A sign-off is its signer's: the lines a change adds count
-   only when every commit of the change that touches an `acks.jsonl` is GitHub-verified and
-   authored and committed by a login the base's `supply-chain/policy/signers.json` lists; the
-   `author` field inside a line is not the signature. Edits under tool digests off the frontier
+   only when the change's branch is in this repository (a signed commit is public, and anyone
+   could carry one, a withdrawn sign-off included, into a pull request of their own) and every
+   commit of the change whose diff against any parent touches an `acks.jsonl` is GitHub-verified
+   and authored and committed by a login the base's `supply-chain/policy/signers.json` lists; an
+   acks change with no such commit is refused. The `author` field inside a line is not the
+   signature. "Verified" is GitHub's judgment of the signature, the trust boundary here. Edits under tool digests off the frontier
    are listed in the report and not evaluated. The app's records are judged as below (Products).
 5. **Every reader reads the same input.** `tools/TOOLS.lock` has one grammar
    (`gate::tools_lock_problems`): every line, comments included, holds only ASCII graphic
