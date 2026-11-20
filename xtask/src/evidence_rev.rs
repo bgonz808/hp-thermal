@@ -976,7 +976,7 @@ pub fn check_rescan(rows: &[Value], rescan: &Value) -> Result<(), String> {
     let missing: Vec<&String> = want.difference(&have).collect();
     let extra: Vec<&String> = have.difference(&want).collect();
     Err(format!(
-        "the recorded rows are not a scan of this lock at the recorded advisory-db commit:          re-scan finds {missing:?} the record lacks, record has {extra:?} the re-scan does not"
+        "the recorded rows are not a scan of this lock at the recorded advisory-db commit; re-scan finds {missing:?} the record lacks, record has {extra:?} the re-scan does not"
     ))
 }
 

@@ -786,12 +786,179 @@ fn vuln_verdict(
     Verdict::RaiseCovered(covered)
 }
 
+/// Verifies that a committed mal record is the line a monitor run printed for (tool, digest).
+type MalCustody<'a> = &'a dyn Fn(&str, &str, &str) -> Result<(), String>;
+
+/// Custody of a mal record (the last line of `mal.jsonl`): its `source` names one run of
+/// `supply-chain-monitor.yml` of this repository, scheduled or dispatched, on `main`, or on a
+/// `candidate/*` branch whose monitor workflow at the run's commit is the base commit's
+/// (`base_monitor`; none given, candidate runs are not accepted); and that run's `vt-monitor` log
+/// holds exactly one record line for (tool, digest), which the committed line is, verbatim or as
+/// its canonical serialization (`candidate-advance` and `release-advance` write that). A record
+/// composed or edited by hand, or printed by a run anywhere else, is not the monitor's; a log
+/// past its retention leaves the record unverifiable, and a fresh panel is recorded instead.
+fn monitor_custody(
+    tool: &str,
+    digest: &str,
+    line: &str,
+    base_monitor: Option<&str>,
+) -> Result<(), String> {
+    let source = MonitorSource {
+        run: &|id| {
+            crate::advance::gh_json(&[
+                "api",
+                &format!("repos/{{owner}}/{{repo}}/actions/runs/{id}"),
+            ])
+        },
+        workflow_at: &|sha| {
+            crate::advance::gh(&[
+                "api",
+                &format!(
+                    "repos/{{owner}}/{{repo}}/contents/.github/workflows/supply-chain-monitor.yml?ref={sha}"
+                ),
+                "-H",
+                "Accept: application/vnd.github.raw+json",
+            ])
+        },
+        log: &|id| crate::advance::gh(&["run", "view", id, "--log"]),
+    };
+    monitor_custody_from(&source, tool, digest, line, base_monitor)
+}
+
+/// Where `monitor_custody` reads a run: its metadata, the monitor workflow at a commit, its log.
+struct MonitorSource<'a> {
+    run: &'a dyn Fn(&str) -> Result<Value, String>,
+    workflow_at: &'a dyn Fn(&str) -> Result<String, String>,
+    log: &'a dyn Fn(&str) -> Result<String, String>,
+}
+
+fn monitor_custody_from(
+    source: &MonitorSource,
+    tool: &str,
+    digest: &str,
+    line: &str,
+    base_monitor: Option<&str>,
+) -> Result<(), String> {
+    let id = monitor_run_id(line)?;
+    let run = (source.run)(&id)?;
+    if monitor_run_ok(&run)? {
+        let sha = run.get("head_sha").and_then(Value::as_str).unwrap_or("");
+        if sha.len() != 40 || !sha.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(format!("monitor run {id}: no head commit"));
+        }
+        if base_monitor != Some((source.workflow_at)(sha)?.as_str()) {
+            return Err(format!(
+                "monitor run {id} ran on a candidate branch whose monitor workflow is not the base's"
+            ));
+        }
+    }
+    let log = (source.log)(&id)
+        .map_err(|e| format!("monitor run {id}: no log ({e}); record a fresh panel"))?;
+    record_in_log(&log, tool, digest, line)
+}
+
+/// The monitor run a record names: `source` is exactly `supply-chain-monitor run <id> (lookup)`.
+fn monitor_run_id(line: &str) -> Result<String, String> {
+    let v: Value = serde_json::from_str(line).map_err(|e| format!("record: {e}"))?;
+    let src = s(&v, &["source"]);
+    src.strip_prefix("supply-chain-monitor run ")
+        .and_then(|r| r.strip_suffix(" (lookup)"))
+        .filter(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()))
+        .map(str::to_string)
+        .ok_or_else(|| format!("source `{src}` names no single supply-chain-monitor run"))
+}
+
+/// The run is this repository's monitor workflow, scheduled or dispatched, done, on `main` or a
+/// `candidate/*` branch. `Ok(true)`: a candidate branch, whose monitor workflow must still be
+/// shown to be the base's.
+fn monitor_run_ok(run: &Value) -> Result<bool, String> {
+    let field = |k: &str| run.get(k).and_then(Value::as_str).unwrap_or("");
+    let repo = run.pointer("/repository/full_name").and_then(Value::as_str);
+    let head_repo = run
+        .pointer("/head_repository/full_name")
+        .and_then(Value::as_str);
+    let branch = field("head_branch");
+    let candidate = branch
+        .strip_prefix("candidate/")
+        .is_some_and(|b| !b.is_empty());
+    let checks = [
+        (
+            field("path") == ".github/workflows/supply-chain-monitor.yml",
+            "not supply-chain-monitor.yml",
+        ),
+        (
+            branch == "main" || candidate,
+            "not on main or a candidate branch",
+        ),
+        (
+            matches!(field("event"), "schedule" | "workflow_dispatch"),
+            "not scheduled or dispatched",
+        ),
+        (field("status") == "completed", "not completed"),
+        (
+            repo.is_some() && repo == head_repo,
+            "not this repository's own code",
+        ),
+    ];
+    match checks.iter().find(|(ok, _)| !ok) {
+        Some((_, why)) => Err(format!(
+            "run {}: {why}",
+            run.get("id").unwrap_or(&Value::Null)
+        )),
+        None => Ok(candidate),
+    }
+}
+
+/// The run's log holds exactly one record line for (tool, digest), and the committed `line` is
+/// it, verbatim or as its canonical serialization. A record line is a whole message of the
+/// `vt-monitor` job (`gh run view --log`: job, step, then a timestamp and the message), the
+/// record prefix at its start; two such lines would mean text posing as a record, and neither
+/// is accepted.
+fn record_in_log(log: &str, tool: &str, digest: &str, line: &str) -> Result<(), String> {
+    let found = record_lines(log, tool, digest);
+    let committed = line.trim_end();
+    let canonical = |printed: &str| {
+        serde_json::from_str::<Value>(printed)
+            .ok()
+            .and_then(|v| serde_json::to_string(&v).ok())
+    };
+    match found.as_slice() {
+        [one] if *one == committed || canonical(one).as_deref() == Some(committed) => Ok(()),
+        [] => Err("the run's log holds no record line for this digest".into()),
+        [_] => Err("the run printed another record for this digest than the committed one".into()),
+        many => Err(format!(
+            "the run's log holds {} record lines for this digest; one is expected",
+            many.len()
+        )),
+    }
+}
+
+/// The record lines a monitor run's log (`gh run view --log`) holds for (tool, digest): whole
+/// messages of the `vt-monitor` job that start with the record prefix. The one reading of the log
+/// for the gate (`record_in_log`) and for `candidate-advance`/`release-advance`, which record what
+/// the gate will accept.
+pub(crate) fn record_lines<'a>(log: &'a str, tool: &str, digest: &str) -> Vec<&'a str> {
+    let key = format!("record (mal.jsonl line for supply-chain/evidence/{tool}/{digest}/): ");
+    log.lines()
+        .filter_map(|l| {
+            let mut f = l.splitn(3, '\t');
+            let (job, _step, rest) = (f.next()?, f.next()?, f.next()?);
+            let message = rest.split_once(' ')?.1.trim_start();
+            (job == "vt-monitor")
+                .then(|| message.strip_prefix(key.as_str()))
+                .flatten()
+                .map(str::trim_end)
+        })
+        .collect()
+}
+
 fn mal_verdict(
     tool: &str,
     evidence_dir: &Path,
     head: &ToolLine,
     acks: &Acks,
     floors: &crate::floors::Floors,
+    custody: MalCustody,
 ) -> Verdict {
     let digest = head.sha.as_str();
     let path = evidence_dir.join(tool).join(digest).join("mal.jsonl");
@@ -843,6 +1010,11 @@ fn mal_verdict(
             "sandbox {name} verdict suspicious: per-item behaviour sign-off is #347's next \
              step; not readable as clean"
         ));
+    }
+    // A record that blocks needs no custody to block; one that would let the digest through
+    // must be the monitor's own.
+    if let Err(e) = custody(tool, digest, last) {
+        return Verdict::Unevaluated(format!("{}: mal record custody: {e}", path.display()));
     }
     let total = v
         .pointer("/detections/total")
@@ -989,7 +1161,40 @@ fn base_record_of(
 fn record_custody(text: &str, h: &ToolLine) -> Result<Vec<Value>, String> {
     let v = crate::build_record::verify_custody(text, &h.name, &h.target, &h.sha)?;
     crate::build_record::same_producer(&v.source_commit, &h.name)?;
+    source_custody(&v.source_commit, h)?;
     Ok(v.messages)
+}
+
+/// The pin names the source its producer built from: custody proves the bytes came from a
+/// producer run at `commit`, and that run built the row its own `tools/TOOLS.lock` holds for
+/// the pin's (name, target). That row's repo and rev must be the pin's.
+fn source_custody(commit: &str, h: &ToolLine) -> Result<(), String> {
+    let text = crate::advance::git(&["show", &format!("{commit}:tools/TOOLS.lock")])?;
+    producer_source(&text, h)
+}
+
+fn producer_source(lock_at_commit: &str, h: &ToolLine) -> Result<(), String> {
+    let row = parse_tools_lock(lock_at_commit)
+        .into_iter()
+        .find(|r| r.name == h.name && r.target == h.target)
+        .ok_or_else(|| {
+            format!(
+                "the producer commit's TOOLS.lock pins no {} [{}]",
+                h.name, h.target
+            )
+        })?;
+    if row.repo != h.repo || row.rev != h.rev {
+        return Err(format!(
+            "the producer built {} [{}] from {}@{}; the pin names {}@{}",
+            h.name,
+            h.target,
+            row.repo,
+            &row.rev[..row.rev.len().min(12)],
+            h.repo,
+            &h.rev[..h.rev.len().min(12)]
+        ));
+    }
+    Ok(())
 }
 
 /// Verifies a committed build record's custody; returns its messages.
@@ -1289,23 +1494,639 @@ pub(crate) fn evidence_candidates(
     out
 }
 
-/// Tools whose acks.jsonl differs from the base commit's — loaded and quality-checked even
-/// when nothing else changed, so a malformed or placeholder sign-off cannot land unnoticed.
-pub(crate) fn changed_ack_files(
-    head: &[ToolLine],
-    evidence_dir: &Path,
-    base_evidence_dir: &Path,
-) -> Vec<String> {
-    let mut tools: Vec<String> = head.iter().map(|h| h.name.clone()).collect();
-    tools.sort();
-    tools.dedup();
-    tools
+/// The signer logins of `supply-chain/policy/signers.json` (`hp-thermal/signers/v1`): at least
+/// one, each non-empty.
+fn signer_logins(path: &Path) -> Result<Vec<String>, String> {
+    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let v: Value = serde_json::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+    if s(&v, &["schema"]) != "hp-thermal/signers/v1" {
+        return Err(format!(
+            "{}: schema is not hp-thermal/signers/v1",
+            path.display()
+        ));
+    }
+    let logins: Vec<String> = v["logins"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|l| l.as_str().filter(|l| !l.is_empty()).map(str::to_string))
+        .collect();
+    if logins.is_empty() || Some(logins.len()) != v["logins"].as_array().map(Vec::len) {
+        return Err(format!(
+            "{}: logins must be non-empty strings",
+            path.display()
+        ));
+    }
+    Ok(logins)
+}
+
+/// The change's commits (the test merge's second parent, less its first) that touch `paths`,
+/// each with what GitHub says of it. The acks changed, so some commit of the change changed them:
+/// none found is refused, never read as nothing to check.
+fn ack_commits(paths: &[String]) -> Result<Vec<(String, Value)>, String> {
+    ack_commits_in(
+        Path::new("."),
+        &|sha| {
+            crate::advance::gh_json(&["api", &format!("repos/{{owner}}/{{repo}}/commits/{sha}")])
+        },
+        paths,
+    )
+}
+
+fn ack_commits_in(
+    repo: &Path,
+    fetch: &dyn Fn(&str) -> Result<Value, String>,
+    paths: &[String],
+) -> Result<Vec<(String, Value)>, String> {
+    // Not a test merge (no HEAD^2): git refuses the range, and the change's commits are unknown.
+    let shas = touching_commits(repo, "HEAD^1", "HEAD^2", paths).map_err(|e| {
+        format!("the change's commits are unknown (is the checkout a test merge?): {e}")
+    })?;
+    if shas.is_empty() {
+        return Err("acks.jsonl changed, but no commit of the change touches it".into());
+    }
+    shas.iter()
+        .map(|sha| fetch(sha).map(|c| (sha.clone(), c)))
+        .collect()
+}
+
+/// Every commit in `from..to` whose tree differs from any of its parents' (or, a root, from
+/// nothing) at `paths`. Not `git rev-list -- <paths>`: its history simplification follows a merge
+/// only into a parent it is identical to, and a merge that takes a file whole from one side
+/// would not be listed at all.
+fn touching_commits(
+    repo: &Path,
+    from: &str,
+    to: &str,
+    paths: &[String],
+) -> Result<Vec<String>, String> {
+    let git = |args: &[&str]| -> Result<String, String> {
+        let out = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            // A path names itself: directory names from the change are not pathspec magic.
+            .arg("--literal-pathspecs")
+            .args(args)
+            .output()
+            .map_err(|e| format!("git {}: {e}", args[0]))?;
+        if !out.status.success() {
+            return Err(format!(
+                "git {} failed: {}",
+                args.join(" "),
+                String::from_utf8_lossy(&out.stderr).trim()
+            ));
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    };
+    let range = format!("{from}..{to}");
+    let mut out = Vec::new();
+    for c in git(&["rev-list", &range])?
+        .lines()
+        .map(str::trim)
+        .filter(|c| !c.is_empty())
+    {
+        let mut args = vec![
+            "diff-tree",
+            "-m",
+            "-r",
+            "--root",
+            "--no-commit-id",
+            "--name-only",
+            c,
+            "--",
+        ];
+        args.extend(paths.iter().map(String::as_str));
+        if !git(&args)?.trim().is_empty() {
+            out.push(c.to_string());
+        }
+    }
+    Ok(out)
+}
+
+/// A signed commit is a bearer token: anyone can carry a public one into a pull request, a
+/// sign-off its signer pushed and then withdrew included. Sign-offs therefore come only from a
+/// branch of this repository (`here`), which only its maintainers push; a change from anywhere
+/// else, or from where is unknown, does not add them.
+fn change_repo_problem(here: Option<&str>, change: Option<&str>) -> Option<String> {
+    match (here, change) {
+        (Some(h), Some(c)) if !h.is_empty() && h == c => None,
+        _ => Some(format!(
+            "sign-offs come only from a branch of {}; this change's branch is in {}",
+            here.unwrap_or("this repository (unknown here)"),
+            change.unwrap_or("an unknown repository")
+        )),
+    }
+}
+
+/// A branch of this repository can hold a sign-off its signer has withdrawn (a closed pull
+/// request leaves its branch), and anyone who can read the repository can open a pull request
+/// from it. So the pull request itself must be a signer's: its opener is a listed signer.
+fn opener_problem(opener: Option<&str>, logins: &[String]) -> Option<String> {
+    match opener {
+        Some(o) if logins.iter().any(|l| l == o) => None,
+        _ => Some(format!(
+            "the pull request was opened by {}, not a listed signer",
+            opener
+                .filter(|o| !o.is_empty())
+                .unwrap_or("an unknown account")
+        )),
+    }
+}
+
+/// Every commit is GitHub-verified, and authored and committed by a listed signer.
+fn ack_signer_problems(commits: &[(String, Value)], logins: &[String]) -> Vec<String> {
+    commits
+        .iter()
+        .filter_map(|(sha, c)| {
+            let verified = c.pointer("/commit/verification/verified") == Some(&Value::Bool(true));
+            let login = |k: &str| c.pointer(&format!("/{k}/login")).and_then(Value::as_str);
+            let signer = |l: Option<&str>| l.is_some_and(|l| logins.iter().any(|x| x == l));
+            (!(verified && signer(login("author")) && signer(login("committer")))).then(|| {
+                format!(
+                    "{}: not a GitHub-verified commit authored and committed by a listed signer \
+                     (verified {verified}, author {}, committer {})",
+                    sha.get(..12).unwrap_or(sha),
+                    login("author").unwrap_or("none"),
+                    login("committer").unwrap_or("none")
+                )
+            })
+        })
+        .collect()
+}
+
+/// Products (every directory of the store, either side: the tools and the app) whose
+/// acks.jsonl differs from the base commit's — loaded and quality-checked even when nothing else
+/// changed, so a malformed or placeholder sign-off cannot land unnoticed.
+pub(crate) fn changed_ack_files(evidence_dir: &Path, base_evidence_dir: &Path) -> Vec<String> {
+    let products: BTreeSet<String> = [evidence_dir, base_evidence_dir]
+        .iter()
+        .filter_map(|r| std::fs::read_dir(r).ok())
+        .flat_map(|d| d.flatten())
+        .filter(|e| e.path().is_dir())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    products
         .into_iter()
         .filter(|t| {
             let rel = Path::new(t).join("acks.jsonl");
             read_opt(&evidence_dir.join(&rel)) != read_opt(&base_evidence_dir.join(&rel))
         })
         .collect()
+}
+
+/// A record that is history grows by lines: unchanged, new, or the base's complete lines
+/// followed by more. Removed, edited, or extending the base's unfinished last line, it does not.
+fn grows_by_lines(head: Option<&[u8]>, base: Option<&[u8]>) -> bool {
+    match (head, base) {
+        (None, _) => false,
+        (Some(_), None) => true,
+        (Some(h), Some(b)) => h == b || b.is_empty() || (b.ends_with(b"\n") && h.starts_with(b)),
+    }
+}
+
+/// Panel history moves forward. Unchanged, or new, it stands as it is. Otherwise the change
+/// appends exactly one panel to the base's complete lines, and that panel is newer than every
+/// panel before it: a later monitor run, and no earlier panel date. A panel already recorded,
+/// replayed after a later one, would read an old verdict as the current one.
+fn mal_history(head: Option<&[u8]>, base: Option<&[u8]>) -> Result<(), String> {
+    let head = head.ok_or("mal.jsonl removed; panel history is never removed")?;
+    let Some(base) = base.filter(|b| !b.is_empty()) else {
+        return Ok(());
+    };
+    if head == base {
+        return Ok(());
+    }
+    // (A base without its final newline cannot be extended to one valid new panel line: what
+    // follows it is either the rest of that line, which is no panel, or a newline and then more.)
+    let added = head
+        .strip_prefix(base)
+        .ok_or("panel history is append-only; a panel is added, never rewritten or removed")?;
+    let added = std::str::from_utf8(added).map_err(|e| e.to_string())?;
+    let new = added.strip_suffix('\n').unwrap_or(added);
+    if new.trim().is_empty() || new.contains('\n') {
+        return Err("a change appends exactly one panel".into());
+    }
+    let prior = std::str::from_utf8(base).map_err(|e| e.to_string())?;
+    let v: Value = serde_json::from_str(new).map_err(|e| format!("the new panel: {e}"))?;
+    let (date, run) = (
+        s(&v, &["panelDate"]).to_string(),
+        monitor_run_id(new).ok().and_then(|r| r.parse::<u64>().ok()),
+    );
+    for p in prior.lines().filter(|l| !l.trim().is_empty()) {
+        if p.trim_end() == new.trim_end() {
+            return Err("the new panel is one already recorded".into());
+        }
+        // An unreadable earlier panel has neither a date nor a run: nothing orders after it.
+        let pv = serde_json::from_str::<Value>(p).unwrap_or_default();
+        let pd = s(&pv, &["panelDate"]);
+        if !pd.is_empty() && date.as_str() < pd {
+            return Err(format!(
+                "the new panel ({date}) is older than one before it ({pd})"
+            ));
+        }
+        let pr = monitor_run_id(p).ok().and_then(|r| r.parse::<u64>().ok());
+        match (run, pr) {
+            // Both name monitor runs: run ids only grow.
+            (Some(n), Some(o)) if n <= o => {
+                return Err(format!(
+                    "the new panel's monitor run {n} is not after an earlier panel's ({o})"
+                ));
+            }
+            (Some(_), Some(_)) => {}
+            // No run to order by: a later day, or nothing.
+            _ if pd.is_empty() || date.as_str() <= pd => {
+                return Err(format!(
+                    "the new panel ({date}) is not after an earlier panel with no monitor run to \
+                     order by ({})",
+                    if pd.is_empty() { "undated" } else { pd }
+                ));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// A product's `mal.jsonl` (`tool/digest` from `h`): its history moves forward
+/// (`mal_history`), and its last panel is judged as any panel is (`mal_verdict`).
+fn mal_edit_verdict(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+    h: &ToolLine,
+    acks: &Acks,
+    floors: &crate::floors::Floors,
+    custody: MalCustody,
+) -> Verdict {
+    let rel = Path::new(&h.name).join(&h.sha).join("mal.jsonl");
+    let (head, base) = (
+        read_opt(&evidence_dir.join(&rel)),
+        read_opt(&base_evidence_dir.join(&rel)),
+    );
+    if head.is_none() && base.is_none() {
+        return mal_verdict(&h.name, evidence_dir, h, acks, floors, custody);
+    }
+    match mal_history(head.as_deref(), base.as_deref()) {
+        Ok(()) => mal_verdict(&h.name, evidence_dir, h, acks, floors, custody),
+        Err(e) => Verdict::Unevaluated(format!("mal.jsonl: {e}")),
+    }
+}
+
+// ---------- the app's records (hp-thermal) ----------
+
+/// The app product: its records describe a published release's exe, by digest
+/// (`release-advance`).
+const APP: &str = "hp-thermal";
+
+/// A release's original attestations, by kind (`release_advance::anchor_file`).
+const APP_ANCHORS: &[&str] = &[
+    "provenance.sigstore.jsonl",
+    "sbom.sigstore.jsonl",
+    "sarif.sigstore.jsonl",
+    "vsa.sigstore.jsonl",
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Change {
+    Added,
+    Modified,
+    Deleted,
+}
+
+/// The app's digest directories whose entries differ from the base commit's, each with what
+/// changed. A directory inside a digest directory is listed as `<name>/`, added: the app's
+/// records are files.
+fn app_changes(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+) -> BTreeMap<String, Vec<(String, Change)>> {
+    let entries = |root: &Path| -> BTreeMap<String, BTreeMap<String, Option<Vec<u8>>>> {
+        let mut out = BTreeMap::new();
+        for d in std::fs::read_dir(root.join(APP))
+            .into_iter()
+            .flatten()
+            .flatten()
+        {
+            if !d.path().is_dir() {
+                continue;
+            }
+            let files = std::fs::read_dir(d.path())
+                .into_iter()
+                .flatten()
+                .flatten()
+                .map(|f| {
+                    let name = f.file_name().to_string_lossy().into_owned();
+                    if f.path().is_dir() {
+                        (format!("{name}/"), None)
+                    } else {
+                        (name, std::fs::read(f.path()).ok())
+                    }
+                })
+                .collect();
+            out.insert(d.file_name().to_string_lossy().into_owned(), files);
+        }
+        out
+    };
+    let (head, base) = (entries(evidence_dir), entries(base_evidence_dir));
+    let empty = BTreeMap::new();
+    let mut out: BTreeMap<String, Vec<(String, Change)>> = BTreeMap::new();
+    for d in head.keys().chain(base.keys()).collect::<BTreeSet<_>>() {
+        let (h, b) = (head.get(d).unwrap_or(&empty), base.get(d).unwrap_or(&empty));
+        for f in h.keys().chain(b.keys()).collect::<BTreeSet<_>>() {
+            let change = match (h.get(f), b.get(f)) {
+                (Some(_), None) => Change::Added,
+                (None, Some(_)) => Change::Deleted,
+                (Some(x), Some(y)) if f.ends_with('/') || x != y => Change::Modified,
+                _ => continue,
+            };
+            out.entry(d.clone()).or_default().push((f.clone(), change));
+        }
+    }
+    out
+}
+
+/// How each new app record proves itself (network-backed in the gate; injected in tests).
+struct AppCustody<'a> {
+    /// (digest, file, text): an anchor file's bundles (`store_anchor_custody`).
+    anchors: &'a dyn Fn(&str, &str, &str) -> Result<String, String>,
+    /// (digest directory, digest): a vulnerability record (`app_vuln_custody`).
+    vuln: &'a dyn Fn(&Path, &str) -> Result<String, String>,
+    mal: MalCustody<'a>,
+}
+
+/// `vdr.v<N>.sigstore.jsonl`: a VDR revision's anchor, N its version.
+fn vdr_anchor_version(file: &str) -> Option<u64> {
+    file.strip_prefix("vdr.v")?
+        .strip_suffix(".sigstore.jsonl")
+        .filter(|n| !n.is_empty() && !n.starts_with('0') && n.bytes().all(|b| b.is_ascii_digit()))?
+        .parse()
+        .ok()
+}
+
+/// Verdicts for one app digest directory's changes. The records are written once by
+/// `release-advance` and only these change: an anchor is added (never replaced or removed), a
+/// first `vuln.jsonl` is added, `mal.jsonl` grows by appended panels, `vdr.cdx.json` follows the
+/// report ledger (`vdr_ledger`). The digest must be a release's: its provenance anchor is there.
+/// Anything else is UNEVALUATED.
+fn app_verdicts(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+    digest: &str,
+    changes: &[(String, Change)],
+    acks: &Acks,
+    floors: &crate::floors::Floors,
+    c: &AppCustody,
+) -> Vec<(&'static str, Verdict)> {
+    let dir = evidence_dir.join(APP).join(digest);
+    let mut axes = Vec::new();
+    if !crate::advance::is_hex64(digest) || digest.bytes().any(|b| b.is_ascii_uppercase()) {
+        axes.push((
+            "release",
+            Verdict::Unevaluated(format!("{digest}: not a lowercase sha256 digest directory")),
+        ));
+        return axes;
+    }
+    if !dir.join("provenance.sigstore.jsonl").is_file() {
+        axes.push((
+            "release",
+            Verdict::Unevaluated(
+                "no provenance anchor for this digest: the app's records describe a published \
+                 release's exe"
+                    .into(),
+            ),
+        ));
+    }
+    for (f, ch) in changes {
+        let anchor = APP_ANCHORS.contains(&f.as_str()) || vdr_anchor_version(f).is_some();
+        let text = || std::fs::read_to_string(dir.join(f)).map_err(|e| format!("{f}: {e}"));
+        let (axis, v) = match (f.as_str(), *ch) {
+            ("vdr.cdx.json", _) => continue, // the report ledger and `vdr check`
+            (_, Change::Added) if anchor => (
+                "anchor",
+                match text().and_then(|t| (c.anchors)(digest, f, &t)) {
+                    Ok(m) => Verdict::Allow(format!("{f}: {m}")),
+                    Err(e) => Verdict::Unevaluated(format!("{f}: {e}")),
+                },
+            ),
+            (_, ch) if anchor => (
+                "anchor",
+                Verdict::Unevaluated(format!(
+                    "{f} {ch:?}: an anchor is never replaced or removed"
+                )),
+            ),
+            ("vuln.jsonl", Change::Added) => (
+                "vuln",
+                match (c.vuln)(&dir, digest) {
+                    Ok(m) => Verdict::Allow(m),
+                    Err(e) => Verdict::Unevaluated(format!("vuln.jsonl: {e}")),
+                },
+            ),
+            ("vuln.jsonl", ch) => (
+                "vuln",
+                Verdict::Unevaluated(format!(
+                    "vuln.jsonl {ch:?}: written once by release-advance, never edited"
+                )),
+            ),
+            ("mal.jsonl", _) => {
+                let line = ToolLine {
+                    name: APP.into(),
+                    repo: String::new(),
+                    rev: String::new(),
+                    target: String::new(),
+                    sha: digest.into(),
+                };
+                let v =
+                    mal_edit_verdict(evidence_dir, base_evidence_dir, &line, acks, floors, c.mal);
+                ("mal", v)
+            }
+            (f, ch) => (
+                "record",
+                Verdict::Unevaluated(format!("{f} {ch:?}: not one of the app's records")),
+            ),
+        };
+        axes.push((axis, v));
+    }
+    axes
+}
+
+/// A DSSE bundle's in-toto statement.
+fn bundle_statement(bundle: &Value) -> Option<Value> {
+    let p = bundle.pointer("/dsseEnvelope/payload")?.as_str()?;
+    serde_json::from_slice(&crate::release_advance::b64decode(p)?).ok()
+}
+
+/// Every line of an anchor file is a bundle GitHub's attestation store holds for the digest
+/// (`stored`), and of the kind the file is named for. Each statement's subjects include
+/// `hp-thermal.exe` at the digest. Provenance is SLSA v1 from one of this repository's release
+/// workflows at a tag; sbom, sarif and vsa go by predicate type, and an sbom is not the
+/// subject's VDR; `vdr.v<N>` is the subject's own VDR (its serialNumber) at version N.
+fn anchors_in_store(
+    digest: &str,
+    file: &str,
+    text: &str,
+    stored: &[&Value],
+    repo: &str,
+) -> Result<String, String> {
+    use crate::release_advance::{CYCLONEDX, PROVENANCE, RELEASE_SIGNERS, anchor_file};
+    let serial = crate::vdr::serial_number(digest);
+    let mut n = 0;
+    for (i, l) in text
+        .lines()
+        .enumerate()
+        .filter(|(_, l)| !l.trim().is_empty())
+    {
+        let at = |e: String| format!("line {}: {e}", i + 1);
+        let b: Value = serde_json::from_str(l).map_err(|e| at(e.to_string()))?;
+        // Byte for byte the store's bundle, canonically serialized (as release-advance writes
+        // it): a line that only parses to it (a repeated key, another spelling) is not it.
+        let line = l.trim_end();
+        if !stored
+            .iter()
+            .any(|s| serde_json::to_string(s).is_ok_and(|c| c == line))
+        {
+            return Err(at(format!(
+                "not a bundle GitHub's attestation store holds for {}",
+                &digest[..12]
+            )));
+        }
+        let st = bundle_statement(&b).ok_or_else(|| at("no in-toto statement".into()))?;
+        let exe = st["subject"].as_array().is_some_and(|a| {
+            a.iter().any(|x| {
+                x["name"] == "hp-thermal.exe"
+                    && x.pointer("/digest/sha256").and_then(Value::as_str) == Some(digest)
+            })
+        });
+        if !exe {
+            return Err(at(
+                "its subjects do not include hp-thermal.exe at this digest".into(),
+            ));
+        }
+        let pt = s(&st, &["predicateType"]);
+        let pred_serial = st
+            .pointer("/predicate/serialNumber")
+            .and_then(Value::as_str);
+        if let Some(v) = vdr_anchor_version(file) {
+            let version = st.pointer("/predicate/version").and_then(Value::as_u64);
+            if pt != CYCLONEDX || pred_serial != Some(serial.as_str()) || version != Some(v) {
+                return Err(at(format!("not this subject's VDR at version {v}")));
+            }
+        } else if anchor_file(pt) != Some(file) {
+            return Err(at(format!("predicate type {pt} is not {file}'s kind")));
+        } else if file == "sbom.sigstore.jsonl" && pred_serial == Some(serial.as_str()) {
+            return Err(at("the subject's VDR, not its SBOM".into()));
+        } else if pt == PROVENANCE {
+            let wf = st.pointer("/predicate/buildDefinition/externalParameters/workflow");
+            let field = |k: &str| wf.and_then(|w| w.get(k)).and_then(Value::as_str);
+            let path_ok = field("path").is_some_and(|p| {
+                RELEASE_SIGNERS
+                    .iter()
+                    .any(|w| p == format!(".github/workflows/{w}"))
+            });
+            if field("repository") != Some(format!("https://github.com/{repo}").as_str())
+                || !path_ok
+                || !field("ref").is_some_and(|r| r.starts_with("refs/tags/"))
+            {
+                return Err(at(
+                    "not provenance from this repository's release workflow at a tag".into(),
+                ));
+            }
+        }
+        n += 1;
+    }
+    if n == 0 {
+        return Err("no bundle".into());
+    }
+    Ok(format!(
+        "{n} bundle(s), each in GitHub's attestation store for this digest and of this file's kind"
+    ))
+}
+
+/// `anchors_in_store` against the attestations GitHub stores for the digest.
+fn store_anchor_custody(digest: &str, file: &str, text: &str) -> Result<String, String> {
+    let list = crate::advance::gh_json(&[
+        "api",
+        &format!("repos/{{owner}}/{{repo}}/attestations/sha256:{digest}?per_page=100"),
+    ])?;
+    let atts = list["attestations"]
+        .as_array()
+        .ok_or("attestations API: no `attestations` array")?;
+    if atts.len() >= 100 {
+        return Err("100 or more attestations for one digest: the list may be truncated".into());
+    }
+    let stored: Vec<&Value> = atts.iter().map(|a| &a["bundle"]).collect();
+    let repo = crate::advance::gh(&[
+        "repo",
+        "view",
+        "--json",
+        "nameWithOwner",
+        "--jq",
+        ".nameWithOwner",
+    ])?;
+    anchors_in_store(digest, file, text, &stored, repo.trim())
+}
+
+/// The commit a release's exe was built from: the source its provenance anchor resolved.
+fn release_commit(dir: &Path) -> Result<String, String> {
+    let text = std::fs::read_to_string(dir.join("provenance.sigstore.jsonl"))
+        .map_err(|e| format!("provenance anchor: {e}"))?;
+    let first = text
+        .lines()
+        .find(|l| !l.trim().is_empty())
+        .ok_or("provenance anchor: empty")?;
+    let st = serde_json::from_str::<Value>(first)
+        .ok()
+        .and_then(|b| bundle_statement(&b))
+        .ok_or("provenance anchor: no statement")?;
+    st.pointer("/predicate/buildDefinition/resolvedDependencies")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter(|d| {
+            d["uri"]
+                .as_str()
+                .is_some_and(|u| u.starts_with("git+https://github.com/"))
+        })
+        .filter_map(|d| d.pointer("/digest/gitCommit").and_then(Value::as_str))
+        .find(|c| c.len() == 40 && c.bytes().all(|b| b.is_ascii_hexdigit()))
+        .map(str::to_string)
+        .ok_or_else(|| "provenance anchor: no resolved source commit".into())
+}
+
+/// A release's first vulnerability record: about this exe, its rows the custody-verified raw
+/// payload's, measured at the advisory-db commit that payload names, and a scan of
+/// `app/Cargo.lock` at the commit the release's provenance names: the pinned auditor, re-scanning
+/// that lock at that commit, finds exactly the recorded rows (`evidence_rev::check_rescan`), so a
+/// payload of another lock, however alike in size, does not stand in.
+fn app_vuln_custody(dir: &Path, digest: &str) -> Result<String, String> {
+    let rows: Vec<Value> = std::fs::read_to_string(dir.join("vuln.jsonl"))
+        .map_err(|e| e.to_string())?
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| serde_json::from_str(l).map_err(|e| e.to_string()))
+        .collect::<Result<_, _>>()?;
+    let header = rows.first().ok_or("no header")?;
+    if s(header, &["subject", "name"]) != APP || s(header, &["subject", "sha256"]) != digest {
+        return Err("the header's subject is not this exe".into());
+    }
+    let commit = release_commit(dir)?;
+    let lock = crate::advance::git(&["show", &format!("{commit}:app/Cargo.lock")])?;
+    let raw = crate::vdr::fetch_raw(header)?;
+    crate::evidence_rev::record_db(header, &raw)?;
+    crate::evidence_rev::check_vuln_rows(&rows[1..], &raw, &lock)?;
+    let file = std::env::temp_dir().join(format!(
+        "gate-app-lock-{}-{}.lock",
+        std::process::id(),
+        &digest[..12]
+    ));
+    std::fs::write(&file, &lock).map_err(|e| format!("{}: {e}", file.display()))?;
+    let rescan = rescan_at(header, &file, None);
+    let _ = std::fs::remove_file(&file);
+    crate::evidence_rev::check_rescan(&rows[1..], &rescan?)?;
+    Ok(format!(
+        "{} row(s) equal raw payload {} and a re-scan of app/Cargo.lock at the release commit {}",
+        rows.len() - 1,
+        s(header, &["rawPayload", "asset"]),
+        &commit[..12]
+    ))
 }
 
 /// Changed evidence files under digests that are NOT on the frontier: reported, not evaluated
@@ -1327,6 +2148,9 @@ pub(crate) fn non_frontier_changes(
         };
         for t in tools.filter_map(Result::ok).filter(|e| e.path().is_dir()) {
             let tool = t.file_name().to_string_lossy().into_owned();
+            if tool == APP {
+                continue; // evaluated: `app_verdicts`
+            }
             let Ok(digests) = std::fs::read_dir(t.path()) else {
                 continue;
             };
@@ -1807,6 +2631,7 @@ fn revision_custody(
 ) -> Result<Vec<Value>, String> {
     let v = crate::build_record::verify_custody(text, &h.name, &h.target, &h.sha)?;
     crate::build_record::same_producer(&v.source_commit, &h.name)?;
+    source_custody(&v.source_commit, h)?;
     let (hdr, _) = crate::build_record::read_evidence(text)?;
     let (lock, patches) =
         crate::evidence_rev::producer_tree(Path::new("."), &v.source_commit, &h.name)?;
@@ -2017,6 +2842,25 @@ struct CandidateReport {
     axes: Vec<(&'static str, Verdict)>,
 }
 
+/// Report text on one line: control characters (line breaks included) in text a change can
+/// supply become spaces.
+fn one_line(s: &str) -> String {
+    s.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect()
+}
+
+/// A report bullet, every further line of `d` indented under it: no text a change supplies
+/// starts a line of the report. The verdict line the workflow enforces is the report's last line,
+/// and a line starting `::` is a workflow command.
+fn bullet(md: &mut String, prefix: &str, d: &str) {
+    let mut lines = d.split('\n');
+    let _ = writeln!(md, "  - {prefix}{}", one_line(lines.next().unwrap_or("")));
+    for l in lines {
+        let _ = writeln!(md, "    {}", one_line(l));
+    }
+}
+
 pub fn run(args: &[String]) -> i32 {
     let mut base_path = None;
     let mut head_path = PathBuf::from("tools/TOOLS.lock");
@@ -2034,6 +2878,12 @@ pub fn run(args: &[String]) -> i32 {
     // Per-tool producer inputs beyond the lock (patches, build args, rustflags), both sides.
     let mut tools_dir = PathBuf::from("tools");
     let mut base_tools_dir: Option<PathBuf> = None;
+    // The base commit's tree: the monitor workflow a candidate branch's run must have run.
+    let mut base_root: Option<PathBuf> = None;
+    // The repository the change's head branch is in: sign-offs come only from this one's.
+    let mut change_repo: Option<String> = None;
+    // Who opened the pull request: sign-offs come only from a signer's.
+    let mut change_opener: Option<String> = None;
     let mut floors_path = PathBuf::from(crate::floors::DEFAULT_PATH);
     let mut it = args.iter().skip(1); // skip "gate"
     while let Some(a) = it.next() {
@@ -2063,6 +2913,9 @@ pub fn run(args: &[String]) -> i32 {
                 }
             }
             "--base-tools-dir" => base_tools_dir = it.next().map(PathBuf::from),
+            "--base-root" => base_root = it.next().map(PathBuf::from),
+            "--change-repo" => change_repo = it.next().cloned(),
+            "--change-opener" => change_opener = it.next().cloned(),
             "--floors" => {
                 if let Some(v) = it.next() {
                     floors_path = PathBuf::from(v);
@@ -2149,8 +3002,14 @@ pub fn run(args: &[String]) -> i32 {
         .chain(rev_cands.iter().map(|h| (Some(h.clone()), h.clone())))
         .collect();
     let ev_cands = evidence_candidates(&head, &cands, &evidence_dir, &base_evidence_dir);
-    let changed_acks = changed_ack_files(&head, &evidence_dir, &base_evidence_dir);
+    let changed_acks = changed_ack_files(&evidence_dir, &base_evidence_dir);
+    let app = app_changes(&evidence_dir, &base_evidence_dir);
     let historical = non_frontier_changes(&head, &evidence_dir, &base_evidence_dir);
+    // A monitor run on a candidate branch counts only if that branch ran the base's monitor.
+    let base_monitor = base_root.as_ref().and_then(|r| {
+        std::fs::read_to_string(r.join(".github/workflows/supply-chain-monitor.yml")).ok()
+    });
+    let mal_custody = |t: &str, d: &str, l: &str| monitor_custody(t, d, l, base_monitor.as_deref());
 
     let mut reports = Vec::new();
     let mut db_stamp = String::new();
@@ -2313,7 +3172,17 @@ pub fn run(args: &[String]) -> i32 {
                 Err(e) => unselected(&evidence_dir, h, e),
             },
         ));
-        axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
+        axes.push((
+            "mal",
+            mal_edit_verdict(
+                &evidence_dir,
+                &base_evidence_dir,
+                h,
+                &acks,
+                floors,
+                &mal_custody,
+            ),
+        ));
         let revision = head_rec.as_ref().ok().and_then(|r| r.revision.clone());
         let custody = |text: &str, line: &ToolLine| match &revision {
             Some(r) => revision_custody(text, line, r),
@@ -2496,7 +3365,17 @@ pub fn run(args: &[String]) -> i32 {
                 ));
             }
             if changed.iter().any(|f| f == "mal.jsonl") {
-                axes.push(("mal", mal_verdict(&h.name, &evidence_dir, h, &acks, floors)));
+                axes.push((
+                    "mal",
+                    mal_edit_verdict(
+                        &evidence_dir,
+                        &base_evidence_dir,
+                        h,
+                        &acks,
+                        floors,
+                        &mal_custody,
+                    ),
+                ));
             }
             if changed.iter().any(|f| f == crate::build_record::FILE) {
                 let prior = Prior {
@@ -2540,6 +3419,70 @@ pub fn run(args: &[String]) -> i32 {
                 axes,
             });
         }
+        // The app's records: a published release's exe, by digest (`app_verdicts`).
+        let custody = AppCustody {
+            anchors: &store_anchor_custody,
+            vuln: &app_vuln_custody,
+            mal: &mal_custody,
+        };
+        for (digest, changes) in &app {
+            let axes = match load_acks(&evidence_dir.join(APP).join("acks.jsonl")) {
+                Ok(acks) => app_verdicts(
+                    &evidence_dir,
+                    &base_evidence_dir,
+                    digest,
+                    changes,
+                    &acks,
+                    floors,
+                    &custody,
+                ),
+                Err(e) => vec![("acks", Verdict::Unevaluated(e))],
+            };
+            if axes.is_empty() {
+                continue; // only the report changed: the ledger above judges it
+            }
+            reports.push(CandidateReport {
+                name: format!(
+                    "{APP} {} (release records)",
+                    digest.get(..12).unwrap_or(digest)
+                ),
+                tool: APP.into(),
+                summary: changes
+                    .iter()
+                    .map(|(f, c)| format!("{f} {c:?}"))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                axes,
+            });
+        }
+        // Sign-offs are history: an acks.jsonl grows by lines, never edited or removed (removing
+        // a later, narrower sign-off would revive an earlier one).
+        let rewritten: Vec<&str> = changed_acks
+            .iter()
+            .filter(|t| {
+                let rel = Path::new(t.as_str()).join("acks.jsonl");
+                let (h, b) = (
+                    read_opt(&evidence_dir.join(&rel)),
+                    read_opt(&base_evidence_dir.join(&rel)),
+                );
+                !grows_by_lines(h.as_deref(), b.as_deref())
+            })
+            .map(String::as_str)
+            .collect();
+        if !rewritten.is_empty() {
+            reports.push(CandidateReport {
+                name: "acks history".into(),
+                tool: String::new(),
+                summary: String::new(),
+                axes: vec![(
+                    "acks",
+                    Verdict::Unevaluated(format!(
+                        "acks.jsonl of {} edited or removed: sign-offs are added, never rewritten",
+                        rewritten.join(", ")
+                    )),
+                )],
+            });
+        }
         // Ack-file edits with nothing else to evaluate: the quality bar still applies.
         for tool in &changed_acks {
             if ev_cands.iter().any(|(h, _)| &h.name == tool)
@@ -2580,6 +3523,48 @@ pub fn run(args: &[String]) -> i32 {
                     axes: vec![("acks", Verdict::Unevaluated(e))],
                 }),
             }
+        }
+    }
+    // A sign-off is the signer's: ack lines a change adds count only from commits GitHub verifies
+    // as signed by a listed signer (the base's `supply-chain/policy/signers.json`).
+    if !changed_acks.is_empty() {
+        let paths: Vec<String> = changed_acks
+            .iter()
+            .map(|t| format!("supply-chain/evidence/{t}/acks.jsonl"))
+            .collect();
+        let problems = base_root
+            .as_ref()
+            .ok_or_else(|| "no base tree (--base-root), so no signer policy".to_string())
+            .and_then(|r| signer_logins(&r.join("supply-chain/policy/signers.json")))
+            .map(|logins| {
+                let mut p: Vec<String> = opener_problem(change_opener.as_deref(), &logins)
+                    .into_iter()
+                    .collect();
+                match ack_commits(&paths) {
+                    Ok(c) => p.extend(ack_signer_problems(&c, &logins)),
+                    Err(e) => p.push(e),
+                }
+                p
+            })
+            .unwrap_or_else(|e| vec![e]);
+        let mut problems = problems;
+        let here = std::env::var("GITHUB_REPOSITORY").ok();
+        if let Some(p) = change_repo_problem(here.as_deref(), change_repo.as_deref()) {
+            problems.insert(0, p);
+        }
+        if !problems.is_empty() {
+            reports.push(CandidateReport {
+                name: "ack sign-off".into(),
+                tool: String::new(),
+                summary: String::new(),
+                axes: vec![(
+                    "acks",
+                    Verdict::Unevaluated(format!(
+                        "acks.jsonl lines count only from commits signed by a listed signer:\n{}",
+                        problems.join("\n")
+                    )),
+                )],
+            });
         }
     }
 
@@ -2634,7 +3619,7 @@ pub fn run(args: &[String]) -> i32 {
     // ---------- report ----------
     let mut md =
         String::from("<!-- candidate-eval -->\n## Candidate evaluation (3-axis gate, #241)\n\n");
-    if cands.is_empty() && ev_cands.is_empty() && changed_acks.is_empty() {
+    if cands.is_empty() && ev_cands.is_empty() && changed_acks.is_empty() && app.is_empty() {
         md.push_str(
             "No TOOLS.lock candidates, no frontier evidence changes, no ack changes in this change.\n",
         );
@@ -2648,22 +3633,20 @@ pub fn run(args: &[String]) -> i32 {
     }
     let mut pass = true;
     for r in &reports {
-        let _ = writeln!(md, "### `{}`  {}", r.name, r.summary);
+        let _ = writeln!(md, "### `{}`  {}", one_line(&r.name), one_line(&r.summary));
         for (axis, v) in &r.axes {
             pass &= v.passes();
             let _ = writeln!(md, "- **{axis}: {}**", v.label());
             match v {
-                Verdict::Allow(d) => {
-                    let _ = writeln!(md, "  - {d}");
-                }
+                Verdict::Allow(d) => bullet(&mut md, "", d),
                 Verdict::RaiseCovered(items) => {
                     for i in items {
-                        let _ = writeln!(md, "  - signed: {i}");
+                        bullet(&mut md, "signed: ", i);
                     }
                 }
                 Verdict::RaiseUncovered { covered, needed } => {
                     for i in covered {
-                        let _ = writeln!(md, "  - signed: {i}");
+                        bullet(&mut md, "signed: ", i);
                     }
                     let _ = writeln!(
                         md,
@@ -2674,12 +3657,10 @@ pub fn run(args: &[String]) -> i32 {
                         r.tool
                     );
                     for n in needed {
-                        let _ = writeln!(md, "\n    ```json\n    {n}\n    ```");
+                        let _ = writeln!(md, "\n    ```json\n    {}\n    ```", one_line(n));
                     }
                 }
-                Verdict::Unevaluated(why) | Verdict::HardStop(why) => {
-                    let _ = writeln!(md, "  - {why}");
-                }
+                Verdict::Unevaluated(why) | Verdict::HardStop(why) => bullet(&mut md, "", why),
             }
         }
         md.push('\n');
@@ -2689,7 +3670,7 @@ pub fn run(args: &[String]) -> i32 {
             md,
             "*Changed evidence under {} non-frontier digest file(s) — history, not evaluated (no gate consumes a record about bytes nobody runs): {}*\n",
             historical.len(),
-            historical.join(", ")
+            one_line(&historical.join(", "))
         );
     }
     let _ = writeln!(
@@ -3289,12 +4270,20 @@ mod tests {
         let hist = non_frontier_changes(&head, &head_ev, &base_ev);
         assert_eq!(hist, vec![format!("t/{}/mal.jsonl", &old[..12])]);
         // acks unchanged -> no ack-file candidate; changed -> named
-        assert!(changed_ack_files(&head, &head_ev, &base_ev).is_empty());
+        assert!(changed_ack_files(&head_ev, &base_ev).is_empty());
         std::fs::write(head_ev.join("t").join("acks.jsonl"), "{}\n").unwrap();
+        assert_eq!(changed_ack_files(&head_ev, &base_ev), vec!["t".to_string()]);
+        // a product TOOLS.lock does not name (the app) is checked too
+        std::fs::create_dir_all(head_ev.join(APP)).unwrap();
+        std::fs::write(head_ev.join(APP).join("acks.jsonl"), "x\n").unwrap();
         assert_eq!(
-            changed_ack_files(&head, &head_ev, &base_ev),
-            vec!["t".to_string()]
+            changed_ack_files(&head_ev, &base_ev),
+            vec![APP.to_string(), "t".to_string()]
         );
+        // the app's records are evaluated, not listed as history
+        std::fs::create_dir_all(head_ev.join(APP).join(&old)).unwrap();
+        std::fs::write(head_ev.join(APP).join(&old).join("mal.jsonl"), "x\n").unwrap();
+        assert_eq!(non_frontier_changes(&head, &head_ev, &base_ev), hist);
         let _ = std::fs::remove_dir_all(&root);
     }
 
@@ -3350,13 +4339,17 @@ mod tests {
         };
         let floors =
             crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
-        let v = mal_verdict("t", &dir, &h, &acks, &floors);
+        let v = mal_verdict("t", &dir, &h, &acks, &floors, &|_, _, _| Ok(()));
         assert!(matches!(v, Verdict::Unevaluated(_)), "got {v:?}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// One mal record on disk → its gate verdict (#347 step 1 cases).
+    /// One mal record on disk → its gate verdict (#347 step 1 cases), its custody granted.
     fn mal_verdict_for(tag: &str, record: &str) -> Verdict {
+        mal_verdict_with(tag, record, &|_, _, _| Ok(()))
+    }
+
+    fn mal_verdict_with(tag: &str, record: &str, custody: MalCustody) -> Verdict {
         let dir = std::env::temp_dir().join(format!("gate-mal-{tag}-{}", std::process::id()));
         let full = "bbbbbbbbbbbb000000000000000000000000000000000000000000000000000b";
         let tool_dir = dir.join("t").join(full);
@@ -3375,9 +4368,729 @@ mod tests {
         };
         let floors =
             crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
-        let v = mal_verdict("t", &dir, &h, &acks, &floors);
+        let v = mal_verdict("t", &dir, &h, &acks, &floors, custody);
         let _ = std::fs::remove_dir_all(&dir);
         v
+    }
+
+    /// A clean panel lets a digest through only as the monitor's own line; a panel that blocks
+    /// keeps blocking whatever its custody.
+    #[test]
+    fn a_clean_panel_counts_only_as_the_monitors_own_line() {
+        let clean = r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":0,"total":70},"flags":[],"sandbox":{"state":"ANALYZED","verdicts":[]}}"#;
+        let refused: MalCustody = &|_, _, _| Err("hand-composed".into());
+        assert!(matches!(mal_verdict_for("c-ok", clean), Verdict::Allow(_)));
+        let v = mal_verdict_with("c-no", clean, refused);
+        assert!(
+            matches!(v, Verdict::Unevaluated(ref w) if w.contains("custody")),
+            "got {v:?}"
+        );
+        let bad = r#"{"subject":{"sha256":"DIGEST"},"detections":{"malicious":9,"total":70},"flags":[],"sandbox":{"state":"ANALYZED","verdicts":[]}}"#;
+        assert!(matches!(
+            mal_verdict_with("c-bad", bad, refused),
+            Verdict::HardStop(_)
+        ));
+    }
+
+    fn b64(bytes: &[u8]) -> String {
+        const A: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+        let mut out = String::new();
+        for c in bytes.chunks(3) {
+            let n = (c[0] as u32) << 16
+                | (*c.get(1).unwrap_or(&0) as u32) << 8
+                | *c.get(2).unwrap_or(&0) as u32;
+            for i in 0..4 {
+                if i <= c.len() {
+                    out.push(A[(n >> (18 - 6 * i) & 63) as usize] as char);
+                } else {
+                    out.push('=');
+                }
+            }
+        }
+        out
+    }
+
+    /// A DSSE bundle carrying `statement`, as the attestation store returns it.
+    fn bundle(statement: Value) -> Value {
+        serde_json::json!({"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+            "dsseEnvelope": {"payloadType": "application/vnd.in-toto+json",
+                             "payload": b64(statement.to_string().as_bytes()), "signatures": []}})
+    }
+
+    fn statement(digest: &str, pt: &str, predicate: Value) -> Value {
+        serde_json::json!({"_type": "https://in-toto.io/Statement/v1",
+            "subject": [{"name": "hp-thermal.exe", "digest": {"sha256": digest}}],
+            "predicateType": pt, "predicate": predicate})
+    }
+
+    #[test]
+    fn an_anchor_is_a_stored_bundle_of_its_files_kind() {
+        use crate::release_advance::{CYCLONEDX, PROVENANCE};
+        let d = "d".repeat(64);
+        let wf = |path: &str, r: &str| {
+            serde_json::json!({"buildDefinition": {"externalParameters": {"workflow": {
+                "ref": r, "repository": "https://github.com/o/r", "path": path}}}})
+        };
+        let prov = bundle(statement(
+            &d,
+            PROVENANCE,
+            wf(".github/workflows/release.yml", "refs/tags/v1"),
+        ));
+        let serial = crate::vdr::serial_number(&d);
+        let vdr1 = bundle(statement(
+            &d,
+            CYCLONEDX,
+            serde_json::json!({"serialNumber": serial, "version": 1}),
+        ));
+        let sbom = bundle(statement(
+            &d,
+            CYCLONEDX,
+            serde_json::json!({"serialNumber": "urn:uuid:other", "version": 1}),
+        ));
+        let stored = [&prov, &vdr1, &sbom];
+        let check = |file: &str, b: &Value, stored: &[&Value]| {
+            anchors_in_store(&d, file, &format!("{b}\n"), stored, "o/r")
+        };
+        assert!(check("provenance.sigstore.jsonl", &prov, &stored).is_ok());
+        assert!(check("vdr.v1.sigstore.jsonl", &vdr1, &stored).is_ok());
+        assert!(check("sbom.sigstore.jsonl", &sbom, &stored).is_ok());
+        // the same statement, judged for a repository whose workflow did not make it
+        let prov_line = format!("{prov}\n");
+        assert!(
+            anchors_in_store(
+                &d,
+                "provenance.sigstore.jsonl",
+                &prov_line,
+                &stored,
+                "evil/r"
+            )
+            .is_err(),
+            "another repository's release workflow"
+        );
+        // the same bundle spelled another way (spacing, a repeated key): not the store's bytes
+        let spaced = serde_json::to_string_pretty(&prov)
+            .unwrap()
+            .replace('\n', "");
+        assert!(
+            anchors_in_store(&d, "provenance.sigstore.jsonl", &spaced, &stored, "o/r").is_err(),
+            "another spelling"
+        );
+        let canonical = serde_json::to_string(&prov).unwrap();
+        let repeated = format!(r#"{{"mediaType":"x",{}"#, &canonical[1..]);
+        assert!(
+            anchors_in_store(&d, "provenance.sigstore.jsonl", &repeated, &stored, "o/r").is_err(),
+            "a repeated key"
+        );
+        let other_subject = bundle(statement(
+            &"e".repeat(64),
+            PROVENANCE,
+            wf(".github/workflows/release.yml", "refs/tags/v1"),
+        ));
+        let other_workflow = bundle(statement(
+            &d,
+            PROVENANCE,
+            wf(".github/workflows/ci.yml", "refs/tags/v1"),
+        ));
+        let branch = bundle(statement(
+            &d,
+            PROVENANCE,
+            wf(".github/workflows/release.yml", "refs/heads/main"),
+        ));
+        let every = [
+            &prov,
+            &vdr1,
+            &sbom,
+            &other_subject,
+            &other_workflow,
+            &branch,
+        ];
+        for (what, file, b, stored) in [
+            (
+                "not in the store",
+                "provenance.sigstore.jsonl",
+                &prov,
+                &[&vdr1][..],
+            ),
+            (
+                "another exe",
+                "provenance.sigstore.jsonl",
+                &other_subject,
+                &every[..],
+            ),
+            (
+                "not a release workflow",
+                "provenance.sigstore.jsonl",
+                &other_workflow,
+                &every[..],
+            ),
+            (
+                "not at a tag",
+                "provenance.sigstore.jsonl",
+                &branch,
+                &every[..],
+            ),
+            (
+                "the VDR filed as the SBOM",
+                "sbom.sigstore.jsonl",
+                &vdr1,
+                &every[..],
+            ),
+            (
+                "the SBOM filed as a VDR",
+                "vdr.v1.sigstore.jsonl",
+                &sbom,
+                &every[..],
+            ),
+            (
+                "a VDR at another version",
+                "vdr.v2.sigstore.jsonl",
+                &vdr1,
+                &every[..],
+            ),
+            (
+                "provenance filed as a sarif",
+                "sarif.sigstore.jsonl",
+                &prov,
+                &every[..],
+            ),
+        ] {
+            assert!(check(file, b, stored).is_err(), "{what}");
+        }
+        assert!(
+            anchors_in_store(&d, "sbom.sigstore.jsonl", "\n", &stored, "o/r").is_err(),
+            "empty"
+        );
+        assert_eq!(vdr_anchor_version("vdr.v12.sigstore.jsonl"), Some(12));
+        for f in [
+            "vdr.v.sigstore.jsonl",
+            "vdr.v01.sigstore.jsonl",
+            "vdr.v1.json",
+            "vdr.vx.sigstore.jsonl",
+        ] {
+            assert_eq!(vdr_anchor_version(f), None, "{f}");
+        }
+    }
+
+    /// The app's records change only as release-advance writes them; each new one proves itself.
+    #[test]
+    fn the_apps_records_change_only_as_release_advance_writes_them() {
+        let root = std::env::temp_dir().join(format!("gate-app-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (he, be) = (root.join("head"), root.join("base"));
+        let d = "a".repeat(64);
+        let put = |side: &Path, f: &str, body: &str| {
+            let p = side.join(APP).join(&d).join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, body).unwrap();
+        };
+        let panel = format!(
+            r#"{{"subject":{{"sha256":"{d}"}},"panelDate":"2026-01-01","detections":{{"malicious":0,"total":70}},"flags":[],"sandbox":{{"state":"ANALYZED","verdicts":[]}}}}"#
+        );
+        for side in [&he, &be] {
+            put(side, "provenance.sigstore.jsonl", "p\n");
+            put(side, "mal.jsonl", &format!("{panel}\n"));
+            put(side, "vuln.jsonl", "v\n");
+        }
+        let floors =
+            crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
+        let acks = Acks {
+            entries: vec![],
+            rejected: vec![],
+        };
+        let ok = AppCustody {
+            anchors: &|_, _, _| Ok("ok".into()),
+            vuln: &|_, _| Ok("ok".into()),
+            mal: &|_, _, _| Ok(()),
+        };
+        let refused = AppCustody {
+            anchors: &|_, _, _| Err("no".into()),
+            vuln: &|_, _| Err("no".into()),
+            mal: &|_, _, _| Err("no".into()),
+        };
+        let verdicts = |c: &AppCustody| {
+            let changes = app_changes(&he, &be);
+            let ch = changes.get(&d).cloned().unwrap_or_default();
+            app_verdicts(&he, &be, &d, &ch, &acks, &floors, c)
+        };
+        let blocked = |v: &[(&str, Verdict)]| v.iter().any(|(_, v)| !v.passes());
+        assert!(app_changes(&he, &be).is_empty());
+        // a new anchor, proved; then unproved
+        put(&he, "vdr.v1.sigstore.jsonl", "x\n");
+        assert!(!blocked(&verdicts(&ok)));
+        assert!(blocked(&verdicts(&refused)), "an unproved anchor");
+        put(&be, "vdr.v1.sigstore.jsonl", "x\n");
+        // the report alone changed: the ledger judges it
+        put(&he, "vdr.cdx.json", "{}");
+        assert!(verdicts(&ok).is_empty());
+        // a later panel appended: evaluated, and only the monitor's own line counts
+        let later = panel.replace("2026-01-01", "2099-01-01");
+        put(&he, "mal.jsonl", &format!("{panel}\n{later}\n"));
+        assert!(!blocked(&verdicts(&ok)));
+        assert!(blocked(&verdicts(&refused)), "an unproved panel");
+        // a valid, clean, custody-granted panel that replaces the history instead of growing it
+        let rewritten = format!(
+            "{}\n",
+            panel.replace(r#""flags":[]"#, r#""flags":[],"x":1"#)
+        );
+        for (what, f, body) in [
+            ("an anchor replaced", "provenance.sigstore.jsonl", "q\n"),
+            ("a panel rewritten", "mal.jsonl", rewritten.as_str()),
+            ("the vuln record edited", "vuln.jsonl", "w\n"),
+            ("a file that is no record", "notes.txt", "hi\n"),
+            ("a directory inside", "sub/x", "x\n"),
+        ] {
+            let before = std::fs::read(he.join(APP).join(&d).join(f)).ok();
+            put(&he, f, body);
+            assert!(blocked(&verdicts(&ok)), "{what}");
+            let p = he.join(APP).join(&d).join(f);
+            match before {
+                Some(b) => std::fs::write(&p, b).unwrap(),
+                None => {
+                    let _ = std::fs::remove_dir_all(he.join(APP).join(&d).join("sub"));
+                    let _ = std::fs::remove_file(&p);
+                }
+            }
+        }
+        // removing an anchor or the panels
+        std::fs::remove_file(he.join(APP).join(&d).join("vdr.v1.sigstore.jsonl")).unwrap();
+        assert!(blocked(&verdicts(&ok)), "an anchor removed");
+        put(&he, "vdr.v1.sigstore.jsonl", "x\n");
+        // a new digest whose records arrive without a provenance anchor
+        let fresh = |name: &str, panel_digest: &str| {
+            let p = he.join(APP).join(name);
+            std::fs::create_dir_all(&p).unwrap();
+            std::fs::write(
+                p.join("mal.jsonl"),
+                format!("{}\n", panel.replace(&d, panel_digest)),
+            )
+            .unwrap();
+            let changes = app_changes(&he, &be);
+            let v = app_verdicts(&he, &be, name, &changes[name], &acks, &floors, &ok);
+            std::fs::remove_dir_all(&p).unwrap();
+            v
+        };
+        let e = "e".repeat(64);
+        assert!(blocked(&fresh(&e, &e)), "no provenance");
+        // a directory that is no lowercase sha256, its records otherwise in order
+        let z = "z".repeat(64);
+        let p = he.join(APP).join(&z);
+        std::fs::create_dir_all(&p).unwrap();
+        std::fs::write(p.join("provenance.sigstore.jsonl"), "p\n").unwrap();
+        assert!(blocked(&fresh(&z, &z)), "not a digest");
+        let upper = "B".repeat(64);
+        let p = he.join(APP).join(&upper);
+        std::fs::create_dir_all(&p).unwrap();
+        std::fs::write(p.join("provenance.sigstore.jsonl"), "p\n").unwrap();
+        assert!(blocked(&fresh(&upper, &upper)), "a digest in capitals");
+        // and the tools' panels follow the same rule
+        let tool = ToolLine {
+            name: APP.into(),
+            repo: String::new(),
+            rev: String::new(),
+            target: String::new(),
+            sha: d.clone(),
+        };
+        let mal = |body: &str| {
+            put(&he, "mal.jsonl", body);
+            mal_edit_verdict(&he, &be, &tool, &acks, &floors, &|_, _, _| Ok(()))
+        };
+        assert!(mal(&format!("{panel}\n{later}\n")).passes(), "appended");
+        assert!(!mal(&format!("{panel}\n{panel}\n")).passes(), "replayed");
+        assert!(!mal(&rewritten).passes(), "rewritten");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Network (gh, GitHub's attestation store, the tools release): every committed app record
+    /// passes the custody a new one is held to. `cargo test -- --ignored committed_app_records`.
+    #[test]
+    #[ignore]
+    fn committed_app_records_pass_their_custody() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../supply-chain/evidence")
+            .join(APP);
+        let mut failures = Vec::new();
+        let mut checked = 0;
+        let mut skipped: Vec<String> = Vec::new();
+        for d in std::fs::read_dir(&root)
+            .unwrap()
+            .flatten()
+            .filter(|d| d.path().is_dir())
+        {
+            let digest = d.file_name().to_string_lossy().into_owned();
+            for f in std::fs::read_dir(d.path()).unwrap().flatten() {
+                let name = f.file_name().to_string_lossy().into_owned();
+                let r = if APP_ANCHORS.contains(&name.as_str())
+                    || vdr_anchor_version(&name).is_some()
+                {
+                    let text = std::fs::read_to_string(f.path()).unwrap();
+                    store_anchor_custody(&digest, &name, &text)
+                } else if name == "vuln.jsonl" {
+                    // The re-scan is the scanner the record names; PINNED_TOOLS_DIR holds one.
+                    let header: Value = std::fs::read_to_string(f.path())
+                        .ok()
+                        .and_then(|t| t.lines().next().and_then(|l| serde_json::from_str(l).ok()))
+                        .unwrap_or_default();
+                    let have = std::env::var("PINNED_TOOLS_DIR").ok().and_then(|p| {
+                        std::fs::read(format!("{p}/cargo-audit{}", std::env::consts::EXE_SUFFIX))
+                            .ok()
+                            .map(|b| crate::sha256::sha256_hex(&b))
+                    });
+                    if have.as_deref() != Some(s(&header, &["scanner", "digest"])) {
+                        skipped.push(format!("{}/{name}", &digest[..12]));
+                        continue;
+                    }
+                    app_vuln_custody(&d.path(), &digest)
+                } else {
+                    continue;
+                };
+                checked += 1;
+                if let Err(e) = r {
+                    failures.push(format!("{}/{name}: {e}", &digest[..12]));
+                }
+            }
+        }
+        eprintln!(
+            "{checked} checked; recorded by another scanner than PINNED_TOOLS_DIR's: {skipped:?}"
+        );
+        assert!(checked > 0);
+        assert!(
+            failures.is_empty(),
+            "{checked} checked:\n{}",
+            failures.join("\n")
+        );
+    }
+
+    #[test]
+    fn a_monitor_record_names_its_run_and_is_in_its_log_once() {
+        let line = |src: &str| {
+            format!(
+                r#"{{"schema":"hp-thermal/evidence-mal/v1","subject":{{"name":"t","sha256":"d"}},"source":"{src}"}}"#
+            )
+        };
+        let ok = line("supply-chain-monitor run 123 (lookup)");
+        assert_eq!(monitor_run_id(&ok).unwrap(), "123");
+        for src in [
+            "vt-submit run 1 (lookup-first; first panel) + monitor run 2 (lookup)",
+            "supply-chain-monitor run (lookup)",
+            "supply-chain-monitor run 12a (lookup)",
+            "supply-chain-monitor run 1 (lookup) ",
+            "",
+        ] {
+            assert!(monitor_run_id(&line(src)).is_err(), "{src}");
+        }
+        let run = serde_json::json!({
+            "id": 123, "path": ".github/workflows/supply-chain-monitor.yml", "head_branch": "main",
+            "event": "schedule", "status": "completed",
+            "repository": {"full_name": "o/r"}, "head_repository": {"full_name": "o/r"}
+        });
+        assert_eq!(monitor_run_ok(&run), Ok(false));
+        // a candidate branch's run counts, its monitor workflow still to be shown to be the base's
+        let mut cand = run.clone();
+        cand["head_branch"] = Value::from("candidate/x");
+        assert_eq!(monitor_run_ok(&cand), Ok(true));
+        for (k, v) in [
+            ("/path", ".github/workflows/vt-submit.yml"),
+            ("/head_branch", "feature/x"),
+            ("/head_branch", "candidate/"),
+            ("/head_branch", "x/candidate/y"),
+            ("/event", "pull_request"),
+            ("/status", "in_progress"),
+            ("/head_repository/full_name", "fork/r"),
+        ] {
+            let mut r = run.clone();
+            *r.pointer_mut(k).unwrap() = Value::from(v);
+            assert!(monitor_run_ok(&r).is_err(), "{k}={v}");
+        }
+        let key = "record (mal.jsonl line for supply-chain/evidence/t/d/): ";
+        let at =
+            |job: &str, msg: &str| format!("{job}\tUNKNOWN STEP\t2026-11-17T00:00:00.0Z {msg}\n");
+        let log = format!("{}other\n", at("vt-monitor", &format!("      {key}{ok}\r")));
+        assert!(record_in_log(&log, "t", "d", &ok).is_ok());
+        // the canonical serialization of the printed line (what candidate-advance writes)
+        let printed = r#"{"source":"supply-chain-monitor run 123 (lookup)","b":1,"a":2}"#;
+        let canonical =
+            serde_json::to_string(&serde_json::from_str::<Value>(printed).unwrap()).unwrap();
+        assert_ne!(printed, canonical);
+        let log2 = at("vt-monitor", &format!("      {key}{printed}"));
+        assert!(record_in_log(&log2, "t", "d", printed).is_ok(), "verbatim");
+        assert!(
+            record_in_log(&log2, "t", "d", &canonical).is_ok(),
+            "canonical"
+        );
+        let respelled = r#"{"a":2,"b":1, "source":"supply-chain-monitor run 123 (lookup)"}"#;
+        assert!(
+            record_in_log(&log2, "t", "d", respelled).is_err(),
+            "another spelling"
+        );
+        assert!(
+            record_in_log(&log, "t", "e", &ok).is_err(),
+            "another digest"
+        );
+        assert!(record_in_log(&log, "u", "d", &ok).is_err(), "another tool");
+        let edited = ok.replace("123", "124");
+        assert!(
+            record_in_log(&log, "t", "d", &edited).is_err(),
+            "an edited line"
+        );
+        let twice = format!("{log}{}", at("vt-monitor", &format!("      {key}{ok}")));
+        assert!(
+            record_in_log(&twice, "t", "d", &ok).is_err(),
+            "a second record line"
+        );
+        // only a whole message of the vt-monitor job is a record line
+        for (what, l) in [
+            ("another job", at("toolchain", &format!("      {key}{ok}"))),
+            (
+                "text before the prefix",
+                at("vt-monitor", &format!("E [malicious] {key}{ok}")),
+            ),
+            ("no log framing", format!("      {key}{ok}\n")),
+        ] {
+            assert!(record_in_log(&l, "t", "d", &ok).is_err(), "{what}");
+        }
+    }
+
+    /// A run on a candidate branch counts only if it ran the base's monitor workflow; a run on
+    /// main is not asked.
+    #[test]
+    fn a_candidate_branch_run_must_have_run_the_bases_monitor() {
+        let line = r#"{"source":"supply-chain-monitor run 7 (lookup)"}"#;
+        let key = "record (mal.jsonl line for supply-chain/evidence/t/d/): ";
+        let log = format!("vt-monitor\tS\t2026-11-17T00:00:00Z       {key}{line}\n");
+        let run_on = |branch: &str| {
+            serde_json::json!({"id": 7, "path": ".github/workflows/supply-chain-monitor.yml",
+                "head_branch": branch, "head_sha": "a".repeat(40), "event": "workflow_dispatch",
+                "status": "completed", "repository": {"full_name": "o/r"},
+                "head_repository": {"full_name": "o/r"}})
+        };
+        let check = |branch: &str, at: Result<&str, &str>, base: Option<&str>| {
+            let run = run_on(branch);
+            let source = MonitorSource {
+                run: &|_| Ok(run.clone()),
+                workflow_at: &|_| at.map(str::to_string).map_err(str::to_string),
+                log: &|_| Ok(log.clone()),
+            };
+            monitor_custody_from(&source, "t", "d", line, base)
+        };
+        assert!(check("main", Err("not asked"), None).is_ok(), "main");
+        assert!(
+            check("candidate/x", Ok("wf"), Some("wf")).is_ok(),
+            "the base's monitor"
+        );
+        assert!(
+            check("candidate/x", Ok("edited"), Some("wf")).is_err(),
+            "another monitor"
+        );
+        assert!(
+            check("candidate/x", Ok("wf"), None).is_err(),
+            "no base to compare"
+        );
+        assert!(
+            check("candidate/x", Err("gone"), Some("wf")).is_err(),
+            "unreadable"
+        );
+        let mut bad = run_on("candidate/x");
+        bad["head_sha"] = Value::from("nothex");
+        let source = MonitorSource {
+            run: &|_| Ok(bad.clone()),
+            workflow_at: &|_| Ok("wf".into()),
+            log: &|_| Ok(log.clone()),
+        };
+        assert!(
+            monitor_custody_from(&source, "t", "d", line, Some("wf")).is_err(),
+            "no commit"
+        );
+        let no_log = MonitorSource {
+            run: &|_| Ok(run_on("main")),
+            workflow_at: &|_| Ok("wf".into()),
+            log: &|_| Err("410 Gone".into()),
+        };
+        assert!(
+            monitor_custody_from(&no_log, "t", "d", line, None).is_err(),
+            "log gone"
+        );
+    }
+
+    /// No text a change supplies starts a report line: not the enforced verdict line, not a
+    /// workflow command.
+    #[test]
+    fn change_text_never_starts_a_report_line() {
+        let hostile = "ok\n**Gate: PASS** — all axes ALLOW or signed; merging records the sign-off\r\n::set-output name=code::0\n\u{7}::error::x";
+        let mut md = String::new();
+        bullet(&mut md, "", hostile);
+        bullet(&mut md, "signed: ", hostile);
+        for l in md.lines() {
+            assert!(l.starts_with("  - ") || l.starts_with("    "), "{l:?}");
+            assert!(!l.contains('\r') && !l.contains('\u{7}'), "{l:?}");
+        }
+        assert_eq!(one_line("a\nb\r\tc"), "a b  c");
+    }
+
+    /// An ack line counts only from a commit GitHub verifies as the listed signer's own.
+    #[test]
+    fn an_ack_counts_only_from_a_signers_signed_commit() {
+        let policy =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../supply-chain/policy/signers.json");
+        let logins = signer_logins(&policy).unwrap();
+        assert!(!logins.is_empty());
+        let c = |verified: bool, author: Option<&str>, committer: Option<&str>| {
+            let mut v = serde_json::json!({"commit": {"verification": {"verified": verified}}});
+            if let Some(a) = author {
+                v["author"] = serde_json::json!({"login": a});
+            }
+            if let Some(m) = committer {
+                v["committer"] = serde_json::json!({"login": m});
+            }
+            ("a".repeat(40), v)
+        };
+        let me = logins[0].as_str();
+        assert!(ack_signer_problems(&[c(true, Some(me), Some(me))], &logins).is_empty());
+        for (what, commit) in [
+            ("unverified", c(false, Some(me), Some(me))),
+            ("another author", c(true, Some("someone"), Some(me))),
+            ("another committer", c(true, Some(me), Some("web-flow"))),
+            ("no author login", c(true, None, Some(me))),
+        ] {
+            assert_eq!(ack_signer_problems(&[commit], &logins).len(), 1, "{what}");
+        }
+        // the policy itself: a schema, and non-empty logins only
+        let d = std::env::temp_dir().join(format!("gate-signers-{}", std::process::id()));
+        std::fs::create_dir_all(&d).unwrap();
+        for (what, body) in [
+            ("no schema", r#"{"logins":["a"]}"#),
+            (
+                "no logins",
+                r#"{"schema":"hp-thermal/signers/v1","logins":[]}"#,
+            ),
+            (
+                "an empty login",
+                r#"{"schema":"hp-thermal/signers/v1","logins":["a",""]}"#,
+            ),
+            (
+                "not a string",
+                r#"{"schema":"hp-thermal/signers/v1","logins":["a",1]}"#,
+            ),
+        ] {
+            std::fs::write(d.join("s.json"), body).unwrap();
+            assert!(signer_logins(&d.join("s.json")).is_err(), "{what}");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Panel history moves forward: one new panel, newer than all before it.
+    #[test]
+    fn panel_history_only_moves_forward() {
+        let p = |date: &str, run: u64| {
+            format!(
+                r#"{{"panelDate":"{date}","source":"supply-chain-monitor run {run} (lookup)"}}"#
+            )
+        };
+        let base = format!("{}\n{}\n", p("2026-10-01", 10), p("2026-10-05", 20));
+        let b = Some(base.as_bytes());
+        let with = |extra: &str| format!("{base}{extra}");
+        let ok = |h: &str| mal_history(Some(h.as_bytes()), b);
+        assert!(ok(&base).is_ok(), "unchanged");
+        assert!(mal_history(Some(b"x"), None).is_ok(), "new");
+        assert!(
+            ok(&with(&format!("{}\n", p("2026-10-06", 30)))).is_ok(),
+            "one newer panel"
+        );
+        assert!(
+            ok(&with(&p("2026-10-05", 21))).is_ok(),
+            "same day, later run, no final newline"
+        );
+        for (what, h) in [
+            (
+                "a replay of an earlier panel",
+                with(&format!("{}\n", p("2026-10-01", 10))),
+            ),
+            (
+                "an earlier run",
+                with(&format!("{}\n", p("2026-10-07", 15))),
+            ),
+            (
+                "an earlier date",
+                with(&format!("{}\n", p("2026-10-04", 30))),
+            ),
+            (
+                "two panels",
+                with(&format!(
+                    "{}\n{}\n",
+                    p("2026-10-06", 30),
+                    p("2026-10-07", 40)
+                )),
+            ),
+            ("a blank line", with("\n")),
+            (
+                "a newer panel and a blank line",
+                with(&format!("{}\n\n", p("2026-10-06", 30))),
+            ),
+            (
+                "history rewritten to its own length, then a newer panel",
+                format!(
+                    "{}\n{}\n{}\n",
+                    p("2026-10-01", 19),
+                    p("2026-10-05", 29),
+                    p("2026-10-06", 30)
+                ),
+            ),
+            ("a rewrite", format!("{}\n", p("2026-10-06", 30))),
+            (
+                "an earlier panel removed",
+                format!("{}\n", p("2026-10-05", 20)),
+            ),
+        ] {
+            assert!(ok(&h).is_err(), "{what}");
+        }
+        assert!(mal_history(None, b).is_err(), "removed");
+        // an earlier panel with no monitor run to order by: only a later day follows it
+        let legacy = r#"{"panelDate":"2026-10-05","source":"vt-submit run 1 + monitor run 2"}"#;
+        let lb = format!("{legacy}\n");
+        let after = |h: String| mal_history(Some(h.as_bytes()), Some(lb.as_bytes()));
+        assert!(
+            after(format!("{lb}{}\n", p("2026-10-06", 5))).is_ok(),
+            "a later day"
+        );
+        assert!(
+            after(format!("{lb}{}\n", p("2026-10-05", 999))).is_err(),
+            "the same day"
+        );
+        let undated = "{\"source\":\"x\"}\n";
+        assert!(
+            mal_history(
+                Some(format!("{undated}{}\n", p("2026-10-06", 5)).as_bytes()),
+                Some(undated.as_bytes())
+            )
+            .is_err(),
+            "nothing to order by"
+        );
+        let unreadable = "not json\n";
+        assert!(
+            mal_history(
+                Some(format!("{unreadable}{}\n", p("2026-10-06", 5)).as_bytes()),
+                Some(unreadable.as_bytes())
+            )
+            .is_err(),
+            "an unreadable earlier panel"
+        );
+        let unfinished = p("2026-10-01", 10);
+        assert!(
+            mal_history(
+                Some(format!("{unfinished}x\n").as_bytes()),
+                Some(unfinished.as_bytes())
+            )
+            .is_err(),
+            "extending an unfinished last line"
+        );
+        // sign-off history grows by lines too
+        assert!(grows_by_lines(Some(b"a\nb\n"), Some(b"a\n")));
+        assert!(grows_by_lines(Some(b"a\n"), Some(b"a\n")));
+        assert!(!grows_by_lines(Some(b"b\n"), Some(b"a\n")), "edited");
+        assert!(!grows_by_lines(None, Some(b"a\n")), "removed");
+        assert!(
+            !grows_by_lines(Some(b"ab\n"), Some(b"a")),
+            "extending an unfinished line"
+        );
     }
 
     #[test]
@@ -4201,6 +5914,167 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    /// A pin names the source its producer run built: the producer commit's row for the same
+    /// (name, target) has the pin's repo and rev.
+    #[test]
+    fn a_pin_names_the_source_its_producer_built() {
+        let (r, s) = ("a".repeat(40), "c".repeat(64));
+        let at_commit = format!(
+            "# producer commit\nt o/r {r} linux-x86_64 {}\nt o/r {r} windows-x86_64 {s}\n",
+            ZERO_DIGEST
+        );
+        let pin = |repo: &str, rev: &str, target: &str| ToolLine {
+            name: "t".into(),
+            repo: repo.into(),
+            rev: rev.into(),
+            target: target.into(),
+            sha: s.clone(),
+        };
+        // the digest is the one the run produced; the commit's row may still be unset
+        assert!(producer_source(&at_commit, &pin("o/r", &r, "linux-x86_64")).is_ok());
+        assert!(producer_source(&at_commit, &pin("o/r", &r, "windows-x86_64")).is_ok());
+        for (what, p) in [
+            ("another repo", pin("evil/r", &r, "linux-x86_64")),
+            ("another rev", pin("o/r", &"b".repeat(40), "linux-x86_64")),
+            (
+                "a target the commit does not pin",
+                pin("o/r", &r, "macos-aarch64"),
+            ),
+        ] {
+            assert!(producer_source(&at_commit, &p).is_err(), "{what}");
+        }
+    }
+
+    /// The commits of a change that touch the acks are all of them, a merge that takes the file
+    /// whole from one side included (path-limited `git rev-list` simplifies it away).
+    #[test]
+    fn every_commit_that_touches_the_acks_is_found() {
+        let d = std::env::temp_dir().join(format!("gate-touch-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        std::fs::create_dir_all(&d).unwrap();
+        let git = |args: &[&str]| -> String {
+            let o = Command::new("git")
+                .arg("-C")
+                .arg(&d)
+                .args([
+                    "-c",
+                    "core.autocrlf=false",
+                    "-c",
+                    "user.name=t",
+                    "-c",
+                    "user.email=t@t",
+                ])
+                .args(args)
+                .output()
+                .unwrap();
+            assert!(
+                o.status.success(),
+                "git {args:?}: {}",
+                String::from_utf8_lossy(&o.stderr)
+            );
+            String::from_utf8_lossy(&o.stdout).trim().to_string()
+        };
+        let put = |f: &str, body: &str| std::fs::write(d.join(f), body).unwrap();
+        let commit = |m: &str| {
+            git(&["add", "-A"]);
+            git(&["commit", "-q", "-m", m]);
+            git(&["rev-parse", "HEAD"])
+        };
+        git(&["init", "-q", "-b", "main"]);
+        put("acks.jsonl", "old\n");
+        put("x", "0");
+        let u1 = commit("u1: the old acks");
+        put("acks.jsonl", "old\ntip\n");
+        let tip = commit("tip: main's acks");
+        git(&["checkout", "-q", "-b", "r1", &u1]);
+        put("x", "1");
+        let r1 = commit("r1: unrelated, on the old acks");
+        git(&["checkout", "-q", "-b", "r2", &tip]);
+        put("y", "2");
+        let r2 = commit("r2: unrelated, on main's tip");
+        // a merge that takes r1's acks whole: path-limited rev-list follows it into r1 and stops
+        git(&["merge", "-q", "--no-commit", "--no-ff", &r1]);
+        git(&["checkout", &r1, "--", "acks.jsonl"]);
+        let h = commit("h: merge, the old acks back");
+        let paths = vec!["acks.jsonl".to_string()];
+        assert_eq!(
+            git(&["rev-list", &format!("{tip}..{h}"), "--", "acks.jsonl"]),
+            "",
+            "git's own path-limited walk lists nothing here"
+        );
+        assert_eq!(
+            touching_commits(&d, &tip, &h, &paths).unwrap(),
+            vec![h.clone()]
+        );
+        // a plain commit that changes the acks, and one that does not
+        put("acks.jsonl", "old\ntip\nnew\n");
+        let a = commit("a: adds a line");
+        put("y", "3");
+        let b = commit("b: unrelated");
+        let found = touching_commits(&d, &tip, &b, &paths).unwrap();
+        assert!(
+            found.contains(&a) && found.contains(&h) && !found.contains(&b),
+            "{found:?}"
+        );
+        // as the gate sees a change: GitHub's test merge of the change (h) into main's tip
+        let fetch = |sha: &str| Ok(serde_json::json!({ "sha": sha }));
+        git(&["checkout", "-q", "--detach", &tip]);
+        git(&["merge", "-q", "--no-ff", "-m", "test merge", &h]);
+        let listed = ack_commits_in(&d, &fetch, &paths).unwrap();
+        assert_eq!(
+            listed.iter().map(|(s, _)| s.clone()).collect::<Vec<_>>(),
+            vec![h.clone()]
+        );
+        // a change none of whose commits touches the acks gives no commit to show for them
+        git(&["checkout", "-q", "--detach", &tip]);
+        git(&["merge", "-q", "--no-ff", "-m", "test merge", &r2]);
+        assert!(
+            ack_commits_in(&d, &fetch, &paths).is_err(),
+            "no commit touches the acks"
+        );
+        // and a checkout that is no test merge has no commits to read
+        git(&["checkout", "-q", "--detach", &tip]);
+        assert!(
+            ack_commits_in(&d, &fetch, &paths).is_err(),
+            "not a test merge"
+        );
+        // a directory name that reads as a glob names itself only: `x[1]` is not `x1`
+        std::fs::create_dir_all(d.join("x1")).unwrap();
+        put("x1/acks.jsonl", "one\n");
+        let x1 = commit("x1: a sibling the glob would match");
+        let glob = vec!["x[1]/acks.jsonl".to_string()];
+        assert!(
+            !touching_commits(&d, &tip, &x1, &glob)
+                .unwrap()
+                .contains(&x1),
+            "a literal path, not a pattern"
+        );
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// Sign-offs come only from a branch of this repository, in a pull request a signer opened.
+    #[test]
+    fn sign_offs_come_only_from_this_repositorys_branches() {
+        let logins = vec!["me".to_string()];
+        assert!(opener_problem(Some("me"), &logins).is_none());
+        for opener in [Some("someone"), Some(""), None, Some("Me")] {
+            assert!(opener_problem(opener, &logins).is_some(), "{opener:?}");
+        }
+        assert!(change_repo_problem(Some("o/r"), Some("o/r")).is_none());
+        for (here, change) in [
+            (Some("o/r"), Some("fork/r")),
+            (Some("o/r"), None),
+            (None, Some("o/r")),
+            (None, None),
+            (Some(""), Some("")),
+        ] {
+            assert!(
+                change_repo_problem(here, change).is_some(),
+                "{here:?} {change:?}"
+            );
+        }
+    }
+
     #[test]
     fn a_pin_is_unchanged_only_when_every_field_is() {
         let line = |name: &str, repo: &str, rev: &str, target: &str, sha: &str| ToolLine {
@@ -4264,6 +6138,108 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
     }
 
+    /// The gate judges the app's records: a change under a release's digest that is not one of
+    /// its records blocks, with no TOOLS.lock change at all.
+    #[test]
+    fn the_gate_judges_the_apps_records() {
+        let d = std::env::temp_dir().join(format!("gate-app-run-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&d);
+        let digest = "a".repeat(64);
+        for side in ["ev", "bev"] {
+            let rel = d.join(side).join(APP).join(&digest);
+            std::fs::create_dir_all(&rel).unwrap();
+            std::fs::write(rel.join("provenance.sigstore.jsonl"), "p\n").unwrap();
+        }
+        for sub in ["locks", "blocks", "tools", "btools"] {
+            std::fs::create_dir_all(d.join(sub)).unwrap();
+        }
+        std::fs::write(
+            d.join("TOOLS.lock"),
+            format!("t o/r {} linux-x86_64 {}\n", "a".repeat(40), "c".repeat(64)),
+        )
+        .unwrap();
+        let floors =
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../supply-chain/policy/floors.json");
+        // the base tree: this repository's, for its signer policy
+        let base_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+        let run_it = || {
+            let p = |x: &str| d.join(x).to_string_lossy().into_owned();
+            let args: Vec<String> = [
+                "gate",
+                "--base",
+                &p("TOOLS.lock"),
+                "--head",
+                &p("TOOLS.lock"),
+                "--evidence",
+                &p("ev"),
+                "--base-evidence",
+                &p("bev"),
+                "--locks-dir",
+                &p("locks"),
+                "--base-locks-dir",
+                &p("blocks"),
+                "--tools-dir",
+                &p("tools"),
+                "--base-tools-dir",
+                &p("btools"),
+                "--base-root",
+                &base_root.to_string_lossy(),
+                "--floors",
+                &floors.to_string_lossy(),
+                "--report",
+                &p("report.md"),
+            ]
+            .map(String::from)
+            .to_vec();
+            run(&args)
+        };
+        assert_eq!(run_it(), 0);
+        std::fs::write(d.join("ev").join(APP).join(&digest).join("notes.txt"), "x").unwrap();
+        assert_eq!(run_it(), 1);
+        let report = std::fs::read_to_string(d.join("report.md")).unwrap();
+        assert!(report.contains("not one of the app's records"), "{report}");
+        std::fs::remove_file(d.join("ev").join(APP).join(&digest).join("notes.txt")).unwrap();
+        // sign-offs are history: quality-passing ack lines, one of them removed
+        let real = std::fs::read_to_string(
+            Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../supply-chain/evidence/cargo-vet/acks.jsonl"),
+        )
+        .unwrap();
+        let lines: Vec<&str> = real
+            .lines()
+            .filter(|l| !l.trim().is_empty())
+            .take(2)
+            .collect();
+        let acks = |side: &str, body: String| {
+            std::fs::write(d.join(side).join(APP).join("acks.jsonl"), body).unwrap()
+        };
+        acks("bev", format!("{}\n{}\n", lines[0], lines[1]));
+        acks("ev", format!("{}\n{}\n", lines[0], lines[1]));
+        assert_eq!(run_it(), 0, "unchanged");
+        acks("ev", format!("{}\n", lines[0]));
+        assert_eq!(run_it(), 1, "a sign-off removed");
+        let report = std::fs::read_to_string(d.join("report.md")).unwrap();
+        assert!(
+            report.contains("sign-offs are added, never rewritten"),
+            "{report}"
+        );
+        // a sign-off added in order, but with nothing to show it is a signer's (no test merge
+        // here, no branch of this repository, no opener given): it does not count
+        acks("bev", format!("{}\n", lines[0]));
+        acks("ev", format!("{}\n{}\n", lines[0], lines[1]));
+        assert_eq!(run_it(), 1, "an unattributed sign-off");
+        let report = std::fs::read_to_string(d.join("report.md")).unwrap();
+        for why in [
+            "signed by a listed signer",
+            "sign-offs come only from a branch of",
+            "not a listed signer",
+            "is the checkout a test merge?",
+        ] {
+            assert!(report.contains(why), "{why}: {report}");
+        }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
     /// No policy, no verdict: a broken floors file blocks a change even when nothing else in it
     /// is evaluated.
     #[test]
@@ -4310,8 +6286,8 @@ mod tests {
             .to_vec();
             run(&args)
         };
-        // The workflow enforces a written PASS line, not only the exit status: it is the line a
-        // passing run writes, and a blocked run does not.
+        // The workflow enforces a written PASS line as the report's last line, not only the exit
+        // status: it is the line a passing run ends with, and a blocked run does not.
         let wf = std::fs::read_to_string(
             Path::new(env!("CARGO_MANIFEST_DIR")).join("../.github/workflows/candidate-eval.yml"),
         )
@@ -4319,8 +6295,9 @@ mod tests {
         let required = wf
             .lines()
             .find_map(|l| {
-                l.split_once("grep -qxF '")
-                    .and_then(|(_, r)| r.split_once('\''))
+                l.trim_start()
+                    .strip_prefix("pass='")
+                    .and_then(|r| r.split_once('\''))
             })
             .map(|(line, _)| line.to_string())
             .expect("candidate-eval enforces a PASS line");
@@ -4328,7 +6305,8 @@ mod tests {
             std::fs::read_to_string(d.join("report.md"))
                 .unwrap()
                 .lines()
-                .any(|l| l == required)
+                .last()
+                .is_some_and(|l| l == required)
         };
         assert_eq!(run_with(&good), 0);
         assert!(has(), "a passing report carries `{required}`");
