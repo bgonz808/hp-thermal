@@ -223,8 +223,8 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    pull request it was for, so a later deny is never set aside for an earlier pass (and a pass got
    by evaluating again relies on every check failing closed, as they do). GitHub keeps at most
    1000 statuses per head and context and then accepts none, a withdrawal included: from 900 on,
-   a head gets `failure` ("push a new commit") instead of `pending` or a pass, so the last status
-   that lands is never a pass; a withdrawal from a head that already shows a failure posts
+   a head gets `failure` ("push a new commit") instead of `pending` or a pass, so a head that
+   reaches the cap never ends on a pass; a withdrawal from a head that already shows a failure posts
    nothing. Posts are retried. A title or body edit runs nothing, and an event that is not
    evaluated has concurrency groups of its own, so it cancels no evaluation. The status is posted
    as a GitHub App only this workflow uses, allowed nothing but commit statuses; the required check
@@ -238,8 +238,9 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    report indents everything a change supplies, so no text from the change starts one of its
    lines; the comment names the head and base it judged. A maintainer dispatch reports in its run
    only. The scripts that post are tested as written in the workflow, against a fake GitHub API
-   that keeps GitHub's cap, in the required `scan` check (`.github/tests/gate-status/`;
-   `mutate.py` breaks each guard and expects a failure); the trigger, the jobs' conditions and the
+   that keeps GitHub's cap, in the required `scan` check (`.github/tests/gate-status/test.py`;
+   `mutate.py`, run by hand when the scripts change, breaks each guard and expects a failure);
+   the trigger, the jobs' conditions and the
    concurrency groups are GitHub's to evaluate, and the scripts check the action, base and head
    themselves. This needs these repository settings: the status required on `main` with the App
    as its source, branches up to date before merging (a verdict is judged against `main`'s tip),
@@ -250,16 +251,24 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    2026-12-02). Approval before fork pull requests run workflows does not hold back this workflow
    (`pull_request_target` runs regardless); it delays a fork's own workflows, the ones that could
    create a check run named like the verdict or share a concurrency group with this one. What is
-   left: a pass is not judged again until an event on a pull request with that head, so
-   advisories published after the evaluation are not seen until then; an event that ran no
-   workflow (GitHub Actions down, the policy missing), a post that failed all its retries, or a
-   verdict job stopped between its pass and its re-check leaves a pass on a head its pull request
-   left; a verdict that reads the head just before a newer run posts lands after it, so the head
-   shows the older verdict, for a pull request still open on it, until the newer run's verdict
-   (or the next event, if that run posts none); and anyone who can open a pull request can make a
-   head it shares show `failure` or `pending` (a failing evaluation, a head filled to 900
-   statuses, a fork workflow sharing a concurrency group name, an exhausted API quota), which
-   blocks, never passes.
+   left. A verdict is a status on the head, which every pull request with that head shares, and a
+   pass leaves only when a later post lands on it; so a pass stays on a head its pull request left
+   whenever that post does not land: an event that ran no workflow (GitHub Actions down, the
+   policy missing), a post that failed all its retries, a verdict job stopped between its pass and
+   its re-check (a fork's own workflow, once approved, can cancel it by sharing its concurrency
+   group name), or posts starved on purpose: anyone can raise enough events (a pull request
+   pushed back and forth) to exhaust the App's API quota, and while it lasts no post lands, a
+   withdrawal included. A pull request opened from that head (anyone can: the commit is public)
+   then shows the required check green, though its own evaluation fails. The status names the
+   pull request it judged (`#<pr>: ...`), so a pass naming another pull request is not this one's
+   pass: until merges are judged at merge time, merge only a pull request whose gate status names
+   it. Besides: a pass is not judged again until an event on a pull request with that head, so
+   advisories published after the evaluation are not seen until then; a verdict that reads the
+   head just before a newer run posts lands after it, so the head shows the older verdict, for a
+   pull request still open on it, until the newer run's verdict (or the next event, if that run
+   posts none); and anyone who can open a pull request can make a head it shares show `failure`
+   or `pending` (a failing evaluation, a head filled to 900 statuses, a fork workflow sharing a
+   concurrency group name), which blocks.
 4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
    digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
    on the axes it touched, against the base commit's record (the workflow extracts that tree). An

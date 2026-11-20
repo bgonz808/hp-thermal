@@ -12,6 +12,8 @@ BOTH, FIRST, SECOND = "both", 1, 2
 M = [
     # helpers
     ("post: retried", BOTH, "for i in 1 2 3; do", "for i in 1; do"),
+    ("post: says what landed", BOTH, 'export GATE_POSTED="$state"', 'export GATE_POSTED="$2"'),
+    ("app_status: no App slug is unreadable", BOTH, '[ -n "${APP_SLUG:-}" ] || return 1', ":"),
     ("app_status: the App's statuses only", BOTH, ' and .creator.login == \\"${APP_SLUG}[bot]\\"', ""),
     ("app_status: the newest first", BOTH, '<<< "$(head -n 1 <<< "$rows")"', '<<< "$(tail -n 1 <<< "$rows")"'),
     ("on_head: open", BOTH, '[ "${f[0]}" = open ]', "true"),
@@ -42,6 +44,7 @@ M = [
     ("claim: never over a newer run", FIRST, 'if newer "$run" "$attempt" \\', 'if false \\'),
     ("claim: never over its own run's verdict", FIRST, '|| { [ "$run" = "$GITHUB_RUN_ID" ] && [ "$attempt" = "$GITHUB_RUN_ATTEMPT" ]; }; then', "; then"),
     # verdict
+    ("verdict: fails with a pass held back at the cap", FIRST, 'if [ "$GATE_POSTED" != "$state" ]; then', "if false; then"),
     ("verdict: the evaluation succeeded", FIRST, '[ "${VERDICT:-}" = success ] && [ "$EVALUATED" = success ]', '[ "${VERDICT:-}" = success ]'),
     ("verdict: a spoof fails", FIRST, 'if spoofed; then\n            state=failure', 'if false; then\n            state=failure'),
     ("verdict: only while open on the head", FIRST, 'if ! on_head "$VERDICT_PR"; then', "if false; then"),
