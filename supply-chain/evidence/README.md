@@ -210,39 +210,46 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    request's head, taken from the event: `success` only when the gate exits 0 and the report's
    last line is the PASS line, `failure` on anything else. A head's status is shared by every
    pull request with that head, so each status names the pull request it judged and the run
-   that posted it, and none outlives its pull request. Every event claims the head for its pull
-   request at once (`pending`, from a job outside the evaluation's concurrency group), and the
-   verdict follows, posted only while the pull request is open and still that head on `main`,
-   never from a cancelled run, and never over a newer run's status. A fork's pull request leaves
-   a head whose status an open pull request from this repository to `main` holds (the same tree,
-   judged in a context at least as strict); otherwise it claims the head and its own verdict
-   stands. Closing a pull request without merging withdraws its verdict from the head (`failure`),
-   and a pass posted while it closed is withdrawn by the verdict job itself; a pull request opened
-   later from that head is judged on its own. A title or body edit runs nothing. The status is
-   posted as a GitHub App only this workflow uses, allowed nothing but commit statuses; the
-   required check names that App as its source, so a check run or status from anywhere else (a
-   fork's own workflow posts as GitHub Actions) does not satisfy it. The App's key is a secret of
-   the environment `gate`, which only `main` may use, and only the two jobs that post hold it,
-   each on its own runner, taking nothing from the change but the verdict; the job that reads the
-   change holds no key, can write nothing, and hands on only its verdict and report, which a
-   third job, without the key, posts as the comment. A check run whose name is the context (in
-   any case or spacing) is treated as an impersonation all the same, and the head gets
-   `failure`. The report indents everything a change supplies, so no text from the change starts
-   one of its lines; the comment names the head and base it judged. A maintainer dispatch
-   reports in its run only. These rules are tested as written in the workflow, against a fake
-   GitHub API, in the required `scan` check (`.github/tests/gate-status/`; `mutate.py` breaks
-   each guard and expects a failure). This holds with the repository's settings as they are: the
+   that posted it, and a verdict stands only while its pull request is open to `main` on that
+   head. Every event of every pull request first withdraws (`failure`) what the pull request left,
+   if its verdict is still the head's latest: the head it left on a push, and its head when it
+   closes unmerged or is not, or no longer, to `main` (the workflow runs for every base for this).
+   Then a pull request to `main` claims its head (`pending`) and its verdict follows, posted only
+   while it is open and still that head on `main`, never from a cancelled run, and not over a
+   newer run's status already there; a pass posted while the pull request closed, was pushed to or
+   was retargeted is withdrawn by the verdict job itself. No pull request defers to another: the
+   latest evaluation of a head stands, whichever pull request it was for, so a later deny is never
+   set aside for an earlier pass. A title or body edit runs nothing. The status is posted as a
+   GitHub App only this workflow uses, allowed nothing but commit statuses; the required check
+   names that App as its source, so a check run or status from anywhere else (a fork's own
+   workflow posts as GitHub Actions) does not satisfy it. The App's key is a secret of the
+   environment `gate`, which only `main` may use, and only the two jobs that post hold it, each on
+   its own runner, taking nothing from the change but the verdict; the job that reads the change
+   holds no key, can write nothing, and hands on only its verdict and report, which a third job,
+   without the key, posts as the comment. A check run whose name is the context (ASCII case and
+   spacing aside) is treated as an impersonation all the same, and the head gets `failure`. The
+   report indents everything a change supplies, so no text from the change starts one of its
+   lines; the comment names the head and base it judged. A maintainer dispatch reports in its run
+   only. The scripts that post are tested as written in the workflow, against a fake GitHub API,
+   in the required `scan` check (`.github/tests/gate-status/`; `mutate.py` breaks each guard and
+   expects a failure); the trigger and the jobs' conditions are GitHub's to evaluate, and the
+   scripts check the action, base and head themselves. This needs these repository settings: the
    status required on `main` with the App as its source, branches up to date before merging (a
    verdict is judged against `main`'s tip), squash merges only (a merge lands the tree the gate
-   judged), the environment `gate` limited to `main`, and an Actions policy that allows
-   `pull_request_target` for this workflow (GitHub blocks it by default in public repositories
-   from 2026-12-02). Approval before fork pull requests run workflows does not hold back this
-   workflow (`pull_request_target` runs regardless); it delays a fork's own workflows, the ones
-   that could create a check run named like the verdict. What is left: a pass stands until an
-   event on its pull request or a close changes it, so advisories published after the evaluation
-   are not seen until the next one, and a close that ran no workflow (GitHub Actions down or the
-   policy missing) leaves the pass on the head; and anyone who can open a pull request can make
-   the gate post `failure` on a shared head, which blocks, never passes.
+   judged), the environment `gate` limited to `main` (created before the workflow first runs: a
+   run that names a missing environment creates it without rules), and an Actions policy that
+   allows `pull_request_target` for this workflow, for every actor (GitHub blocks it by default in
+   public repositories from 2026-12-02). Approval before fork pull requests run workflows does not
+   hold back this workflow (`pull_request_target` runs regardless); it delays a fork's own
+   workflows, the ones that could create a check run named like the verdict. What is left: a pass
+   is not judged again until an event on a pull request with that head, so advisories published
+   after the evaluation are not seen until then; an event that ran no workflow (GitHub Actions
+   down, the policy missing) or a withdrawal that could not post (retried, then the run fails)
+   leaves a pass on a head its pull request left, as does a head past GitHub's 1000 statuses;
+   a verdict that reads the head just before a newer run posts lands after it, so the head shows
+   the older verdict, for a pull request still open on it, until the next event; and anyone who
+   can open a pull request can make the gate post `failure` on a head it shares, which blocks,
+   never passes.
 4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
    digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
    on the axes it touched, against the base commit's record (the workflow extracts that tree). An
