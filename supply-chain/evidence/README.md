@@ -216,13 +216,17 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    from this repository to `main` also has. The status is posted as a GitHub App only this
    workflow uses, allowed nothing but commit statuses; the required check names that App as its
    source, so a check run or status from anywhere else (a fork's own workflow posts as GitHub
-   Actions) does not satisfy it. A check run whose name is the context (in any case or spacing)
-   is treated as an impersonation all the same, and the head gets `failure`. The report indents
-   everything a change supplies, so no text from the change starts one of its lines; the
-   comment names the head and base it judged. This holds with `main`'s settings as they are:
-   the status required with the App as its source, branches up to date before merging (a
-   verdict is judged against `main`'s tip), squash merges only (a merge lands the tree the gate
-   judged), and approval before fork pull requests run workflows.
+   Actions) does not satisfy it. The App's key is a secret of the environment `gate`, which only
+   `main` may use, and only the two jobs that post hold it, each on its own runner; the job that
+   reads the change holds no key, can write nothing, and hands on only its verdict and report. A
+   check run whose name is the context (in any case or spacing) is treated as an impersonation
+   all the same, and the head gets `failure`. The report indents everything a change supplies,
+   so no text from the change starts one of its lines; the comment names the head and base it
+   judged. A maintainer dispatch reports in its run only. This holds with the repository's
+   settings as they are: the status required on `main` with the App as its source, branches up
+   to date before merging (a verdict is judged against `main`'s tip), squash merges only (a
+   merge lands the tree the gate judged), the environment `gate` limited to `main`, and approval
+   before fork pull requests run workflows.
 4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
    digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
    on the axes it touched, against the base commit's record (the workflow extracts that tree). An
