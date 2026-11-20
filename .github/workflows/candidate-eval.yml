@@ -116,7 +116,7 @@ jobs:
           # post <sha> <state> <text>, retried: a lost withdrawal would leave a pass standing.
           # GitHub keeps at most 1000 statuses per head and context, past which nothing posts, a
           # withdrawal included: from 900 on, a head gets failure instead (a count that cannot be
-          # read counts as 1000), so the last status that lands on a head is never a pass.
+          # read counts as 1000), so a head that reaches the cap never ends on a pass.
           post() {
             local i n state=$2 text=$3
             if [ "$state" != failure ]; then
@@ -128,11 +128,14 @@ jobs:
               fi
             fi
             for i in 1 2 3; do
-              GH_TOKEN="$STATUS_TOKEN" gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$1" \
-                -f state="$state" -f context=candidate-eval/gate -f description="#$VERDICT_PR: $text" \
-                -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
-                > /dev/null && return 0
-              sleep "$i"
+              if GH_TOKEN="$STATUS_TOKEN" gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$1" \
+                   -f state="$state" -f context=candidate-eval/gate -f description="#$VERDICT_PR: $text" \
+                   -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
+                   > /dev/null; then
+                export GATE_POSTED="$state" # what landed (a pass held back at the cap is a failure)
+                return 0
+              fi
+              [ "$i" -lt 3 ] && sleep "$i"
             done
             return 1
           }
@@ -140,6 +143,7 @@ jobs:
           # for a field that does not parse; "none 0 0 0" when there is none). A failed lookup
           # returns 1.
           app_status() {
+            [ -n "${APP_SLUG:-}" ] || return 1 # no App to tell its statuses by: unreadable
             local rows state desc url owner=0 run=0 attempt=0
             local own='^#([0-9]+): ' at='/actions/runs/([0-9]+)/attempts/([0-9]+)$'
             rows=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$1/statuses?per_page=100" \
@@ -507,7 +511,7 @@ jobs:
           # post <sha> <state> <text>, retried: a lost withdrawal would leave a pass standing.
           # GitHub keeps at most 1000 statuses per head and context, past which nothing posts, a
           # withdrawal included: from 900 on, a head gets failure instead (a count that cannot be
-          # read counts as 1000), so the last status that lands on a head is never a pass.
+          # read counts as 1000), so a head that reaches the cap never ends on a pass.
           post() {
             local i n state=$2 text=$3
             if [ "$state" != failure ]; then
@@ -519,11 +523,14 @@ jobs:
               fi
             fi
             for i in 1 2 3; do
-              GH_TOKEN="$STATUS_TOKEN" gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$1" \
-                -f state="$state" -f context=candidate-eval/gate -f description="#$VERDICT_PR: $text" \
-                -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
-                > /dev/null && return 0
-              sleep "$i"
+              if GH_TOKEN="$STATUS_TOKEN" gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$1" \
+                   -f state="$state" -f context=candidate-eval/gate -f description="#$VERDICT_PR: $text" \
+                   -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
+                   > /dev/null; then
+                export GATE_POSTED="$state" # what landed (a pass held back at the cap is a failure)
+                return 0
+              fi
+              [ "$i" -lt 3 ] && sleep "$i"
             done
             return 1
           }
@@ -531,6 +538,7 @@ jobs:
           # for a field that does not parse; "none 0 0 0" when there is none). A failed lookup
           # returns 1.
           app_status() {
+            [ -n "${APP_SLUG:-}" ] || return 1 # no App to tell its statuses by: unreadable
             local rows state desc url owner=0 run=0 attempt=0
             local own='^#([0-9]+): ' at='/actions/runs/([0-9]+)/attempts/([0-9]+)$'
             rows=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$1/statuses?per_page=100" \
@@ -605,6 +613,9 @@ jobs:
             state=failure desc="this head's status could not be read; re-run to judge"
           fi
           post "$VERDICT_SHA" "$state" "$desc" || { echo "::error::could not post the verdict status"; exit 1; }
+          if [ "$GATE_POSTED" != "$state" ]; then
+            state=$GATE_POSTED desc="too many statuses on this head; push a new commit"
+          fi
           # Closed, pushed or retargeted while judged: the pass is withdrawn here, without reading
           # the head again (that event's own withdrawal may have read it before this post, and a
           # read here could miss this post and take the withdrawal for newer).

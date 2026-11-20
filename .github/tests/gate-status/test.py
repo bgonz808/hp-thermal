@@ -87,12 +87,12 @@ class World:
         return open(p).read().splitlines() if os.path.exists(p) else []
 
     def run(self, script, pr, run_id, attempt=1, sha=H, before="", base="main", action="opened",
-            merged="false", verdict="", evaluated="success"):
+            merged="false", verdict="", evaluated="success", app_slug="gate-app"):
         env = dict(os.environ)
         env.update(FAKE=self.dir, PATH=FAKEBIN + os.pathsep + env["PATH"], GITHUB_REPOSITORY=REPO,
                    GITHUB_SERVER_URL="https://github.com", GITHUB_RUN_ID=str(run_id),
                    GITHUB_RUN_ATTEMPT=str(attempt), GH_TOKEN="gh-token", STATUS_TOKEN="app-token",
-                   APP_SLUG="gate-app", VERDICT_SHA=sha, VERDICT_PR=str(pr), BEFORE_SHA=before,
+                   APP_SLUG=app_slug, VERDICT_SHA=sha, VERDICT_PR=str(pr), BEFORE_SHA=before,
                    BASE_REF=base, ACTION=action, MERGED=merged, VERDICT=verdict, EVALUATED=evaluated)
         return subprocess.run([BASH, "-c", script], env=env, capture_output=True, text=True).returncode
 
@@ -266,8 +266,14 @@ def scenarios(claim, verdict):
     filler = lambda n: [status("failure", 9, 1, creator="github-actions[bot]")] * n
     TOOMANY = ("failure", "#1: too many statuses on this head; push a new commit")
     w = World({H: [status("pending", 1, 500)] + filler(899)}, {1: pull()})
-    w.run(verdict, 1, 500, verdict="success", evaluated="success")
+    rc = w.run(verdict, 1, 500, verdict="success", evaluated="success")
     yield "at 900 statuses a pass becomes failure", w.top() == TOOMANY, w.top()
+    yield "and the verdict job fails with it", rc != 0, rc
+    w.close()
+    # no App slug: the App's statuses cannot be told apart, so the head reads as unreadable
+    w = World({H: [status("success", 1, 100)]}, {1: pull(state="closed")})
+    w.run(claim, 1, 200, action="closed", app_slug="")
+    yield "without the App's slug a close still withdraws", w.posts() and w.posts()[-1].split("\t")[1] == "failure", w.posts()
     w.close()
     w = World({H: [status("pending", 1, 500)] + filler(898)}, {1: pull()})
     w.run(verdict, 1, 500, verdict="success", evaluated="success")
