@@ -10,9 +10,10 @@ name: Candidate evaluation
 # UNEVALUATED cannot be acked (fail-secure, #241 §3-4).
 #
 # JUDGED FROM THE BASE. Everything that runs is main's: this workflow (`pull_request_target`
-# takes it from the base branch, and only pull requests to main run it, so no other branch's
-# copy of it judges anything), the gate's code (xtask, built here with main's cargo
-# configuration), the composite actions and the floors. The change is GitHub's test merge of the
+# takes it from the default branch, main, whatever the pull request's base, so no other branch's
+# copy of it judges anything; it runs for every base, and evaluates pull requests to main only),
+# the gate's code (xtask, built here with main's cargo configuration), the composite actions and
+# the floors. The change is GitHub's test merge of the
 # pull request into main's current tip, checked out into its own directory as data, with no
 # hooks and no filter drivers; nothing in it is built or run, and the gate reads it there with
 # workflow commands stopped (`::stop-commands::`), so nothing it prints is a command.
@@ -113,11 +114,22 @@ jobs:
           # Every status the App posts names its pull request and its run: the description
           # "#<pr>: <text>", the target ".../actions/runs/<id>/attempts/<n>".
           # post <sha> <state> <text>, retried: a lost withdrawal would leave a pass standing.
+          # GitHub keeps at most 1000 statuses per head and context, past which nothing posts, a
+          # withdrawal included: from 900 on, a head gets failure instead (a count that cannot be
+          # read counts as 1000), so the last status that lands on a head is never a pass.
           post() {
-            local i
+            local i n state=$2 text=$3
+            if [ "$state" != failure ]; then
+              n=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$1/statuses?per_page=100" \
+                    --jq '[.[] | select(.context == "candidate-eval/gate")] | length' \
+                    | awk '{ s += $1 } END { print s + 0 }') || n=1000
+              if [ "$n" -ge 900 ]; then
+                state=failure text="too many statuses on this head; push a new commit"
+              fi
+            fi
             for i in 1 2 3; do
               GH_TOKEN="$STATUS_TOKEN" gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$1" \
-                -f state="$2" -f context=candidate-eval/gate -f description="#$VERDICT_PR: $3" \
+                -f state="$state" -f context=candidate-eval/gate -f description="#$VERDICT_PR: $text" \
                 -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
                 > /dev/null && return 0
               sleep "$i"
@@ -163,11 +175,14 @@ jobs:
                    | grep -cxF 'candidate-eval/gate')" != 0 ]
           }
           # withdraw <sha> <why>: this pull request's verdict no longer stands on that head. If the
-          # App's latest status there names this pull request, and no newer run posted it (or the
-          # status cannot be read), it becomes failure.
+          # App's latest status there is this pull request's pending or pass, and no newer run
+          # posted it (or the status cannot be read), it becomes failure. A head whose latest
+          # status is a failure has nothing to withdraw. (claim's; verdict posts its own failure)
+          # shellcheck disable=SC2329
           withdraw() {
-            local s owner=unknown run=0 attempt=0
-            if s=$(app_status "$1"); then read -r _ owner run attempt <<< "$s"; fi
+            local s state=unknown owner=unknown run=0 attempt=0
+            if s=$(app_status "$1"); then read -r state owner run attempt <<< "$s"; fi
+            [ "$state" = failure ] && return 0
             if [ "$owner" = unknown ] || { [ "$owner" = "$VERDICT_PR" ] && ! newer "$run" "$attempt"; }; then
               post "$1" failure "$2; its verdict no longer stands" \
                 || { echo "::error::could not withdraw #$VERDICT_PR's verdict from $1"; return 1; }
@@ -211,7 +226,8 @@ jobs:
           && (github.event.action != 'edited' || github.event.changes.base))
     runs-on: windows-2025
     concurrency:
-      group: candidate-eval-${{ github.event_name }}-${{ github.event.pull_request.number || github.event.inputs.pr || github.run_id }}
+      # An event that is not evaluated has a group of its own: it never cancels an evaluation.
+      group: candidate-eval-${{ github.event_name }}-${{ (github.event_name != 'pull_request_target' || (github.event.pull_request.base.ref == 'main' && github.event.action != 'closed' && (github.event.action != 'edited' || github.event.changes.base))) && (github.event.pull_request.number || github.event.inputs.pr) || github.run_id }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -396,7 +412,7 @@ jobs:
       && needs.evaluate.result != 'cancelled' && needs.evaluate.result != 'skipped'
     runs-on: ubuntu-24.04
     concurrency:
-      group: candidate-eval-comment-${{ github.event.pull_request.number }}
+      group: candidate-eval-comment-${{ (github.event.pull_request.base.ref == 'main' && github.event.action != 'closed' && (github.event.action != 'edited' || github.event.changes.base)) && github.event.pull_request.number || github.run_id }}
       cancel-in-progress: false
     permissions:
       pull-requests: write # the evidence comment
@@ -458,7 +474,7 @@ jobs:
       name: gate # the App's key: main only
       deployment: false
     concurrency:
-      group: candidate-eval-verdict-${{ github.event.pull_request.number }}
+      group: candidate-eval-verdict-${{ (github.event.pull_request.base.ref == 'main' && github.event.action != 'closed' && (github.event.action != 'edited' || github.event.changes.base)) && github.event.pull_request.number || github.run_id }}
       cancel-in-progress: false
     permissions:
       statuses: read
@@ -489,11 +505,22 @@ jobs:
           # Every status the App posts names its pull request and its run: the description
           # "#<pr>: <text>", the target ".../actions/runs/<id>/attempts/<n>".
           # post <sha> <state> <text>, retried: a lost withdrawal would leave a pass standing.
+          # GitHub keeps at most 1000 statuses per head and context, past which nothing posts, a
+          # withdrawal included: from 900 on, a head gets failure instead (a count that cannot be
+          # read counts as 1000), so the last status that lands on a head is never a pass.
           post() {
-            local i
+            local i n state=$2 text=$3
+            if [ "$state" != failure ]; then
+              n=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$1/statuses?per_page=100" \
+                    --jq '[.[] | select(.context == "candidate-eval/gate")] | length' \
+                    | awk '{ s += $1 } END { print s + 0 }') || n=1000
+              if [ "$n" -ge 900 ]; then
+                state=failure text="too many statuses on this head; push a new commit"
+              fi
+            fi
             for i in 1 2 3; do
               GH_TOKEN="$STATUS_TOKEN" gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$1" \
-                -f state="$2" -f context=candidate-eval/gate -f description="#$VERDICT_PR: $3" \
+                -f state="$state" -f context=candidate-eval/gate -f description="#$VERDICT_PR: $text" \
                 -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT" \
                 > /dev/null && return 0
               sleep "$i"
@@ -539,11 +566,14 @@ jobs:
                    | grep -cxF 'candidate-eval/gate')" != 0 ]
           }
           # withdraw <sha> <why>: this pull request's verdict no longer stands on that head. If the
-          # App's latest status there names this pull request, and no newer run posted it (or the
-          # status cannot be read), it becomes failure.
+          # App's latest status there is this pull request's pending or pass, and no newer run
+          # posted it (or the status cannot be read), it becomes failure. A head whose latest
+          # status is a failure has nothing to withdraw. (claim's; verdict posts its own failure)
+          # shellcheck disable=SC2329
           withdraw() {
-            local s owner=unknown run=0 attempt=0
-            if s=$(app_status "$1"); then read -r _ owner run attempt <<< "$s"; fi
+            local s state=unknown owner=unknown run=0 attempt=0
+            if s=$(app_status "$1"); then read -r state owner run attempt <<< "$s"; fi
+            [ "$state" = failure ] && return 0
             if [ "$owner" = unknown ] || { [ "$owner" = "$VERDICT_PR" ] && ! newer "$run" "$attempt"; }; then
               post "$1" failure "$2; its verdict no longer stands" \
                 || { echo "::error::could not withdraw #$VERDICT_PR's verdict from $1"; return 1; }
@@ -575,10 +605,11 @@ jobs:
             state=failure desc="this head's status could not be read; re-run to judge"
           fi
           post "$VERDICT_SHA" "$state" "$desc" || { echo "::error::could not post the verdict status"; exit 1; }
-          # Closed, pushed or retargeted while judged: the pass is withdrawn here (that event's
-          # own withdrawal may have read the head before this post).
+          # Closed, pushed or retargeted while judged: the pass is withdrawn here, without reading
+          # the head again (that event's own withdrawal may have read it before this post, and a
+          # read here could miss this post and take the withdrawal for newer).
           if [ "$state" = success ] && ! on_head "$VERDICT_PR"; then
-            withdraw "$VERDICT_SHA" "closed or moved while judged" || true
+            post "$VERDICT_SHA" failure "closed or moved while judged; its verdict no longer stands" || true
             state=failure desc="closed or moved while judged"
           fi
           [ "$state" = success ] || { echo "::error::$desc"; exit 1; }

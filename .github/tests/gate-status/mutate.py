@@ -24,9 +24,15 @@ M = [
     ("spoofed: case and spacing", BOTH, "| tr '[:upper:]' '[:lower:]' | tr -d ' \\t\\r'", ""),
     ("withdraw: only this pull request's", BOTH, '[ "$owner" = "$VERDICT_PR" ] && ', ""),
     ("withdraw: never a newer run's", BOTH, ' && ! newer "$run" "$attempt"', ""),
-    ("withdraw: an unreadable head withdraws", BOTH, "local s owner=unknown run=0 attempt=0", "local s owner=0 run=0 attempt=0"),
+    ("withdraw: an unreadable head withdraws", BOTH, "local s state=unknown owner=unknown run=0 attempt=0", "local s state=unknown owner=0 run=0 attempt=0"),
+    ("withdraw: nothing to withdraw from a failure", BOTH, '[ "$state" = failure ] && return 0', ":"),
+    ("post: from 900 statuses, failure only", BOTH, 'if [ "$n" -ge 900 ]; then', "if false; then"),
+    ("post: an unreadable count counts as full", BOTH, "| awk '{ s += $1 } END { print s + 0 }') || n=1000", "| awk '{ s += $1 } END { print s + 0 }') || n=0"),
+    ("app_status: this context only", BOTH, '.context == \\"candidate-eval/gate\\" and .creator', ".creator"),
     ("withdraw: a failed post fails", BOTH, '{ echo "::error::could not withdraw #$VERDICT_PR\'s verdict from $1"; return 1; }', "true"),
     # claim
+    ("claim: a failed withdrawal fails the run", FIRST, 'withdraw "$BEFORE_SHA" "moved to a new head" || rc=1', 'withdraw "$BEFORE_SHA" "moved to a new head" || true'),
+    ("claim: no head before, nothing to withdraw", FIRST, '[ -n "${BEFORE_SHA:-}" ]', "true"),
     ("claim: a push withdraws the head left", FIRST, 'withdraw "$BEFORE_SHA" "moved to a new head" || rc=1', ":"),
     ("claim: a close withdraws", FIRST, '[ "$MERGED" = true ] || withdraw "$VERDICT_SHA" "closed" || rc=1', ":"),
     ("claim: a merge withdraws nothing", FIRST, '[ "$MERGED" = true ] || withdraw', "withdraw"),
@@ -41,6 +47,7 @@ M = [
     ("verdict: only while open on the head", FIRST, 'if ! on_head "$VERDICT_PR"; then', "if false; then"),
     ("verdict: never over a newer run", FIRST, '            if newer "$run" "$attempt"; then', "            if false; then"),
     ("verdict: an unreadable head fails", FIRST, 'state=failure desc="this head\'s status could not be read; re-run to judge"', ":"),
+    ("verdict: the re-check posts without reading", FIRST, 'post "$VERDICT_SHA" failure "closed or moved while judged; its verdict no longer stands" || true', 'withdraw "$VERDICT_SHA" "closed or moved while judged" || true'),
     ("verdict: withdrawn when moved while judged", FIRST, 'if [ "$state" = success ] && ! on_head "$VERDICT_PR"; then', "if false; then"),
 ]
 
