@@ -140,7 +140,8 @@ jobs:
             echo "$state $owner $run $attempt"
           }
           # on_head <pr>: whether that pull request is open, to main, with head $VERDICT_SHA. A
-          # failed lookup is a no.
+          # failed lookup is a no. (verdict's; claim reads the event instead)
+          # shellcheck disable=SC2329
           on_head() {
             local f
             mapfile -t f < <(gh api "repos/$GITHUB_REPOSITORY/pulls/$1" \
@@ -515,7 +516,8 @@ jobs:
             echo "$state $owner $run $attempt"
           }
           # on_head <pr>: whether that pull request is open, to main, with head $VERDICT_SHA. A
-          # failed lookup is a no.
+          # failed lookup is a no. (verdict's; claim reads the event instead)
+          # shellcheck disable=SC2329
           on_head() {
             local f
             mapfile -t f < <(gh api "repos/$GITHUB_REPOSITORY/pulls/$1" \
