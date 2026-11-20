@@ -78,7 +78,8 @@ class World:
 
     def top(self, sha=H):
         p = os.path.join(self.dir, f"statuses_{sha}.json")
-        st = [s for s in (json.load(open(p)) if os.path.exists(p) else []) if s["creator"]["login"] == "gate-app[bot]"]
+        st = [s for s in (json.load(open(p)) if os.path.exists(p) else [])
+              if s["creator"]["login"] == "gate-app[bot]" and s["context"] == "candidate-eval/gate"]
         return (st[0]["state"], st[0]["description"]) if st else None
 
     def posts(self):
@@ -216,7 +217,7 @@ def scenarios(claim, verdict):
         w.close()
     w = World({H: [status("pending", 1, 500)]}, {1: pull()}, fail=["statuses"])
     w.run(verdict, 1, 500, verdict="success", evaluated="success")
-    yield "an unreadable status is answered with failure", w.posts() and w.posts()[-1].split("\t")[1] == "failure", w.posts()
+    yield "an unreadable status is answered with failure", w.posts() and w.posts()[-1].split("\t")[1:] == ["failure", "#1: this head's status could not be read; re-run to judge"], w.posts()
     w.close()
     for name, after in (("closed", pull(state="closed")), ("pushed", pull(head=H2)), ("retargeted", pull(base="dev"))):
         w = World({H: [status("pending", 1, 500)]}, {1: pull()})
@@ -247,6 +248,58 @@ def scenarios(claim, verdict):
     w = World({H: [status("success", 1, 100)]}, {1: pull(state="closed")}, fail=["post"])
     rc = w.run(claim, 1, 200, action="closed")
     yield "a withdrawal that cannot post fails the run", rc != 0, rc
+    w.close()
+    w = World({H: [status("success", 1, 100)]}, {1: pull(head=H2)}, fail=["post_" + H])
+    rc = w.run(claim, 1, 200, sha=H2, before=H, action="synchronize")
+    yield "a push whose withdrawal cannot post fails the run", rc != 0 and w.top(H2) == ("pending", "#1: evaluating"), (rc, w.top(H2))
+    w.close()
+    w = World({}, {1: pull()})
+    rc = w.run(claim, 1, 200, before="", action="synchronize")
+    yield "a push with no head before it withdraws nothing", rc == 0 and all(not l.startswith("\t") for l in w.posts()), (rc, w.posts())
+    w.close()
+    other = dict(status("success", 1, 900), context="other/context")
+    w = World({H: [other, status("pending", 1, 500)]}, {1: pull()})
+    w.run(claim, 1, 600)
+    yield "the App's statuses of another context are not the head's", w.top() == ("pending", "#1: evaluating"), w.top()
+    w.close()
+    # --- GitHub keeps at most 1000 statuses per head and context: from 900 on, failure only ---
+    filler = lambda n: [status("failure", 9, 1, creator="github-actions[bot]")] * n
+    TOOMANY = ("failure", "#1: too many statuses on this head; push a new commit")
+    w = World({H: [status("pending", 1, 500)] + filler(899)}, {1: pull()})
+    w.run(verdict, 1, 500, verdict="success", evaluated="success")
+    yield "at 900 statuses a pass becomes failure", w.top() == TOOMANY, w.top()
+    w.close()
+    w = World({H: [status("pending", 1, 500)] + filler(898)}, {1: pull()})
+    w.run(verdict, 1, 500, verdict="success", evaluated="success")
+    passed = w.top()
+    w.put("pull_1.json", pull(state="closed"))
+    w.run(claim, 1, 600, action="closed")
+    yield "below 900 a pass is posted", passed == ("success", "#1: all axes ALLOW or signed"), passed
+    yield "past it, the withdrawal still lands", w.top()[0] == "failure", w.top()
+    w.close()
+    w = World({H: filler(900)}, {1: pull()})
+    w.run(claim, 1, 500)
+    yield "at 900 statuses a claim is failure", w.top() == TOOMANY, w.top()
+    w.close()
+    w = World({H: [status("pending", 1, 500)]}, {1: pull()}, fail=["statuses_count"])
+    w.run(verdict, 1, 500, verdict="success", evaluated="success")
+    yield "a count that cannot be read counts as full", w.top() == TOOMANY, w.top()
+    w.close()
+    # an attacker's pull request off main, pushing back and forth, adds no statuses to a head
+    # whose latest is already a failure
+    w = World({H: [status("failure", 2, 100)]}, {2: pull(base="dev")})
+    for k in range(10):
+        a, b = (H, H2) if k % 2 else (H2, H)
+        w.run(claim, 2, 200 + k, sha=a, before=b, base="dev", action="synchronize")
+    yield "pushes off main add nothing to a failed head", not w.posts(), w.posts()
+    w.close()
+    # the verdict's re-check posts without reading: a read that missed its own pass, seeing the
+    # move's withdrawal on top, would take it for newer and leave the pass
+    w = World({H: [status("pending", 1, 500)]}, {1: pull()})
+    w.put("before_post.json", {H: [status("failure", 1, 600)]})
+    w.put("after_post.json", {"pull_1.json": pull(head=H2), "fail_stale_once": 1})
+    w.run(verdict, 1, 500, verdict="success", evaluated="success")
+    yield "a pass is withdrawn without trusting a second read", w.top() == ("failure", "#1: closed or moved while judged; its verdict no longer stands"), w.top()
     w.close()
     # --- spoofs ---
     for name, kw in (("a spoof check run", {"checkruns": ["Candidate-Eval / Gate"]}), ("a failed spoof lookup", {"fail": ["checkruns"]})):

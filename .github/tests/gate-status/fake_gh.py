@@ -2,9 +2,14 @@
   statuses_<sha>.json  a head's statuses, newest first (as GitHub lists them)
   pull_<n>.json        a pull request
   checkruns.json       check run names on the head being claimed
-  fail_<kind>          make a call fail: statuses, checkruns, pulls_<n>, pulls_<n>_silent (no
-                       output at all), post (every POST), post_once (the next POST only)
+  fail_<kind>          make a call fail: statuses, statuses_count (the count read alone),
+                       checkruns, pulls_<n>, pulls_<n>_silent (no
+                       output at all), post (every POST), post_<sha>, post_once (the next POST);
+                       stale_once: the next statuses read misses the newest status
+  before_post.json     {sha: [statuses]} landed just before the next POST (another run's)
   after_post.json      {file: content} written after the next successful POST (then removed)
+A POST past 1000 statuses of one context on a head fails (422), as on GitHub; an empty SHA is
+not found.
 A failed call prints the error body and exits 1, as gh does (it applies no --jq to errors).
 """
 import json, os, subprocess, sys
@@ -65,8 +70,21 @@ if method == "POST" and parts[3] == "statuses":
     if failing("post_once"):
         os.remove(path("fail_post_once"))
         error(502)
-    sha = parts[4]
+    sha = parts[4] if len(parts) > 4 else ""
+    if not sha:
+        error(404)
+    if failing("post_" + sha):
+        error(500)
+    # a status another run posts between this run's read and this post
+    before = load("before_post.json", None)
+    if before is not None:
+        for s, rows in before.items():
+            json.dump(rows + load(f"statuses_{s}.json", []), open(path(f"statuses_{s}.json"), "w"))
+        os.remove(path("before_post.json"))
     st = load(f"statuses_{sha}.json", [])
+    # GitHub: "a limit of 1000 statuses per sha and context within a repository"
+    if sum(1 for x in st if x["context"] == fields["context"]) >= 1000:
+        error(422)
     creator = "gate-app[bot]" if os.environ.get("GH_TOKEN") == "app-token" else "github-actions[bot]"
     st.insert(0, {"context": fields["context"], "state": fields["state"],
                   "description": fields["description"], "target_url": fields["target_url"],
@@ -81,9 +99,15 @@ if method == "POST" and parts[3] == "statuses":
         os.remove(path("after_post.json"))
     sys.exit(0)
 if parts[3] == "commits" and parts[5] == "statuses":
-    if failing("statuses"):
+    if failing("statuses") or not parts[4]:
+        error(502 if parts[4] else 404)
+    if failing("statuses_count") and jq and "length" in jq:  # the count read alone
         error(502)
-    out(load(f"statuses_{parts[4]}.json", []))
+    rows = load(f"statuses_{parts[4]}.json", [])
+    if failing("stale_once"):  # a read that does not yet show the newest status
+        os.remove(path("fail_stale_once"))
+        rows = rows[1:]
+    out(rows)
 elif parts[3] == "commits" and parts[5] == "check-runs":
     if failing("checkruns"):
         error(502)
