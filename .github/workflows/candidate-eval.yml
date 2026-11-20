@@ -21,15 +21,18 @@ name: Candidate evaluation
 # the event, never from anything the change can print: `pending` first, then `success` only on
 # exit 0 with the report's last line the PASS line, `failure` on anything else, including a run
 # that could not resolve the change. It is posted with a token of a GitHub App that only this
-# workflow uses and that may only write commit statuses (repository variable GATE_APP_CLIENT_ID,
-# secret GATE_APP_PRIVATE_KEY): the required check names that App as its source, so neither a
-# fork's own workflow (whose jobs post as GitHub Actions) nor any other job can satisfy it. Its
-# key is in no step that reads the change. Without the App, no status is posted, and the
-# required check blocks.
+# workflow uses and that may only write commit statuses (repository variable GATE_APP_CLIENT_ID).
+# The App's key, GATE_APP_PRIVATE_KEY, is a secret of the environment `gate`, which only `main`
+# may use, so no workflow on another branch can read it. The required check names the App as its
+# source, so neither a fork's own workflow (whose jobs post as GitHub Actions) nor any other job
+# can satisfy it. Least privilege by job: `evaluate` reads the change, holds no key and writes
+# nothing (contents and pull requests read-only), and hands on only its verdict and report;
+# `pending` and `verdict` hold the key, run nothing of the change, and start on fresh runners.
+# Without the App no status is posted; once the check is required, that blocks.
 #
 # A maintainer dispatch evaluates a pull request with the gate at the dispatched ref (testing a
-# gate change before it merges) and posts `candidate-eval/gate-dispatch`, never the required
-# context. Without a pull request it evaluates the ref against itself (plumbing only).
+# gate change before it merges): the run's result and summary only, no key, nothing posted.
+# Without a pull request it evaluates the ref against itself (plumbing only).
 #
 # VT is NEVER called here (VT_API_KEY is schedule/dispatch-only): the mal axis reads the
 # persisted per-digest evidence. The vuln axis re-scans BOTH revs in this run against one
@@ -62,6 +65,9 @@ jobs:
   pending:
     if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-24.04
+    environment:
+      name: gate # the App's key: main only
+      deployment: false
     permissions:
       statuses: read
       checks: read
@@ -112,6 +118,7 @@ jobs:
           fi
           post pending "evaluating"
 
+  # Reads the change; holds no key and writes nothing. Hands on the verdict and the report only.
   evaluate:
     runs-on: windows-2025
     concurrency:
@@ -119,13 +126,14 @@ jobs:
       cancel-in-progress: true
     permissions:
       contents: read
-      pull-requests: write # the evidence comment
-      checks: read # a check run posing as the verdict
+      pull-requests: read
+    outputs:
+      verdict: ${{ steps.verdict.outputs.verdict }}
+      report: ${{ steps.verdict.outputs.report }}
+      base: ${{ steps.change.outputs.base }}
     env:
-      # Where the verdict goes: from the event for a pull request (never from a step's output).
+      # The head judged: from the event for a pull request (never from a step's output).
       VERDICT_SHA: ${{ github.event.pull_request.head.sha }}
-      VERDICT_PR: ${{ github.event.pull_request.number }}
-      VERDICT_CONTEXT: ${{ github.event_name == 'pull_request_target' && 'candidate-eval/gate' || 'candidate-eval/gate-dispatch' }}
     steps:
       - name: Checkout the gate's code (main; the change is fetched as data below)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # actions/checkout v7.0.1
@@ -257,67 +265,12 @@ jobs:
           echo "::$tok::"
           echo "code=$code" >> "$GITHUB_OUTPUT"
 
-      - name: Post / update the evidence comment
-        if: always() && github.event_name == 'pull_request_target'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR: ${{ github.event.pull_request.number }}
-          BASE: ${{ steps.change.outputs.base }}
-        run: |
-          set -euo pipefail
-          marker='<!-- candidate-eval -->'
-          report="$RUNNER_TEMP/gate-report.md" body="$RUNNER_TEMP/comment.md"
-          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
-          judged="_Judged: head \`$VERDICT_SHA\` against main \`${BASE:-unresolved}\`._"
-          # A run that wrote no report, or one too long for a comment, must not leave an earlier
-          # verdict standing: the comment then says so.
-          fallback() {
-            printf '%s\n## Candidate evaluation\n\n%s\n\nThe gate wrote no report for this head that fits a comment; see %s.\n' \
-              "$marker" "$judged" "$run_url" > "$body"
-          }
-          if [ -f "$report" ] && [ "$(wc -c < "$report")" -le 60000 ]; then
-            { echo "$marker"; echo; echo "$judged"; tail -n +2 "$report"; } > "$body"
-          else
-            fallback
-          fi
-          # Only this workflow's own comment carries the report: the first is updated, any other
-          # (an older format, a race) is removed so no stale verdict stands lower in the thread.
-          ids=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
-                 --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")
-          cid=$(sed -n 1p <<< "$ids")
-          sed -n '2,$p' <<< "$ids" | while read -r extra; do
-            [ -n "$extra" ] || continue
-            gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$extra" > /dev/null || true
-          done
-          post() {
-            if [ -n "${cid:-}" ]; then
-              gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -F body=@"$body" > /dev/null
-            else
-              gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file "$body"
-            fi
-          }
-          post || { fallback; post; }
-
-      - name: Status token (the gate's App; commit statuses only)
-        id: app
-        if: always()
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
-        with:
-          client-id: ${{ vars.GATE_APP_CLIENT_ID }}
-          private-key: ${{ secrets.GATE_APP_PRIVATE_KEY }}
-          repositories: ${{ github.event.repository.name }}
-          permission-statuses: write
-
-      - name: Enforce the verdict
+      - name: Verdict (handed to the verdict job)
+        id: verdict
         if: always()
         shell: bash
         env:
           CODE: ${{ steps.gate.outputs.code }}
-          GH_TOKEN: ${{ github.token }}
-          STATUS_TOKEN: ${{ steps.app.outputs.token }}
-          DISPATCH_PR: ${{ steps.change.outputs.pr }}
-          DISPATCH_HEAD: ${{ steps.change.outputs.head }}
           JOB_STATUS: ${{ job.status }}
         run: |
           set -uo pipefail
@@ -333,52 +286,143 @@ jobs:
           # A pass is a written verdict, not only an exit status, and the report's last line: the
           # change is quoted above it, never after it.
           pass='**Gate: PASS** — all axes ALLOW or signed; merging records the sign-off'
-          state=failure desc="blocked or not evaluated: see the run"
+          verdict=failure
           if [ "${CODE:-1}" = "0" ] && [ -f "$report" ] && [ "$(tail -n 1 "$report")" = "$pass" ]; then
+            verdict=success
+          fi
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          # The report, when it fits a comment, as one base64 line: no line of it can end or
+          # extend the value.
+          if [ -f "$report" ] && [ "$(wc -c < "$report")" -le 60000 ]; then
+            echo "report=$(base64 -w0 < "$report")" >> "$GITHUB_OUTPUT"
+          fi
+          [ "$verdict" = success ] || { echo "::error::blocked or not evaluated: see the report"; exit 1; }
+
+  # Posts the evidence comment and the verdict, on a fresh runner that reads nothing of the change
+  # but the report: the key never shares a machine with the change. Runs in order per pull
+  # request, so an older run's verdict never lands after a newer one's.
+  verdict:
+    needs: [pending, evaluate]
+    if: >-
+      always() && github.event_name == 'pull_request_target'
+      && needs.evaluate.result != 'cancelled' && needs.evaluate.result != 'skipped'
+    runs-on: ubuntu-24.04
+    environment:
+      name: gate # the App's key: main only
+      deployment: false
+    concurrency:
+      group: candidate-eval-verdict-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: write # the evidence comment
+      checks: read # a check run posing as the verdict
+    env:
+      # Where the verdict goes: from the event (never from the evaluation's output).
+      VERDICT_SHA: ${{ github.event.pull_request.head.sha }}
+      VERDICT_PR: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Post / update the evidence comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPORT_B64: ${{ needs.evaluate.outputs.report }}
+          BASE: ${{ needs.evaluate.outputs.base }}
+        run: |
+          set -euo pipefail
+          marker='<!-- candidate-eval -->'
+          report="$RUNNER_TEMP/gate-report.md" body="$RUNNER_TEMP/comment.md"
+          run_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          [[ ${BASE:-} =~ ^[0-9a-f]{40}$ ]] || BASE=unresolved
+          judged="_Judged: head \`$VERDICT_SHA\` against main \`$BASE\`._"
+          # A run that handed on no report (none written, or one too long for a comment) must not
+          # leave an earlier verdict standing: the comment then says so.
+          fallback() {
+            printf '%s\n## Candidate evaluation\n\n%s\n\nThe gate wrote no report for this head that fits a comment; see %s.\n' \
+              "$marker" "$judged" "$run_url" > "$body"
+          }
+          if [ -n "${REPORT_B64:-}" ] && base64 -d <<< "$REPORT_B64" > "$report" 2> /dev/null; then
+            { echo "$marker"; echo; echo "$judged"; tail -n +2 "$report"; } > "$body"
+          else
+            fallback
+          fi
+          # Only this workflow's own comment carries the report: the first is updated, any other
+          # (an older format, a race) is removed so no stale verdict stands lower in the thread.
+          ids=$(gh api "repos/$GITHUB_REPOSITORY/issues/$VERDICT_PR/comments" --paginate \
+                 --jq ".[] | select(.user.login == \"github-actions[bot]\" and (.body | startswith(\"$marker\"))) | .id")
+          cid=$(sed -n 1p <<< "$ids")
+          sed -n '2,$p' <<< "$ids" | while read -r extra; do
+            [ -n "$extra" ] || continue
+            gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/comments/$extra" > /dev/null || true
+          done
+          post() {
+            if [ -n "${cid:-}" ]; then
+              gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$cid" -F body=@"$body" > /dev/null
+            else
+              gh pr comment "$VERDICT_PR" --repo "$GITHUB_REPOSITORY" --body-file "$body"
+            fi
+          }
+          post || { fallback; post; }
+
+      - name: Status token (the gate's App; commit statuses only)
+        id: app
+        if: always()
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ vars.GATE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.GATE_APP_PRIVATE_KEY }}
+          repositories: ${{ github.event.repository.name }}
+          permission-statuses: write
+
+      - name: Post the verdict
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATUS_TOKEN: ${{ steps.app.outputs.token }}
+          VERDICT: ${{ needs.evaluate.outputs.verdict }}
+          EVALUATED: ${{ needs.evaluate.result }}
+        run: |
+          set -uo pipefail
+          # Only the exact word from an evaluation that succeeded passes; anything else fails.
+          state=failure desc="blocked or not evaluated: see the run"
+          if [ "${VERDICT:-}" = success ] && [ "$EVALUATED" = success ]; then
             state=success desc="all axes ALLOW or signed"
           fi
           # The verdict is a status only: a check run of the same name on the head is someone
           # else's, and the head fails whatever the gate found (a failed lookup counts as one).
-          if [ "$GITHUB_EVENT_NAME" = pull_request_target ]; then
-            spoofs=1
-            if names=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$VERDICT_SHA/check-runs?per_page=100" \
-                         --jq '.check_runs[].name'); then
-              spoofs=$(printf '%s\n' "$names" | tr '[:upper:]' '[:lower:]' | tr -d ' \t\r' \
-                         | grep -cxF 'candidate-eval/gate' || true)
-            fi
-            if [ "$spoofs" != 0 ]; then
-              state=failure desc="a check run named candidate-eval/gate is on this head; the verdict is a status only"
-            fi
+          spoofs=1
+          if names=$(gh api --paginate "repos/$GITHUB_REPOSITORY/commits/$VERDICT_SHA/check-runs?per_page=100" \
+                       --jq '.check_runs[].name'); then
+            spoofs=$(printf '%s\n' "$names" | tr '[:upper:]' '[:lower:]' | tr -d ' \t\r' \
+                       | grep -cxF 'candidate-eval/gate' || true)
           fi
+          if [ "$spoofs" != 0 ]; then
+            state=failure desc="a check run named candidate-eval/gate is on this head; the verdict is a status only"
+          fi
+          # A status belongs to the SHA, shared by every pull request with that head: post only
+          # while this pull request is open and still that head on main; otherwise the run for
+          # its current state posts. A pull request from a fork posts nothing on a head that a
+          # pull request from this repository to main also has: that one's runs post, and a
+          # fork's (judged as a fork, so stricter) does not overwrite them.
           sha="$VERDICT_SHA"
-          if [ "$GITHUB_EVENT_NAME" != pull_request_target ]; then
-            sha=""; [ -n "${DISPATCH_PR:-}" ] && sha="${DISPATCH_HEAD:-}"
-          else
-            # A status belongs to the SHA, shared by every pull request with that head: post only
-            # while this pull request is open and still that head on main; otherwise the run for
-            # its current state posts. A pull request from a fork posts nothing on a head that a
-            # pull request from this repository to main also has: that one's runs post, and a
-            # fork's (judged as a fork, so stricter) does not overwrite them.
-            mapfile -t now < <(gh api "repos/$GITHUB_REPOSITORY/pulls/$VERDICT_PR" \
-                     --jq '.state, .head.sha, .base.ref, (.head.repo.full_name // "")' || true)
-            if [ "${#now[@]}" -ne 4 ] || [ "${now[0]}" != open ] || [ "${now[1]}" != "$VERDICT_SHA" ] \
-               || [ "${now[2]}" != main ]; then
-              echo "::warning::#$VERDICT_PR is not open with head $VERDICT_SHA on main; no verdict posted from this run"
+          mapfile -t now < <(gh api "repos/$GITHUB_REPOSITORY/pulls/$VERDICT_PR" \
+                   --jq '.state, .head.sha, .base.ref, (.head.repo.full_name // "")' || true)
+          if [ "${#now[@]}" -ne 4 ] || [ "${now[0]}" != open ] || [ "${now[1]}" != "$VERDICT_SHA" ] \
+             || [ "${now[2]}" != main ]; then
+            echo "::warning::#$VERDICT_PR is not open with head $VERDICT_SHA on main; no verdict posted from this run"
+            sha=""
+          elif [ "${now[3]}" != "$GITHUB_REPOSITORY" ]; then
+            # Any lookup failure reads as "there is one": the fork posts nothing.
+            others=$(gh api "repos/$GITHUB_REPOSITORY/commits/$VERDICT_SHA/pulls" \
+                       --jq "[.[] | select(.state == \"open\" and .base.ref == \"main\" and .head.sha == \"$VERDICT_SHA\" and .number != $VERDICT_PR)] | length" \
+                     || echo 1)
+            if [ "$others" != 0 ]; then
+              echo "::warning::another pull request to main has head $VERDICT_SHA; its runs post the verdict"
               sha=""
-            elif [ "${now[3]}" != "$GITHUB_REPOSITORY" ]; then
-              # Any lookup failure reads as "there is one": the fork posts nothing.
-              others=$(gh api "repos/$GITHUB_REPOSITORY/commits/$VERDICT_SHA/pulls" \
-                         --jq "[.[] | select(.state == \"open\" and .base.ref == \"main\" and .head.sha == \"$VERDICT_SHA\" and .number != $VERDICT_PR)] | length" \
-                       || echo 1)
-              if [ "$others" != 0 ]; then
-                echo "::warning::another pull request to main has head $VERDICT_SHA; its runs post the verdict"
-                sha=""
-              fi
             fi
           fi
           if [ -n "$sha" ]; then
             GH_TOKEN="$STATUS_TOKEN" gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$sha" -f state="$state" \
-              -f context="$VERDICT_CONTEXT" -f description="$desc" \
+              -f context=candidate-eval/gate -f description="$desc" \
               -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" > /dev/null \
               || { echo "::error::could not post the verdict status"; exit 1; }
           fi
