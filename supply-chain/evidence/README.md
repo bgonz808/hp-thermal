@@ -261,8 +261,8 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    withdrawal included. A pull request opened from that head (anyone can: the commit is public)
    then shows the required check green, though its own evaluation fails. The status names the
    pull request it judged (`#<pr>: ...`), so a pass naming another pull request is not this one's
-   pass: until merges are judged at merge time, merge only a pull request whose gate status names
-   it. Besides: a pass is not judged again until an event on a pull request with that head, so
+   pass: until merges are judged at merge time (#513), merge only a pull request whose gate status
+   names it. Besides: a pass is not judged again until an event on a pull request with that head, so
    advisories published after the evaluation are not seen until then; a verdict that reads the
    head just before a newer run posts lands after it, so the head shows the older verdict, for a
    pull request still open on it, until the newer run's verdict (or the next event, if that run
