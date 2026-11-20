@@ -138,6 +138,11 @@ jobs:
       - name: actionlint (workflow lint)
         uses: rhysd/actionlint@914e7df21a07ef503a81201c76d2b11c789d3fca  # v1.7.12
 
+      # The gate's commit status: candidate-eval.yml's claim and verdict scripts, as written,
+      # against a fake GitHub API (the runner image's python3, bash and jq; nothing installed).
+      - name: Gate status scenarios (candidate-eval claim / verdict)
+        run: python3 -I .github/tests/gate-status/test.py .github/workflows/candidate-eval.yml
+
       # supply-chain/evidence holds committed CycloneDX VDRs (*.cdx.json), which osv-scanner
       # would otherwise ingest as SBOMs: a VDR is the REPORT of the findings already ruled on in
       # acks.jsonl, not a dependency manifest, so scanning it double-counts the tool fleet's
