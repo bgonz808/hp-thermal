@@ -1,34 +1,47 @@
 """Breaks each guard of candidate-eval.yml's claim and verdict scripts in turn; test.py must fail
 every time. Usage: python3 -I .github/tests/gate-status/mutate.py .github/workflows/candidate-eval.yml
+A guard in the shared helpers is broken in both copies (else the helpers-identical check alone
+would catch it).
 """
 import os, subprocess, sys, tempfile
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 WF = sys.argv[1]
 src = open(WF, encoding="utf-8").read()
-ALL, FIRST, SECOND = "all", 1, 2
+BOTH, FIRST, SECOND = "both", 1, 2
 M = [
-    ("defer: owner must be same-repo, open, on the head", ALL, '&& on_head "$1" same-repo', "&& true"),
-    ("on_head: from this repository", ALL, '{ [ "${2:-}" != same-repo ] || [ "${f[3]}" = "$GITHUB_REPOSITORY" ]; }', "true"),
-    ("on_head: open", ALL, '[ "${f[0]}" = open ]', "true"),
-    ("on_head: to main", ALL, '[ "${f[1]}" = main ]', "true"),
-    ("on_head: this head", ALL, '[ "${f[2]}" = "$VERDICT_SHA" ]', "true"),
-    ("defer: only a fork defers", ALL, '[ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ] && ', ""),
-    ("newer: run id", ALL, '[ "$1" -gt "$GITHUB_RUN_ID" ] ||', "false ||"),
-    ("newer: attempt", ALL, '[ "$2" -gt "$GITHUB_RUN_ATTEMPT" ]', "false"),
-    ("app_status: the App's statuses only", ALL, ' and .creator.login == \\"${APP_SLUG}[bot]\\"', ""),
-    ("spoofed: a failed lookup counts", ALL, "--jq '.check_runs[].name') || return 0", "--jq '.check_runs[].name') || return 1"),
-    ("close: withdraws its own verdict", FIRST, 'if [ "$owner" = "$VERDICT_PR" ] || [ "$owner" = unknown ]; then', "if false; then"),
-    ("close: an unreadable head withdraws", FIRST, "owner=unknown", "owner=0"),
-    ("close: a merge withdraws nothing", FIRST, '[ "$MERGED" = true ] && exit 0', ":"),
+    # helpers
+    ("post: retried", BOTH, "for i in 1 2 3; do", "for i in 1; do"),
+    ("app_status: the App's statuses only", BOTH, ' and .creator.login == \\"${APP_SLUG}[bot]\\"', ""),
+    ("app_status: the newest first", BOTH, '<<< "$(head -n 1 <<< "$rows")"', '<<< "$(tail -n 1 <<< "$rows")"'),
+    ("on_head: open", BOTH, '[ "${f[0]}" = open ]', "true"),
+    ("on_head: to main", BOTH, '[ "${f[1]}" = main ]', "true"),
+    ("on_head: this head", BOTH, '[ "${f[2]}" = "$VERDICT_SHA" ]', "true"),
+    ("on_head: every field read", BOTH, '[ "${#f[@]}" -eq 3 ] && ', ""),
+    ("newer: run id", BOTH, '[ "$1" -gt "$GITHUB_RUN_ID" ] ||', "false ||"),
+    ("newer: attempt", BOTH, '[ "$2" -gt "$GITHUB_RUN_ATTEMPT" ]', "false"),
+    ("spoofed: a failed lookup counts", BOTH, "--jq '.check_runs[].name') || return 0", "--jq '.check_runs[].name') || return 1"),
+    ("spoofed: case and spacing", BOTH, "| tr '[:upper:]' '[:lower:]' | tr -d ' \\t\\r'", ""),
+    ("withdraw: only this pull request's", BOTH, '[ "$owner" = "$VERDICT_PR" ] && ', ""),
+    ("withdraw: never a newer run's", BOTH, ' && ! newer "$run" "$attempt"', ""),
+    ("withdraw: an unreadable head withdraws", BOTH, "local s owner=unknown run=0 attempt=0", "local s owner=0 run=0 attempt=0"),
+    ("withdraw: a failed post fails", BOTH, '{ echo "::error::could not withdraw #$VERDICT_PR\'s verdict from $1"; return 1; }', "true"),
+    # claim
+    ("claim: a push withdraws the head left", FIRST, 'withdraw "$BEFORE_SHA" "moved to a new head" || rc=1', ":"),
+    ("claim: a close withdraws", FIRST, '[ "$MERGED" = true ] || withdraw "$VERDICT_SHA" "closed" || rc=1', ":"),
+    ("claim: a merge withdraws nothing", FIRST, '[ "$MERGED" = true ] || withdraw', "withdraw"),
+    ("claim: off main withdraws", FIRST, 'withdraw "$VERDICT_SHA" "not a pull request to main" || rc=1', ":"),
+    ("claim: off main claims nothing", FIRST, 'withdraw "$VERDICT_SHA" "not a pull request to main" || rc=1\n            exit "$rc"', 'withdraw "$VERDICT_SHA" "not a pull request to main" || rc=1'),
+    ("claim: a spoof fails", FIRST, 'if spoofed; then\n            post "$VERDICT_SHA" failure', 'if false; then\n            post "$VERDICT_SHA" failure'),
+    ("claim: never over a newer run", FIRST, 'if newer "$run" "$attempt" \\', 'if false \\'),
     ("claim: never over its own run's verdict", FIRST, '|| { [ "$run" = "$GITHUB_RUN_ID" ] && [ "$attempt" = "$GITHUB_RUN_ATTEMPT" ]; }; then', "; then"),
-    ("claim: a fork defers", FIRST, 'if defers_to "$owner"; then', "if false; then"),
-    ("verdict: a fork defers", SECOND, 'if defers_to "$owner"; then', "if false; then"),
-    ("verdict: never over a newer run", FIRST, 'if newer "$run" "$attempt"; then', "if false; then"),
+    # verdict
     ("verdict: the evaluation succeeded", FIRST, '[ "${VERDICT:-}" = success ] && [ "$EVALUATED" = success ]', '[ "${VERDICT:-}" = success ]'),
-    ("verdict: an unreadable head fails", FIRST, 'state=failure desc="this head\'s status could not be read; re-run to judge"', ":"),
-    ("verdict: withdrawn when closed while judged", FIRST, 'if [ "$state" = success ] && ! on_head "$VERDICT_PR"; then', "if false; then"),
     ("verdict: a spoof fails", FIRST, 'if spoofed; then\n            state=failure', 'if false; then\n            state=failure'),
     ("verdict: only while open on the head", FIRST, 'if ! on_head "$VERDICT_PR"; then', "if false; then"),
+    ("verdict: never over a newer run", FIRST, '            if newer "$run" "$attempt"; then', "            if false; then"),
+    ("verdict: an unreadable head fails", FIRST, 'state=failure desc="this head\'s status could not be read; re-run to judge"', ":"),
+    ("verdict: withdrawn when moved while judged", FIRST, 'if [ "$state" = success ] && ! on_head "$VERDICT_PR"; then', "if false; then"),
 ]
 
 
@@ -43,9 +56,11 @@ out = os.path.join(tempfile.mkdtemp(prefix="gs-mut-"), "candidate-eval.yml")
 bad = 0
 for name, where, old, new in M:
     count = src.count(old)
-    if count == 0 or (where == ALL and count != 2) or (where == FIRST and count < 1) or (where == SECOND and count < 2):
-        print(f"BADPATTERN {name} (count {count})"); bad += 1; continue
-    m = src.replace(old, new) if where == ALL else nth_replace(src, old, new, where)
+    if (where == BOTH and count != 2) or (where != BOTH and count < where):
+        print(f"BADPATTERN {name} (count {count})")
+        bad += 1
+        continue
+    m = src.replace(old, new) if where == BOTH else nth_replace(src, old, new, where)
     open(out, "w", encoding="utf-8", newline="\n").write(m)
     r = subprocess.run([sys.executable, "-I", os.path.join(HERE, "test.py"), out, "--quiet"],
                        capture_output=True, text=True)
@@ -55,5 +70,5 @@ for name, where, old, new in M:
     first = next((l for l in r.stdout.splitlines() if l.startswith("FAIL")), "")
     print(("killed   " if caught else "SURVIVED ") + name + (f"   <- {first[6:70]}" if caught else ""))
 os.remove(out)
-print(f"{bad} survived or bad")
+print(f"{len(M)} mutants, {bad} survived or bad")
 sys.exit(1 if bad else 0)
