@@ -1,0 +1,5 @@
+{
+  "schema": "hp-thermal/signers/v1",
+  "description": "GitHub logins whose signed commits sign off residual risk: an acks.jsonl line a change adds counts only when every commit of the change that touches an acks.jsonl is GitHub-verified and authored and committed by one of these (gate::ack_signer_problems). Read from the base commit, like the floors.",
+  "logins": ["bgonz808"]
+}
