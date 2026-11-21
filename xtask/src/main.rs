@@ -48,6 +48,8 @@ mod sha256;
 // #376: EoX tracking — OpenEoX Core documents for every runner image / OS / toolchain channel
 // in use, validated against the digest-pinned schema; fails inside the deprecation window.
 mod eox;
+/// `evidence-rev`: lock-bound revisions of a blessed digest's evidence (rule 2).
+mod evidence_rev;
 
 // #405: tier 1 of the strictly-better fix automation — propose frozen-lock fixes as data.
 mod propose;
@@ -131,6 +133,7 @@ fn main() {
         Some("release-advance") => release_advance::run(&args),
         Some("vdr") => vdr::run(&args),
         Some("std-deps") => unit_graph::run(&args),
+        Some("evidence-rev") => evidence_rev::run(&args),
         Some("slsa-vsa") => slsa_vsa::run(&args),
         Some("vet-guard") => {
             if vet_guard::check() {
@@ -611,12 +614,58 @@ fn ci_source_checks() -> bool {
 /// the same args slice works for both (verified against the pinned exes for deny/auditable/
 /// audit). Unset (local dev): fall back to `cargo <sub>` resolution.
 fn cargo_tool_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
+    if args.first() == Some(&"audit") {
+        return audit_step(desc, cwd, args);
+    }
     match std::env::var("PINNED_TOOLS_DIR") {
         Ok(dir) => {
             let exe = format!("{dir}/cargo-{}{}", args[0], std::env::consts::EXE_SUFFIX);
             step(desc, cwd, &exe, args)
         }
         Err(_) => step(desc, cwd, "cargo", args),
+    }
+}
+
+/// cargo-audit, isolated from the checkout's configuration (`gate::audit_isolated`): a committed
+/// `.cargo/audit.toml` must not decide what it reports. `--file` and `bin` paths are read
+/// relative to `cwd`.
+fn audit_step(desc: &str, cwd: &str, args: &[&str]) -> bool {
+    use std::io::Write as _;
+    eprintln!(
+        "
+=== {desc} ==="
+    );
+    let program = match std::env::var("PINNED_TOOLS_DIR") {
+        Ok(dir) => format!("{dir}/cargo-audit{}", std::env::consts::EXE_SUFFIX),
+        Err(_) => "cargo".to_string(),
+    };
+    let argv: Vec<String> = args
+        .iter()
+        .enumerate()
+        .map(|(i, a)| {
+            let bin_path = args.get(1) == Some(&"bin") && i > 1 && !a.starts_with('-');
+            if bin_path || (i > 0 && args[i - 1] == "--file") {
+                std::path::Path::new(cwd).join(a).display().to_string()
+            } else {
+                (*a).to_string()
+            }
+        })
+        .collect();
+    match gate::audit_isolated(&program, &argv) {
+        Ok(o) => {
+            let _ = std::io::stdout().write_all(&o.stdout);
+            let _ = std::io::stderr().write_all(&o.stderr);
+            if o.status.success() {
+                true
+            } else {
+                eprintln!("FAIL: {desc} (exit {:?})", o.status.code());
+                false
+            }
+        }
+        Err(e) => {
+            eprintln!("FAIL: {desc} — {e}");
+            false
+        }
     }
 }
 

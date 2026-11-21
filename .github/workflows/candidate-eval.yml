@@ -24,6 +24,12 @@ on:
     paths:
       - "tools/TOOLS.lock"
       - "supply-chain/evidence/**"
+      # A producer-input change under an unchanged digest needs an evidence revision (evidence
+      # README rule 2), and this gate is what admits or refuses one.
+      - "tools/locks/**"
+      - "tools/patches/**"
+      - "tools/build-args/**"
+      - "tools/rustflags/**"
   workflow_dispatch: {}
 
 permissions:
@@ -72,11 +78,18 @@ jobs:
         shell: bash
         env:
           PINNED_TOOLS_DIR: ${{ steps.auditor.outputs.tools-dir }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
           # Build record custody: the raw record from the tools store, its producer statement.
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # The base is the first parent of the checked-out test merge: exactly the commit the
+          # change was merged into, which `pull_request.base.sha` need not be.
+          BASE_SHA=""
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            git rev-parse --verify -q 'HEAD^2' > /dev/null \
+              || { echo "::error::the checkout is not the change's test merge"; exit 1; }
+            BASE_SHA=$(git rev-parse 'HEAD^1')
+          fi
           # Base = the PR base commit's TOOLS.lock. On workflow_dispatch there is no
           # base — evaluate head against itself (no candidates; proves the plumbing).
           # #255 §5: also extract the BASE commit's frozen locks (tools/locks/) — each side
@@ -94,9 +107,19 @@ jobs:
             # without this tree such a PR looked like "nothing to evaluate". No `|| true` here:
             # the gate REQUIRES this directory, and a failed extraction must fail the gate.
             git archive "$BASE_SHA" supply-chain/evidence | tar -x -C /tmp/base-evidence --strip-components=2
+            # The base commit's per-tool producer inputs (patches, build args, rustflags): a change
+            # to any of them under an unchanged digest is a revision candidate. Required, like the
+            # evidence tree.
+            mkdir -p /tmp/base-root
+            git archive "$BASE_SHA" tools | tar -x -C /tmp/base-root
+            # The policy a change is judged by is the base commit's: a change that lowers a floor
+            # takes effect for the changes after it, never for itself.
+            git show "$BASE_SHA:supply-chain/policy/floors.json" > /tmp/base-floors.json
           else
+            cp supply-chain/policy/floors.json /tmp/base-floors.json
             cp tools/TOOLS.lock /tmp/base-tools.lock
             cp -R supply-chain/evidence/. /tmp/base-evidence/
+            mkdir -p /tmp/base-root && cp -R tools /tmp/base-root/
             # A silent failure here leaves /tmp/base-locks EMPTY, and the gate would then compare the
             # head's FROZEN locks against the base's UPSTREAM resolution -- a wrong baseline that can
             # hide a regression. A missing glob (base had no frozen locks) is the ONLY acceptable
@@ -115,7 +138,8 @@ jobs:
           set +e
           cargo run --locked --manifest-path xtask/Cargo.toml -- gate \
             --base /tmp/base-tools.lock --base-locks-dir /tmp/base-locks \
-            --base-evidence /tmp/base-evidence --report gate-report.md
+            --base-evidence /tmp/base-evidence --base-tools-dir /tmp/base-root/tools \
+            --floors /tmp/base-floors.json --report gate-report.md
           echo "code=$?" >> "$GITHUB_OUTPUT"
 
       - name: Post / update the evidence comment
@@ -145,3 +169,7 @@ jobs:
           set -euo pipefail
           echo "gate exit: ${CODE:-missing}"
           [ "${CODE:-1}" = "0" ]
+          # A pass is a written verdict, not only an exit status: a gate that never ran to its
+          # report has not judged the change.
+          grep -qxF '**Gate: PASS** — all axes ALLOW or signed; merging records the sign-off' gate-report.md \
+            || { echo "::error::no PASS verdict in gate-report.md"; exit 1; }

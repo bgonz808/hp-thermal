@@ -88,10 +88,16 @@ pub fn parse(text: &str) -> Result<Floors, String> {
                 .ok_or("mal.hard_stop_malicious_engines must be a non-negative integer")?,
         ),
     };
-    let mal_sandbox_malicious = v
-        .pointer("/mal/hard_stop_on_sandbox_malicious")
-        .and_then(Value::as_bool)
-        .unwrap_or(false);
+    // A floor flag is off only when it is absent or null; any other non-boolean (`"true"`, 1) is
+    // a malformed policy, never a disarmed floor.
+    let flag = |ptr: &str| -> Result<bool, String> {
+        match v.pointer(ptr) {
+            None | Some(Value::Null) => Ok(false),
+            Some(Value::Bool(b)) => Ok(*b),
+            Some(other) => Err(format!("{ptr} must be true or false, not {other}")),
+        }
+    };
+    let mal_sandbox_malicious = flag("/mal/hard_stop_on_sandbox_malicious")?;
     let mal_min_engines = match v.pointer("/mal/min_verdict_engines") {
         None | Some(Value::Null) => None,
         Some(n) => Some(
@@ -103,16 +109,15 @@ pub fn parse(text: &str) -> Result<Floors, String> {
         None | Some(Value::Null) => Vec::new(),
         Some(a) => strs(Some(a))?,
     };
-    let flag = |ptr: &str| v.pointer(ptr).and_then(Value::as_bool).unwrap_or(false);
     Ok(Floors {
         vuln_shape,
         mal_malicious_engines,
         mal_sandbox_malicious,
         mal_min_engines,
         caps_new_grants,
-        build_link_arg: flag("/build_instructions/hard_stop_link_arg"),
-        build_foreign_link_search: flag("/build_instructions/hard_stop_foreign_link_search"),
-        build_new_env: flag("/build_instructions/hard_stop_new_rustc_env"),
+        build_link_arg: flag("/build_instructions/hard_stop_link_arg")?,
+        build_foreign_link_search: flag("/build_instructions/hard_stop_foreign_link_search")?,
+        build_new_env: flag("/build_instructions/hard_stop_new_rustc_env")?,
         toolset_link_search: match v.pointer("/build_instructions/allow_pinned_toolset_link_search")
         {
             None | Some(Value::Null) => Vec::new(),
@@ -899,6 +904,29 @@ mod tests {
         assert!(parse("not json").is_err());
     }
 
+    /// A flag that is not a boolean is a malformed policy, never a floor turned off.
+    #[test]
+    fn a_floor_flag_is_a_boolean_or_absent() {
+        let with = |ptr: &str, val: Value| {
+            let mut p: Value =
+                serde_json::from_str(include_str!("../../supply-chain/policy/floors.json"))
+                    .unwrap();
+            *p.pointer_mut(ptr).unwrap() = val;
+            parse(&p.to_string())
+        };
+        for ptr in [
+            "/mal/hard_stop_on_sandbox_malicious",
+            "/build_instructions/hard_stop_link_arg",
+            "/build_instructions/hard_stop_foreign_link_search",
+            "/build_instructions/hard_stop_new_rustc_env",
+        ] {
+            assert!(with(ptr, Value::from("true")).is_err(), "{ptr} as a string");
+            assert!(with(ptr, Value::from(1)).is_err(), "{ptr} as a number");
+            assert!(with(ptr, Value::Bool(true)).is_ok(), "{ptr} true");
+            assert!(with(ptr, Value::Null).is_ok(), "{ptr} null");
+        }
+    }
+
     #[test]
     fn critical_shape_trips_on_3x_and_4_0_but_not_on_dos_or_local() {
         let f = policy();
@@ -1377,11 +1405,15 @@ build.allow_build_instructions = [\"cargo:x=1
         let mut seen_dirs = 0;
         let mut seen_inv = 0;
         for t in crate::gate::parse_tools_lock(&lock) {
-            let p = root
-                .join("supply-chain/evidence")
-                .join(&t.name)
-                .join(&t.sha)
-                .join("caps.toml");
+            let p = crate::evidence_rev::current(
+                &root.join("supply-chain/evidence"),
+                &root.join("tools/locks"),
+                &t.name,
+                &t.sha,
+            )
+            .unwrap()
+            .dir
+            .join("caps.toml");
             let Ok(caps) = std::fs::read_to_string(&p) else {
                 continue;
             };
@@ -1597,11 +1629,15 @@ build.allow_build_instructions = [\"cargo:x=1
         let lock = std::fs::read_to_string(root.join("tools/TOOLS.lock")).unwrap();
         let mut seen = 0;
         for t in crate::gate::parse_tools_lock(&lock) {
-            let p = root
-                .join("supply-chain/evidence")
-                .join(&t.name)
-                .join(&t.sha)
-                .join(crate::build_record::FILE);
+            let p = crate::evidence_rev::current(
+                &root.join("supply-chain/evidence"),
+                &root.join("tools/locks"),
+                &t.name,
+                &t.sha,
+            )
+            .unwrap()
+            .dir
+            .join(crate::build_record::FILE);
             let Ok(text) = std::fs::read_to_string(&p) else {
                 continue;
             };

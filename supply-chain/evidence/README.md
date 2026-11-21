@@ -139,7 +139,11 @@ A `vdr.cdx.json` is committed beside the evidence of every live-frontier digest 
 `TOOLS.lock` pin and the latest release); the supply-chain workflow regenerates each pinned
 tool's report and every release's report and fails on any difference, admitting the app's release
 SBOM only after its provenance verifies. When a bless supersedes a tool digest, that digest's last
-report stays committed as history and is no longer regenerated.
+report stays committed as history and is no longer regenerated. A revision (rule 2) carries its
+own report: the same `serialNumber`, the version after the superseded record's. The gate holds
+every committed report to that ledger: never deleted, a changed one keeps its `serialNumber`
+and takes a higher version, a new one is a current subject's, and each carries the
+`serialNumber` derived from the digest directory it sits in.
 A release's report is published by `release-vdr.yml` as an attestation to the shipped exe, never
 as a release asset (a published release is immutable); `release-advance anchor` records each
 revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
@@ -149,7 +153,33 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
 1. **Acks bind to instances, not classes** — a new digest, engine, advisory instance, inventory
    content or verdict string is never covered by an old ack.
 2. **Blessed evidence is immutable** — a digest that was ever pinned in `TOOLS.lock` on `main`
-   keeps its evidence forever (forensic history), even after a later bless supersedes it.
+   keeps its evidence forever (forensic history), even after a later bless supersedes it. It is
+   never edited: **a corrected measurement of a blessed digest is appended as a new revision
+   bound to its lock, with reason and date** (`xtask/src/evidence_rev.rs`):
+
+   ```text
+   <tool>/<digest>/                     revision 1, the bless-time record
+   <tool>/<digest>/rev/<lock-sha256>/   a later revision: revision.json, vuln.jsonl, caps.toml,
+                                        build.jsonl, vdr.cdx.json
+   ```
+
+   Every reader of the lock-bound records (`vuln.jsonl`, `caps.toml`, `build.jsonl`,
+   `vdr.cdx.json`) takes the one measured against the current `tools/locks/<tool>.lock`; none
+   matching is an error, never a fallback. `mal.jsonl` stays at the digest: it describes bytes.
+   A line whose digest the base commit already pins is a revision candidate whenever any of the
+   tool's producer inputs changed (frozen lock, patches, build args, rustflags), and its upstream
+   rev may not change. The gate admits a revision only when the new lock removes packages and
+   changes nothing else, `revision.json` supersedes the base lock and names the patches the
+   change carries, the build record is custody-verified from a producer run that rebuilt the same
+   digest from exactly that lock and those patches and matches the superseded record message for
+   message, and the vulnerability rows equal the raw payload, whose advisory-db commit is the
+   header's and descends from the superseded record's, and a re-scan of the lock by the same
+   scanner at that commit. A change that pins or revises a blessed digest leaves its root records
+   byte for byte; an edit to them is its own PR (rule 4). Records under `rev/` are append-only and
+   an admitted revision takes no new record; its `vdr.cdx.json` is re-emitted like any report.
+   A revision only narrows: a lock never widens under one digest, so a narrowing is never undone,
+   and a wider build is a new digest. A change that pins a digest anew may select only a revision
+   the base commit already holds. `candidate-advance digest --reason …` writes one.
    **Candidate evidence is retired with the candidate**: a digest that was measured on a
    candidate branch but never blessed (its lock was re-frozen, its producer run superseded)
    has its evidence directory, its stored raw payload and any ack bound to it removed on that
@@ -158,7 +188,12 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
 3. Consumer: `cargo xtask gate` (first-party Rust — no external pinned tool, no python runtime)
    diffs baseline↔candidate, applies the #241 verdict algebra, and fails a bump PR until every
    RAISE item is covered by a committed ack, printing the exact ack lines to add. Committing them
-   **is** the sign-off; closing the PR is the reject.
+   **is** the sign-off; closing the PR is the reject. The floors it judges by are the base
+   commit's (`supply-chain/policy/floors.json`): a change that lowers one takes effect for the
+   changes after it, never for itself, and a policy that does not load blocks every change.
+   Its code is not yet the base commit's: the job builds and runs the change's own `xtask/`,
+   `.cargo/config.toml` and workflow, so the gate judges a change made in good faith, not one
+   written to defeat it.
 4. **Evidence edits on the live frontier are candidates too (#380).** A PR that changes a pinned
    digest's `caps.toml` / `caps.UNEVALUATED` / `mal.jsonl` without touching TOOLS.lock is evaluated
    on the axes it touched, against the base commit's record (the workflow extracts that tree). An
@@ -166,6 +201,24 @@ revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
    flow and backed by a stored raw payload, never edited in place. Changed `acks.jsonl` files are
    quality-checked even when nothing else changed; edits under non-frontier digests are listed in
    the report and not evaluated.
+5. **Every reader reads the same input.** `tools/TOOLS.lock` has one grammar
+   (`gate::tools_lock_problems`): every line, comments included, holds only ASCII graphic
+   characters, spaces and tabs, so no locale or invisible character decides what a line says;
+   the text before `#` is five fields; name and target are lowercase and every word starts and
+   ends alphanumeric; one pin per (name, target); a digest names one pin; every target of a tool
+   builds from one (repo, rev). Any other file is refused, never partly read. `fetch-tools`
+   refuses the same files before any line is used (a test runs its bash against the gate's
+   cases), and the workflows' `grep | sed | read` readers of the pins agree on a file that
+   passes. A pin is unchanged only when the same (name, target) has the same repo, rev and
+   digest; the same digest under another repo or rev is refused.
+   The gate and `vdr check` read the working tree only when it is the index under `tools/` and
+   `supply-chain/`: regular files whose bytes, unfiltered, are their blobs, nothing untracked.
+   They refuse two spellings, differing only by case, of a path or of a name a reader opens
+   (a pin's lock, patches, build args, rustflags, evidence records): the Windows checkout would
+   read one through the other. `cargo-audit` reads `.cargo/audit.toml` from its working
+   directory, so every xtask scan (`gate::audit_isolated`) and `deps-audit` scan a copy of the
+   lock, or the binary by absolute path, in a fresh empty directory. The producer's pre-build
+   posture scan (evidence, not a gate) does not yet.
 
 ## Known open items (bootstrap, 2026-08-21)
 

@@ -430,6 +430,16 @@ fn fetch_verified(
     raw_sha256: &str,
     run_id: &str,
 ) -> Result<Verified, String> {
+    // These reach file names and a download pattern: checked here, whatever the caller checked.
+    if !is_hex64(raw_sha256)
+        || !is_hex64(digest)
+        || run_id.is_empty()
+        || !run_id.bytes().all(|b| b.is_ascii_digit())
+    {
+        return Err(format!(
+            "build record: malformed raw sha256, digest or run id ({raw_sha256}, {digest}, {run_id})"
+        ));
+    }
     let asset = asset_name(tool, target, digest, raw_sha256);
     let dir = std::env::temp_dir().join(format!("build-record-{}", &raw_sha256[..12]));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -729,7 +739,13 @@ fn check(args: &[String]) -> Result<(), String> {
 fn reconcile_cmd(args: &[String]) -> Result<(), String> {
     let tool = flag(args, "--tool").ok_or("reconcile: --tool is required")?;
     let digest = flag(args, "--digest").ok_or("reconcile: --digest is required")?;
-    let dir = Path::new("supply-chain/evidence").join(&tool).join(&digest);
+    let dir = crate::evidence_rev::current(
+        Path::new("supply-chain/evidence"),
+        Path::new("tools/locks"),
+        &tool,
+        &digest,
+    )?
+    .dir;
     let rec = std::fs::read_to_string(dir.join(FILE))
         .map_err(|e| format!("{}: {e}", dir.join(FILE).display()))?;
     let caps = std::fs::read_to_string(dir.join("caps.toml"))
@@ -753,9 +769,13 @@ fn baseline(args: &[String]) -> Result<(), String> {
     let lock = std::fs::read_to_string("tools/TOOLS.lock").map_err(|e| e.to_string())?;
     let mut missing = Vec::new();
     for t in crate::gate::parse_tools_lock(&lock) {
-        let dir = Path::new("supply-chain/evidence")
-            .join(&t.name)
-            .join(&t.sha);
+        let dir = crate::evidence_rev::current(
+            Path::new("supply-chain/evidence"),
+            Path::new("tools/locks"),
+            &t.name,
+            &t.sha,
+        )?
+        .dir;
         match record_line(&log, &t.name, &t.target, &t.sha)? {
             Some(raw) => {
                 let text = fetch_evidence(&t.name, &t.target, &t.sha, &raw, &run_id)?;

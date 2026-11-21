@@ -34,6 +34,18 @@ use crate::gate::{
     resolve_lock, run_audit,
 };
 
+/// The `vuln.jsonl` of the record the tool's frozen lock selects (evidence README rule 2).
+/// `None` when no record matches: a baseline measured against another lock is not this one's.
+fn vuln_path(evidence_dir: &Path, tool: &str, digest: &str) -> Option<std::path::PathBuf> {
+    match crate::evidence_rev::current(evidence_dir, Path::new("tools/locks"), tool, digest) {
+        Ok(r) => Some(r.dir.join("vuln.jsonl")),
+        Err(e) => {
+            eprintln!("monitor: {e}");
+            None
+        }
+    }
+}
+
 /// Load the recorded baseline instance set for a blessed digest. `None` = no baseline
 /// recorded (fail-secure: the caller must treat every finding as unreviewed, never as
 /// "carried"). Line 1 of vuln.jsonl is the scan header (schema/scanner/db), not an instance.
@@ -42,8 +54,7 @@ pub(crate) fn load_baseline(
     tool: &str,
     digest: &str,
 ) -> Option<(BTreeSet<Instance>, String)> {
-    let path = evidence_dir.join(tool).join(digest).join("vuln.jsonl");
-    let text = std::fs::read_to_string(path).ok()?;
+    let text = std::fs::read_to_string(vuln_path(evidence_dir, tool, digest)?).ok()?;
     let mut lines = text.lines().filter(|l| !l.trim().is_empty());
     let header: serde_json::Value = serde_json::from_str(lines.next()?).ok()?;
     let db = header
@@ -168,8 +179,7 @@ fn baseline_raw_payload(
     tool: &str,
     digest: &str,
 ) -> Option<(String, String, String)> {
-    let text =
-        std::fs::read_to_string(evidence_dir.join(tool).join(digest).join("vuln.jsonl")).ok()?;
+    let text = std::fs::read_to_string(vuln_path(evidence_dir, tool, digest)?).ok()?;
     let header: serde_json::Value =
         serde_json::from_str(text.lines().find(|l| !l.trim().is_empty())?).ok()?;
     let rp = header.get("rawPayload")?;

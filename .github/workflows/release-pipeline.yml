@@ -213,7 +213,7 @@ jobs:
             $row = $null
             foreach ($l in (Get-Content ../tools/TOOLS.lock)) {
               $f = ($l -replace '\s*#.*$','').Trim() -split '\s+'
-              if ($f.Count -ge 5 -and $f[0] -eq $name -and $f[3] -eq 'windows-x86_64') { $row = $f; break }
+              if ($f.Count -eq 5 -and $f[0] -ceq $name -and $f[3] -ceq 'windows-x86_64') { $row = $f; break }
             }
             if (-not $row) { throw "TOOLS.lock has no windows-x86_64 row for $name" }
             $file = Join-Path $env:TOOLS_DIR "$name.exe"
