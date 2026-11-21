@@ -22,6 +22,6 @@ xtask = "run --manifest-path xtask/Cargo.toml --"
 # verify-build-env` tells a developer what to install. There is no per-point-build installer
 # component: matching means the same Visual Studio servicing release (CONTRIBUTING.md).
 [env]
-VCToolsVersion = { value = "14.51.36231", force = true }
+VCToolsVersion = { value = "14.52.37025", force = true }
 WindowsSdkDir = { value = 'C:\Program Files (x86)\Windows Kits\10\', force = true }
 WindowsSDKVersion = { value = '10.0.26100.0\', force = true }
