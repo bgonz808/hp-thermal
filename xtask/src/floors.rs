@@ -41,6 +41,13 @@ pub struct Floors {
     /// Folders under the pinned MSVC toolset (`VC/Tools/MSVC/<VCToolsVersion>/`) a build script
     /// may add to the link search path. Empty: none.
     pub toolset_link_search: Vec<String>,
+    /// At most one toolset pinned before the current one. A committed build record produced
+    /// under it still passes the link-search rule at rest (`committed_record_link_search_stop`);
+    /// the gate never reads it, so a record it admits names the current pin. Removing the entry
+    /// means re-producing every frontier tool whose record names that toolset. Parsed (and a
+    /// malformed entry refused) wherever the policy loads; read by the frontier test only.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub previous_toolsets: Vec<String>,
 }
 
 pub fn load(path: &Path) -> Result<Floors, String> {
@@ -110,6 +117,27 @@ pub fn parse(text: &str) -> Result<Floors, String> {
         {
             None | Some(Value::Null) => Vec::new(),
             Some(a) => strs(Some(a))?,
+        },
+        previous_toolsets: {
+            let p = match v.pointer("/build_instructions/previous_pinned_toolsets") {
+                None | Some(Value::Null) => Vec::new(),
+                Some(a) => strs(Some(a))?,
+            };
+            if p.len() > 1 {
+                return Err("previous_pinned_toolsets: at most one toolset".into());
+            }
+            if let Some(bad) = p.iter().find(|t| {
+                let parts: Vec<&str> = t.split('.').collect();
+                parts.len() != 3
+                    || parts
+                        .iter()
+                        .any(|n| n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit()))
+            }) {
+                return Err(format!(
+                    "previous_pinned_toolsets: '{bad}' is not a Major.Minor.Build toolset"
+                ));
+            }
+            p
         },
     })
 }
@@ -346,6 +374,24 @@ impl Floors {
     /// adds the toolset's `atlmfc/lib/<arch>` for every MSVC C build; cackle measures on Linux and
     /// never sees it.
     pub fn record_link_search_stop(&self, head: &[Value], toolset: Option<&str>) -> Option<String> {
+        self.link_search_stop(head, toolset.as_slice())
+    }
+
+    /// The same rule for a build record already committed (the frontier): it was admitted
+    /// under the toolset pinned when it was produced, which may be the policy's previous one.
+    /// The frontier test is the at-rest check, so this is test code.
+    #[cfg(test)]
+    pub fn committed_record_link_search_stop(
+        &self,
+        head: &[Value],
+        toolset: Option<&str>,
+    ) -> Option<String> {
+        let mut all: Vec<&str> = toolset.into_iter().collect();
+        all.extend(self.previous_toolsets.iter().map(String::as_str));
+        self.link_search_stop(head, &all)
+    }
+
+    fn link_search_stop(&self, head: &[Value], toolsets: &[&str]) -> Option<String> {
         if !self.build_foreign_link_search {
             return None;
         }
@@ -353,7 +399,7 @@ impl Floors {
         for (key, (name, _, paths)) in crate::build_record::link_directives(head) {
             for p in paths {
                 let path = p.split_once('=').map_or(p.as_str(), |(_, x)| x);
-                if own_dir(&name, path) || self.toolset_dir(path, toolset) {
+                if own_dir(&name, path) || toolsets.iter().any(|t| self.toolset_dir(path, t)) {
                     continue;
                 }
                 hits.push(format!(
@@ -371,10 +417,7 @@ impl Floors {
 
     /// `path` is exactly one of the policy's folders under the pinned toolset, inside a Visual
     /// Studio installation, with no relative segment.
-    fn toolset_dir(&self, path: &str, toolset: Option<&str>) -> bool {
-        let Some(toolset) = toolset else {
-            return false;
-        };
+    fn toolset_dir(&self, path: &str, toolset: &str) -> bool {
         let p = path.replace('\\', "/").to_ascii_lowercase();
         if p.split('/')
             .skip(1)
@@ -1473,6 +1516,76 @@ build.allow_build_instructions = [\"cargo:x=1
             f.record_link_search_stop(&system, Some("14.51.36231"))
                 .is_some()
         );
+
+        // After a bump, a committed record from the previous pin passes at rest; the gate's
+        // rule takes the current pin only; shedding the entry fails the record again.
+        let mut g = policy();
+        g.previous_toolsets = vec!["14.51.36231".into()];
+        assert_eq!(
+            g.committed_record_link_search_stop(&atlmfc, Some("14.52.37025")),
+            None
+        );
+        assert!(
+            g.record_link_search_stop(&atlmfc, Some("14.52.37025"))
+                .is_some(),
+            "the gate admits the current pin only"
+        );
+        for r in [&other_folder, &traversal, &system] {
+            assert!(
+                g.committed_record_link_search_stop(r, Some("14.52.37025"))
+                    .is_some()
+            );
+        }
+        g.previous_toolsets.clear();
+        assert!(
+            g.committed_record_link_search_stop(&atlmfc, Some("14.52.37025"))
+                .is_some(),
+            "shed: re-produce the tool"
+        );
+    }
+
+    #[test]
+    fn previous_pinned_toolsets_holds_at_most_one_well_formed_toolset() {
+        let mut v: Value =
+            serde_json::from_str(include_str!("../../supply-chain/policy/floors.json")).unwrap();
+        let mut with = |x: Value| {
+            v["build_instructions"]["previous_pinned_toolsets"] = x;
+            parse(&v.to_string())
+        };
+        assert_eq!(
+            with(serde_json::json!(["14.51.36231"]))
+                .unwrap()
+                .previous_toolsets,
+            ["14.51.36231"]
+        );
+        assert!(
+            with(serde_json::json!([]))
+                .unwrap()
+                .previous_toolsets
+                .is_empty()
+        );
+        assert!(with(Value::Null).unwrap().previous_toolsets.is_empty());
+        assert!(
+            with(serde_json::json!(["14.51.36231", "14.50.35717"]))
+                .unwrap_err()
+                .contains("at most one")
+        );
+        for bad in [
+            "14.51",
+            "14.51.x",
+            "14..1",
+            "../14.51.1",
+            "",
+            "14.51.36231/x",
+        ] {
+            assert!(
+                with(serde_json::json!([bad]))
+                    .unwrap_err()
+                    .contains("Major.Minor.Build"),
+                "{bad}"
+            );
+        }
+        assert!(with(serde_json::json!([5])).is_err());
     }
 
     #[test]
@@ -1495,7 +1608,7 @@ build.allow_build_instructions = [\"cargo:x=1
             seen += 1;
             let (_, msgs) = crate::build_record::read_evidence(&text).unwrap();
             assert_eq!(
-                f.record_link_search_stop(&msgs, Some(&toolset)),
+                f.committed_record_link_search_stop(&msgs, Some(&toolset)),
                 None,
                 "{}",
                 p.display()
