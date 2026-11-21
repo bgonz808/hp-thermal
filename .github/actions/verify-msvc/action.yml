@@ -63,9 +63,32 @@ runs:
         if ($failures.Count) { throw "vswhere.exe is not a verified Microsoft binary: $($failures -join '; ')" }
         $inst = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -format json | ConvertFrom-Json | Select-Object -First 1
         if (-not $inst) { throw 'no Visual Studio instance with the VC tools' }
+
+        # What this runner carries, on every run (and in the run summary), so a new runner image is
+        # visible before it breaks the pin: every Visual Studio instance, its MSVC toolsets, and the
+        # Windows SDKs. Read only; nothing listed here runs.
+        $seen = [System.Collections.Generic.List[string]]::new()
+        $seen.Add("runner image: $env:ImageOS $env:ImageVersion")
+        foreach ($i in @(& $vswhere -all -products * -format json | ConvertFrom-Json)) {
+          $msvc = Join-Path $i.installationPath 'VC\Tools\MSVC'
+          $ts = if (Test-Path $msvc) { @(Get-ChildItem -LiteralPath $msvc -Directory | ForEach-Object Name | Sort-Object) -join ', ' } else { '' }
+          $seen.Add("$($i.displayName) $($i.installationVersion) at $($i.installationPath): MSVC toolsets $(if ($ts) { $ts } else { 'none' })")
+        }
+        $sdks = @(Get-ChildItem -LiteralPath "$sdkDir\bin" -Directory -ErrorAction SilentlyContinue |
+          Where-Object Name -match '^\d+\.\d+\.\d+\.\d+$' | ForEach-Object Name | Sort-Object) -join ', '
+        $seen.Add("Windows SDKs under $($sdkDir): $(if ($sdks) { $sdks } else { 'none' })")
+        $seen.Add("pinned (.cargo/config.toml): MSVC $toolset, SDK $sdk")
+        $seen | ForEach-Object { Write-Output $_ }
+        if ($env:GITHUB_STEP_SUMMARY) {
+          @('### Build environment on this runner', '') + @($seen | ForEach-Object { "- $_" }) + @('') |
+            Out-File -Append -LiteralPath $env:GITHUB_STEP_SUMMARY -Encoding utf8
+        }
+
         $tools = Join-Path $inst.installationPath "VC\Tools\MSVC\$toolset"
         $bin = Join-Path $tools 'bin\Hostx64\x64'
-        if (-not (Test-Path $bin)) { throw "pinned toolset $toolset is not installed under $($inst.installationPath)" }
+        if (-not (Test-Path $bin)) {
+          throw "pinned toolset $toolset is not installed under $($inst.installationPath); this runner has: $($seen -join ' | ')"
+        }
 
         $exec = @(Get-ChildItem -LiteralPath $bin -File -Recurse -Include *.exe, *.dll)
         $exec += Get-Item -LiteralPath "$sdkDir\bin\$sdk\x64\rc.exe", "$sdkDir\bin\$sdk\x64\rcdll.dll"
