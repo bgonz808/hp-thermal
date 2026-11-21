@@ -75,7 +75,14 @@ jobs:
           TOOLS_DIR: ${{ steps.tools.outputs.tools-dir }}
         run: |
           set -euo pipefail
+          # Run outside the checkout, on copies: cargo-audit reads `.cargo/audit.toml` from its
+          # working directory, and a committed `ignore` there would silence findings.
+          iso="$RUNNER_TEMP/audit-isolated"
+          rm -rf "$iso"; mkdir -p "$iso"
+          cp app/Cargo.lock "$iso/app.lock"
+          cp app/target/std-deps.lock "$iso/std-deps.lock"
+          cd "$iso"
           rc=0
-          "$TOOLS_DIR/cargo-audit.exe" audit --file app/Cargo.lock || rc=1
-          "$TOOLS_DIR/cargo-audit.exe" audit --file app/target/std-deps.lock || rc=1
+          "$TOOLS_DIR/cargo-audit.exe" audit --file app.lock || rc=1
+          "$TOOLS_DIR/cargo-audit.exe" audit --file std-deps.lock || rc=1
           exit "$rc"

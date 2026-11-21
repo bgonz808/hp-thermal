@@ -34,10 +34,44 @@ use crate::advance::{gh, read_jsonl, s};
 
 const SPEC: &str = "1.6";
 
-fn evidence_dir(product: &str, digest: &str) -> PathBuf {
-    PathBuf::from("supply-chain/evidence")
-        .join(product)
-        .join(digest)
+const EVIDENCE: &str = "supply-chain/evidence";
+const LOCKS: &str = "tools/locks";
+
+/// The record a report is built from and written beside: the one the product's frozen lock
+/// selects (evidence README rule 2). The app has no frozen lock; its record is per digest.
+fn record(product: &str, digest: &str) -> Result<crate::evidence_rev::Record, String> {
+    crate::evidence_rev::current(Path::new(EVIDENCE), Path::new(LOCKS), product, digest)
+}
+
+/// A revision's report continues its subject's: same serialNumber, a version after the
+/// superseded record's, so no (serialNumber, version) ever names two documents.
+fn continue_version(
+    mut doc: Value,
+    product: &str,
+    digest: &str,
+    supersedes: &str,
+) -> Result<Value, String> {
+    let prior = crate::evidence_rev::select(Path::new(EVIDENCE), product, digest, supersedes)
+        .map_err(|e| format!("superseded record: {e}"))?;
+    let p = prior.dir.join("vdr.cdx.json");
+    let v: Value = serde_json::from_str(
+        &std::fs::read_to_string(&p).map_err(|e| format!("{}: {e}", p.display()))?,
+    )
+    .map_err(|e| format!("{}: {e}", p.display()))?;
+    if v["serialNumber"] != doc["serialNumber"] {
+        return Err(format!(
+            "{}: another serialNumber; not this subject's report",
+            p.display()
+        ));
+    }
+    let pv = v["version"]
+        .as_u64()
+        .filter(|v| *v >= 1)
+        .ok_or_else(|| format!("{}: no version", p.display()))?;
+    if doc["version"].as_u64().unwrap_or(0) <= pv {
+        doc["version"] = json!(pv + 1);
+    }
+    Ok(doc)
 }
 
 /// Components from a frozen Cargo.lock: name, version, checksum (crates.io registry entries).
@@ -266,7 +300,7 @@ fn affected_versions(pver: &str, versions: &Value) -> Vec<Value> {
     out
 }
 
-fn serial_number(digest: &str) -> String {
+pub(crate) fn serial_number(digest: &str) -> String {
     // Deterministic per subject: the first 16 bytes of sha256("vdr:" + digest) laid out as a UUID.
     let h = crate::sha256::sha256(format!("vdr:{digest}").as_bytes());
     format!(
@@ -638,11 +672,20 @@ fn fetch_tool_binary(product: &str, digest: &str) -> Result<(String, Vec<u8>), S
     Ok((asset, bytes))
 }
 
-fn fetch_raw(header: &Value) -> Result<Value, String> {
+/// The raw `cargo audit --json` payload a vuln header names, from the tools release, refused
+/// unless its bytes hash to the header's sha256. The asset name is the one `record-vuln` gives
+/// that sha256 and nothing else: a header is change content, and its text reaches a file name.
+pub(crate) fn fetch_raw(header: &Value) -> Result<Value, String> {
     let asset = s(header, &["rawPayload", "asset"]);
     let want = s(header, &["rawPayload", "sha256"]);
     if s(header, &["rawPayload", "store"]) != "tools release" || asset.is_empty() {
         return Err("vuln.jsonl header names no raw payload in the tools release".into());
+    }
+    if !raw_asset_named(&asset, &want) {
+        return Err(format!(
+            "vuln.jsonl header names raw payload `{asset}` for sha256 `{want}`: not \
+             audit-raw-<first 12 of a 64-hex sha256>.json"
+        ));
     }
     let tmp = std::env::temp_dir().join(format!("vdr-{asset}"));
     let _ = std::fs::remove_file(&tmp);
@@ -664,6 +707,13 @@ fn fetch_raw(header: &Value) -> Result<Value, String> {
         ));
     }
     serde_json::from_slice(&bytes).map_err(|e| format!("{asset}: {e}"))
+}
+
+/// `asset` is the name `record-vuln` gives the raw payload whose sha256 is `sha`.
+fn raw_asset_named(asset: &str, sha: &str) -> bool {
+    sha.len() == 64
+        && sha.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        && asset == format!("audit-raw-{}.json", &sha[..12])
 }
 
 pub fn run(args: &[String]) -> i32 {
@@ -695,7 +745,26 @@ pub fn run(args: &[String]) -> i32 {
         eprintln!("vdr: --product and a 64-hex --digest are required\n{usage}");
         return 2;
     }
-    let dir = evidence_dir(&product, &digest);
+    // `check` judges committed reports and reads the checkout git would merge; `emit` writes
+    // one on the maintainer's tree, where new evidence is not committed yet.
+    let lock = std::fs::read_to_string("tools/TOOLS.lock").unwrap_or_default();
+    let checked = if cmd == "check" {
+        crate::gate::refuse_checkout(&[&lock])
+    } else {
+        crate::gate::refuse_case_collisions(&[&lock])
+    };
+    if let Err(e) = checked {
+        eprintln!("vdr: {e}");
+        return 1;
+    }
+    let rec = match record(&product, &digest) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("vdr: {e}");
+            return 1;
+        }
+    };
+    let dir = rec.dir.clone();
     let out = out.unwrap_or_else(|| dir.join("vdr.cdx.json"));
     let res = (|| -> Result<(Value, Vec<String>), String> {
         let mut graph: Option<DepGraph> = None;
@@ -826,6 +895,16 @@ pub fn run(args: &[String]) -> i32 {
         .ok()
         .and_then(|t| serde_json::from_str(&t).ok());
     let doc = settle_version(doc, existing.as_ref());
+    let doc = match &rec.revision {
+        None => doc,
+        Some(r) => match continue_version(doc, &product, &digest, &r.supersedes) {
+            Ok(d) => d,
+            Err(e) => {
+                eprintln!("vdr: {e}");
+                return 1;
+            }
+        },
+    };
     let text = serde_json::to_string_pretty(&doc).unwrap() + "\n";
     for b in &burn_down {
         eprintln!("vdr: no native CycloneDX ruling in acks for {b} — analysis omitted (burn-down)");
@@ -873,6 +952,27 @@ pub fn run(args: &[String]) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A header's raw payload name is the one `record-vuln` gives its sha256, or nothing is
+    /// fetched: the name reaches a file path and a download pattern.
+    #[test]
+    fn a_raw_payload_is_named_by_its_digest_only() {
+        let sha = "0277701ae8db".to_string() + &"a".repeat(52);
+        assert!(raw_asset_named("audit-raw-0277701ae8db.json", &sha));
+        for (asset, sha) in [
+            ("audit-raw-0277701ae8db.json", "0277701ae8db"),
+            ("audit-raw-0277701ae8dc.json", sha.as_str()),
+            ("x/../../audit-raw-0277701ae8db.json", sha.as_str()),
+            ("audit-raw-*.json", sha.as_str()),
+            ("audit-raw-0277701AE8DB.json", &sha.to_uppercase()),
+            ("", sha.as_str()),
+        ] {
+            assert!(!raw_asset_named(asset, sha), "{asset} for {sha}");
+        }
+        let header = json!({"rawPayload": {"store": "tools release", "sha256": sha,
+                            "asset": "x/../../audit-raw-0277701ae8db.json"}});
+        assert!(fetch_raw(&header).unwrap_err().contains("not audit-raw-"));
+    }
 
     const LOCK: &str = "[[package]]\nname = \"a\"\nversion = \"1.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"ab\"\n\n[[package]]\nname = \"b\"\nversion = \"2.0.0\"\n\n[metadata]\nk = \"v\"\n";
 
