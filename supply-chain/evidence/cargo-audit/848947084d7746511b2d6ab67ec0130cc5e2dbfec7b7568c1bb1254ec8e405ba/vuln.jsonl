@@ -1,0 +1,14 @@
+{"lock":{"path":"tools/locks/cargo-audit.lock","sha256":"5660005ab7ac06eef642d1ca33dda255d67d6932802d2794716b92e3caa119bd"},"lockProvenance":"frozen tools/locks/cargo-audit.lock sha256 5660005ab7ac06eef642d1ca33dda255d67d6932802d2794716b92e3caa119bd (libz-sys 1.1.33, RUSTSEC-2026-0544, #405) (lock sha256 5660005ab7ac06eef642d1ca33dda255d67d6932802d2794716b92e3caa119bd)","rawPayload":{"asset":"audit-raw-20a841df3dca.json","sha256":"20a841df3dcaa1e7a3a36219e599e458a98b870a42963dd3a8d9400d92fce509","store":"tools release"},"scanFinishedOn":"2026-11-23","scanner":{"db":{"lastUpdate":"2026-11-22T22:14:42+01:00","uri":"github.com/rustsec/advisory-db","version":"8b75c83c3c9142dd18e93d75b8d895a13d285861"},"digest":"5e1bf935c84c2d3fb778457a0bf81dab8f0ff5c4feec284c0db297b8a5634d1e","uri":"github.com/rustsec/rustsec#cargo-audit","version":"0.22.2"},"schema":"hp-thermal/evidence-vuln/v1","subject":{"name":"cargo-audit","sha256":"848947084d7746511b2d6ab67ec0130cc5e2dbfec7b7568c1bb1254ec8e405ba"}}
+{"aliases":[],"id":"RUSTSEC-2026-0214","kind":"unmaintained","package":"gumdrop","version":"0.8.1"}
+{"aliases":[],"id":"RUSTSEC-2026-0374","kind":"unmaintained","package":"basic-toml","version":"0.1.10"}
+{"aliases":[],"id":"RUSTSEC-2026-0543","kind":"unmaintained","package":"chrono","version":"0.4.44"}
+{"aliases":[],"id":"RUSTSEC-2026-0574","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":[],"id":"RUSTSEC-2026-0575","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":[],"id":"RUSTSEC-2026-0576","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":[],"id":"RUSTSEC-2026-0577","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":[],"id":"RUSTSEC-2026-0578","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":[],"id":"RUSTSEC-2026-0579","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":[],"id":"RUSTSEC-2026-0580","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":[],"id":"RUSTSEC-2026-0581","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":[],"id":"RUSTSEC-2026-0582","kind":"unsound","package":"heapless","version":"0.8.0"}
+{"aliases":["GHSA-hrj5-67jp-wqp9"],"id":"RUSTSEC-2026-0592","kind":"vulnerability","package":"url","version":"2.5.8"}
