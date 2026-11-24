@@ -413,6 +413,9 @@ fn ack_quality(v: &Value) -> Result<(), String> {
             }
             _ => {}
         }
+        if v.get("product").and_then(|p| p.get("digest")).is_some() {
+            vuln_bound_quality(v)?;
+        }
     }
     // #380: a sign-off names WHAT it signs. A caps ack binds to the sha256 of the inventory
     // bytes; a mal ack binds to the engine AND its verdict string. Without those fields the
@@ -456,6 +459,50 @@ fn ack_quality(v: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// A digest-bound vuln statement is a claim about one binary's bytes: it names the digest, an
+/// OpenVEX status that can be true of immutable bytes, and the native CycloneDX ruling the VDR
+/// copies, pointing the same way. Lines without a digest govern nothing (`last_vuln_ack`); the
+/// record is append-only, so they are not re-judged here.
+fn vuln_bound_quality(v: &Value) -> Result<(), String> {
+    let d = s(v, &["product", "digest"]);
+    if d.len() != 64
+        || !d
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    {
+        return Err("vuln ack `product.digest` is not 64 lowercase hex".into());
+    }
+    let status = s(v, &["status"]);
+    let state = s(v, &["cyclonedx", "state"]);
+    let agree: &[&str] = match status {
+        "not_affected" => &["not_affected", "false_positive"],
+        "affected" => &["exploitable", "in_triage"],
+        "under_investigation" => &["in_triage"],
+        other => {
+            return Err(format!(
+                "vuln ack status `{other}`: a digest-bound statement is not_affected, affected \
+                 or under_investigation"
+            ));
+        }
+    };
+    if !agree.contains(&state) {
+        return Err(format!(
+            "vuln ack status `{status}` with cyclonedx.state `{state}`: the CycloneDX ruling the \
+             VDR publishes must agree ({})",
+            agree.join(" | ")
+        ));
+    }
+    if status != "not_affected"
+        && (!s(v, &["justification"]).is_empty()
+            || !s(v, &["cyclonedx", "justification"]).is_empty())
+    {
+        return Err(format!(
+            "vuln ack status `{status}` carries a not_affected justification"
+        ));
+    }
+    Ok(())
+}
+
 fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     let mut cur = v;
     for p in path {
@@ -467,16 +514,38 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     cur.as_str().unwrap_or("")
 }
 
-/// The LAST quality-passing vuln statement for this instance, in file order. acks.jsonl is
-/// append-only, so file order is statement order — the OpenVEX sequence model (#251): a later
-/// statement supersedes an earlier one for the same product + vulnerability.
-pub(crate) fn last_vuln_ack<'a>(acks: &'a Acks, inst: &Instance) -> Option<&'a Value> {
-    acks.entries.iter().rev().find(|a| {
-        s(a, &["axis"]) == "vuln"
-            && s(a, &["vulnerability", "name"]) == inst.id
-            && s(a, &["product", "package"]) == inst.package
-            && s(a, &["product", "version"]) == inst.version
-    })
+/// The LAST quality-passing vuln statement for this instance in the binary `digest`, in file
+/// order. acks.jsonl is append-only, so file order is statement order — the OpenVEX sequence
+/// model (#251): a later statement supersedes an earlier one for the same product +
+/// vulnerability. The product is the binary: a statement names the digest it was made about and
+/// governs nothing else, so a new build of the same package version is judged afresh.
+pub(crate) fn last_vuln_ack<'a>(
+    acks: &'a Acks,
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    last_vuln_statement(&acks.entries, inst, digest)
+}
+
+pub(crate) fn last_vuln_statement<'a>(
+    entries: &'a [Value],
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    entries
+        .iter()
+        .rev()
+        .find(|a| is_vuln_statement(a, inst, digest))
+}
+
+/// A vuln statement about this instance in the binary `digest`.
+pub(crate) fn is_vuln_statement(a: &Value, inst: &Instance, digest: &str) -> bool {
+    s(a, &["axis"]) == "vuln"
+        && !digest.is_empty()
+        && s(a, &["product", "digest"]) == digest
+        && s(a, &["vulnerability", "name"]) == inst.id
+        && s(a, &["product", "package"]) == inst.package
+        && s(a, &["product", "version"]) == inst.version
 }
 
 /// CycloneDX-style property (`properties: [{name, value}]`) naming the advisory-DB commit at
@@ -497,8 +566,27 @@ pub(crate) fn observed_absent_at_db(a: &Value) -> Option<&str> {
 /// only ever asked about an instance the DB reports NOW, so a last statement that says "the DB
 /// did not report it" is contradicted by the measurement and void: the reappearance is RAISE
 /// uncovered until signed afresh (fail-closed, #251). Nothing is committed from CI for this.
-pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
-    last_vuln_ack(acks, inst).is_some_and(|a| observed_absent_at_db(a).is_none())
+pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance, digest: &str) -> bool {
+    governing_vuln_ack(acks, inst, digest).is_some()
+}
+
+/// The statement that covers this instance in `digest`, if one does: the gate, the monitor and
+/// the VDR's `analysis` all read coverage through here.
+pub(crate) fn governing_vuln_ack<'a>(
+    acks: &'a Acks,
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    governing_vuln_statement(&acks.entries, inst, digest)
+}
+
+/// `governing_vuln_ack` over quality-passing entries already loaded.
+pub(crate) fn governing_vuln_statement<'a>(
+    entries: &'a [Value],
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    last_vuln_statement(entries, inst, digest).filter(|a| observed_absent_at_db(a).is_none())
 }
 
 /// A mal ack covers one FINDING: (digest, engine, result). The result string is part of the
@@ -618,14 +706,15 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
 /// CycloneDX `state` / `justification` / `response` the VDR copies. It starts at `in_triage`, the
 /// one state that claims nothing. Measured facts (binary presence, version ranges, digests,
 /// dependency paths) live in the VDR's own fields and are not restated in the notes. Caps acks use `reviewed`: a caps ack signs an inventory, not a
-/// vulnerability status, so the OpenVEX statuses do not apply there. The gate reads `status` for
-/// exactly one thing: a vuln statement whose status is `fixed` withdraws coverage (#251).
-pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
+/// vulnerability status, so the OpenVEX statuses do not apply there. The statement names the
+/// binary it is about (`product.digest`) and covers that binary only; the quality bar holds the
+/// OpenVEX status and the CycloneDX state to the same direction (`vuln_bound_quality`).
+pub(crate) fn ack_template_vuln(tool: &str, digest: &str, inst: &Instance) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "vuln",
         "vulnerability": {"name": inst.id},
-        "product": {"name": tool, "package": inst.package, "version": inst.version},
+        "product": {"name": tool, "digest": digest, "package": inst.package, "version": inst.version},
         "status": "affected",
         "cyclonedx": {"state": "in_triage"},
         "status_notes": "",
@@ -653,6 +742,7 @@ pub(crate) enum GoneMechanism {
 /// quality bar still demands a signer. Appended, never replacing — the sequence is the record.
 pub(crate) fn ack_template_vuln_not_affected_observed(
     tool: &str,
+    digest: &str,
     inst: &Instance,
     db: &str,
     how: &GoneMechanism,
@@ -668,9 +758,10 @@ pub(crate) fn ack_template_vuln_not_affected_observed(
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "vuln",
         "vulnerability": {"name": inst.id},
-        "product": {"name": tool, "package": inst.package, "version": inst.version},
+        "product": {"name": tool, "digest": digest, "package": inst.package, "version": inst.version},
         "status": "not_affected",
         "justification": "vulnerable_code_not_present",
+        "cyclonedx": {"state": "not_affected", "justification": "code_not_present"},
         "status_notes": format!(
             "not reported by RustSec against {} {} at advisory DB {}: {mechanism} (monitor-vuln); supersedes the earlier statement for this instance",
             inst.package,
@@ -754,6 +845,7 @@ impl Verdict {
 
 fn vuln_verdict(
     tool: &str,
+    digest: &str,
     added: &[Instance],
     carried: &[Instance],
     fixed_count: usize,
@@ -763,10 +855,10 @@ fn vuln_verdict(
     let mut needed = Vec::new();
     for (label, set) in [("added", added), ("carried-unacked", carried)] {
         for i in set {
-            if ack_covers_vuln(acks, i) {
+            if ack_covers_vuln(acks, i, digest) {
                 covered.push(format!("{label}: {} {} {}", i.id, i.package, i.version));
             } else {
-                needed.push(ack_template_vuln(tool, i));
+                needed.push(ack_template_vuln(tool, digest, i));
             }
         }
     }
@@ -774,7 +866,7 @@ fn vuln_verdict(
         return Verdict::RaiseUncovered { covered, needed };
     }
     if added.is_empty()
-        && carried.iter().all(|i| ack_covers_vuln(acks, i))
+        && carried.iter().all(|i| ack_covers_vuln(acks, i, digest))
         && covered.len() == carried.len()
     {
         // added = ∅ and every carried instance acked -> the §4 relative ∧ absolute ALLOW.
@@ -784,6 +876,60 @@ fn vuln_verdict(
         ));
     }
     Verdict::RaiseCovered(covered)
+}
+
+/// The pinned rows of `tool` an acks edit re-judges (#519): every row TOOLS.lock pins for it,
+/// except one the candidate path judges with the same statements (same name, target, digest).
+/// Evidence-edit rows and a multi-target tool's other targets are included.
+fn rows_to_rejudge<'a>(
+    tool: &str,
+    head: &'a [ToolLine],
+    cands: &[(Option<ToolLine>, ToolLine)],
+) -> Vec<&'a ToolLine> {
+    head.iter()
+        .filter(|l| {
+            l.name == tool
+                && !cands
+                    .iter()
+                    .any(|(_, h)| h.name == l.name && h.target == l.target && h.sha == l.sha)
+        })
+        .collect()
+}
+
+/// The vuln axis of one pinned row whose statements changed (#519): its current instances are
+/// judged with the edited statements. Instances in the row's recorded baseline are carried; any
+/// other is added (signed RAISE when covered, never ALLOW). Without a baseline every instance
+/// is added. A row the bless flow has not produced cannot be judged.
+fn judge_pinned_row(
+    row: &ToolLine,
+    acks: &Acks,
+    baseline: Option<&BTreeSet<Instance>>,
+    scan: &mut dyn FnMut(&ToolLine) -> Result<Value, String>,
+    floors: &crate::floors::Floors,
+) -> Verdict {
+    if row.sha == ZERO_DIGEST || row.sha.len() != 64 {
+        return Verdict::Unevaluated(format!(
+            "{} [{}]: digest is unset/malformed — nothing blessed to judge",
+            row.name, row.target
+        ));
+    }
+    let json = match scan(row) {
+        Ok(j) => j,
+        Err(e) => return Verdict::Unevaluated(e),
+    };
+    let inst = extract_instances(&json);
+    let stops = floors.vuln_stops(&inst, &crate::floors::extract_cvss(&json));
+    if !stops.is_empty() {
+        return Verdict::HardStop(stops.join("\n  - "));
+    }
+    let (added, carried) = match baseline {
+        Some(b) => {
+            let (new, carried, _gone) = crate::monitor::classify(b, &inst);
+            (new, carried)
+        }
+        None => (inst.into_iter().collect(), Vec::new()),
+    };
+    vuln_verdict(&row.name, &row.sha, &added, &carried, 0, acks)
 }
 
 fn mal_verdict(
@@ -2279,7 +2425,7 @@ pub fn run(args: &[String]) -> i32 {
                 return Ok(Verdict::HardStop(stops.join("
   - ")));
             }
-            Ok(vuln_verdict(&h.name, &added, &carried, fixed.len(), &acks))
+            Ok(vuln_verdict(&h.name, &h.sha, &added, &carried, fixed.len(), &acks))
         })()
         .unwrap_or_else(Verdict::Unevaluated);
         axes.push(("vuln", vuln));
@@ -2540,45 +2686,92 @@ pub fn run(args: &[String]) -> i32 {
                 axes,
             });
         }
-        // Ack-file edits with nothing else to evaluate: the quality bar still applies.
+        // A statement edit changes what covers the pinned binaries (#519): every pinned row of a
+        // tool whose acks.jsonl changed is judged again with the edited statements, except a row
+        // the candidate path above already judged with them (same name, target and digest). An
+        // evidence-edit row is judged here: that path does not re-scan.
         for tool in &changed_acks {
-            if ev_cands.iter().any(|(h, _)| &h.name == tool)
-                || cands.iter().any(|(_, h)| &h.name == tool)
-            {
-                continue; // already loaded and reported above
+            let reported = ev_cands.iter().any(|(h, _)| &h.name == tool)
+                || cands.iter().any(|(_, h)| &h.name == tool);
+            let acks = match load_acks(&evidence_dir.join(tool).join("acks.jsonl")) {
+                Ok(a) => a,
+                Err(e) => {
+                    if !reported {
+                        reports.push(CandidateReport {
+                            name: format!("{tool} (acks edit)"),
+                            tool: tool.clone(),
+                            summary: String::new(),
+                            axes: vec![("acks", Verdict::Unevaluated(e))],
+                        });
+                    }
+                    continue;
+                }
+            };
+            if !acks.rejected.is_empty() {
+                if !reported {
+                    reports.push(CandidateReport {
+                        name: format!("{tool} (acks edit)"),
+                        tool: tool.clone(),
+                        summary: String::new(),
+                        axes: vec![(
+                            "ack-quality",
+                            Verdict::Unevaluated(format!(
+                                "{} ack line(s) failed the quality bar:\n    {}",
+                                acks.rejected.len(),
+                                acks.rejected.join("\n    ")
+                            )),
+                        )],
+                    });
+                }
+                continue;
             }
-            match load_acks(&evidence_dir.join(tool).join("acks.jsonl")) {
-                Ok(a) if a.rejected.is_empty() => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
-                    tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![(
+            for row in rows_to_rejudge(tool, &head, &cands) {
+                // The baseline only splits added from carried (signed RAISE vs ALLOW, both
+                // passing); coverage is required for every instance either way.
+                let baseline = crate::monitor::load_baseline(&evidence_dir, &row.name, &row.sha)
+                    .map(|(set, _db)| set);
+                let mut scan = |r: &ToolLine| -> Result<Value, String> {
+                    let dest = std::env::temp_dir()
+                        .join(format!("gate-{}-{}-acks.lock", r.name, r.target));
+                    let (lock, _src) =
+                        resolve_lock(&r.name, &r.repo, &r.rev, Some(&locks_dir), &dest)?;
+                    let json = run_audit(&lock, !first_scan)?;
+                    first_scan = false;
+                    if db_stamp.is_empty() {
+                        db_stamp = format!(
+                            "advisory-db {} ({})",
+                            s(&json, &["database", "last-commit"]),
+                            s(&json, &["database", "last-updated"]),
+                        );
+                    }
+                    Ok(json)
+                };
+                let vuln = judge_pinned_row(row, &acks, baseline.as_ref(), &mut scan, floors);
+                let mut axes = Vec::new();
+                if !reported {
+                    axes.push((
                         "ack-quality",
                         Verdict::Allow(format!(
-                            "{} ack line(s) pass the quality bar; nothing to evaluate against",
-                            a.entries.len()
+                            "{} ack line(s) pass the quality bar",
+                            acks.entries.len()
                         )),
-                    )],
-                }),
-                Ok(a) => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
+                    ));
+                }
+                axes.push(("vuln", vuln));
+                reports.push(CandidateReport {
+                    name: format!("{tool} [{}] (acks edit)", row.target),
                     tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![(
-                        "ack-quality",
-                        Verdict::Unevaluated(format!(
-                            "{} ack line(s) failed the quality bar:\n    {}",
-                            a.rejected.len(),
-                            a.rejected.join("\n    ")
-                        )),
-                    )],
-                }),
-                Err(e) => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
-                    tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![("acks", Verdict::Unevaluated(e))],
-                }),
+                    summary: format!(
+                        "statement edit: pinned digest {} judged with the edited statements{}",
+                        &row.sha[..12.min(row.sha.len())],
+                        if baseline.is_some() {
+                            ""
+                        } else {
+                            " (no recorded baseline: every instance added)"
+                        }
+                    ),
+                    axes,
+                });
             }
         }
     }
@@ -2640,6 +2833,9 @@ pub fn run(args: &[String]) -> i32 {
         );
     } else if cands.is_empty() {
         md.push_str("No TOOLS.lock candidates; evidence/ack edits on the live frontier evaluated below (#380).\n");
+        if !db_stamp.is_empty() {
+            let _ = writeln!(md, "*vuln instrument: {db_stamp}*\n");
+        }
     } else if !db_stamp.is_empty() {
         let _ = writeln!(
             md,
@@ -2734,9 +2930,11 @@ mod tests {
             rejected: Vec::new(),
         }
     }
+    /// The binary the vuln tests' statements are about.
+    const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
     fn good_vuln_ack(id: &str, pkg: &str, ver: &str) -> String {
         format!(
-            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","package":"{pkg}","version":"{ver}"}},"status":"affected","status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","digest":"{D}","package":"{pkg}","version":"{ver}"}},"status":"affected","cyclonedx":{{"state":"in_triage"}},"status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
         )
     }
 
@@ -2810,7 +3008,7 @@ mod tests {
     #[test]
     fn vuln_allow_requires_added_empty_and_carried_acked() {
         let acks = ack(&good_vuln_ack("B", "q", "2"));
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 3, &acks);
+        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 3, &acks);
         assert!(matches!(v, Verdict::Allow(_)));
     }
 
@@ -2819,7 +3017,7 @@ mod tests {
         // No exchange rate: fixes never buy an addition; an acked addition is
         // signed-RAISE, not ALLOW.
         let acks = ack(&good_vuln_ack("C", "r", "3"));
-        let v = vuln_verdict("t", &[inst("C", "r", "3")], &[], 99, &acks);
+        let v = vuln_verdict("t", D, &[inst("C", "r", "3")], &[], 99, &acks);
         assert!(matches!(v, Verdict::RaiseCovered(_)));
     }
 
@@ -2831,6 +3029,7 @@ mod tests {
         let affected = good_vuln_ack("B", "q", "2");
         let observed = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("B", "q", "2"),
             "0123456789abcdef0123",
             &GoneMechanism::VersionsNarrowed,
@@ -2839,33 +3038,37 @@ mod tests {
         .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-10\"");
         let mut acks = ack(&affected);
         acks.entries.push(serde_json::from_str(&observed).unwrap());
-        assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2")));
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 0, &acks);
+        assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
+        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 0, &acks);
         assert!(matches!(v, Verdict::RaiseUncovered { .. }));
         acks.entries.push(serde_json::from_str(&affected).unwrap());
-        assert!(ack_covers_vuln(&acks, &inst("B", "q", "2")));
+        assert!(ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
         // a maintainer-reviewed not_affected (no grounding property) IS coverage
-        let reviewed = affected.replace(
-            "\"status\":\"affected\"",
-            "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
-        );
-        assert!(ack_covers_vuln(&ack(&reviewed), &inst("B", "q", "2")));
+        let reviewed = affected
+            .replace(
+                "\"status\":\"affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+            )
+            .replace("in_triage", "not_affected");
+        assert!(ack_covers_vuln(&ack(&reviewed), &inst("B", "q", "2"), D));
         // a grounded statement for ANOTHER instance changes nothing
         let other = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("B", "q", "3"),
             "0123456789abcdef0123",
             &GoneMechanism::Withdrawn("2026-01-01".into()),
         );
         let mut acks2 = ack(&affected);
         acks2.entries.push(serde_json::from_str(&other).unwrap());
-        assert!(ack_covers_vuln(&acks2, &inst("B", "q", "2")));
+        assert!(ack_covers_vuln(&acks2, &inst("B", "q", "2"), D));
     }
 
     #[test]
     fn not_affected_observed_template_is_grounded_and_needs_a_signer() {
         let t = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("A", "p", "1"),
             "0123456789abcdef0123",
             &GoneMechanism::Withdrawn("2026-02-03".into()),
@@ -2891,11 +3094,99 @@ mod tests {
         let bare = good_vuln_ack("A", "p", "1")
             .replace("\"status\":\"affected\"", "\"status\":\"not_affected\"");
         assert!(ack_quality(&serde_json::from_str(&bare).unwrap()).is_err());
-        let justified = bare.replace(
-            "\"status\":\"not_affected\"",
+        let justified = bare
+            .replace(
+                "\"status\":\"not_affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+            )
+            .replace("in_triage", "not_affected");
+        assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
+    }
+
+    #[test]
+    fn a_vuln_statement_covers_only_the_binary_it_names() {
+        let i = inst("B", "q", "2");
+        let other = "e".repeat(64);
+        let mut acks = ack(&good_vuln_ack("B", "q", "2"));
+        assert!(ack_covers_vuln(&acks, &i, D));
+        assert!(
+            !ack_covers_vuln(&acks, &i, &other),
+            "a new build is judged afresh"
+        );
+        assert!(!ack_covers_vuln(&acks, &i, ""), "no binary, no coverage");
+        // a statement without a digest governs nothing, before or after a bound one
+        let legacy = good_vuln_ack("B", "q", "2").replace(&format!("\"digest\":\"{D}\","), "");
+        assert!(!ack_covers_vuln(&ack(&legacy), &i, D));
+        // a later statement about another binary does not supersede this binary's
+        let observed_other = ack_template_vuln_not_affected_observed(
+            "t",
+            &other,
+            &i,
+            "0123456789abcdef0123",
+            &GoneMechanism::VersionsNarrowed,
+        );
+        acks.entries
+            .push(serde_json::from_str(&observed_other).unwrap());
+        assert!(ack_covers_vuln(&acks, &i, D));
+        assert!(!ack_covers_vuln(&acks, &i, &other));
+        // the template names the binary
+        let t: Value = serde_json::from_str(&ack_template_vuln("t", D, &i)).unwrap();
+        assert_eq!(t["product"]["digest"], D);
+    }
+
+    #[test]
+    fn digest_bound_vuln_statements_must_agree_with_their_cyclonedx_ruling() {
+        let ok = |j: &str| ack_quality(&serde_json::from_str(j).unwrap()).is_ok();
+        let base = good_vuln_ack("A", "p", "1");
+        assert!(ok(&base));
+        // affected cannot publish a not_affected CycloneDX ruling
+        assert!(!ok(&base.replace("in_triage", "not_affected")));
+        // not_affected cannot ride an in_triage / exploitable ruling
+        let na = base.replace(
+            "\"status\":\"affected\"",
             "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
         );
-        assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
+        assert!(!ok(&na));
+        assert!(!ok(&na.replace("in_triage", "exploitable")));
+        assert!(ok(&na.replace("in_triage", "not_affected")));
+        // a ruling is required, and the status must be one immutable bytes can carry
+        assert!(!ok(
+            &base.replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "")
+        ));
+        assert!(!ok(
+            &base.replace("\"status\":\"affected\"", "\"status\":\"reviewed\"")
+        ));
+        // affected carries no not_affected justification
+        assert!(!ok(&base.replace(
+            "\"status\":\"affected\"",
+            "\"status\":\"affected\",\"justification\":\"component_not_present\""
+        )));
+        // the digest is 64 lowercase hex
+        assert!(!ok(&base.replace(D, &D.to_uppercase())));
+        assert!(!ok(&base.replace(D, "dd")));
+        // under_investigation is in_triage
+        let ui = base.replace(
+            "\"status\":\"affected\"",
+            "\"status\":\"under_investigation\"",
+        );
+        assert!(ok(&ui));
+        assert!(!ok(&ui.replace("in_triage", "exploitable")));
+        // a line without a digest is not re-judged (append-only history): it passes, inert
+        let legacy = base
+            .replace(&format!("\"digest\":\"{D}\","), "")
+            .replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "");
+        assert!(ok(&legacy));
+        // the monitor's observation template passes once signed
+        let obs = ack_template_vuln_not_affected_observed(
+            "t",
+            D,
+            &inst("A", "p", "1"),
+            "0123456789abcdef0123",
+            &GoneMechanism::Withdrawn("2026-02-03".into()),
+        )
+        .replace("\"author\":\"\"", "\"author\":\"a\"")
+        .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-24\"");
+        assert!(ok(&obs));
     }
 
     #[test]
@@ -2904,10 +3195,133 @@ mod tests {
             entries: vec![],
             rejected: vec![],
         };
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 0, &acks);
+        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 0, &acks);
         match v {
             Verdict::RaiseUncovered { needed, .. } => assert_eq!(needed.len(), 1),
             other => panic!("expected uncovered, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_acks_edit_judges_each_pinned_row_with_the_edited_statements() {
+        let floors =
+            crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
+        let row = ToolLine {
+            name: "t".into(),
+            repo: "r".into(),
+            rev: "a".into(),
+            target: "x".into(),
+            sha: D.into(),
+        };
+        let audit = serde_json::json!({"vulnerabilities": {"list": [
+            {"advisory": {"id": "B"}, "package": {"name": "q", "version": "2"}},
+            {"advisory": {"id": "C"}, "package": {"name": "r", "version": "3"}}
+        ]}});
+        let mut scan = |_: &ToolLine| -> Result<Value, String> { Ok(audit.clone()) };
+        let mut both = ack(&good_vuln_ack("B", "q", "2"));
+        both.entries
+            .push(serde_json::from_str(&good_vuln_ack("C", "r", "3")).unwrap());
+        let baseline: BTreeSet<Instance> = [inst("B", "q", "2"), inst("C", "r", "3")].into();
+        let judge = |r: &ToolLine,
+                     a: &Acks,
+                     b: Option<&BTreeSet<Instance>>,
+                     s: &mut dyn FnMut(&ToolLine) -> Result<Value, String>| {
+            judge_pinned_row(r, a, b, s, &floors)
+        };
+        // every instance carried and covered in this digest: ALLOW
+        assert!(matches!(
+            judge(&row, &both, Some(&baseline), &mut scan),
+            Verdict::Allow(_)
+        ));
+        // an instance that appeared since bless, covered: signed RAISE, never ALLOW
+        let only_b: BTreeSet<Instance> = [inst("B", "q", "2")].into();
+        assert!(matches!(
+            judge(&row, &both, Some(&only_b), &mut scan),
+            Verdict::RaiseCovered(_)
+        ));
+        // no recorded baseline: every instance is added
+        assert!(matches!(
+            judge(&row, &both, None, &mut scan),
+            Verdict::RaiseCovered(_)
+        ));
+        // a statement withdrawn by the edit: uncovered
+        let one = ack(&good_vuln_ack("B", "q", "2"));
+        assert!(matches!(
+            judge(&row, &one, Some(&baseline), &mut scan),
+            Verdict::RaiseUncovered { .. }
+        ));
+        // statements about another binary cover nothing here
+        let other = ToolLine {
+            sha: "e".repeat(64),
+            ..row.clone()
+        };
+        assert!(matches!(
+            judge(&other, &both, Some(&baseline), &mut scan),
+            Verdict::RaiseUncovered { .. }
+        ));
+        // an unblessed row, or a scan that failed, cannot be judged
+        let zero = ToolLine {
+            sha: ZERO_DIGEST.into(),
+            ..row.clone()
+        };
+        assert!(matches!(
+            judge(&zero, &both, Some(&baseline), &mut scan),
+            Verdict::Unevaluated(_)
+        ));
+        let mut broken = |_: &ToolLine| -> Result<Value, String> { Err("no DB".into()) };
+        assert!(matches!(
+            judge(&row, &both, Some(&baseline), &mut broken),
+            Verdict::Unevaluated(_)
+        ));
+    }
+
+    #[test]
+    fn an_acks_edit_rejudges_every_pinned_row_the_candidate_path_did_not() {
+        let tl = |name: &str, target: &str, sha: &str| ToolLine {
+            name: name.into(),
+            repo: "r".into(),
+            rev: "a".into(),
+            target: target.into(),
+            sha: sha.into(),
+        };
+        let (win, lin) = ("1".repeat(64), "2".repeat(64));
+        let head = vec![
+            tl("t", "windows", &win),
+            tl("t", "linux", &lin),
+            tl("u", "windows", &"3".repeat(64)),
+        ];
+        let picked = |c: &[(Option<ToolLine>, ToolLine)]| -> Vec<String> {
+            rows_to_rejudge("t", &head, c)
+                .iter()
+                .map(|r| r.target.clone())
+                .collect()
+        };
+        // no candidate (acks-only, or evidence-only edit): every pinned row of the tool
+        assert_eq!(picked(&[]), ["windows", "linux"]);
+        // one target is a candidate: the other target is still judged, the candidate is not
+        // judged twice
+        assert_eq!(picked(&[(None, tl("t", "windows", &win))]), ["linux"]);
+        // a candidate with another digest on the same target does not shield the pinned row
+        assert_eq!(
+            picked(&[(None, tl("t", "windows", &"9".repeat(64)))]),
+            ["windows", "linux"]
+        );
+        // another tool's candidate changes nothing
+        assert_eq!(
+            picked(&[(None, tl("u", "windows", &"3".repeat(64)))]),
+            ["windows", "linux"]
+        );
+    }
+
+    #[test]
+    fn a_vuln_digest_that_is_not_a_digest_fails_the_quality_bar() {
+        let base = good_vuln_ack("A", "p", "1");
+        for bad in ["null", "\"\"", "7", "[]"] {
+            let line = base.replace(&format!("\"{D}\""), bad);
+            assert!(
+                ack_quality(&serde_json::from_str(&line).unwrap()).is_err(),
+                "digest {bad} must fail"
+            );
         }
     }
 

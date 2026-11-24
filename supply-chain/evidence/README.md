@@ -65,8 +65,18 @@ parseable. The schema borrows established vocabularies rather than inventing one
   field were bound (2026-11-11) to the `caps.toml` content at the commit each ack first appeared in;
   five of them signed inventories the Bubblewrap refresh (#381) rewrote a day later, and each of
   those digests carries a fresh ack for the rewritten content.
-  Statements are a sequence, never edited or deleted; the LAST statement for an instance is the
-  one that counts (#251). When `monitor-vuln` classifies an instance as GONE (RustSec withdrew the
+  A vuln ack names the binary it is about, `product.digest`, and covers that binary only: a new
+  build of the same package version is judged afresh, so a reachability ruling made for one
+  build never carries into a build that might link a caller. A digest-bound vuln ack carries an
+  OpenVEX status that immutable bytes can carry (`not_affected`, `affected`,
+  `under_investigation`) and a `cyclonedx.state` pointing the same way (`not_affected` or
+  `false_positive`; `exploitable` or `in_triage`; `in_triage`), and only `not_affected` carries a
+  justification. Vuln acks without a digest are history: they pass the quality bar as before and
+  cover nothing. A multi-target tool signs each target's digest. An `acks.jsonl` edit makes the
+  gate judge every pinned digest of that tool with the edited statements, and the monitor
+  re-checks coverage of every carried instance on each run, so a withdrawn statement surfaces.
+  Statements are a sequence, never edited or deleted; for an instance in a binary, the LAST
+  statement naming that binary is the one that counts (#251). When `monitor-vuln` classifies an instance as GONE (RustSec withdrew the
   advisory or narrowed its `[versions]`; the bytes did not change, so never `fixed`) it prints a
   `not_affected` / `vulnerable_code_not_present` statement to append, carrying the DB commit as a
   CycloneDX-style property `hp-thermal:observed-absent-at-db`. A statement grounded that way is
@@ -115,7 +125,10 @@ release SBOM for the app), every RustSec finding from the custody-verified raw p
 `affects` by component bom-ref), the instruments in `metadata.tools.components` with hashes.
 `analysis` is filled only from an ack's native `cyclonedx` ruling (state, justification,
 response), never mapped from OpenVEX fields; acks without one are reported as burn-down.
-`firstIssued` / `lastUpdated` are the earliest and latest ack for the instance. Each finding's
+`analysis` comes from the statement the gate takes as covering the finding in this digest
+(`gate::governing_vuln_statement`), read through the gate's quality bar; a statement about another
+digest supplies nothing. `firstIssued` / `lastUpdated` are the earliest and latest ack for the
+instance in this digest. Each finding's
 `affects[].versions` lists the measured version as `affected` and every patched or unaffected
 requirement from the advisory as an `unaffected` Package URL `vers` range. Facts go in fields,
 not prose: `analysis.detail` is a one-line summary, never a second copy of what the fields say. The

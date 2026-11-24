@@ -8972,7 +8972,7 @@
   },
   "serialNumber": "urn:uuid:2a7e0d41-853e-4c75-83ce-c879dbdf2c76",
   "specVersion": "1.6",
-  "version": 1,
+  "version": 2,
   "vulnerabilities": [
     {
       "advisories": [
@@ -8998,9 +8998,9 @@
       ],
       "analysis": {
         "detail": "The only caller of Url::origin is url's own quirks::origin; nothing outside url references either (source search of the 151 packages in the binary, 2026-11-23).",
-        "firstIssued": "2026-11-23T00:00:00Z",
+        "firstIssued": "2026-11-24T00:00:00Z",
         "justification": "code_not_reachable",
-        "lastUpdated": "2026-11-23T00:00:00Z",
+        "lastUpdated": "2026-11-24T00:00:00Z",
         "state": "not_affected"
       },
       "bom-ref": "vuln:RUSTSEC-2026-0592@url@2.5.8",

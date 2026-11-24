@@ -13,7 +13,9 @@
 //!     verified against the header's sha256 before anything is read from it;
 //!   * components: a tool's frozen `tools/locks/<tool>.lock`, or for the app the release SBOM
 //!     (`--sbom`), whose components already carry `scope` and `bom-ref`s;
-//!   * `supply-chain/evidence/<product>/acks.jsonl` — maintainer rulings. An ack supplies
+//!   * `supply-chain/evidence/<product>/acks.jsonl` — maintainer rulings, read through the
+//!     gate's quality bar. Only the statement the gate takes as covering a finding in THIS digest
+//!     (`gate::governing_vuln_statement`) counts. It supplies
 //!     `analysis` ONLY when it carries a native CycloneDX ruling (`cyclonedx.state`, optionally
 //!     `cyclonedx.justification` / `cyclonedx.response`), chosen by the maintainer; the OpenVEX
 //!     fields are never mapped (the two vocabularies are not a bijection). Legacy acks without
@@ -182,20 +184,23 @@ pub(crate) fn ratings(cvss: Option<&str>, informational: Option<&str>) -> Vec<Va
 /// the (advisory, package, version) instance wins, as in the gate.
 pub(crate) fn analysis_from_acks(
     acks: &[Value],
+    digest: &str,
     id: &str,
     package: &str,
     version: &str,
 ) -> Option<Value> {
+    let inst = crate::gate::Instance {
+        id: id.to_string(),
+        package: package.to_string(),
+        version: version.to_string(),
+        kind: String::new(),
+    };
+    // The statement the gate would take as covering this instance in this binary, or none.
+    let ack = crate::gate::governing_vuln_statement(acks, &inst, digest)?;
     let matching: Vec<&Value> = acks
         .iter()
-        .filter(|a| {
-            s(a, &["axis"]) == "vuln"
-                && s(a, &["vulnerability", "name"]) == id
-                && s(a, &["product", "package"]) == package
-                && s(a, &["product", "version"]) == version
-        })
+        .filter(|a| crate::gate::is_vuln_statement(a, &inst, digest))
         .collect();
-    let ack = *matching.last()?;
     let cdx = &ack["cyclonedx"];
     let state = cdx["state"].as_str()?;
     // The native ruling's own `detail` when it has one; the OpenVEX notes otherwise.
@@ -367,7 +372,7 @@ pub(crate) fn build(
         if let Some(d) = adv["date"].as_str() {
             v["published"] = Value::String(format!("{d}T00:00:00Z"));
         }
-        match analysis_from_acks(acks, &id, &pname, &pver) {
+        match analysis_from_acks(acks, digest, &id, &pname, &pver) {
             Some(an) => v["analysis"] = an,
             None => burn_down.push(format!("{id} {pname} {pver}")),
         }
@@ -716,6 +721,21 @@ fn raw_asset_named(asset: &str, sha: &str) -> bool {
         && asset == format!("audit-raw-{}.json", &sha[..12])
 }
 
+/// The acks a report reads, through the gate's reader. A malformed file, or any line the quality
+/// bar rejects, fails the report: a rejected line may supersede a ruling, so building without it
+/// could publish the superseded one.
+pub(crate) fn report_acks(path: &Path) -> Result<Vec<Value>, String> {
+    let loaded = crate::gate::load_acks(path)?;
+    if !loaded.rejected.is_empty() {
+        return Err(format!(
+            "{} ack line(s) fail the gate's quality bar; no report is built past them:\n  {}",
+            loaded.rejected.len(),
+            loaded.rejected.join("\n  ")
+        ));
+    }
+    Ok(loaded.entries)
+}
+
 pub fn run(args: &[String]) -> i32 {
     let usage = "usage: cargo xtask vdr <emit|check> --product <name> --digest <sha256> [--sbom <release cdx.json>] [--out <path>]";
     let Some(cmd) = args.get(1).map(String::as_str) else {
@@ -859,12 +879,12 @@ pub fn run(args: &[String]) -> i32 {
                 (comps, None)
             }
         };
-        let acks = read_jsonl(
+        let acks = report_acks(
             Path::new("supply-chain/evidence")
                 .join(&product)
                 .join("acks.jsonl")
                 .as_path(),
-        );
+        )?;
         let deps = match &graph {
             Some(g) => Some(dependencies_from_graph(&components, g)?),
             None => None,
@@ -907,7 +927,9 @@ pub fn run(args: &[String]) -> i32 {
     };
     let text = serde_json::to_string_pretty(&doc).unwrap() + "\n";
     for b in &burn_down {
-        eprintln!("vdr: no native CycloneDX ruling in acks for {b} — analysis omitted (burn-down)");
+        eprintln!(
+            "vdr: {b}: no statement naming digest {digest} with a native CycloneDX ruling covers it — analysis omitted (burn-down)"
+        );
     }
     match cmd {
         "emit" => {
@@ -1197,14 +1219,23 @@ mod tests {
 
     #[test]
     fn analysis_comes_only_from_native_cyclonedx_rulings() {
-        let legacy = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"package":"a","version":"1.0.0"},"status":"not_affected","justification":"component_not_present","timestamp":"2026-11-12","status_notes":"dev-only"});
+        const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        let legacy = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"status":"not_affected","justification":"component_not_present","timestamp":"2026-11-12","status_notes":"dev-only"});
         assert!(
-            analysis_from_acks(std::slice::from_ref(&legacy), "RUSTSEC-1", "a", "1.0.0").is_none(),
+            analysis_from_acks(std::slice::from_ref(&legacy), D, "RUSTSEC-1", "a", "1.0.0")
+                .is_none(),
             "OpenVEX-only ack is never mapped"
         );
         let mut native = legacy.clone();
         native["cyclonedx"] = json!({"state":"not_affected","justification":"code_not_present","response":["will_not_fix"]});
-        let an = analysis_from_acks(&[legacy, native], "RUSTSEC-1", "a", "1.0.0").unwrap();
+        let an = analysis_from_acks(
+            &[legacy.clone(), native.clone()],
+            D,
+            "RUSTSEC-1",
+            "a",
+            "1.0.0",
+        )
+        .unwrap();
         assert_eq!(an["state"], "not_affected");
         assert_eq!(an["justification"], "code_not_present");
         assert_eq!(an["response"][0], "will_not_fix");
@@ -1212,15 +1243,59 @@ mod tests {
         assert_eq!(an["lastUpdated"], "2026-11-12T00:00:00Z");
         // A later ack moves lastUpdated; the earliest one keeps firstIssued.
         let mut later = an_source_with_time("2026-11-20");
+        later["product"]["digest"] = json!(D);
         later["cyclonedx"] = json!({"state":"not_affected","justification":"code_not_present"});
-        let first = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"package":"a","version":"1.0.0"},"timestamp":"2026-11-01"});
-        let an2 = analysis_from_acks(&[first, later], "RUSTSEC-1", "a", "1.0.0").unwrap();
+        let first = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"timestamp":"2026-11-01"});
+        let an2 = analysis_from_acks(&[first, later], D, "RUSTSEC-1", "a", "1.0.0").unwrap();
         assert_eq!(an2["firstIssued"], "2026-11-01T00:00:00Z");
         assert_eq!(an2["lastUpdated"], "2026-11-20T00:00:00Z");
         assert!(
             an2.get("detail").is_none(),
             "no detail when neither the ruling nor notes carry one"
         );
+        // The ruling is about one binary: another digest, or none, supplies nothing.
+        let other = "e".repeat(64);
+        assert!(
+            analysis_from_acks(
+                std::slice::from_ref(&native),
+                &other,
+                "RUSTSEC-1",
+                "a",
+                "1.0.0"
+            )
+            .is_none()
+        );
+        let mut unbound = native.clone();
+        unbound["product"].as_object_mut().unwrap().remove("digest");
+        assert!(analysis_from_acks(&[unbound], D, "RUSTSEC-1", "a", "1.0.0").is_none());
+        // A statement grounded in the DB's silence is void for a reported instance: no analysis.
+        let mut observed = native.clone();
+        observed["properties"] =
+            json!([{"name": crate::gate::OBSERVED_ABSENT_PROP, "value": "0123456789abcdef0123"}]);
+        assert!(analysis_from_acks(&[native, observed], D, "RUSTSEC-1", "a", "1.0.0").is_none());
+    }
+
+    #[test]
+    fn a_report_is_not_built_past_a_rejected_ack_line() {
+        let dir = std::env::temp_dir().join(format!("vdr-acks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("acks.jsonl");
+        let d = "d".repeat(64);
+        let good = json!({"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"name":"t","digest":d,"package":"a","version":"1.0.0"},"status":"not_affected","justification":"component_not_present","cyclonedx":{"state":"not_affected","justification":"code_not_present"},"status_notes":"absent","author":"a","timestamp":"2026-11-24","refs":[]});
+        // a later line for the same instance that fails the bar (no CycloneDX ruling)
+        let mut superseding = good.clone();
+        superseding["status"] = json!("affected");
+        superseding.as_object_mut().unwrap().remove("justification");
+        superseding.as_object_mut().unwrap().remove("cyclonedx");
+        std::fs::write(&p, format!("{good}\n")).unwrap();
+        assert_eq!(report_acks(&p).unwrap().len(), 1);
+        std::fs::write(&p, format!("{good}\n{superseding}\n")).unwrap();
+        assert!(
+            report_acks(&p).is_err(),
+            "the superseded ruling must not be published"
+        );
+        assert!(report_acks(&dir.join("absent.jsonl")).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn an_source_with_time(t: &str) -> Value {
