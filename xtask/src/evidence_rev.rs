@@ -314,20 +314,20 @@ pub fn select(root: &Path, tool: &str, digest: &str, lock_sha: &str) -> Result<R
 // ---------- strict subset of a Cargo.lock ----------
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct Pkg {
-    source: Option<String>,
-    checksum: Option<String>,
-    deps: BTreeSet<String>,
+pub(crate) struct Pkg {
+    pub(crate) source: Option<String>,
+    pub(crate) checksum: Option<String>,
+    pub(crate) deps: BTreeSet<String>,
     /// Any key other than name/version/source/checksum/dependencies, verbatim.
     other: Vec<String>,
 }
 
 /// A lock package's identity: (name, version).
-type Key = (String, String);
-type Pkgs = BTreeMap<Key, Pkg>;
+pub(crate) type Key = (String, String);
+pub(crate) type Pkgs = BTreeMap<Key, Pkg>;
 
 /// `[[package]]` entries by (name, version), plus every line outside them, verbatim.
-fn parse_lock(text: &str) -> Result<(Pkgs, Vec<String>), String> {
+pub(crate) fn parse_lock(text: &str) -> Result<(Pkgs, Vec<String>), String> {
     let mut pkgs = BTreeMap::new();
     let mut outside = Vec::new();
     let mut cur: Option<(Option<String>, Option<String>, Pkg)> = None;
