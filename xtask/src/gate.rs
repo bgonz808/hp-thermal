@@ -878,6 +878,24 @@ fn vuln_verdict(
     Verdict::RaiseCovered(covered)
 }
 
+/// The pinned rows of `tool` an acks edit re-judges (#519): every row TOOLS.lock pins for it,
+/// except one the candidate path judges with the same statements (same name, target, digest).
+/// Evidence-edit rows and a multi-target tool's other targets are included.
+fn rows_to_rejudge<'a>(
+    tool: &str,
+    head: &'a [ToolLine],
+    cands: &[(Option<ToolLine>, ToolLine)],
+) -> Vec<&'a ToolLine> {
+    head.iter()
+        .filter(|l| {
+            l.name == tool
+                && !cands
+                    .iter()
+                    .any(|(_, h)| h.name == l.name && h.target == l.target && h.sha == l.sha)
+        })
+        .collect()
+}
+
 /// The vuln axis of one pinned row whose statements changed (#519): its current instances are
 /// judged with the edited statements. Instances in the row's recorded baseline are carried; any
 /// other is added (signed RAISE when covered, never ALLOW). Without a baseline every instance
@@ -2707,13 +2725,9 @@ pub fn run(args: &[String]) -> i32 {
                 }
                 continue;
             }
-            let rows = head.iter().filter(|l| {
-                &l.name == tool
-                    && !cands
-                        .iter()
-                        .any(|(_, h)| h.name == l.name && h.target == l.target && h.sha == l.sha)
-            });
-            for row in rows {
+            for row in rows_to_rejudge(tool, &head, &cands) {
+                // The baseline only splits added from carried (signed RAISE vs ALLOW, both
+                // passing); coverage is required for every instance either way.
                 let baseline = crate::monitor::load_baseline(&evidence_dir, &row.name, &row.sha)
                     .map(|(set, _db)| set);
                 let mut scan = |r: &ToolLine| -> Result<Value, String> {
@@ -3259,6 +3273,44 @@ mod tests {
             judge(&row, &both, Some(&baseline), &mut broken),
             Verdict::Unevaluated(_)
         ));
+    }
+
+    #[test]
+    fn an_acks_edit_rejudges_every_pinned_row_the_candidate_path_did_not() {
+        let tl = |name: &str, target: &str, sha: &str| ToolLine {
+            name: name.into(),
+            repo: "r".into(),
+            rev: "a".into(),
+            target: target.into(),
+            sha: sha.into(),
+        };
+        let (win, lin) = ("1".repeat(64), "2".repeat(64));
+        let head = vec![
+            tl("t", "windows", &win),
+            tl("t", "linux", &lin),
+            tl("u", "windows", &"3".repeat(64)),
+        ];
+        let picked = |c: &[(Option<ToolLine>, ToolLine)]| -> Vec<String> {
+            rows_to_rejudge("t", &head, c)
+                .iter()
+                .map(|r| r.target.clone())
+                .collect()
+        };
+        // no candidate (acks-only, or evidence-only edit): every pinned row of the tool
+        assert_eq!(picked(&[]), ["windows", "linux"]);
+        // one target is a candidate: the other target is still judged, the candidate is not
+        // judged twice
+        assert_eq!(picked(&[(None, tl("t", "windows", &win))]), ["linux"]);
+        // a candidate with another digest on the same target does not shield the pinned row
+        assert_eq!(
+            picked(&[(None, tl("t", "windows", &"9".repeat(64)))]),
+            ["windows", "linux"]
+        );
+        // another tool's candidate changes nothing
+        assert_eq!(
+            picked(&[(None, tl("u", "windows", &"3".repeat(64)))]),
+            ["windows", "linux"]
+        );
     }
 
     #[test]
