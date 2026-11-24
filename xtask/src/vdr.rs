@@ -186,9 +186,10 @@ pub(crate) fn ratings(cvss: Option<&str>, informational: Option<&str>) -> Vec<Va
 /// version) the record states.
 pub(crate) type Records = BTreeMap<String, (String, String, String)>;
 
-/// Every record in `<dir>/reach/`, by the sha256 of its bytes. A file that does not parse states
-/// nothing and is left out (the gate refuses such a file).
-pub(crate) fn records_in(dir: &Path) -> Records {
+/// Every record in `<dir>/reach/` that is this product's and this digest's, in the emitter's
+/// format, and named for the instance and query it states, by the sha256 of its bytes. Anything
+/// else states nothing here (the gate refuses such a file when it is added).
+pub(crate) fn records_in(dir: &Path, product: &str, digest: &str) -> Records {
     let mut out = Records::new();
     for e in std::fs::read_dir(dir.join("reach"))
         .into_iter()
@@ -202,10 +203,22 @@ pub(crate) fn records_in(dir: &Path) -> Records {
             continue;
         };
         let p = &v["runs"][0]["properties"];
-        out.insert(
-            crate::sha256::sha256_hex(&bytes),
-            (s(p, &["advisory"]), s(p, &["package"]), s(p, &["version"])),
-        );
+        let functions: Option<BTreeMap<String, Vec<String>>> = serde_json::from_value(
+            v["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["functions"].clone(),
+        )
+        .ok();
+        let (id, package, version) = (s(p, &["advisory"]), s(p, &["package"]), s(p, &["version"]));
+        let named = functions
+            .and_then(|f| crate::reach::record_name(&id, &package, &version, &f).ok())
+            .is_some_and(|n| e.file_name().to_string_lossy() == n);
+        if !named
+            || s(p, &["tool"]) != product
+            || s(p, &["digest"]) != digest
+            || s(p, &["format"]) != crate::reach::FORMAT
+        {
+            continue;
+        }
+        out.insert(crate::sha256::sha256_hex(&bytes), (id, package, version));
     }
     out
 }
@@ -217,6 +230,7 @@ pub(crate) fn analysis_from_acks(
     package: &str,
     version: &str,
     records: &Records,
+    excluded: bool,
 ) -> Option<Value> {
     let inst = crate::gate::Instance {
         id: id.to_string(),
@@ -228,6 +242,10 @@ pub(crate) fn analysis_from_acks(
     let ack = crate::gate::governing_vuln_statement(acks, &inst, digest)?;
     // A claim about the code is published only with the record it names, committed for this
     // digest and stating this instance (the gate reproduced it before it merged).
+    // "Not present" is published only where the binary itself measured the component excluded.
+    if s(ack, &["justification"]) == "component_not_present" && !excluded {
+        return None;
+    }
     if crate::gate::needs_record(ack) {
         let named = records.get(ack["evidence_sha256"].as_str().unwrap_or_default())?;
         if named != &(id.to_string(), package.to_string(), version.to_string()) {
@@ -411,7 +429,12 @@ pub(crate) fn build(
         if let Some(d) = adv["date"].as_str() {
             v["published"] = Value::String(format!("{d}T00:00:00Z"));
         }
-        match analysis_from_acks(acks, digest, &id, &pname, &pver, records) {
+        let excluded = components
+            .iter()
+            .find(|c| c["bom-ref"].as_str() == Some(bom_ref.as_str()))
+            .and_then(|c| c["scope"].as_str())
+            == Some("excluded");
+        match analysis_from_acks(acks, digest, &id, &pname, &pver, records, excluded) {
             Some(an) => v["analysis"] = an,
             None => burn_down.push(format!("{id} {pname} {pver}")),
         }
@@ -928,7 +951,7 @@ pub fn run(args: &[String]) -> i32 {
             Some(g) => Some(dependencies_from_graph(&components, g)?),
             None => None,
         };
-        let records = records_in(&dir);
+        let records = records_in(&dir, &product, &digest);
         let (mut doc, burn) = build(
             &product, &digest, &header, &raw, components, subject, &acks, &records,
         )?;
@@ -1270,7 +1293,8 @@ mod tests {
                 "RUSTSEC-1",
                 "a",
                 "1.0.0",
-                &Records::new()
+                &Records::new(),
+                true
             )
             .is_none(),
             "OpenVEX-only ack is never mapped"
@@ -1284,6 +1308,7 @@ mod tests {
             "a",
             "1.0.0",
             &Records::new(),
+            true,
         )
         .unwrap();
         assert_eq!(an["state"], "not_affected");
@@ -1303,6 +1328,7 @@ mod tests {
             "a",
             "1.0.0",
             &Records::new(),
+            true,
         )
         .unwrap();
         assert_eq!(an2["firstIssued"], "2026-11-01T00:00:00Z");
@@ -1320,14 +1346,24 @@ mod tests {
                 "RUSTSEC-1",
                 "a",
                 "1.0.0",
-                &Records::new()
+                &Records::new(),
+                true
             )
             .is_none()
         );
         let mut unbound = native.clone();
         unbound["product"].as_object_mut().unwrap().remove("digest");
         assert!(
-            analysis_from_acks(&[unbound], D, "RUSTSEC-1", "a", "1.0.0", &Records::new()).is_none()
+            analysis_from_acks(
+                &[unbound],
+                D,
+                "RUSTSEC-1",
+                "a",
+                "1.0.0",
+                &Records::new(),
+                true
+            )
+            .is_none()
         );
         // A statement grounded in the DB's silence is void for a reported instance: no analysis.
         let mut observed = native.clone();
@@ -1340,7 +1376,8 @@ mod tests {
                 "RUSTSEC-1",
                 "a",
                 "1.0.0",
-                &Records::new()
+                &Records::new(),
+                true
             )
             .is_none()
         );
@@ -1353,36 +1390,63 @@ mod tests {
         let ack = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"status":"not_affected","justification":"vulnerable_code_not_in_execute_path","cyclonedx":{"state":"not_affected","justification":"code_not_reachable"},"evidence_sha256":sha,"timestamp":"2026-11-24","status_notes":"n"});
         let one = std::slice::from_ref(&ack);
         let mut records = Records::new();
-        assert!(analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records).is_none());
+        assert!(analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records, true).is_none());
         records.insert(
             sha.clone(),
             ("RUSTSEC-1".into(), "a".into(), "2.0.0".into()),
         );
         assert!(
-            analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records).is_none(),
+            analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records, true).is_none(),
             "a record for another instance is not this claim's"
         );
         records.insert(sha, ("RUSTSEC-1".into(), "a".into(), "1.0.0".into()));
-        let an = analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records).unwrap();
+        let an = analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records, true).unwrap();
         assert_eq!(an["justification"], "code_not_reachable");
-        // the records of a directory are read by hash
+        // the records of a directory: by hash, and only this product's, this digest's, in the
+        // emitter's format, named for the instance and query they state
         let dir = std::env::temp_dir().join(format!("vdr-records-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join("reach")).unwrap();
-        let body = "{\"runs\":[{\"properties\":{\"advisory\":\"RUSTSEC-1\",\"package\":\"a\",\"version\":\"1.0.0\"}}]}\n";
-        std::fs::write(
-            dir.join("reach")
-                .join("RUSTSEC-0000-0001-0123456789ab.sarif"),
-            body,
-        )
-        .unwrap();
-        let got = records_in(&dir);
+        let functions: BTreeMap<String, Vec<String>> =
+            BTreeMap::from([("a::f".to_string(), vec!["< 2".to_string()])]);
+        let body = |tool: &str, digest: &str, format: &str| {
+            json!({"runs": [{
+                "tool": {"driver": {"rules": [{"id": "RUSTSEC-2026-0001", "properties": {"functions": functions}}]}},
+                "properties": {"advisory": "RUSTSEC-2026-0001", "package": "a", "version": "1.0.0",
+                               "tool": tool, "digest": digest, "format": format}
+            }]})
+            .to_string()
+        };
+        let name =
+            crate::reach::record_name("RUSTSEC-2026-0001", "a", "1.0.0", &functions).unwrap();
+        let write = |name: &str, b: &str| std::fs::write(dir.join("reach").join(name), b).unwrap();
+        let good = body("t", "d", crate::reach::FORMAT);
+        write(&name, &good);
+        let got = records_in(&dir, "t", "d");
         assert_eq!(
-            got.get(&crate::sha256::sha256_hex(body.as_bytes())),
+            got.get(&crate::sha256::sha256_hex(good.as_bytes())),
             Some(&(
-                "RUSTSEC-1".to_string(),
+                "RUSTSEC-2026-0001".to_string(),
                 "a".to_string(),
                 "1.0.0".to_string()
             ))
+        );
+        for (b, why) in [
+            (
+                body("other", "d", crate::reach::FORMAT),
+                "another product's",
+            ),
+            (body("t", "e", crate::reach::FORMAT), "another digest's"),
+            (body("t", "d", "reach-v0"), "another format"),
+        ] {
+            write(&name, &b);
+            assert!(records_in(&dir, "t", "d").is_empty(), "{why}");
+        }
+        std::fs::remove_file(dir.join("reach").join(&name)).unwrap();
+        write("RUSTSEC-2026-0001-000000000000.sarif", &good);
+        assert!(
+            records_in(&dir, "t", "d").is_empty(),
+            "a name its query does not give"
         );
         let _ = std::fs::remove_dir_all(&dir);
     }

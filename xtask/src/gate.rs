@@ -492,6 +492,22 @@ fn vuln_bound_quality(v: &Value) -> Result<(), String> {
             agree.join(" | ")
         ));
     }
+    if status == "not_affected" && state == "not_affected" {
+        let j = s(v, &["justification"]);
+        let cj = s(v, &["cyclonedx", "justification"]);
+        let Some((_, allowed)) = JUSTIFICATIONS.iter().find(|(o, _)| *o == j) else {
+            return Err(format!(
+                "vuln ack justification `{j}`: a digest-bound not_affected names one of OpenVEX's five"
+            ));
+        };
+        if !allowed.contains(&cj) {
+            return Err(format!(
+                "vuln ack justification `{j}` with cyclonedx.justification `{cj}`: they must say \
+                 the same thing ({})",
+                allowed.join(" | ")
+            ));
+        }
+    }
     if status != "not_affected"
         && (!s(v, &["justification"]).is_empty()
             || !s(v, &["cyclonedx", "justification"]).is_empty())
@@ -570,19 +586,41 @@ pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance, digest: &str) -> boo
     governing_vuln_ack(acks, inst, digest).is_some()
 }
 
-/// Justifications that claim something about the vulnerable CODE in this binary, so the claim
-/// rests on a reachability record (#520). `component_not_present` claims the package is absent,
-/// which the VDR measures from the binary itself.
-pub(crate) const RECORD_JUSTIFICATIONS: &[&str] = &[
-    "vulnerable_code_not_in_execute_path",
-    "vulnerable_code_not_present",
-    "vulnerable_code_cannot_be_controlled_by_adversary",
-    "inline_mitigations_already_exist",
+/// OpenVEX `not_affected` justifications, each with the CycloneDX justifications that say the
+/// same thing. A digest-bound statement's two rulings must correspond (the VDR publishes the
+/// CycloneDX one, the gate reads the OpenVEX one).
+pub(crate) const JUSTIFICATIONS: &[(&str, &[&str])] = &[
+    ("component_not_present", &["code_not_present"]),
+    ("vulnerable_code_not_present", &["code_not_present"]),
+    (
+        "vulnerable_code_not_in_execute_path",
+        &["code_not_reachable"],
+    ),
+    (
+        "vulnerable_code_cannot_be_controlled_by_adversary",
+        &[
+            "requires_configuration",
+            "requires_dependency",
+            "requires_environment",
+            "protected_at_perimeter",
+        ],
+    ),
+    (
+        "inline_mitigations_already_exist",
+        &[
+            "protected_by_compiler",
+            "protected_at_runtime",
+            "protected_at_perimeter",
+            "protected_by_mitigating_control",
+        ],
+    ),
 ];
 
-/// The statement's claim rests on a reachability record.
+/// The statement's claim rests on a reachability record (#520): every `not_affected` except
+/// `component_not_present`, which claims the package is absent (the VDR measures that from the
+/// binary). Anything else, including a missing or unknown justification, needs the record.
 pub(crate) fn needs_record(a: &Value) -> bool {
-    s(a, &["status"]) == "not_affected" && RECORD_JUSTIFICATIONS.contains(&s(a, &["justification"]))
+    s(a, &["status"]) == "not_affected" && s(a, &["justification"]) != "component_not_present"
 }
 
 /// Whether an instance in a binary is covered.
@@ -1652,7 +1690,10 @@ pub(crate) fn reach_changes(
     let base = reach_entries(base_evidence_dir);
     let mut refused = Vec::new();
     for (rel, b) in &base {
+        // Pruning a digest's whole evidence directory takes its records with it.
+        let digest_dir: PathBuf = rel.iter().take(2).collect();
         match head.get(rel) {
+            None if !evidence_dir.join(&digest_dir).is_dir() => {}
             None => refused.push(format!("{}: a committed record was deleted", rel.display())),
             Some(h) if h != b => {
                 refused.push(format!("{}: a committed record was edited", rel.display()))
@@ -1689,6 +1730,7 @@ fn verify_added_record(
     evidence_dir: &Path,
     locks_dir: &Path,
     head: &[ToolLine],
+    scan: &mut dyn FnMut(&str) -> Result<Value, String>,
 ) -> Result<String, String> {
     let bytes =
         std::fs::read(evidence_dir.join(rel)).map_err(|e| format!("{}: {e}", rel.display()))?;
@@ -1708,6 +1750,17 @@ fn verify_added_record(
         .iter()
         .find(|l| l.name == tool && l.sha == digest)
         .ok_or_else(|| format!("states {tool} {digest}, which TOOLS.lock does not pin"))?;
+    // The query is the advisory's as the gate's own scan states it, not the record's word.
+    let now =
+        crate::reach::affected_functions(&scan(tool)?, id, package, version).map_err(|e| {
+            format!("{e}: a record can only be checked for an instance the scan reports")
+        })?;
+    if now != functions {
+        return Err(format!(
+            "states a query other than the advisory's affected functions in the scan ({})",
+            now.keys().cloned().collect::<Vec<_>>().join(", ")
+        ));
+    }
     let dir = crate::evidence_rev::current(evidence_dir, locks_dir, tool, digest)?
         .dir
         .join("reach");
@@ -3109,8 +3162,25 @@ pub fn run(args: &[String]) -> i32 {
             )],
         });
     }
+    let mut tool_scans: BTreeMap<String, Value> = BTreeMap::new();
     for rel in &reach_added {
-        let verdict = match verify_added_record(rel, &evidence_dir, &locks_dir, &head) {
+        let mut scan = |tool: &str| -> Result<Value, String> {
+            if let Some(v) = tool_scans.get(tool) {
+                return Ok(v.clone());
+            }
+            let json = run_audit(&locks_dir.join(format!("{tool}.lock")), !first_scan)?;
+            first_scan = false;
+            if db_stamp.is_empty() {
+                db_stamp = format!(
+                    "advisory-db {} ({})",
+                    s(&json, &["database", "last-commit"]),
+                    s(&json, &["database", "last-updated"]),
+                );
+            }
+            tool_scans.insert(tool.to_string(), json.clone());
+            Ok(json)
+        };
+        let verdict = match verify_added_record(rel, &evidence_dir, &locks_dir, &head, &mut scan) {
             Ok(m) => Verdict::Allow(m),
             Err(e) => Verdict::Unevaluated(format!("{}: {e}", rel.display())),
         };
@@ -3490,7 +3560,10 @@ mod tests {
                 "\"status\":\"not_affected\"",
                 "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
             )
-            .replace("in_triage", "not_affected");
+            .replace(
+                "{\"state\":\"in_triage\"}",
+                "{\"state\":\"not_affected\",\"justification\":\"code_not_present\"}",
+            );
         assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
     }
 
@@ -3539,7 +3612,32 @@ mod tests {
         );
         assert!(!ok(&na));
         assert!(!ok(&na.replace("in_triage", "exploitable")));
-        assert!(ok(&na.replace("in_triage", "not_affected")));
+        let ruled = |cj: &str| {
+            na.replace(
+                "{\"state\":\"in_triage\"}",
+                &format!("{{\"state\":\"not_affected\",\"justification\":\"{cj}\"}}"),
+            )
+        };
+        assert!(ok(&ruled("code_not_present")));
+        // the two rulings must say the same thing, and the OpenVEX one is from the five
+        assert!(
+            !ok(&na.replace("in_triage", "not_affected")),
+            "no CycloneDX justification"
+        );
+        assert!(!ok(&ruled("code_not_reachable")));
+        let reach = ruled("code_not_reachable").replace(
+            "component_not_present",
+            "vulnerable_code_not_in_execute_path",
+        );
+        assert!(ok(&reach));
+        assert!(!ok(&reach.replace(
+            "vulnerable_code_not_in_execute_path",
+            "not_reachable_really"
+        )));
+        assert!(!ok(&reach.replace(
+            ",\"justification\":\"vulnerable_code_not_in_execute_path\"",
+            ",\"impact_statement\":\"x\""
+        )));
         // a ruling is required, and the status must be one immutable bytes can carry
         assert!(!ok(
             &base.replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "")
@@ -3674,6 +3772,50 @@ mod tests {
             judge(&row, &both, Some(&baseline), &mut broken),
             Verdict::Unevaluated(_)
         ));
+    }
+
+    #[test]
+    fn an_added_record_states_a_pinned_digest_and_the_scans_query() {
+        let root = std::env::temp_dir().join(format!("gate-reach-added-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let d = "d".repeat(64);
+        let rel = PathBuf::from("t")
+            .join(&d)
+            .join("reach")
+            .join("RUSTSEC-2026-0001-0123456789ab.sarif");
+        std::fs::create_dir_all(root.join(rel.parent().unwrap())).unwrap();
+        let record = |tool: &str, f: &str| {
+            serde_json::json!({"runs": [{
+                "tool": {"driver": {"rules": [{"id": "RUSTSEC-2026-0001", "properties": {"functions": {f: ["< 2"]}}}]}},
+                "properties": {"tool": tool, "digest": d, "advisory": "RUSTSEC-2026-0001", "package": "p", "version": "1.0.0"}
+            }]})
+            .to_string()
+        };
+        let head = [ToolLine {
+            name: "t".into(),
+            repo: "o/r".into(),
+            rev: "a".repeat(40),
+            target: "x".into(),
+            sha: d.clone(),
+        }];
+        let scan_json = serde_json::json!({"vulnerabilities": {"list": [{
+            "advisory": {"id": "RUSTSEC-2026-0001"},
+            "package": {"name": "p", "version": "1.0.0"},
+            "affected": {"functions": {"p::f": ["< 2"]}}
+        }]}});
+        let mut scan = |_: &str| -> Result<Value, String> { Ok(scan_json.clone()) };
+        let check = |body: &str, scan: &mut dyn FnMut(&str) -> Result<Value, String>| {
+            std::fs::write(root.join(&rel), body).unwrap();
+            verify_added_record(&rel, &root, &root.join("locks"), &head, scan).unwrap_err()
+        };
+        assert!(check("not json", &mut scan).contains("not JSON"));
+        assert!(check(&record("other", "p::f"), &mut scan).contains("does not pin"));
+        let e = check(&record("t", "p::g"), &mut scan);
+        assert!(e.contains("query other than"), "{e}");
+        let mut silent = |_: &str| -> Result<Value, String> { Ok(serde_json::json!({})) };
+        let e = check(&record("t", "p::f"), &mut silent);
+        assert!(e.contains("an instance the scan reports"), "{e}");
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[test]

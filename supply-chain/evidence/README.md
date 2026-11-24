@@ -188,10 +188,21 @@ record or any other file under `reach/`, and reproduces every record a change ad
 checks the record is present, hashes to the ack, and is named for the advisory's current
 functions; the VDR publishes a code claim only with the record it names.
 
+Every `not_affected` statement except `component_not_present` needs a record, whatever its
+justification; a digest-bound one names one of OpenVEX's five justifications and the CycloneDX
+justification that says the same thing. The VDR publishes `component_not_present` only where it
+measured the component `excluded` from the binary.
+
 A text search is not a call graph: it misses calls through trait dispatch, generic or trait-object
 code in crates that do not depend on the package, macro- and build.rs-generated code, symbol
-renames and std. An advisory without affected functions yields a record of the dependents only.
-Regeneration needs github.com and static.crates.io; an outage makes such acks UNEVALUATED.
+renames and std. The file filter goes by position: a target moved by `path = "..."` into
+`tests/`, `benches/` or `examples/`, a `#[path]` module there, a non-`.rs` file pulled in by
+`include!`, or a `Cargo.toml` inside a source directory can put compiled code outside what is
+searched. A symlink in the tool tree, a crate file outside its `name-version/` root, a pax path
+together with a GNU long name, or a lock package from a source other than crates.io or a path
+fails the record. An advisory without affected functions yields a record of the dependents only.
+Regeneration needs github.com and static.crates.io through ambient `git` and `curl`; an outage
+makes such acks UNEVALUATED. A record leaves only with its digest's whole evidence directory.
 
 ## Rules
 

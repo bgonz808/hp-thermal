@@ -159,7 +159,9 @@ fn clean_path(p: &str) -> Result<String, String> {
 pub(crate) fn untar(tar: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, String> {
     let mut out = BTreeMap::new();
     let mut total = 0usize;
-    let mut next_name: Option<String> = None;
+    // A pax `path` and a GNU long name for the same entry would let two readers disagree on
+    // which file it is: refused.
+    let (mut pax_name, mut gnu_name): (Option<String>, Option<String>) = (None, None);
     let mut i = 0;
     while i + 512 <= tar.len() {
         let h = &tar[i..i + 512];
@@ -192,7 +194,9 @@ pub(crate) fn untar(tar: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, String> {
         let data = &tar[data_start..data_end];
         let name = {
             let n = cstr(&h[0..100])?;
-            let prefix = if &h[257..262] == b"ustar" {
+            // POSIX ustar (`ustar\0`) has a prefix field; in GNU headers (`ustar  \0`) those
+            // bytes are times.
+            let prefix = if &h[257..263] == b"ustar\0" {
                 cstr(&h[345..500])?
             } else {
                 String::new()
@@ -205,7 +209,13 @@ pub(crate) fn untar(tar: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, String> {
         };
         match h[156] {
             b'0' | 0 => {
-                let path = clean_path(&next_name.take().unwrap_or(name))?;
+                let long = match (pax_name.take(), gnu_name.take()) {
+                    (Some(_), Some(_)) => {
+                        return Err("tar: a pax path and a GNU long name for one entry".into());
+                    }
+                    (a, b) => a.or(b),
+                };
+                let path = clean_path(&long.unwrap_or(name))?;
                 total += size;
                 if total > MAX_CRATE {
                     return Err(format!("tar: expands past {MAX_CRATE} bytes"));
@@ -215,15 +225,15 @@ pub(crate) fn untar(tar: &[u8]) -> Result<BTreeMap<String, Vec<u8>>, String> {
                 }
             }
             b'5' => {
-                next_name = None;
+                (pax_name, gnu_name) = (None, None);
             }
             b'L' => {
-                next_name = Some(cstr(data)?);
+                gnu_name = Some(cstr(data)?);
             }
             b'x' => {
                 for rec in pax_records(data)? {
                     match rec.0.as_str() {
-                        "path" => next_name = Some(rec.1),
+                        "path" => pax_name = Some(rec.1),
                         "size" | "linkpath" => {
                             return Err(format!("tar: pax `{}` override", rec.0));
                         }
@@ -524,6 +534,70 @@ pub(crate) struct ToolTree {
     pub(crate) files: BTreeMap<String, Vec<u8>>,
     /// Submodule entries: the producer never initializes them, so nothing of theirs is compiled.
     pub(crate) gitlinks: Vec<String>,
+    /// Symlinks as `path -> target`. Each one's content is searched at its own path, as a checkout
+    /// presents it to the compiler.
+    pub(crate) symlinks: Vec<String>,
+}
+
+/// Where a tree symlink at `path` with `target` points, inside the tree. Absolute targets and
+/// targets that leave the tree have no answer here.
+pub(crate) fn resolve_link(path: &str, target: &str) -> Result<String, String> {
+    if target.starts_with('/') || target.contains('\\') || target.contains(':') {
+        return Err(format!("{path} -> {target}: points outside the tree"));
+    }
+    let mut parts: Vec<&str> = path.split('/').collect();
+    parts.pop();
+    for c in target.split('/') {
+        match c {
+            "" | "." => {}
+            ".." => {
+                parts
+                    .pop()
+                    .ok_or_else(|| format!("{path} -> {target}: points outside the tree"))?;
+            }
+            c => parts.push(c),
+        }
+    }
+    Ok(parts.join("/"))
+}
+
+/// Follow every symlink as a checkout does: a link to a file gets that file's content at the
+/// link's path, a link to a directory gets the directory's files under the link's path. A link
+/// outside the tree, to nothing, or to another link is refused: what it presents was not read.
+pub(crate) fn follow_links(
+    files: &mut BTreeMap<String, Vec<u8>>,
+    links: &[(String, String)],
+) -> Result<(), String> {
+    let link_paths: BTreeSet<&str> = links.iter().map(|(p, _)| p.as_str()).collect();
+    let mut add = Vec::new();
+    for (path, target) in links {
+        let to = resolve_link(path, target)?;
+        let dir = format!("{to}/");
+        if link_paths.contains(to.as_str()) || link_paths.iter().any(|l| l.starts_with(&dir)) {
+            return Err(format!("{path} -> {target}: a link to a link is refused"));
+        }
+        if let Some(b) = files.get(&to) {
+            add.push((path.clone(), b.clone()));
+            continue;
+        }
+        let under: Vec<(String, Vec<u8>)> = files
+            .iter()
+            .filter_map(|(k, b)| {
+                k.strip_prefix(&dir)
+                    .map(|rest| (format!("{path}/{rest}"), b.clone()))
+            })
+            .collect();
+        if under.is_empty() {
+            return Err(format!("{path} -> {target}: points at nothing in the tree"));
+        }
+        add.extend(under);
+    }
+    for (k, b) in add {
+        if files.insert(k.clone(), b).is_some() {
+            return Err(format!("{k}: a link and a file at one path"));
+        }
+    }
+    Ok(())
 }
 
 fn is_hex(s: &str, n: usize) -> bool {
@@ -538,14 +612,51 @@ struct Git {
 impl Git {
     fn cmd(&self) -> Command {
         let mut c = Command::new("git");
-        // No system or user configuration: an ignore file, a filter or an alias of the machine
-        // that emits must not change what is read.
+        // Nothing of the calling environment reaches git: no GIT_* variable (GIT_DIR or
+        // GIT_INDEX_FILE would point it at another repository), no system or user configuration
+        // (an ignore file, filter, alias or template of the emitting machine must not change what
+        // is read).
+        for (k, _) in std::env::vars_os() {
+            if k.to_string_lossy().to_ascii_uppercase().starts_with("GIT_") {
+                c.env_remove(k);
+            }
+        }
         c.arg("-C")
             .arg(&self.dir)
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("GIT_CONFIG_GLOBAL", &self.config)
-            .env("GIT_TERMINAL_PROMPT", "0");
+            .env("GIT_TERMINAL_PROMPT", "0")
+            // A stalled transfer fails instead of hanging the gate.
+            .env("GIT_HTTP_LOW_SPEED_LIMIT", "1000")
+            .env("GIT_HTTP_LOW_SPEED_TIME", "60");
         c
+    }
+    /// `git apply --cached` of `patch`, fed on stdin: no path of the emitting machine reaches git.
+    fn apply_cached(&self, check: bool, patch: &[u8]) -> Result<(), String> {
+        let mut args = vec!["apply", "--cached"];
+        if check {
+            args.push("--check");
+        }
+        args.push("-");
+        let mut child = self
+            .cmd()
+            .args(&args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("git apply: {e}"))?;
+        let mut stdin = child.stdin.take().ok_or("git apply: no stdin")?;
+        let input = patch.to_vec();
+        let writer = std::thread::spawn(move || stdin.write_all(&input));
+        let out = child
+            .wait_with_output()
+            .map_err(|e| format!("git apply: {e}"))?;
+        let _ = writer.join();
+        if !out.status.success() {
+            return Err(String::from_utf8_lossy(&out.stderr).trim().to_string());
+        }
+        Ok(())
     }
     fn run(&self, args: &[&str]) -> Result<Vec<u8>, String> {
         let out = self
@@ -621,12 +732,44 @@ impl Git {
     }
 }
 
-/// Fetch `repo` at `rev`, apply `patches` in order to the index as the producer applies them to
-/// its checkout (`git apply --check`, then `git apply`), and read every blob of the result.
-pub(crate) fn tool_tree(repo: &str, rev: &str, patches: &[PathBuf]) -> Result<ToolTree, String> {
-    if !is_hex(rev, 40) {
-        return Err(format!("rev `{rev}` is not a full commit id"));
+/// A fresh directory under the temp dir that did not exist before (created exclusively, with an
+/// unpredictable name), so nothing placed there in advance is read or written.
+fn fresh_dir(prefix: &str) -> Result<PathBuf, String> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static N: AtomicU64 = AtomicU64::new(0);
+    for _ in 0..16 {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or_default();
+        let tag = crate::sha256::sha256_hex(
+            format!(
+                "{}-{nanos}-{}",
+                std::process::id(),
+                N.fetch_add(1, Ordering::Relaxed)
+            )
+            .as_bytes(),
+        );
+        let dir = std::env::temp_dir().join(format!("{prefix}-{}", &tag[..16]));
+        match std::fs::create_dir(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(format!("{}: {e}", dir.display())),
+        }
     }
+    Err("no fresh temp directory".into())
+}
+
+/// Fetch `repo` at `rev` from GitHub, apply `patches` in order to the index as the producer applies
+/// them to its checkout (`git apply --check`, then `git apply`), and read every blob of the result.
+/// One fetch per (repo, rev, patches) per run.
+pub(crate) fn tool_tree(
+    repo: &str,
+    rev: &str,
+    patches: &[PathBuf],
+) -> Result<std::sync::Arc<ToolTree>, String> {
+    use std::sync::{Arc, Mutex, OnceLock};
+    static TREES: OnceLock<Mutex<BTreeMap<String, Arc<ToolTree>>>> = OnceLock::new();
     if repo.split('/').count() != 2
         || !repo
             .bytes()
@@ -634,27 +777,59 @@ pub(crate) fn tool_tree(repo: &str, rev: &str, patches: &[PathBuf]) -> Result<To
     {
         return Err(format!("repo `{repo}` is not owner/name"));
     }
-    let work =
-        std::env::temp_dir().join(format!("reach-src-{}-{}", std::process::id(), &rev[..12]));
-    let _ = std::fs::remove_dir_all(&work);
-    std::fs::create_dir_all(&work).map_err(|e| format!("{}: {e}", work.display()))?;
+    let mut bodies = Vec::new();
+    for p in patches {
+        let bytes = std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))?;
+        let name = p
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        bodies.push((name, bytes));
+    }
+    let key = format!(
+        "{repo}@{rev}:{}",
+        bodies
+            .iter()
+            .map(|(n, b)| format!("{n}={}", crate::sha256::sha256_hex(b)))
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    let cache = TREES.get_or_init(|| Mutex::new(BTreeMap::new()));
+    if let Some(t) = cache.lock().map_err(|_| "tree cache poisoned")?.get(&key) {
+        return Ok(t.clone());
+    }
+    let tree = Arc::new(tool_tree_from(
+        &format!("https://github.com/{repo}"),
+        rev,
+        &bodies,
+    )?);
+    cache
+        .lock()
+        .map_err(|_| "tree cache poisoned")?
+        .insert(key, tree.clone());
+    Ok(tree)
+}
+
+/// `tool_tree` from any git URL (a local path in tests). `patches` are (file name, bytes).
+pub(crate) fn tool_tree_from(
+    url: &str,
+    rev: &str,
+    patches: &[(String, Vec<u8>)],
+) -> Result<ToolTree, String> {
+    if !is_hex(rev, 40) {
+        return Err(format!("rev `{rev}` is not a full commit id"));
+    }
+    let work = fresh_dir("reach-src")?;
     let config = work.join("empty.gitconfig");
-    std::fs::write(&config, "").map_err(|e| e.to_string())?;
-    let git = Git {
-        dir: work.join("src"),
-        config,
-    };
     let res = (|| -> Result<ToolTree, String> {
-        std::fs::create_dir_all(&git.dir).map_err(|e| e.to_string())?;
-        git.run(&["init", "-q"])?;
-        git.run(&[
-            "fetch",
-            "-q",
-            "--depth",
-            "1",
-            &format!("https://github.com/{repo}"),
-            rev,
-        ])?;
+        std::fs::write(&config, "").map_err(|e| e.to_string())?;
+        let git = Git {
+            dir: work.join("src"),
+            config: config.clone(),
+        };
+        std::fs::create_dir(&git.dir).map_err(|e| e.to_string())?;
+        git.run(&["init", "-q", "--template="])?;
+        git.run(&["fetch", "-q", "--depth", "1", url, rev])?;
         let head = String::from_utf8_lossy(&git.run(&["rev-parse", "FETCH_HEAD"])?)
             .trim()
             .to_string();
@@ -663,18 +838,12 @@ pub(crate) fn tool_tree(repo: &str, rev: &str, patches: &[PathBuf]) -> Result<To
         }
         git.run(&["read-tree", "FETCH_HEAD"])?;
         let mut applied = Vec::new();
-        for p in patches {
-            let bytes = std::fs::read(p).map_err(|e| format!("{}: {e}", p.display()))?;
-            let abs = std::fs::canonicalize(p).map_err(|e| format!("{}: {e}", p.display()))?;
-            let abs = abs.to_string_lossy();
-            git.run(&["apply", "--cached", "--check", &abs])
-                .map_err(|e| format!("{} no longer applies to {repo}@{rev}: {e}", p.display()))?;
-            git.run(&["apply", "--cached", &abs])?;
-            let name = p
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            applied.push((name, crate::sha256::sha256_hex(&bytes)));
+        for (name, bytes) in patches {
+            git.apply_cached(true, bytes)
+                .map_err(|e| format!("{name} does not apply to {url}@{rev}: {e}"))?;
+            git.apply_cached(false, bytes)
+                .map_err(|e| format!("{name}: {e}"))?;
+            applied.push((name.clone(), crate::sha256::sha256_hex(bytes)));
         }
         let tree = String::from_utf8_lossy(&git.run(&["write-tree"])?)
             .trim()
@@ -682,13 +851,17 @@ pub(crate) fn tool_tree(repo: &str, rev: &str, patches: &[PathBuf]) -> Result<To
         let ls = git.run(&["ls-tree", "-r", "-z", "--full-tree", &tree])?;
         let mut blobs = Vec::new();
         let mut gitlinks = Vec::new();
+        let mut links: Vec<(String, String)> = Vec::new();
         for entry in ls.split(|&b| b == 0).filter(|e| !e.is_empty()) {
             let s = std::str::from_utf8(entry).map_err(|_| "git ls-tree: non-UTF-8 path")?;
             let (meta, path) = s.split_once('\t').ok_or("git ls-tree: malformed entry")?;
             let mut m = meta.split(' ');
             match (m.next(), m.next(), m.next()) {
-                (Some(_mode), Some("blob"), Some(oid)) => {
+                (Some("100644" | "100755"), Some("blob"), Some(oid)) => {
                     blobs.push((path.to_string(), oid.to_string()))
+                }
+                (Some("120000"), Some("blob"), Some(oid)) => {
+                    links.push((path.to_string(), oid.to_string()))
                 }
                 (Some("160000"), Some("commit"), Some(_)) => gitlinks.push(path.to_string()),
                 _ => return Err(format!("git ls-tree: unexpected entry `{s}`")),
@@ -696,13 +869,27 @@ pub(crate) fn tool_tree(repo: &str, rev: &str, patches: &[PathBuf]) -> Result<To
         }
         let oids: Vec<String> = blobs.iter().map(|(_, o)| o.clone()).collect();
         let contents = git.blobs(&oids)?;
-        let files = blobs.into_iter().map(|(p, _)| p).zip(contents).collect();
+        let mut files: BTreeMap<String, Vec<u8>> =
+            blobs.into_iter().map(|(p, _)| p).zip(contents).collect();
+        let link_oids: Vec<String> = links.iter().map(|(_, o)| o.clone()).collect();
+        let targets = git.blobs(&link_oids)?;
+        let mut resolved = Vec::new();
+        for ((path, _), target) in links.iter().zip(targets) {
+            let target =
+                String::from_utf8(target).map_err(|_| format!("{path}: non-UTF-8 link"))?;
+            resolved.push((path.clone(), target));
+        }
+        follow_links(&mut files, &resolved)?;
         Ok(ToolTree {
             commit: head,
             tree,
             patches: applied,
             files,
             gitlinks,
+            symlinks: resolved
+                .iter()
+                .map(|(p, t)| format!("{p} -> {t}"))
+                .collect(),
         })
     })();
     let _ = std::fs::remove_dir_all(&work);
@@ -741,28 +928,48 @@ pub(crate) fn fetch_crate(name: &str, version: &str, checksum: &str) -> Result<V
     {
         return Ok(b);
     }
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let tmp = dir.join(format!("{checksum}.{}.part", std::process::id()));
-    let st = Command::new("curl")
-        .args(["-sSfL", "--proto", "=https", "--tlsv1.2", "-o"])
-        .arg(&tmp)
+    // The body comes back on stdout; nothing is written until its sha256 is the lock checksum.
+    let out = Command::new("curl")
+        .args([
+            "-sSfL",
+            "--proto",
+            "=https",
+            "--proto-redir",
+            "=https",
+            "--tlsv1.2",
+            "--max-time",
+            "300",
+            "--max-filesize",
+            &MAX_CRATE.to_string(),
+        ])
         .arg(crate_url(name, version))
-        .status()
+        .output()
         .map_err(|e| format!("curl: {e}"))?;
-    if !st.success() {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(format!("curl {}: {st}", crate_url(name, version)));
+    if !out.status.success() {
+        return Err(format!(
+            "curl {}: {} {}",
+            crate_url(name, version),
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
     }
-    let b = std::fs::read(&tmp).map_err(|e| e.to_string())?;
-    let got = crate::sha256::sha256_hex(&b);
+    let got = crate::sha256::sha256_hex(&out.stdout);
     if got != checksum {
-        let _ = std::fs::remove_file(&tmp);
         return Err(format!(
             "{name}@{version}: sha256 {got} != lock checksum {checksum}"
         ));
     }
-    std::fs::rename(&tmp, &cached).map_err(|e| e.to_string())?;
-    Ok(b)
+    // Best-effort cache, written exclusively under a fresh name and renamed into place.
+    if std::fs::create_dir_all(&dir).is_ok()
+        && let Ok(tmp) = fresh_dir("reach-crate-part")
+    {
+        let part = tmp.join("c");
+        if std::fs::write(&part, &out.stdout).is_ok() {
+            let _ = std::fs::rename(&part, &cached);
+        }
+        let _ = std::fs::remove_dir_all(&tmp);
+    }
+    Ok(out.stdout)
 }
 
 // ---------- the record ----------
@@ -951,6 +1158,7 @@ pub(crate) fn render(i: &Inputs, tree: &ToolTree, crates: &[CrateSource]) -> Res
                 "lockSha256": crate::sha256::sha256_hex(i.lock.as_bytes()),
                 "patches": tree.patches.iter().map(|(n, s)| json!({"file": n, "sha256": s})).collect::<Vec<_>>(),
                 "gitlinks": tree.gitlinks,
+                "symlinks": tree.symlinks,
                 "registryPackages": universe,
                 "searched": {"rustFiles": rust, "manifests": manifests},
             },
@@ -988,6 +1196,11 @@ pub(crate) fn generate(i: &Inputs) -> Result<(String, String), String> {
             .clone()
             .ok_or_else(|| format!("{n}@{v}: registry package without a checksum"))?;
         let files = crate_files(&fetch_crate(&n, &v, &ck)?).map_err(|e| format!("{n}@{v}: {e}"))?;
+        let root = format!("{n}-{v}/");
+        if let Some(stray) = files.keys().find(|p| !p.starts_with(&root)) {
+            // A file outside the package root would fall outside every searched root unseen.
+            return Err(format!("{n}@{v}: `{stray}` is outside `{root}`"));
+        }
         crates.push((n, v, ck, files));
     }
     let tree = tool_tree(&i.repo, &i.rev, &i.patches)?;
@@ -1379,6 +1592,7 @@ mod tests {
                 ("tests/t.rs".to_string(), b"x.pop();\n".to_vec()),
             ]),
             gitlinks: vec![],
+            symlinks: vec![],
         };
         let crates = vec![
             (
@@ -1447,6 +1661,187 @@ mod tests {
         assert_eq!(run["properties"]["searched"]["rustFiles"], 3);
         assert_eq!(run["properties"]["searched"]["manifests"], 2);
         assert_eq!(run["properties"]["format"], FORMAT);
+    }
+
+    #[test]
+    fn gnu_headers_take_no_prefix_and_two_long_names_are_refused() {
+        // GNU magic (`ustar  \0`): bytes 345.. are atime/ctime, never a path prefix.
+        let mut e = tar_entry("p-1.0.0/src/lib.rs", b'0', b"x");
+        e[257..265].copy_from_slice(b"ustar  \0");
+        e[345..356].copy_from_slice(b"15000000000");
+        e[148..156].copy_from_slice(b"        ");
+        let sum: u32 = e[..512].iter().map(|&b| b as u32).sum();
+        e[148..155].copy_from_slice(format!("{sum:06o}\0").as_bytes());
+        let files = untar(&tar_of(&[e])).unwrap();
+        assert_eq!(files.keys().collect::<Vec<_>>(), ["p-1.0.0/src/lib.rs"]);
+        // a pax path and a GNU long name for one entry
+        let pax = b"29 path=p-1.0.0/src/other.rs\n";
+        let t = tar_of(&[
+            tar_entry("././@PaxHeader", b'x', pax),
+            tar_entry("././@LongLink", b'L', b"p-1.0.0/src/third.rs\0"),
+            tar_entry("p-1.0.0/x", b'0', b"1"),
+        ]);
+        let e = untar(&t).unwrap_err();
+        assert!(e.contains("pax path and a GNU long name"), "{e}");
+        // a pax path alone is honored
+        let t = tar_of(&[
+            tar_entry("././@PaxHeader", b'x', pax),
+            tar_entry("p-1.0.0/x", b'0', b"1"),
+        ]);
+        assert_eq!(
+            untar(&t).unwrap().keys().collect::<Vec<_>>(),
+            ["p-1.0.0/src/other.rs"]
+        );
+    }
+
+    /// A local repository with one commit; returns (file:// url, commit, its git).
+    fn local_repo(files: &[(&str, &str)]) -> (String, String, Git, PathBuf) {
+        let work = fresh_dir("reach-test-repo").unwrap();
+        let config = work.join("empty.gitconfig");
+        std::fs::write(&config, "").unwrap();
+        let git = Git {
+            dir: work.join("r"),
+            config,
+        };
+        std::fs::create_dir(&git.dir).unwrap();
+        git.run(&["init", "-q", "--template="]).unwrap();
+        git.run(&["config", "uploadpack.allowAnySHA1InWant", "true"])
+            .unwrap();
+        git.run(&["config", "core.autocrlf", "false"]).unwrap();
+        for (p, body) in files {
+            let f = git.dir.join(p);
+            std::fs::create_dir_all(f.parent().unwrap()).unwrap();
+            std::fs::write(&f, body).unwrap();
+            git.run(&["add", p]).unwrap();
+        }
+        git.run(&[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--no-gpg-sign",
+            "-m",
+            "x",
+        ])
+        .unwrap();
+        let rev = String::from_utf8_lossy(&git.run(&["rev-parse", "HEAD"]).unwrap())
+            .trim()
+            .to_string();
+        let url = format!(
+            "file:///{}",
+            git.dir
+                .display()
+                .to_string()
+                .replace('\\', "/")
+                .trim_start_matches('/')
+        );
+        (url, rev, git, work)
+    }
+
+    #[test]
+    fn the_tool_tree_is_the_pinned_commit_with_the_patches_applied_to_git_objects() {
+        let (url, rev, _git, work) = local_repo(&[
+            ("Cargo.toml", "[package]\nname = \"t\"\n"),
+            ("src/lib.rs", "fn a() {}\n"),
+        ]);
+        let patch = "diff --git a/src/lib.rs b/src/lib.rs\n--- a/src/lib.rs\n+++ b/src/lib.rs\n@@ -1 +1 @@\n-fn a() {}\n+fn a() { u.origin(); }\n";
+        let tree = tool_tree_from(
+            &url,
+            &rev,
+            &[("0001-x.patch".into(), patch.as_bytes().to_vec())],
+        )
+        .unwrap();
+        assert_eq!(tree.commit, rev);
+        assert_eq!(tree.files["src/lib.rs"], b"fn a() { u.origin(); }\n");
+        assert_eq!(
+            tree.patches,
+            [(
+                "0001-x.patch".to_string(),
+                crate::sha256::sha256_hex(patch.as_bytes())
+            )]
+        );
+        // a patch that does not apply names itself
+        let stale = patch.replace("-fn a() {}", "-fn z() {}");
+        let e = tool_tree_from(
+            &url,
+            &rev,
+            &[("0002-stale.patch".into(), stale.into_bytes())],
+        )
+        .err()
+        .unwrap();
+        assert!(e.contains("0002-stale.patch does not apply"), "{e}");
+        // the pinned commit is required
+        assert!(tool_tree_from(&url, "abc", &[]).is_err());
+        let _ = std::fs::remove_dir_all(&work);
+    }
+
+    #[test]
+    fn a_symlink_is_searched_where_the_checkout_presents_it() {
+        let (_, _, git, work) = local_repo(&[("tests/gen.rs", "fn g() { u.origin(); }\n")]);
+        let blob = |s: &str| -> String {
+            let p = git.dir.join("linktarget.tmp");
+            std::fs::write(&p, s).unwrap();
+            let o = String::from_utf8_lossy(
+                &git.run(&["hash-object", "-w", "linktarget.tmp"]).unwrap(),
+            )
+            .trim()
+            .to_string();
+            std::fs::remove_file(&p).unwrap();
+            o
+        };
+        // src/gen.rs -> ../tests/gen.rs: compiled from src/, so searched there
+        let to = blob("../tests/gen.rs");
+        git.run(&[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("120000,{to},src/gen.rs"),
+        ])
+        .unwrap();
+        git.run(&[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--no-gpg-sign",
+            "-m",
+            "l",
+        ])
+        .unwrap();
+        let rev = String::from_utf8_lossy(&git.run(&["rev-parse", "HEAD"]).unwrap())
+            .trim()
+            .to_string();
+        let url = format!(
+            "file:///{}",
+            git.dir
+                .display()
+                .to_string()
+                .replace('\\', "/")
+                .trim_start_matches('/')
+        );
+        let tree = tool_tree_from(&url, &rev, &[]).unwrap();
+        assert_eq!(tree.files["src/gen.rs"], b"fn g() { u.origin(); }\n");
+        assert_eq!(tree.symlinks, ["src/gen.rs -> ../tests/gen.rs"]);
+        let _ = std::fs::remove_dir_all(&work);
+        // a directory link, a link out of the tree, a dangling link, a link to a link
+        let mut files = BTreeMap::from([("tests/a/x.rs".to_string(), b"x".to_vec())]);
+        follow_links(&mut files, &[("src/a".into(), "../tests/a".into())]).unwrap();
+        assert_eq!(files["src/a/x.rs"], b"x");
+        let mut files = BTreeMap::from([("a.rs".to_string(), b"x".to_vec())]);
+        assert!(follow_links(&mut files, &[("l".into(), "../../etc/passwd".into())]).is_err());
+        assert!(follow_links(&mut files, &[("l".into(), "/etc/passwd".into())]).is_err());
+        assert!(follow_links(&mut files, &[("l".into(), "nothing.rs".into())]).is_err());
+        assert!(
+            follow_links(
+                &mut files,
+                &[("l1".into(), "a.rs".into()), ("l2".into(), "l1".into())]
+            )
+            .is_err()
+        );
     }
 
     #[test]
