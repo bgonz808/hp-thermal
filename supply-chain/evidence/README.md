@@ -161,6 +161,38 @@ A release's report is published by `release-vdr.yml` as an attestation to the sh
 as a release asset (a published release is immutable); `release-advance anchor` records each
 revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
 
+## Reachability records — `cargo xtask reach emit|check` (#520)
+
+A `not_affected` vuln ack whose justification is about the code (`vulnerable_code_not_in_execute_path`,
+`vulnerable_code_not_present`, `vulnerable_code_cannot_be_controlled_by_adversary`,
+`inline_mitigations_already_exist`) covers only with `evidence_sha256`, the sha256 of the search
+it rests on: `reach/<advisory>-<h12>.sarif` in the record directory the frozen lock selects
+(the digest's, or `rev/<lock>/`). `h12` hashes the emitter format, the instance and the
+advisory's affected functions as the asking scan states them, so a changed function list or
+emitter names a new file. `component_not_present` needs no record: the VDR measures presence
+from the binary.
+
+The record is SARIF 2.1.0, built only from checkout inputs: the TOOLS.lock repo and rev, the
+`tools/patches/<tool>` patches applied as the producer applies them (to git objects, not a
+working tree), and every registry package in the reverse-dependency closure of the affected
+package in the frozen lock, each `.crate` refused unless its sha256 is the lock checksum and read
+in memory. Searched: Rust files outside each package's `tests/`, `benches/` and `examples/`, and
+each `Cargo.toml`. Rule `<A>` lists every occurrence of an affected function's name; rule
+`<A>/crate` lists every reference to the affected package from another package (a `p::` path,
+`extern crate p`, or the name in a manifest).
+
+The gate covers such an ack only when that file is committed, hashes to `evidence_sha256`, and
+regenerates byte for byte; one that does not reproduce, or a regeneration that cannot run, is
+UNEVALUATED and cannot be acked past. Records are add-only: the gate refuses an edited or deleted
+record or any other file under `reach/`, and reproduces every record a change adds. The monitor
+checks the record is present, hashes to the ack, and is named for the advisory's current
+functions; the VDR publishes a code claim only with the record it names.
+
+A text search is not a call graph: it misses calls through trait dispatch, generic or trait-object
+code in crates that do not depend on the package, macro- and build.rs-generated code, symbol
+renames and std. An advisory without affected functions yields a record of the dependents only.
+Regeneration needs github.com and static.crates.io; an outage makes such acks UNEVALUATED.
+
 ## Rules
 
 1. **Acks bind to instances, not classes** — a new digest, engine, advisory instance, inventory
