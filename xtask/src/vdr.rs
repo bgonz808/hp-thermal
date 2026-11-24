@@ -721,6 +721,21 @@ fn raw_asset_named(asset: &str, sha: &str) -> bool {
         && asset == format!("audit-raw-{}.json", &sha[..12])
 }
 
+/// The acks a report reads, through the gate's reader. A malformed file, or any line the quality
+/// bar rejects, fails the report: a rejected line may supersede a ruling, so building without it
+/// could publish the superseded one.
+pub(crate) fn report_acks(path: &Path) -> Result<Vec<Value>, String> {
+    let loaded = crate::gate::load_acks(path)?;
+    if !loaded.rejected.is_empty() {
+        return Err(format!(
+            "{} ack line(s) fail the gate's quality bar; no report is built past them:\n  {}",
+            loaded.rejected.len(),
+            loaded.rejected.join("\n  ")
+        ));
+    }
+    Ok(loaded.entries)
+}
+
 pub fn run(args: &[String]) -> i32 {
     let usage = "usage: cargo xtask vdr <emit|check> --product <name> --digest <sha256> [--sbom <release cdx.json>] [--out <path>]";
     let Some(cmd) = args.get(1).map(String::as_str) else {
@@ -864,14 +879,12 @@ pub fn run(args: &[String]) -> i32 {
                 (comps, None)
             }
         };
-        // The gate's reader: quality-passing lines only; a malformed file fails the report.
-        let acks = crate::gate::load_acks(
+        let acks = report_acks(
             Path::new("supply-chain/evidence")
                 .join(&product)
                 .join("acks.jsonl")
                 .as_path(),
-        )?
-        .entries;
+        )?;
         let deps = match &graph {
             Some(g) => Some(dependencies_from_graph(&components, g)?),
             None => None,
@@ -914,7 +927,9 @@ pub fn run(args: &[String]) -> i32 {
     };
     let text = serde_json::to_string_pretty(&doc).unwrap() + "\n";
     for b in &burn_down {
-        eprintln!("vdr: no native CycloneDX ruling in acks for {b} — analysis omitted (burn-down)");
+        eprintln!(
+            "vdr: {b}: no statement naming digest {digest} with a native CycloneDX ruling covers it — analysis omitted (burn-down)"
+        );
     }
     match cmd {
         "emit" => {
@@ -1258,6 +1273,29 @@ mod tests {
         observed["properties"] =
             json!([{"name": crate::gate::OBSERVED_ABSENT_PROP, "value": "0123456789abcdef0123"}]);
         assert!(analysis_from_acks(&[native, observed], D, "RUSTSEC-1", "a", "1.0.0").is_none());
+    }
+
+    #[test]
+    fn a_report_is_not_built_past_a_rejected_ack_line() {
+        let dir = std::env::temp_dir().join(format!("vdr-acks-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("acks.jsonl");
+        let d = "d".repeat(64);
+        let good = json!({"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"name":"t","digest":d,"package":"a","version":"1.0.0"},"status":"not_affected","justification":"component_not_present","cyclonedx":{"state":"not_affected","justification":"code_not_present"},"status_notes":"absent","author":"a","timestamp":"2026-11-24","refs":[]});
+        // a later line for the same instance that fails the bar (no CycloneDX ruling)
+        let mut superseding = good.clone();
+        superseding["status"] = json!("affected");
+        superseding.as_object_mut().unwrap().remove("justification");
+        superseding.as_object_mut().unwrap().remove("cyclonedx");
+        std::fs::write(&p, format!("{good}\n")).unwrap();
+        assert_eq!(report_acks(&p).unwrap().len(), 1);
+        std::fs::write(&p, format!("{good}\n{superseding}\n")).unwrap();
+        assert!(
+            report_acks(&p).is_err(),
+            "the superseded ruling must not be published"
+        );
+        assert!(report_acks(&dir.join("absent.jsonl")).unwrap().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn an_source_with_time(t: &str) -> Value {

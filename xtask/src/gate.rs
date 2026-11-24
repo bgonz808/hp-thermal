@@ -878,6 +878,42 @@ fn vuln_verdict(
     Verdict::RaiseCovered(covered)
 }
 
+/// The vuln axis of one pinned row whose statements changed (#519): its current instances are
+/// judged with the edited statements. Instances in the row's recorded baseline are carried; any
+/// other is added (signed RAISE when covered, never ALLOW). Without a baseline every instance
+/// is added. A row the bless flow has not produced cannot be judged.
+fn judge_pinned_row(
+    row: &ToolLine,
+    acks: &Acks,
+    baseline: Option<&BTreeSet<Instance>>,
+    scan: &mut dyn FnMut(&ToolLine) -> Result<Value, String>,
+    floors: &crate::floors::Floors,
+) -> Verdict {
+    if row.sha == ZERO_DIGEST || row.sha.len() != 64 {
+        return Verdict::Unevaluated(format!(
+            "{} [{}]: digest is unset/malformed — nothing blessed to judge",
+            row.name, row.target
+        ));
+    }
+    let json = match scan(row) {
+        Ok(j) => j,
+        Err(e) => return Verdict::Unevaluated(e),
+    };
+    let inst = extract_instances(&json);
+    let stops = floors.vuln_stops(&inst, &crate::floors::extract_cvss(&json));
+    if !stops.is_empty() {
+        return Verdict::HardStop(stops.join("\n  - "));
+    }
+    let (added, carried) = match baseline {
+        Some(b) => {
+            let (new, carried, _gone) = crate::monitor::classify(b, &inst);
+            (new, carried)
+        }
+        None => (inst.into_iter().collect(), Vec::new()),
+    };
+    vuln_verdict(&row.name, &row.sha, &added, &carried, 0, acks)
+}
+
 fn mal_verdict(
     tool: &str,
     evidence_dir: &Path,
@@ -2632,100 +2668,96 @@ pub fn run(args: &[String]) -> i32 {
                 axes,
             });
         }
-        // Ack-file edits with nothing else to evaluate: the quality bar still applies.
+        // A statement edit changes what covers the pinned binaries (#519): every pinned row of a
+        // tool whose acks.jsonl changed is judged again with the edited statements, except a row
+        // the candidate path above already judged with them (same name, target and digest). An
+        // evidence-edit row is judged here: that path does not re-scan.
         for tool in &changed_acks {
-            if ev_cands.iter().any(|(h, _)| &h.name == tool)
-                || cands.iter().any(|(_, h)| &h.name == tool)
-            {
-                continue; // already loaded and reported above
-            }
-            match load_acks(&evidence_dir.join(tool).join("acks.jsonl")) {
-                // A statement edit changes what covers the pinned binaries: each pinned digest's
-                // instances are judged again with the edited statements, every one carried.
-                Ok(a) if a.rejected.is_empty() => {
-                    if !head.iter().any(|l| &l.name == tool) {
+            let reported = ev_cands.iter().any(|(h, _)| &h.name == tool)
+                || cands.iter().any(|(_, h)| &h.name == tool);
+            let acks = match load_acks(&evidence_dir.join(tool).join("acks.jsonl")) {
+                Ok(a) => a,
+                Err(e) => {
+                    if !reported {
                         reports.push(CandidateReport {
                             name: format!("{tool} (acks edit)"),
                             tool: tool.clone(),
                             summary: String::new(),
-                            axes: vec![(
-                                "ack-quality",
-                                Verdict::Allow(format!(
-                                    "{} ack line(s) pass the quality bar; no pinned digest to judge",
-                                    a.entries.len()
-                                )),
-                            )],
+                            axes: vec![("acks", Verdict::Unevaluated(e))],
                         });
                     }
-                    for row in head.iter().filter(|l| &l.name == tool) {
-                        let dest = std::env::temp_dir()
-                            .join(format!("gate-{}-{}-acks.lock", row.name, row.target));
-                        let vuln = (|| -> Result<Verdict, String> {
-                            let (lock, _src) = resolve_lock(
-                                &row.name,
-                                &row.repo,
-                                &row.rev,
-                                Some(&locks_dir),
-                                &dest,
-                            )?;
-                            let json = run_audit(&lock, !first_scan)?;
-                            first_scan = false;
-                            if db_stamp.is_empty() {
-                                db_stamp = format!(
-                                    "advisory-db {} ({})",
-                                    s(&json, &["database", "last-commit"]),
-                                    s(&json, &["database", "last-updated"]),
-                                );
-                            }
-                            let inst = extract_instances(&json);
-                            let stops =
-                                floors.vuln_stops(&inst, &crate::floors::extract_cvss(&json));
-                            if !stops.is_empty() {
-                                return Ok(Verdict::HardStop(stops.join("\n  - ")));
-                            }
-                            let carried: Vec<Instance> = inst.into_iter().collect();
-                            Ok(vuln_verdict(&row.name, &row.sha, &[], &carried, 0, &a))
-                        })()
-                        .unwrap_or_else(Verdict::Unevaluated);
-                        reports.push(CandidateReport {
-                            name: format!("{tool} [{}] (acks edit)", row.target),
-                            tool: tool.clone(),
-                            summary: format!(
-                                "statement edit: pinned digest {} judged with the edited statements",
-                                &row.sha[..12.min(row.sha.len())]
-                            ),
-                            axes: vec![
-                                (
-                                    "ack-quality",
-                                    Verdict::Allow(format!(
-                                        "{} ack line(s) pass the quality bar",
-                                        a.entries.len()
-                                    )),
-                                ),
-                                ("vuln", vuln),
-                            ],
-                        });
-                    }
+                    continue;
                 }
-                Ok(a) => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
-                    tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![(
+            };
+            if !acks.rejected.is_empty() {
+                if !reported {
+                    reports.push(CandidateReport {
+                        name: format!("{tool} (acks edit)"),
+                        tool: tool.clone(),
+                        summary: String::new(),
+                        axes: vec![(
+                            "ack-quality",
+                            Verdict::Unevaluated(format!(
+                                "{} ack line(s) failed the quality bar:\n    {}",
+                                acks.rejected.len(),
+                                acks.rejected.join("\n    ")
+                            )),
+                        )],
+                    });
+                }
+                continue;
+            }
+            let rows = head.iter().filter(|l| {
+                &l.name == tool
+                    && !cands
+                        .iter()
+                        .any(|(_, h)| h.name == l.name && h.target == l.target && h.sha == l.sha)
+            });
+            for row in rows {
+                let baseline = crate::monitor::load_baseline(&evidence_dir, &row.name, &row.sha)
+                    .map(|(set, _db)| set);
+                let mut scan = |r: &ToolLine| -> Result<Value, String> {
+                    let dest = std::env::temp_dir()
+                        .join(format!("gate-{}-{}-acks.lock", r.name, r.target));
+                    let (lock, _src) =
+                        resolve_lock(&r.name, &r.repo, &r.rev, Some(&locks_dir), &dest)?;
+                    let json = run_audit(&lock, !first_scan)?;
+                    first_scan = false;
+                    if db_stamp.is_empty() {
+                        db_stamp = format!(
+                            "advisory-db {} ({})",
+                            s(&json, &["database", "last-commit"]),
+                            s(&json, &["database", "last-updated"]),
+                        );
+                    }
+                    Ok(json)
+                };
+                let vuln = judge_pinned_row(row, &acks, baseline.as_ref(), &mut scan, floors);
+                let mut axes = Vec::new();
+                if !reported {
+                    axes.push((
                         "ack-quality",
-                        Verdict::Unevaluated(format!(
-                            "{} ack line(s) failed the quality bar:\n    {}",
-                            a.rejected.len(),
-                            a.rejected.join("\n    ")
+                        Verdict::Allow(format!(
+                            "{} ack line(s) pass the quality bar",
+                            acks.entries.len()
                         )),
-                    )],
-                }),
-                Err(e) => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
+                    ));
+                }
+                axes.push(("vuln", vuln));
+                reports.push(CandidateReport {
+                    name: format!("{tool} [{}] (acks edit)", row.target),
                     tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![("acks", Verdict::Unevaluated(e))],
-                }),
+                    summary: format!(
+                        "statement edit: pinned digest {} judged with the edited statements{}",
+                        &row.sha[..12.min(row.sha.len())],
+                        if baseline.is_some() {
+                            ""
+                        } else {
+                            " (no recorded baseline: every instance added)"
+                        }
+                    ),
+                    axes,
+                });
             }
         }
     }
@@ -2787,6 +2819,9 @@ pub fn run(args: &[String]) -> i32 {
         );
     } else if cands.is_empty() {
         md.push_str("No TOOLS.lock candidates; evidence/ack edits on the live frontier evaluated below (#380).\n");
+        if !db_stamp.is_empty() {
+            let _ = writeln!(md, "*vuln instrument: {db_stamp}*\n");
+        }
     } else if !db_stamp.is_empty() {
         let _ = writeln!(
             md,
@@ -3150,6 +3185,91 @@ mod tests {
         match v {
             Verdict::RaiseUncovered { needed, .. } => assert_eq!(needed.len(), 1),
             other => panic!("expected uncovered, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_acks_edit_judges_each_pinned_row_with_the_edited_statements() {
+        let floors =
+            crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
+        let row = ToolLine {
+            name: "t".into(),
+            repo: "r".into(),
+            rev: "a".into(),
+            target: "x".into(),
+            sha: D.into(),
+        };
+        let audit = serde_json::json!({"vulnerabilities": {"list": [
+            {"advisory": {"id": "B"}, "package": {"name": "q", "version": "2"}},
+            {"advisory": {"id": "C"}, "package": {"name": "r", "version": "3"}}
+        ]}});
+        let mut scan = |_: &ToolLine| -> Result<Value, String> { Ok(audit.clone()) };
+        let mut both = ack(&good_vuln_ack("B", "q", "2"));
+        both.entries
+            .push(serde_json::from_str(&good_vuln_ack("C", "r", "3")).unwrap());
+        let baseline: BTreeSet<Instance> = [inst("B", "q", "2"), inst("C", "r", "3")].into();
+        let judge = |r: &ToolLine,
+                     a: &Acks,
+                     b: Option<&BTreeSet<Instance>>,
+                     s: &mut dyn FnMut(&ToolLine) -> Result<Value, String>| {
+            judge_pinned_row(r, a, b, s, &floors)
+        };
+        // every instance carried and covered in this digest: ALLOW
+        assert!(matches!(
+            judge(&row, &both, Some(&baseline), &mut scan),
+            Verdict::Allow(_)
+        ));
+        // an instance that appeared since bless, covered: signed RAISE, never ALLOW
+        let only_b: BTreeSet<Instance> = [inst("B", "q", "2")].into();
+        assert!(matches!(
+            judge(&row, &both, Some(&only_b), &mut scan),
+            Verdict::RaiseCovered(_)
+        ));
+        // no recorded baseline: every instance is added
+        assert!(matches!(
+            judge(&row, &both, None, &mut scan),
+            Verdict::RaiseCovered(_)
+        ));
+        // a statement withdrawn by the edit: uncovered
+        let one = ack(&good_vuln_ack("B", "q", "2"));
+        assert!(matches!(
+            judge(&row, &one, Some(&baseline), &mut scan),
+            Verdict::RaiseUncovered { .. }
+        ));
+        // statements about another binary cover nothing here
+        let other = ToolLine {
+            sha: "e".repeat(64),
+            ..row.clone()
+        };
+        assert!(matches!(
+            judge(&other, &both, Some(&baseline), &mut scan),
+            Verdict::RaiseUncovered { .. }
+        ));
+        // an unblessed row, or a scan that failed, cannot be judged
+        let zero = ToolLine {
+            sha: ZERO_DIGEST.into(),
+            ..row.clone()
+        };
+        assert!(matches!(
+            judge(&zero, &both, Some(&baseline), &mut scan),
+            Verdict::Unevaluated(_)
+        ));
+        let mut broken = |_: &ToolLine| -> Result<Value, String> { Err("no DB".into()) };
+        assert!(matches!(
+            judge(&row, &both, Some(&baseline), &mut broken),
+            Verdict::Unevaluated(_)
+        ));
+    }
+
+    #[test]
+    fn a_vuln_digest_that_is_not_a_digest_fails_the_quality_bar() {
+        let base = good_vuln_ack("A", "p", "1");
+        for bad in ["null", "\"\"", "7", "[]"] {
+            let line = base.replace(&format!("\"{D}\""), bad);
+            assert!(
+                ack_quality(&serde_json::from_str(&line).unwrap()).is_err(),
+                "digest {bad} must fail"
+            );
         }
     }
 

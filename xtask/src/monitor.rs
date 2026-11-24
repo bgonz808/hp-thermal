@@ -522,6 +522,22 @@ pub fn run(args: &[String]) -> i32 {
         if new.is_empty() && stops.is_empty() {
             println!("  OK — no advisory instance has appeared since bless");
         }
+        // A carried instance was covered at bless; a statement edit since then can remove that.
+        // The gate judges acks edits (#519); this re-checks main on every run.
+        for i in &carried {
+            if !ack_covers_vuln(&acks, i, &p.sha) {
+                println!(
+                    "  UNCOVERED: {} {} {} [{}] — carried since bless, no statement covers it in this digest",
+                    i.id, i.package, i.version, i.kind
+                );
+                println!(
+                    "      sign it by committing this line to supply-chain/evidence/{}/acks.jsonl:",
+                    p.name
+                );
+                println!("      {}", ack_template_vuln(&p.name, &p.sha, i));
+                fail = true;
+            }
+        }
         for i in &new {
             if ack_covers_vuln(&acks, i, &p.sha) {
                 // Signed off (typically from a prior monitor run): visible, not paging.

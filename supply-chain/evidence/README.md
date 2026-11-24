@@ -72,7 +72,9 @@ parseable. The schema borrows established vocabularies rather than inventing one
   `under_investigation`) and a `cyclonedx.state` pointing the same way (`not_affected` or
   `false_positive`; `exploitable` or `in_triage`; `in_triage`), and only `not_affected` carries a
   justification. Vuln acks without a digest are history: they pass the quality bar as before and
-  cover nothing. A multi-target tool signs each target's digest.
+  cover nothing. A multi-target tool signs each target's digest. An `acks.jsonl` edit makes the
+  gate judge every pinned digest of that tool with the edited statements, and the monitor
+  re-checks coverage of every carried instance on each run, so a withdrawn statement surfaces.
   Statements are a sequence, never edited or deleted; for an instance in a binary, the LAST
   statement naming that binary is the one that counts (#251). When `monitor-vuln` classifies an instance as GONE (RustSec withdrew the
   advisory or narrowed its `[versions]`; the bytes did not change, so never `fixed`) it prints a
