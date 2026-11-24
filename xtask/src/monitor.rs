@@ -29,9 +29,8 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::gate::{
-    GoneMechanism, Instance, ack_covers_vuln, ack_template_vuln,
-    ack_template_vuln_not_affected_observed, extract_instances, load_acks, parse_tools_lock,
-    resolve_lock, run_audit,
+    GoneMechanism, Instance, ack_template_vuln, ack_template_vuln_not_affected_observed,
+    extract_instances, load_acks, parse_tools_lock, resolve_lock, run_audit,
 };
 
 /// The `vuln.jsonl` of the record the tool's frozen lock selects (evidence README rule 2).
@@ -522,14 +521,37 @@ pub fn run(args: &[String]) -> i32 {
         if new.is_empty() && stops.is_empty() {
             println!("  OK — no advisory instance has appeared since bless");
         }
-        // A carried instance was covered at bless; a statement edit since then can remove that.
-        // The gate judges acks edits (#519); this re-checks main on every run.
+        // A carried instance was covered at bless; a statement edit since then can remove that,
+        // and an advisory that lists other functions now asks for another record (#520). The gate
+        // judges acks edits (#519) and reproduces records; this re-checks main on every run: the
+        // record a code claim names is committed, hashes to the statement's evidence_sha256, and
+        // was built for the advisory as the DB states it now.
+        let record_dir =
+            crate::evidence_rev::current(&evidence_dir, Path::new("tools/locks"), &p.name, &p.sha)
+                .map(|r| r.dir);
+        let cover = |i: &Instance| -> crate::gate::Cover {
+            crate::gate::coverage(&acks, i, &p.sha, &mut |a, inst| match &record_dir {
+                Ok(dir) => crate::gate::record_cover(a, inst, &audit, dir, None),
+                Err(e) => crate::gate::Cover::Unknown(e.clone()),
+            })
+        };
         for i in &carried {
-            if !ack_covers_vuln(&acks, i, &p.sha) {
+            let c = cover(i);
+            if let crate::gate::Cover::Unknown(why) = &c {
+                println!(
+                    "  UNEVALUATED: {} {} {} — {why}",
+                    i.id, i.package, i.version
+                );
+                unevaluated += 1;
+                fail = true;
+            } else if let crate::gate::Cover::No(why) = &c {
                 println!(
                     "  UNCOVERED: {} {} {} [{}] — carried since bless, no statement covers it in this digest",
                     i.id, i.package, i.version, i.kind
                 );
+                if let Some(w) = why {
+                    println!("      {w}");
+                }
                 println!(
                     "      sign it by committing this line to supply-chain/evidence/{}/acks.jsonl:",
                     p.name
@@ -539,7 +561,15 @@ pub fn run(args: &[String]) -> i32 {
             }
         }
         for i in &new {
-            if ack_covers_vuln(&acks, i, &p.sha) {
+            let c = cover(i);
+            if let crate::gate::Cover::Unknown(why) = &c {
+                println!(
+                    "  UNEVALUATED: {} {} {} — {why}",
+                    i.id, i.package, i.version
+                );
+                unevaluated += 1;
+                fail = true;
+            } else if c == crate::gate::Cover::Yes {
                 // Signed off (typically from a prior monitor run): visible, not paging.
                 println!(
                     "  ACKED-NEW: {} {} {} — signed off, monitored",

@@ -182,12 +182,41 @@ pub(crate) fn ratings(cvss: Option<&str>, informational: Option<&str>) -> Vec<Va
 
 /// The maintainer's native CycloneDX ruling, if the matching ack carries one. The last ack for
 /// the (advisory, package, version) instance wins, as in the gate.
+/// The reachability records committed for a digest (#520): sha256 -> (advisory, package,
+/// version) the record states.
+pub(crate) type Records = BTreeMap<String, (String, String, String)>;
+
+/// Every record in `<dir>/reach/`, by the sha256 of its bytes. A file that does not parse states
+/// nothing and is left out (the gate refuses such a file).
+pub(crate) fn records_in(dir: &Path) -> Records {
+    let mut out = Records::new();
+    for e in std::fs::read_dir(dir.join("reach"))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let Ok(bytes) = std::fs::read(e.path()) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_slice::<Value>(&bytes) else {
+            continue;
+        };
+        let p = &v["runs"][0]["properties"];
+        out.insert(
+            crate::sha256::sha256_hex(&bytes),
+            (s(p, &["advisory"]), s(p, &["package"]), s(p, &["version"])),
+        );
+    }
+    out
+}
+
 pub(crate) fn analysis_from_acks(
     acks: &[Value],
     digest: &str,
     id: &str,
     package: &str,
     version: &str,
+    records: &Records,
 ) -> Option<Value> {
     let inst = crate::gate::Instance {
         id: id.to_string(),
@@ -197,6 +226,14 @@ pub(crate) fn analysis_from_acks(
     };
     // The statement the gate would take as covering this instance in this binary, or none.
     let ack = crate::gate::governing_vuln_statement(acks, &inst, digest)?;
+    // A claim about the code is published only with the record it names, committed for this
+    // digest and stating this instance (the gate reproduced it before it merged).
+    if crate::gate::needs_record(ack) {
+        let named = records.get(ack["evidence_sha256"].as_str().unwrap_or_default())?;
+        if named != &(id.to_string(), package.to_string(), version.to_string()) {
+            return None;
+        }
+    }
     let matching: Vec<&Value> = acks
         .iter()
         .filter(|a| crate::gate::is_vuln_statement(a, &inst, digest))
@@ -330,6 +367,7 @@ pub(crate) fn serial_number(digest: &str) -> String {
 }
 
 /// Build the VDR document. Pure: every input is passed in.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build(
     product: &str,
     digest: &str,
@@ -338,6 +376,7 @@ pub(crate) fn build(
     components: Vec<Value>,
     subject: Option<Value>,
     acks: &[Value],
+    records: &Records,
 ) -> Result<(Value, Vec<String>), String> {
     let mut burn_down = Vec::new();
     let mut vulns = Vec::new();
@@ -372,7 +411,7 @@ pub(crate) fn build(
         if let Some(d) = adv["date"].as_str() {
             v["published"] = Value::String(format!("{d}T00:00:00Z"));
         }
-        match analysis_from_acks(acks, digest, &id, &pname, &pver) {
+        match analysis_from_acks(acks, digest, &id, &pname, &pver, records) {
             Some(an) => v["analysis"] = an,
             None => burn_down.push(format!("{id} {pname} {pver}")),
         }
@@ -889,7 +928,10 @@ pub fn run(args: &[String]) -> i32 {
             Some(g) => Some(dependencies_from_graph(&components, g)?),
             None => None,
         };
-        let (mut doc, burn) = build(&product, &digest, &header, &raw, components, subject, &acks)?;
+        let records = records_in(&dir);
+        let (mut doc, burn) = build(
+            &product, &digest, &header, &raw, components, subject, &acks, &records,
+        )?;
         if let Some(d) = deps {
             // The scope and the edges were measured from the built binary: post-build too.
             doc["dependencies"] = Value::Array(d);
@@ -1222,8 +1264,15 @@ mod tests {
         const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
         let legacy = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"status":"not_affected","justification":"component_not_present","timestamp":"2026-11-12","status_notes":"dev-only"});
         assert!(
-            analysis_from_acks(std::slice::from_ref(&legacy), D, "RUSTSEC-1", "a", "1.0.0")
-                .is_none(),
+            analysis_from_acks(
+                std::slice::from_ref(&legacy),
+                D,
+                "RUSTSEC-1",
+                "a",
+                "1.0.0",
+                &Records::new()
+            )
+            .is_none(),
             "OpenVEX-only ack is never mapped"
         );
         let mut native = legacy.clone();
@@ -1234,6 +1283,7 @@ mod tests {
             "RUSTSEC-1",
             "a",
             "1.0.0",
+            &Records::new(),
         )
         .unwrap();
         assert_eq!(an["state"], "not_affected");
@@ -1246,7 +1296,15 @@ mod tests {
         later["product"]["digest"] = json!(D);
         later["cyclonedx"] = json!({"state":"not_affected","justification":"code_not_present"});
         let first = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"timestamp":"2026-11-01"});
-        let an2 = analysis_from_acks(&[first, later], D, "RUSTSEC-1", "a", "1.0.0").unwrap();
+        let an2 = analysis_from_acks(
+            &[first, later],
+            D,
+            "RUSTSEC-1",
+            "a",
+            "1.0.0",
+            &Records::new(),
+        )
+        .unwrap();
         assert_eq!(an2["firstIssued"], "2026-11-01T00:00:00Z");
         assert_eq!(an2["lastUpdated"], "2026-11-20T00:00:00Z");
         assert!(
@@ -1261,18 +1319,72 @@ mod tests {
                 &other,
                 "RUSTSEC-1",
                 "a",
-                "1.0.0"
+                "1.0.0",
+                &Records::new()
             )
             .is_none()
         );
         let mut unbound = native.clone();
         unbound["product"].as_object_mut().unwrap().remove("digest");
-        assert!(analysis_from_acks(&[unbound], D, "RUSTSEC-1", "a", "1.0.0").is_none());
+        assert!(
+            analysis_from_acks(&[unbound], D, "RUSTSEC-1", "a", "1.0.0", &Records::new()).is_none()
+        );
         // A statement grounded in the DB's silence is void for a reported instance: no analysis.
         let mut observed = native.clone();
         observed["properties"] =
             json!([{"name": crate::gate::OBSERVED_ABSENT_PROP, "value": "0123456789abcdef0123"}]);
-        assert!(analysis_from_acks(&[native, observed], D, "RUSTSEC-1", "a", "1.0.0").is_none());
+        assert!(
+            analysis_from_acks(
+                &[native, observed],
+                D,
+                "RUSTSEC-1",
+                "a",
+                "1.0.0",
+                &Records::new()
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn a_code_claim_is_published_only_with_the_record_it_names() {
+        const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        let sha = "a".repeat(64);
+        let ack = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"status":"not_affected","justification":"vulnerable_code_not_in_execute_path","cyclonedx":{"state":"not_affected","justification":"code_not_reachable"},"evidence_sha256":sha,"timestamp":"2026-11-24","status_notes":"n"});
+        let one = std::slice::from_ref(&ack);
+        let mut records = Records::new();
+        assert!(analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records).is_none());
+        records.insert(
+            sha.clone(),
+            ("RUSTSEC-1".into(), "a".into(), "2.0.0".into()),
+        );
+        assert!(
+            analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records).is_none(),
+            "a record for another instance is not this claim's"
+        );
+        records.insert(sha, ("RUSTSEC-1".into(), "a".into(), "1.0.0".into()));
+        let an = analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records).unwrap();
+        assert_eq!(an["justification"], "code_not_reachable");
+        // the records of a directory are read by hash
+        let dir = std::env::temp_dir().join(format!("vdr-records-{}", std::process::id()));
+        std::fs::create_dir_all(dir.join("reach")).unwrap();
+        let body = "{\"runs\":[{\"properties\":{\"advisory\":\"RUSTSEC-1\",\"package\":\"a\",\"version\":\"1.0.0\"}}]}\n";
+        std::fs::write(
+            dir.join("reach")
+                .join("RUSTSEC-0000-0001-0123456789ab.sarif"),
+            body,
+        )
+        .unwrap();
+        let got = records_in(&dir);
+        assert_eq!(
+            got.get(&crate::sha256::sha256_hex(body.as_bytes())),
+            Some(&(
+                "RUSTSEC-1".to_string(),
+                "a".to_string(),
+                "1.0.0".to_string()
+            ))
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1316,6 +1428,7 @@ mod tests {
             comps.clone(),
             None,
             &[],
+            &Records::new(),
         )
         .unwrap();
         assert_eq!(doc["specVersion"], "1.6");
@@ -1330,11 +1443,31 @@ mod tests {
             "https://rustsec.org/advisories/RUSTSEC-2024-0320.html"
         );
         assert_eq!(burn, vec!["RUSTSEC-2024-0320 yaml-rust 0.4.5".to_string()]);
-        let (doc2, _) = build("t", &"d".repeat(64), &header, &raw, comps, None, &[]).unwrap();
+        let (doc2, _) = build(
+            "t",
+            &"d".repeat(64),
+            &header,
+            &raw,
+            comps,
+            None,
+            &[],
+            &Records::new(),
+        )
+        .unwrap();
         assert_eq!(doc, doc2, "same inputs, same document");
         let other = components_from_lock("[[package]]\nname = \"other\"\nversion = \"1.0.0\"\n");
         assert!(
-            build("t", &"d".repeat(64), &header, &raw, other, None, &[]).is_err(),
+            build(
+                "t",
+                &"d".repeat(64),
+                &header,
+                &raw,
+                other,
+                None,
+                &[],
+                &Records::new()
+            )
+            .is_err(),
             "affected package missing from components"
         );
     }

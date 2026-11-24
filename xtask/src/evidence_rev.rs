@@ -722,6 +722,11 @@ fn rev_files(root: &Path) -> (BTreeMap<String, Vec<u8>>, Vec<String>) {
                     continue;
                 }
                 for f in dirs(&l.path()) {
+                    // Reachability records are add-only on their own terms (gate::reach_changes,
+                    // #520); they arrive after a revision is admitted.
+                    if f.file_name() == "reach" && f.path().is_dir() {
+                        continue;
+                    }
                     let rel = format!("{rel_rev}/{lname}/{}", f.file_name().to_string_lossy());
                     match std::fs::read(f.path()) {
                         Ok(b) if f.path().is_file() => {

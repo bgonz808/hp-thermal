@@ -570,6 +570,98 @@ pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance, digest: &str) -> boo
     governing_vuln_ack(acks, inst, digest).is_some()
 }
 
+/// Justifications that claim something about the vulnerable CODE in this binary, so the claim
+/// rests on a reachability record (#520). `component_not_present` claims the package is absent,
+/// which the VDR measures from the binary itself.
+pub(crate) const RECORD_JUSTIFICATIONS: &[&str] = &[
+    "vulnerable_code_not_in_execute_path",
+    "vulnerable_code_not_present",
+    "vulnerable_code_cannot_be_controlled_by_adversary",
+    "inline_mitigations_already_exist",
+];
+
+/// The statement's claim rests on a reachability record.
+pub(crate) fn needs_record(a: &Value) -> bool {
+    s(a, &["status"]) == "not_affected" && RECORD_JUSTIFICATIONS.contains(&s(a, &["justification"]))
+}
+
+/// Whether an instance in a binary is covered.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Cover {
+    Yes,
+    /// Not covered; the reason when a statement exists but cannot cover.
+    No(Option<String>),
+    /// Cannot be told (a record that does not reproduce, a fetch that failed): never acked past.
+    Unknown(String),
+}
+
+/// Coverage of `inst` in `digest`: the governing statement, and for a claim about the code, the
+/// record it names, judged by `record`.
+pub(crate) fn coverage(
+    acks: &Acks,
+    inst: &Instance,
+    digest: &str,
+    record: &mut dyn FnMut(&Value, &Instance) -> Cover,
+) -> Cover {
+    match governing_vuln_ack(acks, inst, digest) {
+        None => Cover::No(None),
+        Some(a) if needs_record(a) => record(a, inst),
+        Some(_) => Cover::Yes,
+    }
+}
+
+/// Rebuilds a record's bytes from the checkout for a query (affected functions).
+pub(crate) type Regenerate<'a> =
+    &'a mut dyn FnMut(&BTreeMap<String, Vec<String>>) -> Result<String, String>;
+
+/// The gate's record check: the record named for this instance and the scan's query must be
+/// committed in `dir`, hash to the statement's `evidence_sha256`, and reproduce byte for byte
+/// from the checkout (`regenerate`). A record that is there and does not reproduce cannot be
+/// acked past.
+pub(crate) fn record_cover(
+    a: &Value,
+    inst: &Instance,
+    scan: &Value,
+    dir: &Path,
+    regenerate: Option<Regenerate<'_>>,
+) -> Cover {
+    let functions =
+        match crate::reach::affected_functions(scan, &inst.id, &inst.package, &inst.version) {
+            Ok(f) => f,
+            Err(e) => return Cover::Unknown(e),
+        };
+    let name = match crate::reach::record_name(&inst.id, &inst.package, &inst.version, &functions) {
+        Ok(n) => n,
+        Err(e) => return Cover::No(Some(format!("{}: {e}", inst.id))),
+    };
+    let path = dir.join("reach").join(&name);
+    let Ok(bytes) = std::fs::read(&path) else {
+        return Cover::No(Some(format!(
+            "{} {} {}: the statement's claim needs reachability record `reach/{name}`, not committed \
+             (`cargo xtask reach emit`)",
+            inst.id, inst.package, inst.version
+        )));
+    };
+    let sha = crate::sha256::sha256_hex(&bytes);
+    if s(a, &["evidence_sha256"]) != sha {
+        return Cover::No(Some(format!(
+            "{} {} {}: the statement's `evidence_sha256` is not the sha256 of `reach/{name}` ({sha})",
+            inst.id, inst.package, inst.version
+        )));
+    }
+    let Some(regenerate) = regenerate else {
+        return Cover::Yes;
+    };
+    match regenerate(&functions) {
+        Ok(text) if text.as_bytes() == bytes.as_slice() => Cover::Yes,
+        Ok(_) => Cover::Unknown(format!(
+            "reach/{name} does not reproduce from the checkout: a record that does not reproduce \
+             cannot be acked past"
+        )),
+        Err(e) => Cover::Unknown(format!("reach/{name}: {e}")),
+    }
+}
+
 /// The statement that covers this instance in `digest`, if one does: the gate, the monitor and
 /// the VDR's `analysis` all read coverage through here.
 pub(crate) fn governing_vuln_ack<'a>(
@@ -821,6 +913,8 @@ enum Verdict {
     RaiseUncovered {
         covered: Vec<String>,
         needed: Vec<String>,
+        /// Why an item that has a statement is still uncovered (e.g. its record is missing).
+        notes: Vec<String>,
     },
     /// Missing/failed/partial data — blocks, and CANNOT be acked (#241 §3).
     Unevaluated(String),
@@ -850,25 +944,39 @@ fn vuln_verdict(
     carried: &[Instance],
     fixed_count: usize,
     acks: &Acks,
+    record: &mut dyn FnMut(&Value, &Instance) -> Cover,
 ) -> Verdict {
     let mut covered = Vec::new();
     let mut needed = Vec::new();
+    let mut notes = Vec::new();
+    let mut unknown = Vec::new();
     for (label, set) in [("added", added), ("carried-unacked", carried)] {
         for i in set {
-            if ack_covers_vuln(acks, i, digest) {
-                covered.push(format!("{label}: {} {} {}", i.id, i.package, i.version));
-            } else {
-                needed.push(ack_template_vuln(tool, digest, i));
+            match coverage(acks, i, digest, record) {
+                Cover::Yes => {
+                    covered.push(format!("{label}: {} {} {}", i.id, i.package, i.version))
+                }
+                Cover::No(why) => {
+                    notes.extend(why);
+                    needed.push(ack_template_vuln(tool, digest, i));
+                }
+                Cover::Unknown(why) => {
+                    unknown.push(format!("{} {} {}: {why}", i.id, i.package, i.version))
+                }
             }
         }
     }
-    if !needed.is_empty() {
-        return Verdict::RaiseUncovered { covered, needed };
+    if !unknown.is_empty() {
+        return Verdict::Unevaluated(unknown.join("\n  - "));
     }
-    if added.is_empty()
-        && carried.iter().all(|i| ack_covers_vuln(acks, i, digest))
-        && covered.len() == carried.len()
-    {
+    if !needed.is_empty() {
+        return Verdict::RaiseUncovered {
+            covered,
+            needed,
+            notes,
+        };
+    }
+    if added.is_empty() && covered.len() == carried.len() {
         // added = ∅ and every carried instance acked -> the §4 relative ∧ absolute ALLOW.
         return Verdict::Allow(format!(
             "no added instances; {} carried all acked; {fixed_count} fixed",
@@ -876,6 +984,41 @@ fn vuln_verdict(
         ));
     }
     Verdict::RaiseCovered(covered)
+}
+
+/// The gate's record judge for one pinned or candidate row (#520): the record directory the
+/// checkout selects for (tool, digest), and regeneration from the checkout's inputs — the frozen
+/// lock, the row's repo and rev, the tool's patches — with the query from the asking scan.
+fn gate_record_judge<'a>(
+    row: &'a ToolLine,
+    evidence_dir: &'a Path,
+    locks_dir: &'a Path,
+) -> impl FnMut(&Value, &Instance, &Value) -> Cover + 'a {
+    move |a, inst, scan| {
+        let dir = match crate::evidence_rev::current(evidence_dir, locks_dir, &row.name, &row.sha) {
+            Ok(r) => r.dir,
+            Err(e) => return Cover::Unknown(e),
+        };
+        let lock = locks_dir.join(format!("{}.lock", row.name));
+        let mut regen = |functions: &BTreeMap<String, Vec<String>>| -> Result<String, String> {
+            let i = crate::reach::Inputs {
+                tool: row.name.clone(),
+                digest: row.sha.clone(),
+                repo: row.repo.clone(),
+                rev: row.rev.clone(),
+                lock: std::fs::read_to_string(&lock).map_err(|e| {
+                    format!("{}: {e} (a record needs the frozen lock)", lock.display())
+                })?,
+                patches: crate::reach::patches_for(&row.name)?,
+                id: inst.id.clone(),
+                package: inst.package.clone(),
+                version: inst.version.clone(),
+                functions: functions.clone(),
+            };
+            Ok(crate::reach::generate(&i)?.1)
+        };
+        record_cover(a, inst, scan, &dir, Some(&mut regen))
+    }
 }
 
 /// The pinned rows of `tool` an acks edit re-judges (#519): every row TOOLS.lock pins for it,
@@ -906,6 +1049,7 @@ fn judge_pinned_row(
     baseline: Option<&BTreeSet<Instance>>,
     scan: &mut dyn FnMut(&ToolLine) -> Result<Value, String>,
     floors: &crate::floors::Floors,
+    record: &mut dyn FnMut(&Value, &Instance, &Value) -> Cover,
 ) -> Verdict {
     if row.sha == ZERO_DIGEST || row.sha.len() != 64 {
         return Verdict::Unevaluated(format!(
@@ -929,7 +1073,15 @@ fn judge_pinned_row(
         }
         None => (inst.into_iter().collect(), Vec::new()),
     };
-    vuln_verdict(&row.name, &row.sha, &added, &carried, 0, acks)
+    vuln_verdict(
+        &row.name,
+        &row.sha,
+        &added,
+        &carried,
+        0,
+        acks,
+        &mut |a, i| record(a, i, &json),
+    )
 }
 
 fn mal_verdict(
@@ -1023,7 +1175,11 @@ fn mal_verdict(
             if needed.is_empty() {
                 Verdict::RaiseCovered(covered)
             } else {
-                Verdict::RaiseUncovered { covered, needed }
+                Verdict::RaiseUncovered {
+                    covered,
+                    needed,
+                    notes: Vec::new(),
+                }
             }
         }
         None => Verdict::Unevaluated(format!("{}: no detections.malicious field", path.display())),
@@ -1104,6 +1260,7 @@ fn caps_verdict(
             Verdict::RaiseUncovered {
                 covered: Vec::new(),
                 needed: vec![ack_template_caps(tool, digest, &caps_sha)],
+                notes: Vec::new(),
             }
         }
     } else if dir.join("caps.UNEVALUATED").exists() {
@@ -1306,6 +1463,7 @@ fn build_verdict(
         Verdict::RaiseUncovered {
             covered: Vec::new(),
             needed: vec![template.to_string()],
+            notes: Vec::new(),
         }
     }
 }
@@ -1433,6 +1591,154 @@ pub(crate) fn evidence_candidates(
         }
     }
     out
+}
+
+/// Every entry of every `reach/` directory under `root` (a digest's, or a revision's), by path
+/// relative to `root`: a file's bytes, or `None` for anything that is not a regular file.
+fn reach_entries(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+    let mut out = BTreeMap::new();
+    let subdirs = |p: &Path| -> Vec<PathBuf> {
+        std::fs::read_dir(p)
+            .map(|r| {
+                r.flatten()
+                    .map(|e| e.path())
+                    .filter(|p| p.is_dir())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    for tool in subdirs(root) {
+        for digest in subdirs(&tool) {
+            let mut dirs = vec![digest.join("reach")];
+            dirs.extend(
+                subdirs(&digest.join(crate::evidence_rev::REV_DIR))
+                    .into_iter()
+                    .map(|r| r.join("reach")),
+            );
+            for d in dirs {
+                for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+                    let path = e.path();
+                    let Ok(rel) = path.strip_prefix(root) else {
+                        continue;
+                    };
+                    let bytes = path.is_file().then(|| std::fs::read(&path).ok()).flatten();
+                    out.insert(rel.to_path_buf(), bytes);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `RUSTSEC-YYYY-NNNN-<12 hex>.sarif`, the only name a record has (`reach::record_name`).
+fn is_record_name(name: &str) -> bool {
+    name.len() == 17 + 1 + 12 + 6
+        && crate::reach::is_rustsec_id(&name[..17])
+        && name.as_bytes()[17] == b'-'
+        && name[18..30]
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        && name.ends_with(".sarif")
+}
+
+/// Reachability records (#520) this change touches. Records are add-only: an edited or deleted
+/// record, or anything in a `reach/` directory that is not a record file, is refused. Returns the
+/// added records (relative to the evidence root) and the refusals.
+pub(crate) fn reach_changes(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+) -> (Vec<PathBuf>, Vec<String>) {
+    let head = reach_entries(evidence_dir);
+    let base = reach_entries(base_evidence_dir);
+    let mut refused = Vec::new();
+    for (rel, b) in &base {
+        match head.get(rel) {
+            None => refused.push(format!("{}: a committed record was deleted", rel.display())),
+            Some(h) if h != b => {
+                refused.push(format!("{}: a committed record was edited", rel.display()))
+            }
+            _ => {}
+        }
+    }
+    let mut added = Vec::new();
+    for (rel, h) in &head {
+        if base.contains_key(rel) {
+            continue;
+        }
+        let name = rel
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if h.is_none() || !is_record_name(&name) {
+            refused.push(format!(
+                "{}: not a record file (reach/ holds only RUSTSEC-YYYY-NNNN-<h12>.sarif)",
+                rel.display()
+            ));
+        } else {
+            added.push(rel.clone());
+        }
+    }
+    (added, refused)
+}
+
+/// An added record must be what the checkout reproduces: it sits in the record directory the
+/// checkout selects for its (tool, digest), its name is the one its stated instance and query
+/// give, and regenerating it from the checkout's inputs with that query gives the same bytes.
+fn verify_added_record(
+    rel: &Path,
+    evidence_dir: &Path,
+    locks_dir: &Path,
+    head: &[ToolLine],
+) -> Result<String, String> {
+    let bytes =
+        std::fs::read(evidence_dir.join(rel)).map_err(|e| format!("{}: {e}", rel.display()))?;
+    let v: Value = serde_json::from_slice(&bytes).map_err(|e| format!("not JSON: {e}"))?;
+    let props = &v["runs"][0]["properties"];
+    let (tool, digest) = (s(props, &["tool"]), s(props, &["digest"]));
+    let functions: BTreeMap<String, Vec<String>> = serde_json::from_value(
+        v["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["functions"].clone(),
+    )
+    .map_err(|e| format!("no query: {e}"))?;
+    let (id, package, version) = (
+        s(props, &["advisory"]),
+        s(props, &["package"]),
+        s(props, &["version"]),
+    );
+    let row = head
+        .iter()
+        .find(|l| l.name == tool && l.sha == digest)
+        .ok_or_else(|| format!("states {tool} {digest}, which TOOLS.lock does not pin"))?;
+    let dir = crate::evidence_rev::current(evidence_dir, locks_dir, tool, digest)?
+        .dir
+        .join("reach");
+    let name = crate::reach::record_name(id, package, version, &functions)?;
+    if evidence_dir.join(rel) != dir.join(&name) {
+        return Err(format!(
+            "its instance and query name it {}/{name}",
+            dir.strip_prefix(evidence_dir).unwrap_or(&dir).display()
+        ));
+    }
+    let i = crate::reach::Inputs {
+        tool: tool.into(),
+        digest: digest.into(),
+        repo: row.repo.clone(),
+        rev: row.rev.clone(),
+        lock: std::fs::read_to_string(locks_dir.join(format!("{tool}.lock")))
+            .map_err(|e| format!("frozen lock: {e}"))?,
+        patches: crate::reach::patches_for(tool)?,
+        id: id.into(),
+        package: package.into(),
+        version: version.into(),
+        functions,
+    };
+    let (_, text) = crate::reach::generate(&i)?;
+    if text.as_bytes() != bytes.as_slice() {
+        return Err("does not reproduce from the checkout".into());
+    }
+    Ok(format!(
+        "{id} {package} {version}: reproduces from the checkout (sha256 {})",
+        crate::sha256::sha256_hex(&bytes)
+    ))
 }
 
 /// Tools whose acks.jsonl differs from the base commit's — loaded and quality-checked even
@@ -2296,6 +2602,7 @@ pub fn run(args: &[String]) -> i32 {
         .collect();
     let ev_cands = evidence_candidates(&head, &cands, &evidence_dir, &base_evidence_dir);
     let changed_acks = changed_ack_files(&head, &evidence_dir, &base_evidence_dir);
+    let (reach_added, reach_refused) = reach_changes(&evidence_dir, &base_evidence_dir);
     let historical = non_frontier_changes(&head, &evidence_dir, &base_evidence_dir);
 
     let mut reports = Vec::new();
@@ -2425,7 +2732,16 @@ pub fn run(args: &[String]) -> i32 {
                 return Ok(Verdict::HardStop(stops.join("
   - ")));
             }
-            Ok(vuln_verdict(&h.name, &h.sha, &added, &carried, fixed.len(), &acks))
+            let mut judge = gate_record_judge(h, &evidence_dir, &locks_dir);
+            Ok(vuln_verdict(
+                &h.name,
+                &h.sha,
+                &added,
+                &carried,
+                fixed.len(),
+                &acks,
+                &mut |a, i| judge(a, i, &head_json),
+            ))
         })()
         .unwrap_or_else(Verdict::Unevaluated);
         axes.push(("vuln", vuln));
@@ -2746,7 +3062,9 @@ pub fn run(args: &[String]) -> i32 {
                     }
                     Ok(json)
                 };
-                let vuln = judge_pinned_row(row, &acks, baseline.as_ref(), &mut scan, floors);
+                let mut judge = gate_record_judge(row, &evidence_dir, &locks_dir);
+                let vuln =
+                    judge_pinned_row(row, &acks, baseline.as_ref(), &mut scan, floors, &mut judge);
                 let mut axes = Vec::new();
                 if !reported {
                     axes.push((
@@ -2774,6 +3092,43 @@ pub fn run(args: &[String]) -> i32 {
                 });
             }
         }
+    }
+
+    // ---------- reachability records (#520): add-only, and each added one reproduces ----------
+    if !reach_refused.is_empty() {
+        reports.push(CandidateReport {
+            name: "reachability records".into(),
+            tool: String::new(),
+            summary: String::new(),
+            axes: vec![(
+                "reach",
+                Verdict::HardStop(format!(
+                    "records are add-only (#520):\n    {}",
+                    reach_refused.join("\n    ")
+                )),
+            )],
+        });
+    }
+    for rel in &reach_added {
+        let verdict = match verify_added_record(rel, &evidence_dir, &locks_dir, &head) {
+            Ok(m) => Verdict::Allow(m),
+            Err(e) => Verdict::Unevaluated(format!("{}: {e}", rel.display())),
+        };
+        reports.push(CandidateReport {
+            name: format!(
+                "reach/{}",
+                rel.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ),
+            tool: rel
+                .iter()
+                .next()
+                .map(|c| c.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            summary: format!("record added: {}", rel.display()),
+            axes: vec![("reach", verdict)],
+        });
     }
 
     let is_current = |dir: &Path| -> bool {
@@ -2827,7 +3182,12 @@ pub fn run(args: &[String]) -> i32 {
     // ---------- report ----------
     let mut md =
         String::from("<!-- candidate-eval -->\n## Candidate evaluation (3-axis gate, #241)\n\n");
-    if cands.is_empty() && ev_cands.is_empty() && changed_acks.is_empty() {
+    if cands.is_empty()
+        && ev_cands.is_empty()
+        && changed_acks.is_empty()
+        && reach_added.is_empty()
+        && reach_refused.is_empty()
+    {
         md.push_str(
             "No TOOLS.lock candidates, no frontier evidence changes, no ack changes in this change.\n",
         );
@@ -2857,9 +3217,16 @@ pub fn run(args: &[String]) -> i32 {
                         let _ = writeln!(md, "  - signed: {i}");
                     }
                 }
-                Verdict::RaiseUncovered { covered, needed } => {
+                Verdict::RaiseUncovered {
+                    covered,
+                    needed,
+                    notes,
+                } => {
                     for i in covered {
                         let _ = writeln!(md, "  - signed: {i}");
+                    }
+                    for n in notes {
+                        let _ = writeln!(md, "  - {n}");
                     }
                     let _ = writeln!(
                         md,
@@ -3008,7 +3375,15 @@ mod tests {
     #[test]
     fn vuln_allow_requires_added_empty_and_carried_acked() {
         let acks = ack(&good_vuln_ack("B", "q", "2"));
-        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 3, &acks);
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            3,
+            &acks,
+            &mut |_, _| Cover::Unknown("no record judge".into()),
+        );
         assert!(matches!(v, Verdict::Allow(_)));
     }
 
@@ -3017,7 +3392,15 @@ mod tests {
         // No exchange rate: fixes never buy an addition; an acked addition is
         // signed-RAISE, not ALLOW.
         let acks = ack(&good_vuln_ack("C", "r", "3"));
-        let v = vuln_verdict("t", D, &[inst("C", "r", "3")], &[], 99, &acks);
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[inst("C", "r", "3")],
+            &[],
+            99,
+            &acks,
+            &mut |_, _| Cover::Unknown("no record judge".into()),
+        );
         assert!(matches!(v, Verdict::RaiseCovered(_)));
     }
 
@@ -3039,7 +3422,15 @@ mod tests {
         let mut acks = ack(&affected);
         acks.entries.push(serde_json::from_str(&observed).unwrap());
         assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
-        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 0, &acks);
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::Unknown("no record judge".into()),
+        );
         assert!(matches!(v, Verdict::RaiseUncovered { .. }));
         acks.entries.push(serde_json::from_str(&affected).unwrap());
         assert!(ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
@@ -3195,7 +3586,15 @@ mod tests {
             entries: vec![],
             rejected: vec![],
         };
-        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 0, &acks);
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::Unknown("no record judge".into()),
+        );
         match v {
             Verdict::RaiseUncovered { needed, .. } => assert_eq!(needed.len(), 1),
             other => panic!("expected uncovered, got {other:?}"),
@@ -3226,7 +3625,9 @@ mod tests {
                      a: &Acks,
                      b: Option<&BTreeSet<Instance>>,
                      s: &mut dyn FnMut(&ToolLine) -> Result<Value, String>| {
-            judge_pinned_row(r, a, b, s, &floors)
+            judge_pinned_row(r, a, b, s, &floors, &mut |_, _, _| {
+                Cover::Unknown("no record judge".into())
+            })
         };
         // every instance carried and covered in this digest: ALLOW
         assert!(matches!(
@@ -3276,6 +3677,53 @@ mod tests {
     }
 
     #[test]
+    fn records_are_add_only_and_only_records_live_in_reach() {
+        let root = std::env::temp_dir().join(format!("gate-reach-ledger-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (base, head) = (root.join("base"), root.join("head"));
+        let d = "d".repeat(64);
+        let l = "1".repeat(64);
+        let rec = |r: &Path, sub: &str, name: &str, body: &str| {
+            let dir = r.join("t").join(&d).join(sub).join("reach");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(name), body).unwrap();
+        };
+        let a = "RUSTSEC-2026-0001-0123456789ab.sarif";
+        let b = "RUSTSEC-2026-0002-0123456789ab.sarif";
+        for r in [&base, &head] {
+            rec(r, "", a, "{}\n");
+        }
+        // unchanged: nothing to report
+        assert_eq!(reach_changes(&head, &base), (Vec::new(), Vec::new()));
+        // an addition at the digest and under a revision
+        rec(&head, "", b, "{}\n");
+        rec(&head, &format!("rev/{l}"), a, "{}\n");
+        let (added, refused) = reach_changes(&head, &base);
+        assert!(refused.is_empty(), "{refused:?}");
+        assert_eq!(added.len(), 2);
+        // an edit, and a file that is not a record
+        rec(&head, "", a, "{\"edited\": 1}\n");
+        rec(&head, "", "notes.txt", "x");
+        let (_, refused) = reach_changes(&head, &base);
+        assert_eq!(refused.len(), 2, "{refused:?}");
+        // a deletion
+        std::fs::remove_file(head.join("t").join(&d).join("reach").join(a)).unwrap();
+        let (_, refused) = reach_changes(&head, &base);
+        assert!(refused.iter().any(|r| r.contains("deleted")), "{refused:?}");
+        let _ = std::fs::remove_dir_all(&root);
+        // names
+        assert!(is_record_name(a));
+        for bad in [
+            "RUSTSEC-2026-0001-0123456789AB.sarif",
+            "RUSTSEC-2026-0001-0123456789a.sarif",
+            "yanked-0123456789ab.sarif",
+            "RUSTSEC-2026-0001-0123456789ab.json",
+        ] {
+            assert!(!is_record_name(bad), "{bad}");
+        }
+    }
+
+    #[test]
     fn an_acks_edit_rejudges_every_pinned_row_the_candidate_path_did_not() {
         let tl = |name: &str, target: &str, sha: &str| ToolLine {
             name: name.into(),
@@ -3311,6 +3759,131 @@ mod tests {
             picked(&[(None, tl("u", "windows", &"3".repeat(64)))]),
             ["windows", "linux"]
         );
+    }
+
+    #[test]
+    fn a_claim_about_the_code_is_covered_only_by_a_record_that_reproduces() {
+        let i = Instance {
+            id: "RUSTSEC-2026-0592".into(),
+            package: "url".into(),
+            version: "2.5.8".into(),
+            kind: "vulnerability".into(),
+        };
+        let scan = serde_json::json!({"vulnerabilities": {"list": [{
+            "advisory": {"id": "RUSTSEC-2026-0592"},
+            "package": {"name": "url", "version": "2.5.8"},
+            "affected": {"functions": {"url::Url::origin": ["<=2.5.8"]}}
+        }]}});
+        let functions =
+            crate::reach::affected_functions(&scan, &i.id, &i.package, &i.version).unwrap();
+        let name = crate::reach::record_name(&i.id, &i.package, &i.version, &functions).unwrap();
+        let dir = std::env::temp_dir().join(format!("gate-reach-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("reach")).unwrap();
+        let record = "{\"record\": 1}\n";
+        let sha = crate::sha256::sha256_hex(record.as_bytes());
+        let ack = |e: &str| -> Value {
+            serde_json::json!({"axis": "vuln", "status": "not_affected",
+                "justification": "vulnerable_code_not_in_execute_path", "evidence_sha256": e})
+        };
+        let same =
+            |_: &BTreeMap<String, Vec<String>>| -> Result<String, String> { Ok(record.into()) };
+        // not committed yet
+        assert!(matches!(
+            record_cover(&ack(&sha), &i, &scan, &dir, Some(&mut { same })),
+            Cover::No(Some(_))
+        ));
+        std::fs::write(dir.join("reach").join(&name), record).unwrap();
+        assert_eq!(
+            record_cover(&ack(&sha), &i, &scan, &dir, Some(&mut { same })),
+            Cover::Yes
+        );
+        // the statement names other bytes
+        assert!(matches!(
+            record_cover(&ack(&"0".repeat(64)), &i, &scan, &dir, Some(&mut { same })),
+            Cover::No(Some(_))
+        ));
+        // committed and named, but the checkout does not reproduce it: cannot be acked past
+        let other =
+            |_: &BTreeMap<String, Vec<String>>| -> Result<String, String> { Ok("{}\n".into()) };
+        assert!(matches!(
+            record_cover(&ack(&sha), &i, &scan, &dir, Some(&mut { other })),
+            Cover::Unknown(_)
+        ));
+        let down =
+            |_: &BTreeMap<String, Vec<String>>| -> Result<String, String> { Err("offline".into()) };
+        assert!(matches!(
+            record_cover(&ack(&sha), &i, &scan, &dir, Some(&mut { down })),
+            Cover::Unknown(_)
+        ));
+        // the advisory's function list changed: another file is expected
+        let changed = serde_json::json!({"vulnerabilities": {"list": [{
+            "advisory": {"id": "RUSTSEC-2026-0592"},
+            "package": {"name": "url", "version": "2.5.8"},
+            "affected": {"functions": {"url::Url::origin": ["<=2.5.8"], "url::quirks::origin": ["<=2.5.8"]}}
+        }]}});
+        assert!(matches!(
+            record_cover(&ack(&sha), &i, &changed, &dir, Some(&mut { same })),
+            Cover::No(Some(_))
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_verdict_carries_why_a_signed_claim_does_not_cover_and_never_passes_an_unknown() {
+        let reach = good_vuln_ack("B", "q", "2")
+            .replace(
+                "\"status\":\"affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"vulnerable_code_not_in_execute_path\"",
+            )
+            .replace("in_triage", "not_affected");
+        let acks = ack(&reach);
+        assert!(needs_record(&acks.entries[0]));
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::No(Some("record missing".into())),
+        );
+        match v {
+            Verdict::RaiseUncovered { needed, notes, .. } => {
+                assert_eq!(needed.len(), 1);
+                assert_eq!(notes, ["record missing"]);
+            }
+            other => panic!("expected uncovered, got {other:?}"),
+        }
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::Unknown("does not reproduce".into()),
+        );
+        assert!(matches!(v, Verdict::Unevaluated(_)));
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::Yes,
+        );
+        assert!(matches!(v, Verdict::Allow(_)));
+        // a claim about the component, or an accepted risk, needs no record
+        let absent = reach.replace(
+            "vulnerable_code_not_in_execute_path",
+            "component_not_present",
+        );
+        assert!(!needs_record(&serde_json::from_str(&absent).unwrap()));
+        assert!(!needs_record(
+            &serde_json::from_str(&good_vuln_ack("B", "q", "2")).unwrap()
+        ));
     }
 
     #[test]
