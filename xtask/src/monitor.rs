@@ -491,7 +491,7 @@ pub fn run(args: &[String]) -> i32 {
                 }
                 Ok(Some(how)) => how,
             };
-            match crate::gate::last_vuln_ack(&acks, i) {
+            match crate::gate::last_vuln_ack(&acks, i, &p.sha) {
                 Some(a) if crate::gate::observed_absent_at_db(a).is_some() => {
                     println!(
                         "      not_affected statement grounded in this observation already recorded"
@@ -512,7 +512,7 @@ pub fn run(args: &[String]) -> i32 {
             }
             println!(
                 "      {}",
-                ack_template_vuln_not_affected_observed(&p.name, i, now_db, &how)
+                ack_template_vuln_not_affected_observed(&p.name, &p.sha, i, now_db, &how)
             );
         }
         for why in &stops {
@@ -523,7 +523,7 @@ pub fn run(args: &[String]) -> i32 {
             println!("  OK — no advisory instance has appeared since bless");
         }
         for i in &new {
-            if ack_covers_vuln(&acks, i) {
+            if ack_covers_vuln(&acks, i, &p.sha) {
                 // Signed off (typically from a prior monitor run): visible, not paging.
                 println!(
                     "  ACKED-NEW: {} {} {} — signed off, monitored",
@@ -541,7 +541,7 @@ pub fn run(args: &[String]) -> i32 {
                 println!(
                     "      (fill status_notes / author / timestamp / refs), or bump — see the exploration report:"
                 );
-                println!("      {}", ack_template_vuln(&p.name, i));
+                println!("      {}", ack_template_vuln(&p.name, &p.sha, i));
                 fail = true;
             }
         }

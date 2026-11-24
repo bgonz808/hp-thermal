@@ -413,6 +413,9 @@ fn ack_quality(v: &Value) -> Result<(), String> {
             }
             _ => {}
         }
+        if v.get("product").and_then(|p| p.get("digest")).is_some() {
+            vuln_bound_quality(v)?;
+        }
     }
     // #380: a sign-off names WHAT it signs. A caps ack binds to the sha256 of the inventory
     // bytes; a mal ack binds to the engine AND its verdict string. Without those fields the
@@ -456,6 +459,50 @@ fn ack_quality(v: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// A digest-bound vuln statement is a claim about one binary's bytes: it names the digest, an
+/// OpenVEX status that can be true of immutable bytes, and the native CycloneDX ruling the VDR
+/// copies, pointing the same way. Lines without a digest govern nothing (`last_vuln_ack`); the
+/// record is append-only, so they are not re-judged here.
+fn vuln_bound_quality(v: &Value) -> Result<(), String> {
+    let d = s(v, &["product", "digest"]);
+    if d.len() != 64
+        || !d
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    {
+        return Err("vuln ack `product.digest` is not 64 lowercase hex".into());
+    }
+    let status = s(v, &["status"]);
+    let state = s(v, &["cyclonedx", "state"]);
+    let agree: &[&str] = match status {
+        "not_affected" => &["not_affected", "false_positive"],
+        "affected" => &["exploitable", "in_triage"],
+        "under_investigation" => &["in_triage"],
+        other => {
+            return Err(format!(
+                "vuln ack status `{other}`: a digest-bound statement is not_affected, affected \
+                 or under_investigation"
+            ));
+        }
+    };
+    if !agree.contains(&state) {
+        return Err(format!(
+            "vuln ack status `{status}` with cyclonedx.state `{state}`: the CycloneDX ruling the \
+             VDR publishes must agree ({})",
+            agree.join(" | ")
+        ));
+    }
+    if status != "not_affected"
+        && (!s(v, &["justification"]).is_empty()
+            || !s(v, &["cyclonedx", "justification"]).is_empty())
+    {
+        return Err(format!(
+            "vuln ack status `{status}` carries a not_affected justification"
+        ));
+    }
+    Ok(())
+}
+
 fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     let mut cur = v;
     for p in path {
@@ -467,16 +514,38 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     cur.as_str().unwrap_or("")
 }
 
-/// The LAST quality-passing vuln statement for this instance, in file order. acks.jsonl is
-/// append-only, so file order is statement order — the OpenVEX sequence model (#251): a later
-/// statement supersedes an earlier one for the same product + vulnerability.
-pub(crate) fn last_vuln_ack<'a>(acks: &'a Acks, inst: &Instance) -> Option<&'a Value> {
-    acks.entries.iter().rev().find(|a| {
-        s(a, &["axis"]) == "vuln"
-            && s(a, &["vulnerability", "name"]) == inst.id
-            && s(a, &["product", "package"]) == inst.package
-            && s(a, &["product", "version"]) == inst.version
-    })
+/// The LAST quality-passing vuln statement for this instance in the binary `digest`, in file
+/// order. acks.jsonl is append-only, so file order is statement order — the OpenVEX sequence
+/// model (#251): a later statement supersedes an earlier one for the same product +
+/// vulnerability. The product is the binary: a statement names the digest it was made about and
+/// governs nothing else, so a new build of the same package version is judged afresh.
+pub(crate) fn last_vuln_ack<'a>(
+    acks: &'a Acks,
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    last_vuln_statement(&acks.entries, inst, digest)
+}
+
+pub(crate) fn last_vuln_statement<'a>(
+    entries: &'a [Value],
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    entries
+        .iter()
+        .rev()
+        .find(|a| is_vuln_statement(a, inst, digest))
+}
+
+/// A vuln statement about this instance in the binary `digest`.
+pub(crate) fn is_vuln_statement(a: &Value, inst: &Instance, digest: &str) -> bool {
+    s(a, &["axis"]) == "vuln"
+        && !digest.is_empty()
+        && s(a, &["product", "digest"]) == digest
+        && s(a, &["vulnerability", "name"]) == inst.id
+        && s(a, &["product", "package"]) == inst.package
+        && s(a, &["product", "version"]) == inst.version
 }
 
 /// CycloneDX-style property (`properties: [{name, value}]`) naming the advisory-DB commit at
@@ -497,8 +566,27 @@ pub(crate) fn observed_absent_at_db(a: &Value) -> Option<&str> {
 /// only ever asked about an instance the DB reports NOW, so a last statement that says "the DB
 /// did not report it" is contradicted by the measurement and void: the reappearance is RAISE
 /// uncovered until signed afresh (fail-closed, #251). Nothing is committed from CI for this.
-pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
-    last_vuln_ack(acks, inst).is_some_and(|a| observed_absent_at_db(a).is_none())
+pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance, digest: &str) -> bool {
+    governing_vuln_ack(acks, inst, digest).is_some()
+}
+
+/// The statement that covers this instance in `digest`, if one does: the gate, the monitor and
+/// the VDR's `analysis` all read coverage through here.
+pub(crate) fn governing_vuln_ack<'a>(
+    acks: &'a Acks,
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    governing_vuln_statement(&acks.entries, inst, digest)
+}
+
+/// `governing_vuln_ack` over quality-passing entries already loaded.
+pub(crate) fn governing_vuln_statement<'a>(
+    entries: &'a [Value],
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    last_vuln_statement(entries, inst, digest).filter(|a| observed_absent_at_db(a).is_none())
 }
 
 /// A mal ack covers one FINDING: (digest, engine, result). The result string is part of the
@@ -618,14 +706,15 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
 /// CycloneDX `state` / `justification` / `response` the VDR copies. It starts at `in_triage`, the
 /// one state that claims nothing. Measured facts (binary presence, version ranges, digests,
 /// dependency paths) live in the VDR's own fields and are not restated in the notes. Caps acks use `reviewed`: a caps ack signs an inventory, not a
-/// vulnerability status, so the OpenVEX statuses do not apply there. The gate reads `status` for
-/// exactly one thing: a vuln statement whose status is `fixed` withdraws coverage (#251).
-pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
+/// vulnerability status, so the OpenVEX statuses do not apply there. The statement names the
+/// binary it is about (`product.digest`) and covers that binary only; the quality bar holds the
+/// OpenVEX status and the CycloneDX state to the same direction (`vuln_bound_quality`).
+pub(crate) fn ack_template_vuln(tool: &str, digest: &str, inst: &Instance) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "vuln",
         "vulnerability": {"name": inst.id},
-        "product": {"name": tool, "package": inst.package, "version": inst.version},
+        "product": {"name": tool, "digest": digest, "package": inst.package, "version": inst.version},
         "status": "affected",
         "cyclonedx": {"state": "in_triage"},
         "status_notes": "",
@@ -653,6 +742,7 @@ pub(crate) enum GoneMechanism {
 /// quality bar still demands a signer. Appended, never replacing — the sequence is the record.
 pub(crate) fn ack_template_vuln_not_affected_observed(
     tool: &str,
+    digest: &str,
     inst: &Instance,
     db: &str,
     how: &GoneMechanism,
@@ -668,9 +758,10 @@ pub(crate) fn ack_template_vuln_not_affected_observed(
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "vuln",
         "vulnerability": {"name": inst.id},
-        "product": {"name": tool, "package": inst.package, "version": inst.version},
+        "product": {"name": tool, "digest": digest, "package": inst.package, "version": inst.version},
         "status": "not_affected",
         "justification": "vulnerable_code_not_present",
+        "cyclonedx": {"state": "not_affected", "justification": "code_not_present"},
         "status_notes": format!(
             "not reported by RustSec against {} {} at advisory DB {}: {mechanism} (monitor-vuln); supersedes the earlier statement for this instance",
             inst.package,
@@ -754,6 +845,7 @@ impl Verdict {
 
 fn vuln_verdict(
     tool: &str,
+    digest: &str,
     added: &[Instance],
     carried: &[Instance],
     fixed_count: usize,
@@ -763,10 +855,10 @@ fn vuln_verdict(
     let mut needed = Vec::new();
     for (label, set) in [("added", added), ("carried-unacked", carried)] {
         for i in set {
-            if ack_covers_vuln(acks, i) {
+            if ack_covers_vuln(acks, i, digest) {
                 covered.push(format!("{label}: {} {} {}", i.id, i.package, i.version));
             } else {
-                needed.push(ack_template_vuln(tool, i));
+                needed.push(ack_template_vuln(tool, digest, i));
             }
         }
     }
@@ -774,7 +866,7 @@ fn vuln_verdict(
         return Verdict::RaiseUncovered { covered, needed };
     }
     if added.is_empty()
-        && carried.iter().all(|i| ack_covers_vuln(acks, i))
+        && carried.iter().all(|i| ack_covers_vuln(acks, i, digest))
         && covered.len() == carried.len()
     {
         // added = ∅ and every carried instance acked -> the §4 relative ∧ absolute ALLOW.
@@ -2279,7 +2371,7 @@ pub fn run(args: &[String]) -> i32 {
                 return Ok(Verdict::HardStop(stops.join("
   - ")));
             }
-            Ok(vuln_verdict(&h.name, &added, &carried, fixed.len(), &acks))
+            Ok(vuln_verdict(&h.name, &h.sha, &added, &carried, fixed.len(), &acks))
         })()
         .unwrap_or_else(Verdict::Unevaluated);
         axes.push(("vuln", vuln));
@@ -2548,18 +2640,73 @@ pub fn run(args: &[String]) -> i32 {
                 continue; // already loaded and reported above
             }
             match load_acks(&evidence_dir.join(tool).join("acks.jsonl")) {
-                Ok(a) if a.rejected.is_empty() => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
-                    tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![(
-                        "ack-quality",
-                        Verdict::Allow(format!(
-                            "{} ack line(s) pass the quality bar; nothing to evaluate against",
-                            a.entries.len()
-                        )),
-                    )],
-                }),
+                // A statement edit changes what covers the pinned binaries: each pinned digest's
+                // instances are judged again with the edited statements, every one carried.
+                Ok(a) if a.rejected.is_empty() => {
+                    if !head.iter().any(|l| &l.name == tool) {
+                        reports.push(CandidateReport {
+                            name: format!("{tool} (acks edit)"),
+                            tool: tool.clone(),
+                            summary: String::new(),
+                            axes: vec![(
+                                "ack-quality",
+                                Verdict::Allow(format!(
+                                    "{} ack line(s) pass the quality bar; no pinned digest to judge",
+                                    a.entries.len()
+                                )),
+                            )],
+                        });
+                    }
+                    for row in head.iter().filter(|l| &l.name == tool) {
+                        let dest = std::env::temp_dir()
+                            .join(format!("gate-{}-{}-acks.lock", row.name, row.target));
+                        let vuln = (|| -> Result<Verdict, String> {
+                            let (lock, _src) = resolve_lock(
+                                &row.name,
+                                &row.repo,
+                                &row.rev,
+                                Some(&locks_dir),
+                                &dest,
+                            )?;
+                            let json = run_audit(&lock, !first_scan)?;
+                            first_scan = false;
+                            if db_stamp.is_empty() {
+                                db_stamp = format!(
+                                    "advisory-db {} ({})",
+                                    s(&json, &["database", "last-commit"]),
+                                    s(&json, &["database", "last-updated"]),
+                                );
+                            }
+                            let inst = extract_instances(&json);
+                            let stops =
+                                floors.vuln_stops(&inst, &crate::floors::extract_cvss(&json));
+                            if !stops.is_empty() {
+                                return Ok(Verdict::HardStop(stops.join("\n  - ")));
+                            }
+                            let carried: Vec<Instance> = inst.into_iter().collect();
+                            Ok(vuln_verdict(&row.name, &row.sha, &[], &carried, 0, &a))
+                        })()
+                        .unwrap_or_else(Verdict::Unevaluated);
+                        reports.push(CandidateReport {
+                            name: format!("{tool} [{}] (acks edit)", row.target),
+                            tool: tool.clone(),
+                            summary: format!(
+                                "statement edit: pinned digest {} judged with the edited statements",
+                                &row.sha[..12.min(row.sha.len())]
+                            ),
+                            axes: vec![
+                                (
+                                    "ack-quality",
+                                    Verdict::Allow(format!(
+                                        "{} ack line(s) pass the quality bar",
+                                        a.entries.len()
+                                    )),
+                                ),
+                                ("vuln", vuln),
+                            ],
+                        });
+                    }
+                }
                 Ok(a) => reports.push(CandidateReport {
                     name: format!("{tool} (acks edit)"),
                     tool: tool.clone(),
@@ -2734,9 +2881,11 @@ mod tests {
             rejected: Vec::new(),
         }
     }
+    /// The binary the vuln tests' statements are about.
+    const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
     fn good_vuln_ack(id: &str, pkg: &str, ver: &str) -> String {
         format!(
-            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","package":"{pkg}","version":"{ver}"}},"status":"affected","status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","digest":"{D}","package":"{pkg}","version":"{ver}"}},"status":"affected","cyclonedx":{{"state":"in_triage"}},"status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
         )
     }
 
@@ -2810,7 +2959,7 @@ mod tests {
     #[test]
     fn vuln_allow_requires_added_empty_and_carried_acked() {
         let acks = ack(&good_vuln_ack("B", "q", "2"));
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 3, &acks);
+        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 3, &acks);
         assert!(matches!(v, Verdict::Allow(_)));
     }
 
@@ -2819,7 +2968,7 @@ mod tests {
         // No exchange rate: fixes never buy an addition; an acked addition is
         // signed-RAISE, not ALLOW.
         let acks = ack(&good_vuln_ack("C", "r", "3"));
-        let v = vuln_verdict("t", &[inst("C", "r", "3")], &[], 99, &acks);
+        let v = vuln_verdict("t", D, &[inst("C", "r", "3")], &[], 99, &acks);
         assert!(matches!(v, Verdict::RaiseCovered(_)));
     }
 
@@ -2831,6 +2980,7 @@ mod tests {
         let affected = good_vuln_ack("B", "q", "2");
         let observed = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("B", "q", "2"),
             "0123456789abcdef0123",
             &GoneMechanism::VersionsNarrowed,
@@ -2839,33 +2989,37 @@ mod tests {
         .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-10\"");
         let mut acks = ack(&affected);
         acks.entries.push(serde_json::from_str(&observed).unwrap());
-        assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2")));
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 0, &acks);
+        assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
+        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 0, &acks);
         assert!(matches!(v, Verdict::RaiseUncovered { .. }));
         acks.entries.push(serde_json::from_str(&affected).unwrap());
-        assert!(ack_covers_vuln(&acks, &inst("B", "q", "2")));
+        assert!(ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
         // a maintainer-reviewed not_affected (no grounding property) IS coverage
-        let reviewed = affected.replace(
-            "\"status\":\"affected\"",
-            "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
-        );
-        assert!(ack_covers_vuln(&ack(&reviewed), &inst("B", "q", "2")));
+        let reviewed = affected
+            .replace(
+                "\"status\":\"affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+            )
+            .replace("in_triage", "not_affected");
+        assert!(ack_covers_vuln(&ack(&reviewed), &inst("B", "q", "2"), D));
         // a grounded statement for ANOTHER instance changes nothing
         let other = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("B", "q", "3"),
             "0123456789abcdef0123",
             &GoneMechanism::Withdrawn("2026-01-01".into()),
         );
         let mut acks2 = ack(&affected);
         acks2.entries.push(serde_json::from_str(&other).unwrap());
-        assert!(ack_covers_vuln(&acks2, &inst("B", "q", "2")));
+        assert!(ack_covers_vuln(&acks2, &inst("B", "q", "2"), D));
     }
 
     #[test]
     fn not_affected_observed_template_is_grounded_and_needs_a_signer() {
         let t = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("A", "p", "1"),
             "0123456789abcdef0123",
             &GoneMechanism::Withdrawn("2026-02-03".into()),
@@ -2891,11 +3045,99 @@ mod tests {
         let bare = good_vuln_ack("A", "p", "1")
             .replace("\"status\":\"affected\"", "\"status\":\"not_affected\"");
         assert!(ack_quality(&serde_json::from_str(&bare).unwrap()).is_err());
-        let justified = bare.replace(
-            "\"status\":\"not_affected\"",
+        let justified = bare
+            .replace(
+                "\"status\":\"not_affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+            )
+            .replace("in_triage", "not_affected");
+        assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
+    }
+
+    #[test]
+    fn a_vuln_statement_covers_only_the_binary_it_names() {
+        let i = inst("B", "q", "2");
+        let other = "e".repeat(64);
+        let mut acks = ack(&good_vuln_ack("B", "q", "2"));
+        assert!(ack_covers_vuln(&acks, &i, D));
+        assert!(
+            !ack_covers_vuln(&acks, &i, &other),
+            "a new build is judged afresh"
+        );
+        assert!(!ack_covers_vuln(&acks, &i, ""), "no binary, no coverage");
+        // a statement without a digest governs nothing, before or after a bound one
+        let legacy = good_vuln_ack("B", "q", "2").replace(&format!("\"digest\":\"{D}\","), "");
+        assert!(!ack_covers_vuln(&ack(&legacy), &i, D));
+        // a later statement about another binary does not supersede this binary's
+        let observed_other = ack_template_vuln_not_affected_observed(
+            "t",
+            &other,
+            &i,
+            "0123456789abcdef0123",
+            &GoneMechanism::VersionsNarrowed,
+        );
+        acks.entries
+            .push(serde_json::from_str(&observed_other).unwrap());
+        assert!(ack_covers_vuln(&acks, &i, D));
+        assert!(!ack_covers_vuln(&acks, &i, &other));
+        // the template names the binary
+        let t: Value = serde_json::from_str(&ack_template_vuln("t", D, &i)).unwrap();
+        assert_eq!(t["product"]["digest"], D);
+    }
+
+    #[test]
+    fn digest_bound_vuln_statements_must_agree_with_their_cyclonedx_ruling() {
+        let ok = |j: &str| ack_quality(&serde_json::from_str(j).unwrap()).is_ok();
+        let base = good_vuln_ack("A", "p", "1");
+        assert!(ok(&base));
+        // affected cannot publish a not_affected CycloneDX ruling
+        assert!(!ok(&base.replace("in_triage", "not_affected")));
+        // not_affected cannot ride an in_triage / exploitable ruling
+        let na = base.replace(
+            "\"status\":\"affected\"",
             "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
         );
-        assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
+        assert!(!ok(&na));
+        assert!(!ok(&na.replace("in_triage", "exploitable")));
+        assert!(ok(&na.replace("in_triage", "not_affected")));
+        // a ruling is required, and the status must be one immutable bytes can carry
+        assert!(!ok(
+            &base.replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "")
+        ));
+        assert!(!ok(
+            &base.replace("\"status\":\"affected\"", "\"status\":\"reviewed\"")
+        ));
+        // affected carries no not_affected justification
+        assert!(!ok(&base.replace(
+            "\"status\":\"affected\"",
+            "\"status\":\"affected\",\"justification\":\"component_not_present\""
+        )));
+        // the digest is 64 lowercase hex
+        assert!(!ok(&base.replace(D, &D.to_uppercase())));
+        assert!(!ok(&base.replace(D, "dd")));
+        // under_investigation is in_triage
+        let ui = base.replace(
+            "\"status\":\"affected\"",
+            "\"status\":\"under_investigation\"",
+        );
+        assert!(ok(&ui));
+        assert!(!ok(&ui.replace("in_triage", "exploitable")));
+        // a line without a digest is not re-judged (append-only history): it passes, inert
+        let legacy = base
+            .replace(&format!("\"digest\":\"{D}\","), "")
+            .replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "");
+        assert!(ok(&legacy));
+        // the monitor's observation template passes once signed
+        let obs = ack_template_vuln_not_affected_observed(
+            "t",
+            D,
+            &inst("A", "p", "1"),
+            "0123456789abcdef0123",
+            &GoneMechanism::Withdrawn("2026-02-03".into()),
+        )
+        .replace("\"author\":\"\"", "\"author\":\"a\"")
+        .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-24\"");
+        assert!(ok(&obs));
     }
 
     #[test]
@@ -2904,7 +3146,7 @@ mod tests {
             entries: vec![],
             rejected: vec![],
         };
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 0, &acks);
+        let v = vuln_verdict("t", D, &[], &[inst("B", "q", "2")], 0, &acks);
         match v {
             Verdict::RaiseUncovered { needed, .. } => assert_eq!(needed.len(), 1),
             other => panic!("expected uncovered, got {other:?}"),

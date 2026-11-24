@@ -463,10 +463,12 @@ pub fn run(args: &[String]) -> i32 {
                         })
                     })
                     .unwrap_or(false);
-                let is_acked = acks
-                    .as_ref()
-                    .map(|a| crate::gate::ack_covers_vuln(a, &inst))
-                    .unwrap_or(false);
+                // A statement covers the binary it names; without a digest there is no
+                // binary to ask about, so nothing reads as acked.
+                let is_acked = match (acks.as_ref(), digest.as_deref()) {
+                    (Some(a), Some(d)) => crate::gate::ack_covers_vuln(a, &inst, d),
+                    _ => false,
+                };
                 match (baseline.is_some(), is_new, is_acked) {
                     (true, true, false) => format!("{id} **NEW**"),
                     (true, true, true) => format!("{id} NEW/acked"),
