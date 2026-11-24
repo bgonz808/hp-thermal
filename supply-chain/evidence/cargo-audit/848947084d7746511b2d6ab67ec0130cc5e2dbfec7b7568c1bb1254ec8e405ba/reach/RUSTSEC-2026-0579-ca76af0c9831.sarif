@@ -1,0 +1,6533 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "artifacts": [
+        {
+          "location": {
+            "uri": "https://github.com/rustsec/rustsec/tree/281452c35cf0870969042374110f099a411bc185"
+          },
+          "properties": {
+            "files": 348,
+            "gitCommit": "281452c35cf0870969042374110f099a411bc185",
+            "gitTree": "62833baf6c7ae4ac676f00bb52687e62cd5bed4c"
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "04839bdf9d8c10f66806fad16b852fc72aab80873aebc3cb69d85b4fa41543ed"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/faster-hex/faster-hex-0.10.1.crate"
+          },
+          "properties": {
+            "files": 17
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "ae54ae0ebd1a5a3c3f8d95dd3b5ca6e63f4fed9bfd585e13801a97d7bde8f9ce"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix/gix-0.84.0.crate"
+          },
+          "properties": {
+            "files": 196
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7f675d0df484a7f6a47e64bd6f311af489d947c0323b0564f36d14f3d7762abb"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-commitgraph/gix-commitgraph-0.37.1.crate"
+          },
+          "properties": {
+            "files": 15
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4f2372d4b49ca28431e7d150cab9d25edc1890f0184bd57eb0e917c7799e63de"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-config/gix-config-0.57.0.crate"
+          },
+          "properties": {
+            "files": 49
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "3b6d9528f32d94cef2edf39a1ac01fe5a0fc44ddbb18d9e44099936047c3302b"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-diff/gix-diff-0.64.0.crate"
+          },
+          "properties": {
+            "files": 24
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "77bacdd12b7879d2178a80c58c2f319995e4654e1a7a23e3181e5c8a12b824f7"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-discover/gix-discover-0.52.0.crate"
+          },
+          "properties": {
+            "files": 14
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "ecf74b7d16f6694ce4a3049074c41be0c7987105743674f1671807bd6dce09fa"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-filter/gix-filter-0.31.0.crate"
+          },
+          "properties": {
+            "files": 27
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "cb0926d3819c837750b4e03c7754901e73f68b8c9b690753a6372a1bed4eedce"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-hash/gix-hash-0.25.1.crate"
+          },
+          "properties": {
+            "files": 14
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "b0e30b93eea8718baf7d8153fcb938e2926175bbf18097c09f1c01b6f0be0563"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-hashtable/gix-hashtable-0.15.1.crate"
+          },
+          "properties": {
+            "files": 7
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4e6b28cc592dc753adb58302bb14a64e412ee591a3bec77aa4df87bff74fa80d"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-index/gix-index-0.52.0.crate"
+          },
+          "properties": {
+            "files": 42
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "890c936a215bae25818c076cb881cb2e54d2c66ba947ba58b8dd47cff921bf55"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-negotiate/gix-negotiate-0.32.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "d5cd857e29429c7213bdef3f5aef83f8cc124774fe8ae0d27b1607d218d6d525"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-object/gix-object-0.61.0.crate"
+          },
+          "properties": {
+            "files": 34
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7d004c32858b1556f2d7874405edb3c97dc78fc09beaa87d57bb077ee2858a7d"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-odb/gix-odb-0.81.0.crate"
+          },
+          "properties": {
+            "files": 35
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "e43626f2a27d1033674ec1a196b845614231e6bbd949d5e21c133045ff56b174"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-pack/gix-pack-0.71.0.crate"
+          },
+          "properties": {
+            "files": 73
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "bb18337ba2830bb43367d1af43819c8c78f31337f079fc76d0f1f1750a173126"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-packetline/gix-packetline-0.21.4.crate"
+          },
+          "properties": {
+            "files": 18
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "51dea3acb390707ab868f1f9584f18449eb95d869deffae96768e47d303595ee"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-protocol/gix-protocol-0.62.0.crate"
+          },
+          "properties": {
+            "files": 30
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4c04f64c37eb7e6feb73c7060f8dc6f381cc5de5d53249bfd450bc48a86b2e8b"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-ref/gix-ref-0.64.0.crate"
+          },
+          "properties": {
+            "files": 47
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "b216ae06ec74b5f24ad0142026a997fb0a935b7410eaf9c1616fc3f0e6c5a6d3"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-refspec/gix-refspec-0.42.0.crate"
+          },
+          "properties": {
+            "files": 17
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "0b47c88884dd3c1a19a39da19d10211fcdea2809aadc86869b6e824a1774340f"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-revision/gix-revision-0.46.0.crate"
+          },
+          "properties": {
+            "files": 15
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "85f5756abffe0917827aac683b13684ed99875bc398fa1f9b8f479b0681ef9e6"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-revwalk/gix-revwalk-0.32.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "a292fc2fe548c5dfa575479d16b445b0ddf1dd2f56f1fec6aed386f82553cd97"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-shallow/gix-shallow-0.12.1.crate"
+          },
+          "properties": {
+            "files": 7
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "3059890ef054066c22a94bfc6a3eaba0d806aedcd630a0bc9e5783fd88884781"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-submodule/gix-submodule-0.31.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7cd0e34995b1aab0fa8dff2af8db726a0bfad3e119c89302604463264046e7ff"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-transport/gix-transport-0.57.1.crate"
+          },
+          "properties": {
+            "files": 35
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "e8de590ecc86a3b2870665f2288324fa9f7f8672c7fc2d4e020fdd81cd1f7aed"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-traverse/gix-traverse-0.58.0.crate"
+          },
+          "properties": {
+            "files": 16
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "cef414ed275e8407cd5d53d301e83be19700b0dd3f859d2434417b58f454a2d1"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree/gix-worktree-0.53.0.crate"
+          },
+          "properties": {
+            "files": 13
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4bffae8b3ca258fdd50370cd51f06deb4c76a3b43db3868bc28dde45ffa77d69"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree-state/gix-worktree-state-0.31.0.crate"
+          },
+          "properties": {
+            "files": 11
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "d25e9ed30100c63f7590bc581c225e53f731a53e06aa79a245739c07f7dcc557"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree-stream/gix-worktree-stream-0.33.0.crate"
+          },
+          "properties": {
+            "files": 11
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/heapless/heapless-0.8.0.crate"
+          },
+          "properties": {
+            "files": 42
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "22cdc99608ecd7eb4ae63499e850c19ee677d7c7f7490b418e24150947fe9342"
+          },
+          "location": {
+            "uri": "cargo-lock/src/lockfile/encoding.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "6852d1f44ddbf38d539edca4ad1e921733b1f8a4e27d9ebe630c716c3c65e114"
+          },
+          "location": {
+            "uri": "cargo-lock/src/lockfile/version.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "e1ad20ae4e345b111ea73ad806706eb35ed27fae59bc52f00cfd7087090f4633"
+          },
+          "location": {
+            "uri": "cargo-lock/src/metadata.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "4df421298f7997f520c459e22f53f2a16f5371c6564b484cfd53293afac30568"
+          },
+          "location": {
+            "uri": "platforms-data-gen/templates/bits_footer.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "bd688251fd0ea6bc035a889385e9a12757c35fe106d2bbd9d641fd52ac4bd053"
+          },
+          "location": {
+            "uri": "platforms/src/platform/tier.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "37ac7afb6151417ff7e3468bfe2cace4c0aa8ca59c3722b1dcb118723630d5dc"
+          },
+          "location": {
+            "uri": "platforms/src/target/pointerwidth.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "dfb40a2e9381d222852d42bdfb1767599d428bb22b71b4e8cb79ebd24ef8304d"
+          },
+          "location": {
+            "uri": "rustsec/src/advisory/versions.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "ef400c53f7c8a5366becb66324462952deb0bb37b7b86f43d2f34073c1cfb47f"
+          },
+          "location": {
+            "uri": "rustsec/src/osv/advisory.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "479a728763688c81fb6974d3415f4b1fc2ac88c1a32b43377b28a2707701d714"
+          },
+          "location": {
+            "uri": "rustsec/src/osv/unaffected_range.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "2475c448fa61ceaf1fbbc44d8a036b1258471cf775f3ef7b6f5ee9c8f38a5a7d"
+          },
+          "location": {
+            "uri": "faster-hex-0.10.1/Cargo.toml"
+          },
+          "parentIndex": 1
+        },
+        {
+          "hashes": {
+            "sha-256": "d73d4545a2fb2db2c9f04633e8781ac1b708b87e813aef2c027945409340c4d4"
+          },
+          "location": {
+            "uri": "faster-hex-0.10.1/src/encode.rs"
+          },
+          "parentIndex": 1
+        },
+        {
+          "hashes": {
+            "sha-256": "1be3202e577a52a9d00bb9cfd8a64b8fe4e0581e4051fb4e5ed49e975486806c"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/clone/fetch/mod.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "77025f5b02905f414fe09f871e553f3bcd52116f1a770c79070a32bafe5efc69"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/overrides.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "efb48ea965f69f7df197c20822621f8892065ba79535783d3b4607f63bcc0144"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/snapshot/credential_helpers.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "611a7d6e94b6b3adda74eac9f108987c698bc19992016777fa5764f71fdc3621"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/keys.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "c5f434c92e8651b1acbb1e320652ca918d85796a6bb96039eff8e456722c7e52"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/sections/checkout.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "4acf65c0675e90950fa3e2315633debddab11244f9c1b6053237850d77e950b9"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/sections/core.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "189191746f2a1b990d26b62b3ff88bf2d68ba9da01843381f49eb1418ded0dae"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/sections/diff.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "5e07e6d8317c6fb5373c76e40418ef933d927d27079617c5799762df3dcc6065"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/sections/fetch.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "2deb325147b0f9428443bd8b5dfd7e292119297b4f7ba30a7f2bac8b3c235b94"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/sections/http.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "04599ad8117ff730c4675fc8a1ffd91e457321a9de931120529159179b765517"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/sections/index.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "dea917ecea942c7cd4d57fbcb130245649b1967c0f8bf0d7929453b4951dddf1"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/sections/pack.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "7762e9ef1118488e05eb43a46e841bfc61f826fb9e59d654fb8a1bf943ff29f2"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/config/tree/sections/protocol.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "034b6ab77882d1cf21671ca401cd519a0c918817b719975875a8ae7e746339cf"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/create.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "23284fd9cb01ddfb1bc0b4a13bd84e8e194759feef9dc8d621df3c51cc7ad756"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/discover.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "74ec071c843106361afcfcc4476a40d26864fae41f8c0e411f0a6e320eb74303"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/filter.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "5f3df31ea69cfe6484d8a8c2fad69ec03be6c3e20c648d907ecea30b2582b831"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/object/impls.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "c8319eaa609bf472cf5e9b2e8cd7eb2c1cdd19c7756cd6e587fee8f84b608705"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/object/tree/mod.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "9bb59bbc0c77ebd8a81afcd7e7018a4e2c0673f7ef15bc439fdea5d9d52f3c5d"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/remote/name.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "f9d9bb0d73a9a83414287f5832b06d272bb372db75b2df24de2b51c744e5e4e0"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/remote/url/scheme_permission.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "7033d3e8ce91f46b265a5a4ac7c87fbdedbbb4dea73c788ca20a270d49226e89"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/repository/config/branch.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "83cf735bc0de3fc0a5bc88371b756575783999668eea3c19b6d13beb89f4ce22"
+          },
+          "location": {
+            "uri": "gix-0.84.0/src/repository/location.rs"
+          },
+          "parentIndex": 2
+        },
+        {
+          "hashes": {
+            "sha-256": "0f420ce2c2f315a1d654ec5f9fa57f6773cd51ea6e19e14f464fa4ce72d984ce"
+          },
+          "location": {
+            "uri": "gix-commitgraph-0.37.1/src/file/init.rs"
+          },
+          "parentIndex": 3
+        },
+        {
+          "hashes": {
+            "sha-256": "759e4d78f72b86162ffef765d6c59f7e1d4c612bf5c693710289d2ad7fb35824"
+          },
+          "location": {
+            "uri": "gix-commitgraph-0.37.1/src/init.rs"
+          },
+          "parentIndex": 3
+        },
+        {
+          "hashes": {
+            "sha-256": "38e209fb9d7ffb53204c2a0e2d6b6276f254a097a2dd159a76070304fea75d31"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/file/access/comfort.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "0db0891956be7ce18f7020ac4781a3adacbf9cb3fd8bf34637e516e39140c734"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/file/access/mutate.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "2f8c8c62b16d88f801e834223732d8901761b39895c5393b1ee95c5189c4c2c7"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/file/access/raw.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "f62760f7737100a75ba1051590f251f328e6d0923cc703b836d0127601bd19aa"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/file/access/read_only.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "28d55e81b0ea4c3eba374200fa9fb2468eabf4a82ffc12d40da0fbc1d9a36979"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/file/impls.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "047d5881711a0b56d0ea9740a240282dab48e09021b6f0a9f05fb2d3720593b1"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/file/init/from_env.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "b82aa3259998da860bd4e2f9dc7cd9386a45ba294788d67dd6244cd489b50871"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/file/tests.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "6fdc366924ceb4943881fcd89c0945fd228907ac52218736e447ba20655d1f5c"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/parse/events.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "a802b3824454771137f802db860c0c06aeaf23a41358ef749e0b12b8da3aae3b"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/parse/section/mod.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "84307f65e0aa3e138a9b6aaea3619d15f301e40febc1478d6c51d94fa4014671"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/parse/tests.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "674a1ade8059c3973e6a4646a8d33948659f8d228d3ab39afc55e98c5446825f"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/source.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "a1be3e8281cf863986a054a5fe11760b0aa3e58260bf24adbe582060eb17552d"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/types.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "d32dde603ea1ff29031b920f1e0c6d4df82ad7374038899131e446b141774fd0"
+          },
+          "location": {
+            "uri": "gix-hash-0.25.1/src/kind.rs"
+          },
+          "parentIndex": 8
+        },
+        {
+          "hashes": {
+            "sha-256": "74853b8c3d0dc38df2c42abd7ae1ba3aa703b77501fd76736f406870acd5a2e2"
+          },
+          "location": {
+            "uri": "gix-hash-0.25.1/src/object_id.rs"
+          },
+          "parentIndex": 8
+        },
+        {
+          "hashes": {
+            "sha-256": "587db6b5328e2a6caad9e6fe591bcca3ce10bbd82064ccab53baf888e640a1a2"
+          },
+          "location": {
+            "uri": "gix-hash-0.25.1/src/oid.rs"
+          },
+          "parentIndex": 8
+        },
+        {
+          "hashes": {
+            "sha-256": "937ca83952dc4d4e59a43c0f7f53b2ad2a52fd8a09da096e6f103a03ba6e9cf4"
+          },
+          "location": {
+            "uri": "gix-hash-0.25.1/src/prefix.rs"
+          },
+          "parentIndex": 8
+        },
+        {
+          "hashes": {
+            "sha-256": "ac6c17bfd91ba273ee3e344fdf8b3f4a3be651e5b99a7796b89a3e0f4e52f659"
+          },
+          "location": {
+            "uri": "gix-index-0.52.0/src/entry/mode.rs"
+          },
+          "parentIndex": 10
+        },
+        {
+          "hashes": {
+            "sha-256": "86f641060ab2dc497f472c5e9abd9ff1ee550ef0e47ba606cbfd1c0fabd50e35"
+          },
+          "location": {
+            "uri": "gix-index-0.52.0/src/entry/stat.rs"
+          },
+          "parentIndex": 10
+        },
+        {
+          "hashes": {
+            "sha-256": "e6676628e3919210153b64baef642ab07156831253401a6bfef8b60742b874c9"
+          },
+          "location": {
+            "uri": "gix-index-0.52.0/src/extension/tree/write.rs"
+          },
+          "parentIndex": 10
+        },
+        {
+          "hashes": {
+            "sha-256": "38039016478959711566d40543da59e9cfb43908086f7c816f7b06abe7a84d49"
+          },
+          "location": {
+            "uri": "gix-index-0.52.0/src/write.rs"
+          },
+          "parentIndex": 10
+        },
+        {
+          "hashes": {
+            "sha-256": "519ff363446f6c39c696e584762fd9c5ec44e1abfc9fdd8500956c878031eb16"
+          },
+          "location": {
+            "uri": "gix-object-0.61.0/src/object/convert.rs"
+          },
+          "parentIndex": 12
+        },
+        {
+          "hashes": {
+            "sha-256": "4c8bb6b1cdea33e69ed967a2ab22d7e2090a77c798eec96031760f6bb2858a0d"
+          },
+          "location": {
+            "uri": "gix-object-0.61.0/src/tree/mod.rs"
+          },
+          "parentIndex": 12
+        },
+        {
+          "hashes": {
+            "sha-256": "669187031fa5ed26b077fc6c6658a3a0dd18f2f736a130f81213c0a267f569b0"
+          },
+          "location": {
+            "uri": "gix-object-0.61.0/src/tree/ref_iter.rs"
+          },
+          "parentIndex": 12
+        },
+        {
+          "hashes": {
+            "sha-256": "417bd6845864c0120211de24da3f467f6dd0940d32cd68a642baa613dd61f374"
+          },
+          "location": {
+            "uri": "gix-odb-0.81.0/src/store_impls/dynamic/handle.rs"
+          },
+          "parentIndex": 13
+        },
+        {
+          "hashes": {
+            "sha-256": "d446945d223b2ab5f75bd8d9bbfef343231ef08d8ce180c2c376588c0949e77c"
+          },
+          "location": {
+            "uri": "gix-odb-0.81.0/src/store_impls/loose/find.rs"
+          },
+          "parentIndex": 13
+        },
+        {
+          "hashes": {
+            "sha-256": "9dea8c8133f563ab0448b1d2448cc25163fc6deecaed1805b3ec8d6696d4a448"
+          },
+          "location": {
+            "uri": "gix-pack-0.71.0/src/cache/delta/from_offsets.rs"
+          },
+          "parentIndex": 14
+        },
+        {
+          "hashes": {
+            "sha-256": "313fc4e8402a643c37bdf8d02dc3b69d1a47bc400b8b148423200bc597930d6a"
+          },
+          "location": {
+            "uri": "gix-pack-0.71.0/src/data/output/entry/mod.rs"
+          },
+          "parentIndex": 14
+        },
+        {
+          "hashes": {
+            "sha-256": "7200b3cb396eb414951fbad9f083341771b3c2332b426c7fbdfc25056ea7dbaf"
+          },
+          "location": {
+            "uri": "gix-pack-0.71.0/src/multi_index/chunk.rs"
+          },
+          "parentIndex": 14
+        },
+        {
+          "hashes": {
+            "sha-256": "a0a49eac6c83e2e090f41bd0c3147db17652d67156a051998ed1ae120124ac46"
+          },
+          "location": {
+            "uri": "gix-pack-0.71.0/src/multi_index/init.rs"
+          },
+          "parentIndex": 14
+        },
+        {
+          "hashes": {
+            "sha-256": "c3575be0042f1f1064a895f3639ab8b8efc40c66bd7c0462d24cf57d2c915ef6"
+          },
+          "location": {
+            "uri": "gix-protocol-0.62.0/src/remote_progress.rs"
+          },
+          "parentIndex": 16
+        },
+        {
+          "hashes": {
+            "sha-256": "f8f960290bb929e852f322be2655443b4c00176b8fc9f5532a1e4bf53d32a141"
+          },
+          "location": {
+            "uri": "gix-ref-0.64.0/src/fullname.rs"
+          },
+          "parentIndex": 17
+        },
+        {
+          "hashes": {
+            "sha-256": "a099f48b86fa930db93c8d59d834c5a1dae19394747e7683e885d01da8fd41ff"
+          },
+          "location": {
+            "uri": "gix-ref-0.64.0/src/name.rs"
+          },
+          "parentIndex": 17
+        },
+        {
+          "hashes": {
+            "sha-256": "84d9f20fb4e64c5d338c090f4d0a8707f250eab46d1424cce3afd4e74222f3e9"
+          },
+          "location": {
+            "uri": "gix-ref-0.64.0/src/store/file/loose/reference/decode.rs"
+          },
+          "parentIndex": 17
+        },
+        {
+          "hashes": {
+            "sha-256": "1e70994467a1d1d1814063248161986513ef6b6ba8c3981fc2c17224c00e03cb"
+          },
+          "location": {
+            "uri": "gix-ref-0.64.0/src/target.rs"
+          },
+          "parentIndex": 17
+        },
+        {
+          "hashes": {
+            "sha-256": "5cfb72c4a22dccb1db4d82997a7d3e5d7177f758799bf2b70e46bc8ad7e79ae0"
+          },
+          "location": {
+            "uri": "gix-submodule-0.31.0/src/access.rs"
+          },
+          "parentIndex": 22
+        },
+        {
+          "hashes": {
+            "sha-256": "009ec688b1ac68d8e0e9667cb3f12212e41a802528560bf3451a0c6e4cce1af2"
+          },
+          "location": {
+            "uri": "gix-submodule-0.31.0/src/config.rs"
+          },
+          "parentIndex": 22
+        },
+        {
+          "hashes": {
+            "sha-256": "44958f31cf82142f3f547afaffebe1945863673c135f93d7b2e83ad688220831"
+          },
+          "location": {
+            "uri": "gix-transport-0.57.1/src/client/blocking_io/http/reqwest/remote.rs"
+          },
+          "parentIndex": 23
+        },
+        {
+          "hashes": {
+            "sha-256": "aff5bbf29159aa3e6c4cde5ef7c798ee6ac4859ae2135a6f78c84ec7c4a0e4d7"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/string.rs"
+          },
+          "parentIndex": 28
+        },
+        {
+          "hashes": {
+            "sha-256": "994866ba6d13daaa4ab2b3f11351075808c376e830d35124e7994988ef832ed2"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/vec.rs"
+          },
+          "parentIndex": 28
+        }
+      ],
+      "properties": {
+        "advisory": "RUSTSEC-2026-0579",
+        "digest": "848947084d7746511b2d6ab67ec0130cc5e2dbfec7b7568c1bb1254ec8e405ba",
+        "format": "reach-v1",
+        "gitlinks": [
+          "cvss/tests/cvss-redhat"
+        ],
+        "lockSha256": "5660005ab7ac06eef642d1ca33dda255d67d6932802d2794716b92e3caa119bd",
+        "package": "heapless",
+        "patches": [],
+        "registryPackages": [
+          "faster-hex@0.10.1",
+          "gix@0.84.0",
+          "gix-commitgraph@0.37.1",
+          "gix-config@0.57.0",
+          "gix-diff@0.64.0",
+          "gix-discover@0.52.0",
+          "gix-filter@0.31.0",
+          "gix-hash@0.25.1",
+          "gix-hashtable@0.15.1",
+          "gix-index@0.52.0",
+          "gix-negotiate@0.32.0",
+          "gix-object@0.61.0",
+          "gix-odb@0.81.0",
+          "gix-pack@0.71.0",
+          "gix-packetline@0.21.4",
+          "gix-protocol@0.62.0",
+          "gix-ref@0.64.0",
+          "gix-refspec@0.42.0",
+          "gix-revision@0.46.0",
+          "gix-revwalk@0.32.0",
+          "gix-shallow@0.12.1",
+          "gix-submodule@0.31.0",
+          "gix-transport@0.57.1",
+          "gix-traverse@0.58.0",
+          "gix-worktree@0.53.0",
+          "gix-worktree-state@0.31.0",
+          "gix-worktree-stream@0.33.0",
+          "heapless@0.8.0"
+        ],
+        "searched": {
+          "manifests": 48,
+          "rustFiles": 833
+        },
+        "symlinks": [
+          "cargo-lock/tests/examples/Cargo.lock -> Cargo.lock.v3"
+        ],
+        "tool": "cargo-audit",
+        "version": "0.8.0"
+      },
+      "results": [
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 29
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(raw_lockfile: EncodableLockfile) -> Result<Lockfile> {"
+                  },
+                  "startLine": 75
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 29
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                let mut pkg = Package::try_from(raw_package)?;"
+                  },
+                  "startLine": 87
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 29
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let toml = toml::Value::try_from(self).unwrap();"
+                  },
+                  "startLine": 165
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 29
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(raw_package: &EncodablePackage) -> Result<Package> {"
+                  },
+                  "startLine": 344
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 29
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(raw_dependency: &EncodableDependency) -> Result<Dependency> {"
+                  },
+                  "startLine": 497
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 30
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            .and_then(Self::try_from)"
+                  },
+                  "startLine": 87
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 30
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(num: u32) -> Result<Self> {"
+                  },
+                  "startLine": 94
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 31
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(key: &MetadataKey) -> Result<Dependency> {"
+                  },
+                  "startLine": 61
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 31
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &MetadataValue) -> Result<Checksum> {"
+                  },
+                  "startLine": 123
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 32
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: u8) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 7
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 33
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(num: usize) -> Result<Tier, Error> {"
+                  },
+                  "startLine": 72
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: u8) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 57
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "#[serde(try_from = \"RawVersions\")]"
+                  },
+                  "startLine": 10
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(raw: RawVersions) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 55
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(cvss: Cvss) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 79
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(input: &semver::VersionReq) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 115
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "[target.'cfg(not(feature = \"alloc\"))'.dependencies.heapless]"
+                  },
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`heapless`"
+          },
+          "properties": {
+            "byteColumn": 52
+          },
+          "ruleId": "RUSTSEC-2026-0579/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 39
+                },
+                "region": {
+                  "snippet": {
+                    "text": "use heapless::{String, Vec};"
+                  },
+                  "startLine": 13
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`heapless`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0579/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 40
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                        } if full_ref_name == \"HEAD\" => gix_ref::FullName::try_from(target)"
+                  },
+                  "startLine": 152
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 76
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 41
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let value_name = gix_config::parse::section::ValueName::try_from(key.value_name.to_owned()).map_err(|err| {"
+                  },
+                  "startLine": 34
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 65
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 42
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                            gix_config::Boolean::try_from(val)"
+                  },
+                  "startLine": 169
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 43
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            usize::try_from("
+                  },
+                  "startLine": 543
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 43
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                gix_config::Integer::try_from(value)?"
+                  },
+                  "startLine": 544
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 38
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 43
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            gix_config::Boolean::try_from(value)?;"
+                  },
+                  "startLine": 559
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 34
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 43
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            remote::Name::try_from(Cow::Borrowed(value))"
+                  },
+                  "startLine": 569
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 43
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            let value = gix_config::Integer::try_from(value)?"
+                  },
+                  "startLine": 628
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 46
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 43
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            let value = gix_config::Integer::try_from(value)?"
+                  },
+                  "startLine": 641
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 46
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            super::Checkout::WORKERS.try_from_workers(gix_config::Integer::try_from(value).and_then(|i| {"
+                  },
+                  "startLine": 51
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 76
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 45
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                let value = gix_config::Boolean::try_from(value.as_ref()).map_err(|err| {"
+                  },
+                  "startLine": 259
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 45
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                let value = gix_config::Boolean::try_from(value.as_ref()).map_err(|err| {"
+                  },
+                  "startLine": 287
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 45
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                if let Ok(false) = gix_config::Boolean::try_from(value_bytes).map(Into::into) {"
+                  },
+                  "startLine": 416
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 57
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 45
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    let value = gix_config::Integer::try_from(value_bytes)"
+                  },
+                  "startLine": 419
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 54
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 45
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                .try_into_ref_updates(Some(gix_config::Boolean::try_from(value).map(|b| b.0)))?;"
+                  },
+                  "startLine": 461
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 65
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 46
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            gix_submodule::config::Ignore::try_from(value.as_ref())"
+                  },
+                  "startLine": 97
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 46
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                            gix_config::Boolean::try_from(value.as_ref())"
+                  },
+                  "startLine": 143
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 46
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            gix_submodule::config::Ignore::try_from(value)"
+                  },
+                  "startLine": 203
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 46
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            let boolean = gix_config::Boolean::try_from(value).map(|b| b.0);"
+                  },
+                  "startLine": 222
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 48
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 47
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                let boolean = gix_config::Boolean::try_from(value).map(|b| b.0);"
+                  },
+                  "startLine": 98
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 52
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 48
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                gix_config::Boolean::try_from(_value).map(|b| Some(b.0))"
+                  },
+                  "startLine": 319
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 38
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            gix_config::Integer::try_from(value.as_ref())"
+                  },
+                  "startLine": 34
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 34
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    gix_config::Boolean::try_from(value.as_ref())"
+                  },
+                  "startLine": 38
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 42
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            super::Pack::INDEX_VERSION.try_into_index_version(gix_config::Integer::try_from(value).and_then("
+                  },
+                  "startLine": 56
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 84
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            scheme_permission::Allow::try_from(value).map_err(|value| config::protocol::allow::Error {"
+                  },
+                  "startLine": 35
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 39
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            let value = gix_config::Integer::try_from(value)?"
+                  },
+                  "startLine": 128
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 46
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 52
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    section::ValueName::try_from(name).expect(\"valid key name\")"
+                  },
+                  "startLine": 280
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 25
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 53
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                if let Ok(b) = gix_config::Boolean::try_from(cross_fs.as_ref()) {"
+                  },
+                  "startLine": 84
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 53
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 54
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                        .map(|value| gix_config::Boolean::try_from(value.as_ref()))"
+                  },
+                  "startLine": 308
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 59
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 55
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(mut value: Object<'repo>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 79
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 55
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(mut value: Object<'repo>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 55
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(mut value: Object<'repo>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 111
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 55
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(mut value: Object<'repo>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 127
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 56
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        fn try_from(t: Tree<'_>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 261
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 57
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(name: Cow<'a, BStr>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 66
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 57
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        Self::try_from(Cow::Owned(name)).expect(\"String is never illformed\")"
+                  },
+                  "startLine": 84
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 15
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 58
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: Cow<'a, BStr>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 34
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 59
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                gix_refspec::match_group::SourceRef::FullName(name) => gix_ref::FullName::try_from(name.into_owned())?,"
+                  },
+                  "startLine": 189
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 91
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 59
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        .and_then(|m| m.rhs.map(|name| FullName::try_from(name.into_owned()).map(Cow::Owned)))"
+                  },
+                  "startLine": 291
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 60
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            .unwrap_or_else(|_| gix_ref::FullName::try_from(\"refs/heads/master\").expect(\"known to be valid\"));"
+                  },
+                  "startLine": 148
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 52
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 61
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        Self::try_from(path.as_ref())"
+                  },
+                  "startLine": 21
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 15
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 61
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let object_hash = gix_hash::Kind::try_from(data[ofs])"
+                  },
+                  "startLine": 49
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 43
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 61
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(path: &Path) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 180
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 62
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        Self::try_from(path)"
+                  },
+                  "startLine": 12
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 15
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 62
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(path: &Path) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 87
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 63
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                Some(Some(v)) => return Some(crate::Boolean::try_from(v).map(Into::into)),"
+                  },
+                  "startLine": 133
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 62
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 63
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        Some(crate::Integer::try_from(int.as_ref()).and_then(|b| {"
+                  },
+                  "startLine": 177
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 63
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                        crate::Integer::try_from(v.as_ref()).and_then(|int| {"
+                  },
+                  "startLine": 259
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 41
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 64
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// section.push(section::ValueName::try_from(\"a\")?, Some(\"b\".into()));"
+                  },
+                  "startLine": 173
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 42
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 64
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut git_config = gix_config::File::try_from("
+                  },
+                  "startLine": 211
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 48
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 64
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut git_config = gix_config::File::try_from("
+                  },
+                  "startLine": 226
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 48
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 213
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 46
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 256
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 46
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 351
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 409
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 551
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 597
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\").unwrap();"
+                  },
+                  "startLine": 640
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\").unwrap();"
+                  },
+                  "startLine": 681
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 775
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 796
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 815
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 872
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 893
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 65
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// # let mut git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 912
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let git_config = gix_config::File::try_from(config)?;"
+                  },
+                  "startLine": 43
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let git_config = gix_config::File::try_from(config)?;"
+                  },
+                  "startLine": 78
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        T::try_from(self.raw_value_by(section_name, subsection_name, value_name)?)"
+                  },
+                  "startLine": 91
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            .map(T::try_from)"
+                  },
+                  "startLine": 110
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 21
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let git_config = gix_config::File::try_from(config).unwrap();"
+                  },
+                  "startLine": 141
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            .map(T::try_from)"
+                  },
+                  "startLine": 163
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 21
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let git_config = gix_config::File::try_from(config).unwrap();"
+                  },
+                  "startLine": 196
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            .map(T::try_from)"
+                  },
+                  "startLine": 223
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 21
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 66
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let git_config = gix_config::File::try_from(config)?;"
+                  },
+                  "startLine": 309
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 67
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(s: &'a str) -> Result<File<'a>, Self::Error> {"
+                  },
+                  "startLine": 27
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 67
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &'a BStr) -> Result<File<'a>, Self::Error> {"
+                  },
+                  "startLine": 37
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 68
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    section::ValueName::try_from(key.value_name.to_owned())?,"
+                  },
+                  "startLine": 71
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 41
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 69
+                },
+                "region": {
+                  "snippet": {
+                    "text": "mod try_from {"
+                  },
+                  "startLine": 8
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 69
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let config = File::try_from(\"\").unwrap();"
+                  },
+                  "startLine": 23
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 28
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 69
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut config = File::try_from(\"[core]\\na=b\\nc=d\").unwrap();"
+                  },
+                  "startLine": 32
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 69
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut config = File::try_from(\"[core.sub]\\na=b\\nc=d\").unwrap();"
+                  },
+                  "startLine": 72
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 69
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut config = File::try_from(\"[core]\\na=b\\nc=d\\n[other]e=f\").unwrap();"
+                  },
+                  "startLine": 114
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 69
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut config = File::try_from(\"[core]\\na=b\\nc=d\\n[core]e=f\").unwrap();"
+                  },
+                  "startLine": 164
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 70
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Event::SectionValueName(section::ValueName::try_from(\"autocrlf\")?),"
+                  },
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 49
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 70
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Event::SectionValueName(section::ValueName::try_from(\"autocrlf\")?),"
+                  },
+                  "startLine": 132
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 49
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 70
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Event::SectionValueName(section::ValueName::try_from(\"autocrlf\")?),"
+                  },
+                  "startLine": 163
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 49
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 70
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Event::SectionValueName(section::ValueName::try_from(\"filemode\")?),"
+                  },
+                  "startLine": 167
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 49
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 70
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Event::SectionValueName(section::ValueName::try_from(\"file\")?),"
+                  },
+                  "startLine": 198
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 49
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 70
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &'a str) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 274
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 70
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 282
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 71
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                fn try_from(s: &'a str) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 110
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 71
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    Self::try_from(std::borrow::Cow::Borrowed(bstr::ByteSlice::as_bstr(s.as_bytes())))"
+                  },
+                  "startLine": 111
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 71
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                fn try_from(s: String) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 118
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 71
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    Self::try_from(std::borrow::Cow::Owned(bstr::BString::from(s)))"
+                  },
+                  "startLine": 119
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 71
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                fn try_from(s: std::borrow::Cow<'a, bstr::BStr>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 126
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 72
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let name = section::Name::try_from(name).unwrap();"
+                  },
+                  "startLine": 181
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 73
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    .map(crate::Boolean::try_from)"
+                  },
+                  "startLine": 70
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 42
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 73
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    .map(crate::Boolean::try_from)"
+                  },
+                  "startLine": 83
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 42
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 74
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// # let git_config = gix_config::File::try_from(\"[core]a=b\\n[core]\\na=c\\na=d\").unwrap();"
+                  },
+                  "startLine": 91
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 42
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 75
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: u8) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 14
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 76
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Use `Self::try_from(bytes)` for a fallible version."
+                  },
+                  "startLine": 208
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 76
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 316
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 77
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &'a [u8]) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 270
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 78
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &str) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 147
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 79
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        gix_object::tree::EntryMode::try_from(self.bits()).ok()"
+                  },
+                  "startLine": 17
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 38
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 80
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(s: SystemTime) -> Result<Self, SystemTimeError> {"
+                  },
+                  "startLine": 124
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 81
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            &u32::try_from(entries.len())"
+                  },
+                  "startLine": 42
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 82
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                .checked_add(u32::try_from(written).expect(\"we don't write 4GB buffers\"))"
+                  },
+                  "startLine": 208
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(other: TagRef<'_>) -> Result<Tag, Self::Error> {"
+                  },
+                  "startLine": 9
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(other: CommitRef<'_>) -> Result<Commit, Self::Error> {"
+                  },
+                  "startLine": 33
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: ObjectRef<'_>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 106
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: Object) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 143
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: Object) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 154
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: Object) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 165
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: Object) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 176
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: ObjectRef<'a>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 211
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: ObjectRef<'a>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 222
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: ObjectRef<'a>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 233
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 83
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: ObjectRef<'a>) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 244
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 84
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(mode: u32) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 58
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 85
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(mode: &'a [u8]) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 204
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 86
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(s: &super::Store) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 346
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 86
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let store = Arc::new(super::Store::try_from(self.store_ref())?);"
+                  },
+                  "startLine": 364
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 87
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let size_usize = usize::try_from(size).map_err(|_| Error::OutOfMemory { size })?;"
+                  },
+                  "startLine": 166
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 88
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        if bytes_to_skip <= u64::try_from(buf.len()).expect(\"sensible buffer size\") {"
+                  },
+                  "startLine": 150
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 34
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 89
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                            - usize::try_from(pack_entry.data_offset).expect(\"offset representable as usize\"),"
+                  },
+                  "startLine": 125
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 38
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 90
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let num_packs = usize::try_from(num_packs).map_err(|_| decode::Error::OutOfMemory)?;"
+                  },
+                  "startLine": 59
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 91
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            let object_hash = gix_hash::Kind::try_from(object_hash[0])"
+                  },
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 47
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 92
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        u32::try_from(number).ok()"
+                  },
+                  "startLine": 109
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 14
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 93
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &str) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 8
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 93
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: String) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 18
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 93
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &BStr) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 27
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 93
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: BString) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 35
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 93
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &BString) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 44
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 93
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            FullName::try_from(out)"
+                  },
+                  "startLine": 191
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 93
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            FullName::try_from(partial_name.as_bstr())"
+                  },
+                  "startLine": 193
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// The error used in the [`PartialNameRef`]`::try_from`(…) implementations."
+                  },
+                  "startLine": 7
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 48
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a BStr) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 123
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a OsStr) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 137
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a BString) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 177
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a BStr) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 187
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a PartialName) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 195
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a str) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 203
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a str) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 212
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a str) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 221
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a FullName) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 231
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a String) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 239
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: &'a String) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 248
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: String) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 257
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 94
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: BString) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 266
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 95
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(v: MaybeUnsafeState) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 27
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 96
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: Target) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 133
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 97
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        Branch::try_from(branch.as_ref())"
+                  },
+                  "startLine": 203
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 17
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 97
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                Ignore::try_from(value.as_ref()).map_err(|()| config::Error {"
+                  },
+                  "startLine": 232
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 25
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 98
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &BStr) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 23
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 98
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &BStr) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 98
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(value: &BStr) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 129
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 99
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                .zip(reqwest::header::HeaderValue::try_from(value.trim()).ok())"
+                  },
+                  "startLine": 246
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 52
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let s: String<4> = String::try_from(\"ab\")?;"
+                  },
+                  "startLine": 110
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<4> = String::try_from(\"ab\")?;"
+                  },
+                  "startLine": 131
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<4> = String::try_from(\"ab\")?;"
+                  },
+                  "startLine": 152
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<8> = String::try_from(\"hello\")?;"
+                  },
+                  "startLine": 178
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<8> = String::try_from(\"foo\")?;"
+                  },
+                  "startLine": 202
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<8> = String::try_from(\"abc\")?;"
+                  },
+                  "startLine": 242
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<8> = String::try_from(\"hello\")?;"
+                  },
+                  "startLine": 282
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<8> = String::try_from(\"foo\")?;"
+                  },
+                  "startLine": 308
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<8> = String::try_from(\"foo\").unwrap();"
+                  },
+                  "startLine": 347
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// let mut s: String<8> = String::try_from(\"foo\")?;"
+                  },
+                  "startLine": 382
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(s: &'a str) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 405
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            fn try_from(s: $num) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 595
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 16
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s1: String<20> = String::try_from(\"abcd\").unwrap();"
+                  },
+                  "startLine": 626
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 38
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s1: String<4> = String::try_from(\"abcd\").unwrap();"
+                  },
+                  "startLine": 636
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 37
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s2: String<4> = String::try_from(\"zzzz\").unwrap();"
+                  },
+                  "startLine": 637
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 37
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s1: String<4> = String::try_from(\"abcd\").unwrap();"
+                  },
+                  "startLine": 644
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 37
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s2: String<8> = String::try_from(\"zzzz\").unwrap();"
+                  },
+                  "startLine": 645
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 37
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s: String<8> = String::try_from(\"abcd\").unwrap();"
+                  },
+                  "startLine": 654
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s: String<8> = String::try_from(\"abcd\").unwrap();"
+                  },
+                  "startLine": 664
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from() {"
+                  },
+                  "startLine": 680
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s: String<4> = String::try_from(\"123\").unwrap();"
+                  },
+                  "startLine": 681
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let e: () = String::<2>::try_from(\"123\").unwrap_err();"
+                  },
+                  "startLine": 685
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 34
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let _: String<4> = String::try_from(\"12345\").unwrap();"
+                  },
+                  "startLine": 718
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let v: String<20> = String::try_from(18446744073709551615 as u64).unwrap();"
+                  },
+                  "startLine": 723
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 37
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let e: () = String::<2>::try_from(18446744073709551615 as u64).unwrap_err();"
+                  },
+                  "startLine": 726
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 34
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s: String<4> = String::try_from(\"ab\").unwrap();"
+                  },
+                  "startLine": 732
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s: String<4> = String::try_from(\"ab\").unwrap();"
+                  },
+                  "startLine": 740
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<4> = String::try_from(\"ab\").unwrap();"
+                  },
+                  "startLine": 750
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<8> = String::try_from(\"foo\").unwrap();"
+                  },
+                  "startLine": 758
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<6> = String::try_from(\"abc\").unwrap();"
+                  },
+                  "startLine": 769
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let s: String<8> = String::try_from(\"hello\").unwrap();"
+                  },
+                  "startLine": 779
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<8> = String::try_from(\"hello\").unwrap();"
+                  },
+                  "startLine": 785
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<8> = String::try_from(\"foo\").unwrap();"
+                  },
+                  "startLine": 796
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<8> = String::try_from(\"é\").unwrap();"
+                  },
+                  "startLine": 805
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<8> = String::try_from(\"foo\").unwrap();"
+                  },
+                  "startLine": 827
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<8> = String::try_from(\"foo\").unwrap();"
+                  },
+                  "startLine": 836
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<8> = String::try_from(\"ĝėēƶ\").unwrap();"
+                  },
+                  "startLine": 843
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 100
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        let mut s: String<8> = String::try_from(\"héy\").unwrap();"
+                  },
+                  "startLine": 852
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 40
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 101
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    fn try_from(slice: &'a [T]) -> Result<Self, Self::Error> {"
+                  },
+                  "startLine": 859
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`try_from`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0579"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/bgonz808/hp-thermal",
+          "name": "hp-thermal xtask reach",
+          "rules": [
+            {
+              "id": "RUSTSEC-2026-0579",
+              "properties": {
+                "functions": {
+                  "heapless::Deque::try_from": [
+                    ">=0.9.2, <0.9.4"
+                  ]
+                },
+                "tokens": [
+                  "try_from"
+                ]
+              }
+            },
+            {
+              "id": "RUSTSEC-2026-0579/crate",
+              "properties": {
+                "crateIdent": "heapless",
+                "package": "heapless"
+              }
+            }
+          ]
+        }
+      },
+      "versionControlProvenance": [
+        {
+          "repositoryUri": "https://github.com/rustsec/rustsec",
+          "revisionId": "281452c35cf0870969042374110f099a411bc185"
+        }
+      ]
+    }
+  ],
+  "version": "2.1.0"
+}
