@@ -783,6 +783,70 @@ fn raw_asset_named(asset: &str, sha: &str) -> bool {
         && asset == format!("audit-raw-{}.json", &sha[..12])
 }
 
+/// A tool digest's lock components with `scope` measured from the pinned binary: its
+/// cargo-auditable `.dep-v0` list, refined by the digest's custody-verified build record when
+/// `dir` (the selected record directory) has one. The one presence measurement: the VDR's
+/// scope, and the gate's and monitor's check of a `component_not_present` statement (#520).
+pub(crate) fn tool_components(
+    product: &str,
+    digest: &str,
+    dir: &Path,
+) -> Result<(Vec<Value>, DepGraph), String> {
+    let lock = std::fs::read_to_string(format!("tools/locks/{product}.lock"))
+        .map_err(|e| format!("tools/locks/{product}.lock: {e} (pass --sbom for the app)"))?;
+    let mut comps = components_from_lock(&lock);
+    // Scope from the artifact, not the manifest: the pinned binary's cargo-auditable
+    // list says which lock packages were compiled into it (runtime and build kinds).
+    let (asset, bin) = fetch_tool_binary(product, digest)?;
+    let present = auditable_packages(&bin).map_err(|e| format!("{asset}: {e}"))?;
+    // cargo's build record, when the digest has one: re-verified against its raw
+    // record and the producer statement before it decides any scope.
+    let record_path = dir.join(crate::build_record::FILE);
+    let record = match std::fs::read_to_string(&record_path) {
+        Ok(text) => {
+            let lock = std::fs::read_to_string("tools/TOOLS.lock")
+                .map_err(|e| format!("tools/TOOLS.lock: {e}"))?;
+            let target = tools_lock_target(&lock, product, digest)
+                .ok_or("no TOOLS.lock row for the digest")?;
+            let msgs = crate::build_record::verify_custody(&text, product, &target, digest)
+                .map_err(|e| format!("{}: {e}", record_path.display()))?
+                .messages;
+            let (h, _) = crate::build_record::read_evidence(&text)?;
+            Some((
+                crate::build_record::linked(&msgs),
+                crate::build_record::compiled(&msgs),
+                crate::build_record::std_deps(&msgs),
+                format!(
+                    "cargo build record {} (sha256 {})",
+                    s(&h, &["rawRecord", "asset"]),
+                    s(&h, &["rawRecord", "sha256"])
+                ),
+            ))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("{}: {e}", record_path.display())),
+    };
+    let graph = graph_from_dep_v0(
+        crate::auditable::dep_v0_section(&bin).map_err(|e| format!("{asset}: {e}"))?,
+    )
+    .map_err(|e| format!("{asset}: {e}"))?;
+    let built = record
+        .as_ref()
+        .map(|(linked, any, std_deps, desc)| Compiled {
+            linked,
+            any,
+            std_deps,
+            desc,
+        });
+    apply_scope(
+        &mut comps,
+        &present,
+        &format!("cargo-auditable .dep-v0 section of {asset} (sha256 {digest})"),
+        built.as_ref(),
+    );
+    Ok((comps, graph))
+}
+
 /// The acks a report reads, through the gate's reader. A malformed file, or any line the quality
 /// bar rejects, fails the report: a rejected line may supersede a ruling, so building without it
 /// could publish the superseded one.
@@ -881,63 +945,8 @@ pub fn run(args: &[String]) -> i32 {
                 (comps, Some(subj))
             }
             None => {
-                let lock = std::fs::read_to_string(format!("tools/locks/{product}.lock")).map_err(
-                    |e| format!("tools/locks/{product}.lock: {e} (pass --sbom for the app)"),
-                )?;
-                let mut comps = components_from_lock(&lock);
-                // Scope from the artifact, not the manifest: the pinned binary's cargo-auditable
-                // list says which lock packages were compiled into it (runtime and build kinds).
-                let (asset, bin) = fetch_tool_binary(&product, &digest)?;
-                let present = auditable_packages(&bin).map_err(|e| format!("{asset}: {e}"))?;
-                // cargo's build record, when the digest has one: re-verified against its raw
-                // record and the producer statement before it decides any scope.
-                let record_path = dir.join(crate::build_record::FILE);
-                let record = match std::fs::read_to_string(&record_path) {
-                    Ok(text) => {
-                        let lock = std::fs::read_to_string("tools/TOOLS.lock")
-                            .map_err(|e| format!("tools/TOOLS.lock: {e}"))?;
-                        let target = tools_lock_target(&lock, &product, &digest)
-                            .ok_or("no TOOLS.lock row for the digest")?;
-                        let msgs =
-                            crate::build_record::verify_custody(&text, &product, &target, &digest)
-                                .map_err(|e| format!("{}: {e}", record_path.display()))?
-                                .messages;
-                        let (h, _) = crate::build_record::read_evidence(&text)?;
-                        Some((
-                            crate::build_record::linked(&msgs),
-                            crate::build_record::compiled(&msgs),
-                            crate::build_record::std_deps(&msgs),
-                            format!(
-                                "cargo build record {} (sha256 {})",
-                                s(&h, &["rawRecord", "asset"]),
-                                s(&h, &["rawRecord", "sha256"])
-                            ),
-                        ))
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-                    Err(e) => return Err(format!("{}: {e}", record_path.display())),
-                };
-                graph = Some(
-                    graph_from_dep_v0(
-                        crate::auditable::dep_v0_section(&bin)
-                            .map_err(|e| format!("{asset}: {e}"))?,
-                    )
-                    .map_err(|e| format!("{asset}: {e}"))?,
-                );
-                let built = record
-                    .as_ref()
-                    .map(|(linked, any, std_deps, desc)| Compiled {
-                        linked,
-                        any,
-                        std_deps,
-                        desc,
-                    });
-                apply_scope(
-                    &mut comps,
-                    &present,
-                    &format!("cargo-auditable .dep-v0 section of {asset} (sha256 {digest})"),
-                    built.as_ref(),
-                );
+                let (comps, g) = tool_components(&product, &digest, &dir)?;
+                graph = Some(g);
                 (comps, None)
             }
         };

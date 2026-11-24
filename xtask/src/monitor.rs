@@ -531,7 +531,10 @@ pub fn run(args: &[String]) -> i32 {
                 .map(|r| r.dir);
         let cover = |i: &Instance| -> crate::gate::Cover {
             crate::gate::coverage(&acks, i, &p.sha, &mut |a, inst| match &record_dir {
-                Ok(dir) => crate::gate::record_cover(a, inst, &audit, dir, None),
+                Ok(dir) if crate::gate::needs_record(a) => {
+                    crate::gate::record_cover(a, inst, &audit, dir, None)
+                }
+                Ok(dir) => crate::gate::measured_absent(&p.name, &p.sha, dir, inst),
                 Err(e) => crate::gate::Cover::Unknown(e.clone()),
             })
         };

@@ -492,7 +492,7 @@ fn vuln_bound_quality(v: &Value) -> Result<(), String> {
             agree.join(" | ")
         ));
     }
-    if status == "not_affected" && state == "not_affected" {
+    if status == "not_affected" {
         let j = s(v, &["justification"]);
         let cj = s(v, &["cyclonedx", "justification"]);
         let Some((_, allowed)) = JUSTIFICATIONS.iter().find(|(o, _)| *o == j) else {
@@ -500,7 +500,8 @@ fn vuln_bound_quality(v: &Value) -> Result<(), String> {
                 "vuln ack justification `{j}`: a digest-bound not_affected names one of OpenVEX's five"
             ));
         };
-        if !allowed.contains(&cj) {
+        // `false_positive` may carry no CycloneDX justification; one it carries must agree.
+        if !(allowed.contains(&cj) || state == "false_positive" && cj.is_empty()) {
             return Err(format!(
                 "vuln ack justification `{j}` with cyclonedx.justification `{cj}`: they must say \
                  the same thing ({})",
@@ -633,8 +634,9 @@ pub(crate) enum Cover {
     Unknown(String),
 }
 
-/// Coverage of `inst` in `digest`: the governing statement, and for a claim about the code, the
-/// record it names, judged by `record`.
+/// Coverage of `inst` in `digest`: the governing statement, and for every `not_affected` the
+/// evidence under it, judged by `record`: the reachability record a claim about the code names,
+/// or the binary's own measurement for `component_not_present`.
 pub(crate) fn coverage(
     acks: &Acks,
     inst: &Instance,
@@ -643,7 +645,9 @@ pub(crate) fn coverage(
 ) -> Cover {
     match governing_vuln_ack(acks, inst, digest) {
         None => Cover::No(None),
-        Some(a) if needs_record(a) => record(a, inst),
+        // A claim about the code rests on its record; `component_not_present` on the binary's
+        // own measurement. Neither is taken on the statement's word.
+        Some(a) if s(a, &["status"]) == "not_affected" => record(a, inst),
         Some(_) => Cover::Yes,
     }
 }
@@ -1037,6 +1041,9 @@ fn gate_record_judge<'a>(
             Ok(r) => r.dir,
             Err(e) => return Cover::Unknown(e),
         };
+        if !needs_record(a) {
+            return measured_absent(&row.name, &row.sha, &dir, inst);
+        }
         let lock = locks_dir.join(format!("{}.lock", row.name));
         let mut regen = |functions: &BTreeMap<String, Vec<String>>| -> Result<String, String> {
             let i = crate::reach::Inputs {
@@ -1056,6 +1063,66 @@ fn gate_record_judge<'a>(
             Ok(crate::reach::generate(&i)?.1)
         };
         record_cover(a, inst, scan, &dir, Some(&mut regen))
+    }
+}
+
+/// A `component_not_present` statement against the binary itself (#520): the package must be
+/// `excluded` by the same measurement the VDR's scope comes from (the pinned binary's `.dep-v0`
+/// and its custody-verified build record). A record directory without a build record cannot
+/// tell a standard-library copy apart, so it cannot be judged. One measurement per digest per run.
+pub(crate) fn measured_absent(tool: &str, digest: &str, dir: &Path, inst: &Instance) -> Cover {
+    use std::sync::{Arc, Mutex, OnceLock};
+    type Scoped = Arc<Result<Vec<Value>, String>>;
+    static SCOPES: OnceLock<Mutex<BTreeMap<String, Scoped>>> = OnceLock::new();
+    if !dir.join(crate::build_record::FILE).is_file() {
+        return Cover::Unknown(format!(
+            "{} {}: no build record under {}; presence cannot be measured",
+            inst.package,
+            inst.version,
+            dir.display()
+        ));
+    }
+    let key = format!("{tool}@{digest}@{}", dir.display());
+    let cache = SCOPES.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let cached = cache.lock().ok().and_then(|c| c.get(&key).cloned());
+    let comps = match cached {
+        Some(c) => c,
+        None => {
+            let c: Scoped =
+                Arc::new(crate::vdr::tool_components(tool, digest, dir).map(|(c, _)| c));
+            if let Ok(mut m) = cache.lock() {
+                m.insert(key, c.clone());
+            }
+            c
+        }
+    };
+    let comps = match comps.as_ref() {
+        Ok(c) => c,
+        Err(e) => {
+            return Cover::Unknown(format!(
+                "presence of {} {}: {e}",
+                inst.package, inst.version
+            ));
+        }
+    };
+    let scope = comps
+        .iter()
+        .find(|c| s(c, &["name"]) == inst.package && s(c, &["version"]) == inst.version)
+        .map(|c| s(c, &["scope"]));
+    match scope {
+        Some("excluded") => Cover::Yes,
+        Some(other) => Cover::No(Some(format!(
+            "{} {} {}: the statement says the component is not present; the binary's measurement \
+             scopes it `{}`",
+            inst.id,
+            inst.package,
+            inst.version,
+            if other.is_empty() { "listed" } else { other }
+        ))),
+        None => Cover::Unknown(format!(
+            "{} {} is not among the lock's components",
+            inst.package, inst.version
+        )),
     }
 }
 
@@ -3653,6 +3720,26 @@ mod tests {
         // the digest is 64 lowercase hex
         assert!(!ok(&base.replace(D, &D.to_uppercase())));
         assert!(!ok(&base.replace(D, "dd")));
+        // a false_positive ruling still names one of the five, and any CycloneDX justification
+        // it carries must agree
+        let fp = |j: &str, cj: &str| {
+            base.replace(
+                "\"status\":\"affected\"",
+                &format!("\"status\":\"not_affected\",\"justification\":\"{j}\""),
+            )
+            .replace(
+                "{\"state\":\"in_triage\"}",
+                &if cj.is_empty() {
+                    "{\"state\":\"false_positive\"}".to_string()
+                } else {
+                    format!("{{\"state\":\"false_positive\",\"justification\":\"{cj}\"}}")
+                },
+            )
+        };
+        assert!(ok(&fp("component_not_present", "")));
+        assert!(ok(&fp("component_not_present", "code_not_present")));
+        assert!(!ok(&fp("component_not_present", "code_not_reachable")));
+        assert!(!ok(&fp("made_up", "")));
         // under_investigation is in_triage
         let ui = base.replace(
             "\"status\":\"affected\"",
@@ -3852,6 +3939,13 @@ mod tests {
         std::fs::remove_file(head.join("t").join(&d).join("reach").join(a)).unwrap();
         let (_, refused) = reach_changes(&head, &base);
         assert!(refused.iter().any(|r| r.contains("deleted")), "{refused:?}");
+        // pruning the digest's whole evidence directory takes its records with it
+        std::fs::remove_dir_all(head.join("t").join(&d)).unwrap();
+        let (added, refused) = reach_changes(&head, &base);
+        assert!(
+            refused.is_empty() && added.is_empty(),
+            "{refused:?} {added:?}"
+        );
         let _ = std::fs::remove_dir_all(&root);
         // names
         assert!(is_record_name(a));
@@ -4017,12 +4111,45 @@ mod tests {
             &mut |_, _| Cover::Yes,
         );
         assert!(matches!(v, Verdict::Allow(_)));
-        // a claim about the component, or an accepted risk, needs no record
+        // a claim about the component needs no record, but is still judged (measured), never
+        // taken on its word; an accepted risk is not judged
         let absent = reach.replace(
             "vulnerable_code_not_in_execute_path",
             "component_not_present",
         );
         assert!(!needs_record(&serde_json::from_str(&absent).unwrap()));
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &ack(&absent),
+            &mut |_, _| Cover::No(Some("measured present".into())),
+        );
+        assert!(matches!(v, Verdict::RaiseUncovered { .. }));
+        let mut judged = false;
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &ack(&good_vuln_ack("B", "q", "2")),
+            &mut |_, _| {
+                judged = true;
+                Cover::No(None)
+            },
+        );
+        assert!(matches!(v, Verdict::Allow(_)) && !judged);
+        // without a build record, presence cannot be measured
+        let empty = std::env::temp_dir().join(format!("gate-noabsent-{}", std::process::id()));
+        std::fs::create_dir_all(&empty).unwrap();
+        assert!(matches!(
+            measured_absent("t", D, &empty, &inst("B", "q", "2")),
+            Cover::Unknown(_)
+        ));
+        let _ = std::fs::remove_dir_all(&empty);
         assert!(!needs_record(
             &serde_json::from_str(&good_vuln_ack("B", "q", "2")).unwrap()
         ));
