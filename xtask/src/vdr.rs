@@ -182,12 +182,55 @@ pub(crate) fn ratings(cvss: Option<&str>, informational: Option<&str>) -> Vec<Va
 
 /// The maintainer's native CycloneDX ruling, if the matching ack carries one. The last ack for
 /// the (advisory, package, version) instance wins, as in the gate.
+/// The reachability records committed for a digest (#520): sha256 -> (advisory, package,
+/// version) the record states.
+pub(crate) type Records = BTreeMap<String, (String, String, String)>;
+
+/// Every record in `<dir>/reach/` that is this product's and this digest's, in the emitter's
+/// format, and named for the instance and query it states, by the sha256 of its bytes. Anything
+/// else states nothing here (the gate refuses such a file when it is added).
+pub(crate) fn records_in(dir: &Path, product: &str, digest: &str) -> Records {
+    let mut out = Records::new();
+    for e in std::fs::read_dir(dir.join("reach"))
+        .into_iter()
+        .flatten()
+        .flatten()
+    {
+        let Ok(bytes) = std::fs::read(e.path()) else {
+            continue;
+        };
+        let Ok(v) = serde_json::from_slice::<Value>(&bytes) else {
+            continue;
+        };
+        let p = &v["runs"][0]["properties"];
+        let functions: Option<BTreeMap<String, Vec<String>>> = serde_json::from_value(
+            v["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["functions"].clone(),
+        )
+        .ok();
+        let (id, package, version) = (s(p, &["advisory"]), s(p, &["package"]), s(p, &["version"]));
+        let named = functions
+            .and_then(|f| crate::reach::record_name(&id, &package, &version, &f).ok())
+            .is_some_and(|n| e.file_name().to_string_lossy() == n);
+        if !named
+            || s(p, &["tool"]) != product
+            || s(p, &["digest"]) != digest
+            || s(p, &["format"]) != crate::reach::FORMAT
+        {
+            continue;
+        }
+        out.insert(crate::sha256::sha256_hex(&bytes), (id, package, version));
+    }
+    out
+}
+
 pub(crate) fn analysis_from_acks(
     acks: &[Value],
     digest: &str,
     id: &str,
     package: &str,
     version: &str,
+    records: &Records,
+    excluded: bool,
 ) -> Option<Value> {
     let inst = crate::gate::Instance {
         id: id.to_string(),
@@ -197,6 +240,18 @@ pub(crate) fn analysis_from_acks(
     };
     // The statement the gate would take as covering this instance in this binary, or none.
     let ack = crate::gate::governing_vuln_statement(acks, &inst, digest)?;
+    // A claim about the code is published only with the record it names, committed for this
+    // digest and stating this instance (the gate reproduced it before it merged).
+    // "Not present" is published only where the binary itself measured the component excluded.
+    if s(ack, &["justification"]) == "component_not_present" && !excluded {
+        return None;
+    }
+    if crate::gate::needs_record(ack) {
+        let named = records.get(ack["evidence_sha256"].as_str().unwrap_or_default())?;
+        if named != &(id.to_string(), package.to_string(), version.to_string()) {
+            return None;
+        }
+    }
     let matching: Vec<&Value> = acks
         .iter()
         .filter(|a| crate::gate::is_vuln_statement(a, &inst, digest))
@@ -330,6 +385,7 @@ pub(crate) fn serial_number(digest: &str) -> String {
 }
 
 /// Build the VDR document. Pure: every input is passed in.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn build(
     product: &str,
     digest: &str,
@@ -338,6 +394,7 @@ pub(crate) fn build(
     components: Vec<Value>,
     subject: Option<Value>,
     acks: &[Value],
+    records: &Records,
 ) -> Result<(Value, Vec<String>), String> {
     let mut burn_down = Vec::new();
     let mut vulns = Vec::new();
@@ -372,7 +429,12 @@ pub(crate) fn build(
         if let Some(d) = adv["date"].as_str() {
             v["published"] = Value::String(format!("{d}T00:00:00Z"));
         }
-        match analysis_from_acks(acks, digest, &id, &pname, &pver) {
+        let excluded = components
+            .iter()
+            .find(|c| c["bom-ref"].as_str() == Some(bom_ref.as_str()))
+            .and_then(|c| c["scope"].as_str())
+            == Some("excluded");
+        match analysis_from_acks(acks, digest, &id, &pname, &pver, records, excluded) {
             Some(an) => v["analysis"] = an,
             None => burn_down.push(format!("{id} {pname} {pver}")),
         }
@@ -721,6 +783,70 @@ fn raw_asset_named(asset: &str, sha: &str) -> bool {
         && asset == format!("audit-raw-{}.json", &sha[..12])
 }
 
+/// A tool digest's lock components with `scope` measured from the pinned binary: its
+/// cargo-auditable `.dep-v0` list, refined by the digest's custody-verified build record when
+/// `dir` (the selected record directory) has one. The one presence measurement: the VDR's
+/// scope, and the gate's and monitor's check of a `component_not_present` statement (#520).
+pub(crate) fn tool_components(
+    product: &str,
+    digest: &str,
+    dir: &Path,
+) -> Result<(Vec<Value>, DepGraph), String> {
+    let lock = std::fs::read_to_string(format!("tools/locks/{product}.lock"))
+        .map_err(|e| format!("tools/locks/{product}.lock: {e} (pass --sbom for the app)"))?;
+    let mut comps = components_from_lock(&lock);
+    // Scope from the artifact, not the manifest: the pinned binary's cargo-auditable
+    // list says which lock packages were compiled into it (runtime and build kinds).
+    let (asset, bin) = fetch_tool_binary(product, digest)?;
+    let present = auditable_packages(&bin).map_err(|e| format!("{asset}: {e}"))?;
+    // cargo's build record, when the digest has one: re-verified against its raw
+    // record and the producer statement before it decides any scope.
+    let record_path = dir.join(crate::build_record::FILE);
+    let record = match std::fs::read_to_string(&record_path) {
+        Ok(text) => {
+            let lock = std::fs::read_to_string("tools/TOOLS.lock")
+                .map_err(|e| format!("tools/TOOLS.lock: {e}"))?;
+            let target = tools_lock_target(&lock, product, digest)
+                .ok_or("no TOOLS.lock row for the digest")?;
+            let msgs = crate::build_record::verify_custody(&text, product, &target, digest)
+                .map_err(|e| format!("{}: {e}", record_path.display()))?
+                .messages;
+            let (h, _) = crate::build_record::read_evidence(&text)?;
+            Some((
+                crate::build_record::linked(&msgs),
+                crate::build_record::compiled(&msgs),
+                crate::build_record::std_deps(&msgs),
+                format!(
+                    "cargo build record {} (sha256 {})",
+                    s(&h, &["rawRecord", "asset"]),
+                    s(&h, &["rawRecord", "sha256"])
+                ),
+            ))
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("{}: {e}", record_path.display())),
+    };
+    let graph = graph_from_dep_v0(
+        crate::auditable::dep_v0_section(&bin).map_err(|e| format!("{asset}: {e}"))?,
+    )
+    .map_err(|e| format!("{asset}: {e}"))?;
+    let built = record
+        .as_ref()
+        .map(|(linked, any, std_deps, desc)| Compiled {
+            linked,
+            any,
+            std_deps,
+            desc,
+        });
+    apply_scope(
+        &mut comps,
+        &present,
+        &format!("cargo-auditable .dep-v0 section of {asset} (sha256 {digest})"),
+        built.as_ref(),
+    );
+    Ok((comps, graph))
+}
+
 /// The acks a report reads, through the gate's reader. A malformed file, or any line the quality
 /// bar rejects, fails the report: a rejected line may supersede a ruling, so building without it
 /// could publish the superseded one.
@@ -819,63 +945,8 @@ pub fn run(args: &[String]) -> i32 {
                 (comps, Some(subj))
             }
             None => {
-                let lock = std::fs::read_to_string(format!("tools/locks/{product}.lock")).map_err(
-                    |e| format!("tools/locks/{product}.lock: {e} (pass --sbom for the app)"),
-                )?;
-                let mut comps = components_from_lock(&lock);
-                // Scope from the artifact, not the manifest: the pinned binary's cargo-auditable
-                // list says which lock packages were compiled into it (runtime and build kinds).
-                let (asset, bin) = fetch_tool_binary(&product, &digest)?;
-                let present = auditable_packages(&bin).map_err(|e| format!("{asset}: {e}"))?;
-                // cargo's build record, when the digest has one: re-verified against its raw
-                // record and the producer statement before it decides any scope.
-                let record_path = dir.join(crate::build_record::FILE);
-                let record = match std::fs::read_to_string(&record_path) {
-                    Ok(text) => {
-                        let lock = std::fs::read_to_string("tools/TOOLS.lock")
-                            .map_err(|e| format!("tools/TOOLS.lock: {e}"))?;
-                        let target = tools_lock_target(&lock, &product, &digest)
-                            .ok_or("no TOOLS.lock row for the digest")?;
-                        let msgs =
-                            crate::build_record::verify_custody(&text, &product, &target, &digest)
-                                .map_err(|e| format!("{}: {e}", record_path.display()))?
-                                .messages;
-                        let (h, _) = crate::build_record::read_evidence(&text)?;
-                        Some((
-                            crate::build_record::linked(&msgs),
-                            crate::build_record::compiled(&msgs),
-                            crate::build_record::std_deps(&msgs),
-                            format!(
-                                "cargo build record {} (sha256 {})",
-                                s(&h, &["rawRecord", "asset"]),
-                                s(&h, &["rawRecord", "sha256"])
-                            ),
-                        ))
-                    }
-                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-                    Err(e) => return Err(format!("{}: {e}", record_path.display())),
-                };
-                graph = Some(
-                    graph_from_dep_v0(
-                        crate::auditable::dep_v0_section(&bin)
-                            .map_err(|e| format!("{asset}: {e}"))?,
-                    )
-                    .map_err(|e| format!("{asset}: {e}"))?,
-                );
-                let built = record
-                    .as_ref()
-                    .map(|(linked, any, std_deps, desc)| Compiled {
-                        linked,
-                        any,
-                        std_deps,
-                        desc,
-                    });
-                apply_scope(
-                    &mut comps,
-                    &present,
-                    &format!("cargo-auditable .dep-v0 section of {asset} (sha256 {digest})"),
-                    built.as_ref(),
-                );
+                let (comps, g) = tool_components(&product, &digest, &dir)?;
+                graph = Some(g);
                 (comps, None)
             }
         };
@@ -889,7 +960,10 @@ pub fn run(args: &[String]) -> i32 {
             Some(g) => Some(dependencies_from_graph(&components, g)?),
             None => None,
         };
-        let (mut doc, burn) = build(&product, &digest, &header, &raw, components, subject, &acks)?;
+        let records = records_in(&dir, &product, &digest);
+        let (mut doc, burn) = build(
+            &product, &digest, &header, &raw, components, subject, &acks, &records,
+        )?;
         if let Some(d) = deps {
             // The scope and the edges were measured from the built binary: post-build too.
             doc["dependencies"] = Value::Array(d);
@@ -1222,8 +1296,16 @@ mod tests {
         const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
         let legacy = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"status":"not_affected","justification":"component_not_present","timestamp":"2026-11-12","status_notes":"dev-only"});
         assert!(
-            analysis_from_acks(std::slice::from_ref(&legacy), D, "RUSTSEC-1", "a", "1.0.0")
-                .is_none(),
+            analysis_from_acks(
+                std::slice::from_ref(&legacy),
+                D,
+                "RUSTSEC-1",
+                "a",
+                "1.0.0",
+                &Records::new(),
+                true
+            )
+            .is_none(),
             "OpenVEX-only ack is never mapped"
         );
         let mut native = legacy.clone();
@@ -1234,6 +1316,8 @@ mod tests {
             "RUSTSEC-1",
             "a",
             "1.0.0",
+            &Records::new(),
+            true,
         )
         .unwrap();
         assert_eq!(an["state"], "not_affected");
@@ -1246,7 +1330,16 @@ mod tests {
         later["product"]["digest"] = json!(D);
         later["cyclonedx"] = json!({"state":"not_affected","justification":"code_not_present"});
         let first = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"timestamp":"2026-11-01"});
-        let an2 = analysis_from_acks(&[first, later], D, "RUSTSEC-1", "a", "1.0.0").unwrap();
+        let an2 = analysis_from_acks(
+            &[first, later],
+            D,
+            "RUSTSEC-1",
+            "a",
+            "1.0.0",
+            &Records::new(),
+            true,
+        )
+        .unwrap();
         assert_eq!(an2["firstIssued"], "2026-11-01T00:00:00Z");
         assert_eq!(an2["lastUpdated"], "2026-11-20T00:00:00Z");
         assert!(
@@ -1261,18 +1354,110 @@ mod tests {
                 &other,
                 "RUSTSEC-1",
                 "a",
-                "1.0.0"
+                "1.0.0",
+                &Records::new(),
+                true
             )
             .is_none()
         );
         let mut unbound = native.clone();
         unbound["product"].as_object_mut().unwrap().remove("digest");
-        assert!(analysis_from_acks(&[unbound], D, "RUSTSEC-1", "a", "1.0.0").is_none());
+        assert!(
+            analysis_from_acks(
+                &[unbound],
+                D,
+                "RUSTSEC-1",
+                "a",
+                "1.0.0",
+                &Records::new(),
+                true
+            )
+            .is_none()
+        );
         // A statement grounded in the DB's silence is void for a reported instance: no analysis.
         let mut observed = native.clone();
         observed["properties"] =
             json!([{"name": crate::gate::OBSERVED_ABSENT_PROP, "value": "0123456789abcdef0123"}]);
-        assert!(analysis_from_acks(&[native, observed], D, "RUSTSEC-1", "a", "1.0.0").is_none());
+        assert!(
+            analysis_from_acks(
+                &[native, observed],
+                D,
+                "RUSTSEC-1",
+                "a",
+                "1.0.0",
+                &Records::new(),
+                true
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn a_code_claim_is_published_only_with_the_record_it_names() {
+        const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        let sha = "a".repeat(64);
+        let ack = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"status":"not_affected","justification":"vulnerable_code_not_in_execute_path","cyclonedx":{"state":"not_affected","justification":"code_not_reachable"},"evidence_sha256":sha,"timestamp":"2026-11-24","status_notes":"n"});
+        let one = std::slice::from_ref(&ack);
+        let mut records = Records::new();
+        assert!(analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records, true).is_none());
+        records.insert(
+            sha.clone(),
+            ("RUSTSEC-1".into(), "a".into(), "2.0.0".into()),
+        );
+        assert!(
+            analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records, true).is_none(),
+            "a record for another instance is not this claim's"
+        );
+        records.insert(sha, ("RUSTSEC-1".into(), "a".into(), "1.0.0".into()));
+        let an = analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &records, true).unwrap();
+        assert_eq!(an["justification"], "code_not_reachable");
+        // the records of a directory: by hash, and only this product's, this digest's, in the
+        // emitter's format, named for the instance and query they state
+        let dir = std::env::temp_dir().join(format!("vdr-records-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("reach")).unwrap();
+        let functions: BTreeMap<String, Vec<String>> =
+            BTreeMap::from([("a::f".to_string(), vec!["< 2".to_string()])]);
+        let body = |tool: &str, digest: &str, format: &str| {
+            json!({"runs": [{
+                "tool": {"driver": {"rules": [{"id": "RUSTSEC-2026-0001", "properties": {"functions": functions}}]}},
+                "properties": {"advisory": "RUSTSEC-2026-0001", "package": "a", "version": "1.0.0",
+                               "tool": tool, "digest": digest, "format": format}
+            }]})
+            .to_string()
+        };
+        let name =
+            crate::reach::record_name("RUSTSEC-2026-0001", "a", "1.0.0", &functions).unwrap();
+        let write = |name: &str, b: &str| std::fs::write(dir.join("reach").join(name), b).unwrap();
+        let good = body("t", "d", crate::reach::FORMAT);
+        write(&name, &good);
+        let got = records_in(&dir, "t", "d");
+        assert_eq!(
+            got.get(&crate::sha256::sha256_hex(good.as_bytes())),
+            Some(&(
+                "RUSTSEC-2026-0001".to_string(),
+                "a".to_string(),
+                "1.0.0".to_string()
+            ))
+        );
+        for (b, why) in [
+            (
+                body("other", "d", crate::reach::FORMAT),
+                "another product's",
+            ),
+            (body("t", "e", crate::reach::FORMAT), "another digest's"),
+            (body("t", "d", "reach-v0"), "another format"),
+        ] {
+            write(&name, &b);
+            assert!(records_in(&dir, "t", "d").is_empty(), "{why}");
+        }
+        std::fs::remove_file(dir.join("reach").join(&name)).unwrap();
+        write("RUSTSEC-2026-0001-000000000000.sarif", &good);
+        assert!(
+            records_in(&dir, "t", "d").is_empty(),
+            "a name its query does not give"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1316,6 +1501,7 @@ mod tests {
             comps.clone(),
             None,
             &[],
+            &Records::new(),
         )
         .unwrap();
         assert_eq!(doc["specVersion"], "1.6");
@@ -1330,11 +1516,31 @@ mod tests {
             "https://rustsec.org/advisories/RUSTSEC-2024-0320.html"
         );
         assert_eq!(burn, vec!["RUSTSEC-2024-0320 yaml-rust 0.4.5".to_string()]);
-        let (doc2, _) = build("t", &"d".repeat(64), &header, &raw, comps, None, &[]).unwrap();
+        let (doc2, _) = build(
+            "t",
+            &"d".repeat(64),
+            &header,
+            &raw,
+            comps,
+            None,
+            &[],
+            &Records::new(),
+        )
+        .unwrap();
         assert_eq!(doc, doc2, "same inputs, same document");
         let other = components_from_lock("[[package]]\nname = \"other\"\nversion = \"1.0.0\"\n");
         assert!(
-            build("t", &"d".repeat(64), &header, &raw, other, None, &[]).is_err(),
+            build(
+                "t",
+                &"d".repeat(64),
+                &header,
+                &raw,
+                other,
+                None,
+                &[],
+                &Records::new()
+            )
+            .is_err(),
             "affected package missing from components"
         );
     }

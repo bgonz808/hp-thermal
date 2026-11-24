@@ -1,0 +1,1456 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "artifacts": [
+        {
+          "location": {
+            "uri": "https://github.com/EmbarkStudios/cargo-deny/tree/bca0dde53651ee946720e4540b5ce2610bec8f06"
+          },
+          "properties": {
+            "files": 416,
+            "gitCommit": "bca0dde53651ee946720e4540b5ce2610bec8f06",
+            "gitTree": "fbfc96f028b5f197ca062ddce1301395578feded"
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/url/url-2.5.8.crate"
+          },
+          "properties": {
+            "files": 19
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "ddd2e513b4a2db0d7f115d8f91a0e441bfd8b0036f95e8cb91cf51c0006c6803"
+          },
+          "location": {
+            "uri": "Cargo.toml"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "56fa131fba04b03637eac463957591bb41d412add6909c1d106739c5ee9f0ae5"
+          },
+          "location": {
+            "uri": "src/advisories/cfg.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "e9e1cfab9e55e0386da3b11acd9cae177b845f79be8017cf4768da73db9ccfeb"
+          },
+          "location": {
+            "uri": "src/advisories/helpers/db.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "bf508f2db7d01658d804d155e150dbf1938f776e9925109671cc92c765417de8"
+          },
+          "location": {
+            "uri": "src/diag/krate_spans.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "2ea7462e9c39953199bcf4991e05eef4e5a8521ad14cac675c95bea9d0480779"
+          },
+          "location": {
+            "uri": "src/git.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "849effdfaa6fc636ffec048405795f5875b4573d8d20312732d6ce553160f58c"
+          },
+          "location": {
+            "uri": "src/lib.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "43b5c690139e9f7a9e0418f4d505c85494bd51b1d7315a15a5f00d8645a8dea5"
+          },
+          "location": {
+            "uri": "src/licenses/cfg.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "cc7088e8403db94184a6d419b8d2aa2be1d0598537191638778e6aed62ea449b"
+          },
+          "location": {
+            "uri": "src/sources.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "e440c783bbe5b2bb01193a027635e37a6e33273963c8d799d7c5071b38577c06"
+          },
+          "location": {
+            "uri": "src/sources/cfg.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "51f47a93654528f3b8cb92c94fc26ad25775860d84197fff0c3124a687f8c5e3"
+          },
+          "location": {
+            "uri": "url-2.5.8/src/lib.rs"
+          },
+          "parentIndex": 1
+        },
+        {
+          "hashes": {
+            "sha-256": "e8ffaf759aa78c92574c6ae49f76999a751064621c399059b3d4eb819cb0d821"
+          },
+          "location": {
+            "uri": "url-2.5.8/src/origin.rs"
+          },
+          "parentIndex": 1
+        },
+        {
+          "hashes": {
+            "sha-256": "c3c8380f9dbecf65924272e904cad8876bda0c62e0e48a3c6b1344fac258102f"
+          },
+          "location": {
+            "uri": "url-2.5.8/src/quirks.rs"
+          },
+          "parentIndex": 1
+        }
+      ],
+      "properties": {
+        "advisory": "RUSTSEC-2026-0592",
+        "digest": "5610ebe3b0e5748c4c81211e104a6162d50d4194a96a1284af4dc8d7fb6de364",
+        "format": "reach-v1",
+        "gitlinks": [
+          "tests/advisory-db/advisory-db-3157b0e258782691",
+          "tests/advisory-db/test-advisory-db-c27873b782cceedc"
+        ],
+        "lockSha256": "540f1636bbcde33e702ef98d44ba034a667b4064478d94e1343505abd824846e",
+        "package": "url",
+        "patches": [],
+        "registryPackages": [
+          "url@2.5.8"
+        ],
+        "searched": {
+          "manifests": 47,
+          "rustFiles": 97
+        },
+        "symlinks": [],
+        "tool": "cargo-deny",
+        "version": "2.5.8"
+      },
+      "results": [
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 2
+                },
+                "region": {
+                  "snippet": {
+                    "text": "url = \"2.5\""
+                  },
+                  "startLine": 94
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 1
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 3
+                },
+                "region": {
+                  "snippet": {
+                    "text": "use url::Url;"
+                  },
+                  "startLine": 8
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 4
+                },
+                "region": {
+                  "snippet": {
+                    "text": "use url::Url;"
+                  },
+                  "startLine": 11
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 5
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    Git { repo: url::Url, spec: GitSpec<'t> },"
+                  },
+                  "startLine": 499
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 17
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 5
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    let repo = url::Url::parse(&take_string(section, name, repo)?)?;"
+                  },
+                  "startLine": 570
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 5
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        urls: Vec<(String, Option<url::Url>)>,"
+                  },
+                  "startLine": 628
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 5
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        fn get(&mut self, name: &str, config_root: &crate::Path) -> Option<&url::Url> {"
+                  },
+                  "startLine": 632
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 77
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 5
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                        Ok(url) => url::Url::parse(url.as_str())"
+                  },
+                  "startLine": 641
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 5
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            .and_then(|iu| url::Url::parse(iu.as_str()).ok()),"
+                  },
+                  "startLine": 674
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 28
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 6
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        run(&[\"fetch\", \"--depth=1\", \"-u\", \"origin\", &rspec])"
+                  },
+                  "startLine": 157
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 44
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 7
+                },
+                "region": {
+                  "snippet": {
+                    "text": "use url::Url;"
+                  },
+                  "startLine": 5
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 8
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            match url::Url::parse(aurl.as_ref()) {"
+                  },
+                  "startLine": 313
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 8
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    pub ignore_sources: Vec<url::Url>,"
+                  },
+                  "startLine": 492
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 8
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        struct Ignore<'a>(&'a [url::Url]);"
+                  },
+                  "startLine": 507
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 9
+                },
+                "region": {
+                  "snippet": {
+                    "text": "fn get_org(url: &url::Url) -> Option<(OrgType, &str)> {"
+                  },
+                  "startLine": 210
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 18
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 10
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            match url::Url::parse(&astr[skip..]) {"
+                  },
+                  "startLine": 178
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 10
+                },
+                "region": {
+                  "snippet": {
+                    "text": "pub type UrlSpan = Spanned<url::Url>;"
+                  },
+                  "startLine": 236
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`url`"
+          },
+          "properties": {
+            "byteColumn": 28
+          },
+          "ruleId": "RUSTSEC-2026-0592/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "pub use crate::origin::{OpaqueOrigin, Origin};"
+                  },
+                  "startLine": 211
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 16
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "mod origin;"
+                  },
+                  "startLine": 218
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Return the origin of this URL (<https://url.spec.whatwg.org/#origin>)"
+                  },
+                  "startLine": 811
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Return the origin of this URL (<https://url.spec.whatwg.org/#origin>)"
+                  },
+                  "startLine": 811
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 70
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Note: this returns an opaque origin for `file:` URLs, which causes"
+                  },
+                  "startLine": 813
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 38
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// `url.origin() != url.origin()`."
+                  },
+                  "startLine": 814
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 14
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// `url.origin() != url.origin()`."
+                  },
+                  "startLine": 814
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(url.origin(),"
+                  },
+                  "startLine": 826
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 24
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(url.origin(),"
+                  },
+                  "startLine": 843
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 24
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert!(!url.origin().is_tuple());"
+                  },
+                  "startLine": 860
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 22
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert!(url.origin() != other_url.origin());"
+                  },
+                  "startLine": 863
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 21
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert!(url.origin() != other_url.origin());"
+                  },
+                  "startLine": 863
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 43
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert!(!url.origin().is_tuple());"
+                  },
+                  "startLine": 877
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 22
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    pub fn origin(&self) -> Origin {"
+                  },
+                  "startLine": 883
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 11
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        origin::url_origin(self)"
+                  },
+                  "startLine": 884
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// The origin of an URL"
+                  },
+                  "startLine": 38
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Two URLs with the same origin are considered"
+                  },
+                  "startLine": 40
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 28
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// The origin is determined based on the scheme as follows:"
+                  },
+                  "startLine": 44
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// - If the scheme is \"blob\" the origin is the origin of the"
+                  },
+                  "startLine": 46
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// - If the scheme is \"blob\" the origin is the origin of the"
+                  },
+                  "startLine": 46
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 49
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "///   it is an opaque origin."
+                  },
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "///   then the origin is a tuple of the scheme, host, and port."
+                  },
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 16
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// - If the scheme is anything else, the origin is opaque, meaning"
+                  },
+                  "startLine": 51
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 43
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "///   the URL does not have the same origin as any other URL."
+                  },
+                  "startLine": 52
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 38
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// For more information see <https://url.spec.whatwg.org/#origin>"
+                  },
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 60
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Creates a new opaque origin that is only equal to itself."
+                  },
+                  "startLine": 65
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Return whether this origin is a (scheme, host, port) tuple"
+                  },
+                  "startLine": 71
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// (as opposed to an opaque origin)."
+                  },
+                  "startLine": 72
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 34
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// <https://html.spec.whatwg.org/multipage/#ascii-serialisation-of-an-origin>"
+                  },
+                  "startLine": 77
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 76
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 12
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// <https://html.spec.whatwg.org/multipage/#unicode-serialisation-of-an-origin>"
+                  },
+                  "startLine": 91
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 78
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 13
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Getter for <https://url.spec.whatwg.org/#dom-url-origin>"
+                  },
+                  "startLine": 92
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 54
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 13
+                },
+                "region": {
+                  "snippet": {
+                    "text": "pub fn origin(url: &Url) -> String {"
+                  },
+                  "startLine": 93
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 13
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    url.origin().ascii_serialization()"
+                  },
+                  "startLine": 94
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`origin`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0592"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/bgonz808/hp-thermal",
+          "name": "hp-thermal xtask reach",
+          "rules": [
+            {
+              "id": "RUSTSEC-2026-0592",
+              "properties": {
+                "functions": {
+                  "url::Url::origin": [
+                    "<=2.5.8"
+                  ],
+                  "url::quirks::origin": [
+                    "<=2.5.8"
+                  ]
+                },
+                "tokens": [
+                  "origin"
+                ]
+              }
+            },
+            {
+              "id": "RUSTSEC-2026-0592/crate",
+              "properties": {
+                "crateIdent": "url",
+                "package": "url"
+              }
+            }
+          ]
+        }
+      },
+      "versionControlProvenance": [
+        {
+          "repositoryUri": "https://github.com/EmbarkStudios/cargo-deny",
+          "revisionId": "bca0dde53651ee946720e4540b5ce2610bec8f06"
+        }
+      ]
+    }
+  ],
+  "version": "2.1.0"
+}

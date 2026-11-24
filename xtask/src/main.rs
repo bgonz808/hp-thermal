@@ -61,6 +61,8 @@ mod build_env;
 mod build_record;
 mod cadence;
 mod formulate;
+/// `reach`: the reachability record a `not_affected` vuln statement is bound to (#520).
+mod reach;
 mod record_vuln;
 /// `release-advance`: the app's post-release evidence (vuln baseline, VT panel) as stages.
 mod release_advance;
@@ -132,6 +134,7 @@ fn main() {
         Some("candidate-advance") => advance::run(&args),
         Some("release-advance") => release_advance::run(&args),
         Some("vdr") => vdr::run(&args),
+        Some("reach") => reach::run(&args),
         Some("std-deps") => unit_graph::run(&args),
         Some("evidence-rev") => evidence_rev::run(&args),
         Some("slsa-vsa") => slsa_vsa::run(&args),
