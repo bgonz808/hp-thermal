@@ -440,6 +440,46 @@ pub(crate) fn dispatch(
     }
 }
 
+/// The workflows a stage dispatches run GitHub's copy of the branch: TOOLS.lock, the lock and
+/// the evidence they read are whatever was pushed. Refuse unless the local branch is pushed
+/// (HEAD equals origin/<branch>); a run on a stale copy looks up the previous digest and records
+/// nothing for this one (2026-11-22: mal on six unpushed stage commits).
+fn require_pushed(branch: &str) -> Result<String, String> {
+    git(&["fetch", "--quiet", "origin", branch])?;
+    let local = git(&["rev-parse", "HEAD"])?.trim().to_string();
+    let remote = git(&["rev-parse", &format!("origin/{branch}")])?
+        .trim()
+        .to_string();
+    if local != remote {
+        let ahead =
+            git(&["rev-list", "--count", &format!("origin/{branch}..HEAD")]).unwrap_or_default();
+        return Err(format!(
+            "{branch} is not pushed (HEAD {}, origin {}, {} commit(s) ahead): the dispatched workflow reads GitHub's copy; `git push origin {branch}` first",
+            short(&local),
+            short(&remote),
+            ahead.trim()
+        ));
+    }
+    Ok(local)
+}
+
+/// `dispatch` on the candidate branch, after `require_pushed`; the run it adopts must have
+/// checked out exactly that commit (the branch can move between the check and the dispatch).
+fn dispatch_pushed(ctx: &Ctx, workflow: &str, inputs: &[(&str, &str)]) -> Result<String, String> {
+    let head = require_pushed(&ctx.branch)?;
+    let id = dispatch(workflow, &ctx.branch, inputs)?;
+    let v = gh_json(&["run", "view", &id, "--json", "headSha"])?;
+    let built = s(&v, &["headSha"]);
+    if built != head {
+        return Err(format!(
+            "{workflow} run {id} checked out {}, not HEAD {}: the branch moved; rerun the stage",
+            short(&built),
+            short(&head)
+        ));
+    }
+    Ok(id)
+}
+
 pub(crate) fn run_log(id: &str) -> Result<String, String> {
     gh(&["run", "view", id, "--log"])
 }
@@ -929,7 +969,7 @@ fn stage_caps(
             if let Some(sd) = seed {
                 inputs.push(("seed_digest", sd));
             }
-            let id = dispatch("caps-measure.yml", &ctx.branch, &inputs)?;
+            let id = dispatch_pushed(ctx, "caps-measure.yml", &inputs)?;
             println!(
                 "  caps-measure run {id} dispatched (seed: {})",
                 seed.unwrap_or("main's blessed inventory")
@@ -989,7 +1029,7 @@ fn stage_mal(
         return Err("digest is ZERO — run the digest stage first".into());
     }
     // 1. lookup — never upload before asking.
-    let m1 = dispatch("supply-chain-monitor.yml", &ctx.branch, &[])?;
+    let m1 = dispatch_pushed(ctx, "supply-chain-monitor.yml", &[])?;
     println!("  monitor (lookup) run {m1}");
     let _ = wait_run(&m1, wait)?; // the monitor's exit code is its own contract; the log decides
     let mut log = run_log(&m1)?;
@@ -1006,7 +1046,7 @@ fn stage_mal(
             return Err("digest is not in the VT corpus and --no-submit was given".into());
         }
         // 2. absent -> one submission, lookup-first inside the workflow too.
-        let sub = dispatch("vt-submit.yml", &ctx.branch, &[("only", ctx.tool.as_str())])?;
+        let sub = dispatch_pushed(ctx, "vt-submit.yml", &[("only", ctx.tool.as_str())])?;
         println!("  vt-submit run {sub}");
         let c = wait_run(&sub, wait)?;
         if c != "success" {
@@ -1015,7 +1055,7 @@ fn stage_mal(
         println!("  waiting {:?} for the panel", panel_wait);
         std::thread::sleep(panel_wait);
         // 3. re-read.
-        let m2 = dispatch("supply-chain-monitor.yml", &ctx.branch, &[])?;
+        let m2 = dispatch_pushed(ctx, "supply-chain-monitor.yml", &[])?;
         println!("  monitor (record) run {m2}");
         let _ = wait_run(&m2, wait)?;
         log = run_log(&m2)?;
