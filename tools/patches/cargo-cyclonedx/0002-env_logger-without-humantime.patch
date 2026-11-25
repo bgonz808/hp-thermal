@@ -1,0 +1,13 @@
+diff --git a/cargo-cyclonedx/Cargo.toml b/cargo-cyclonedx/Cargo.toml
+index dafd9ca..c301d6c 100644
+--- a/cargo-cyclonedx/Cargo.toml
++++ b/cargo-cyclonedx/Cargo.toml
+@@ -26,7 +26,7 @@ cargo-lock = "11.0.1"
+ cargo_metadata = "0.23.1"
+ clap = { version = "4.4.11", features = ["derive"] }
+ cyclonedx-bom = { version = "0.9.0", path = "../cyclonedx-bom" }
+-env_logger = "0.11.0"
++env_logger = { version = "0.11.0", default-features = false, features = ["auto-color", "regex"] }
+ log = "0.4.20"
+ once_cell = "1.18.0"
+ pathdiff = { version = "0.2.1", features = ["camino"] }
