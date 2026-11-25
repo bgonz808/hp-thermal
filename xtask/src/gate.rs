@@ -1701,7 +1701,7 @@ pub(crate) fn run_audit(lockfile: &Path, no_fetch: bool) -> Result<Value, String
 pub(crate) fn fetch_lockfile(repo: &str, rev: &str, dest: &Path) -> Result<(), String> {
     let url = format!("https://raw.githubusercontent.com/{repo}/{rev}/Cargo.lock");
     let st = Command::new("curl")
-        .args(["-sSfL", &url, "-o"])
+        .args(["-q", "-sSfL", &url, "-o"])
         .arg(dest)
         .status()
         .map_err(|e| format!("cannot run curl: {e}"))?;

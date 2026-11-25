@@ -32,6 +32,11 @@
 //!
 //! Safety properties, all enforced here rather than assumed:
 //!   * every target version is checked NON-YANKED and PAST SOAK on crates.io before use;
+//!   * so is every other entry the freeze adds to the starting lock as staged (after --base
+//!     and --patches), compared in full (name, version, source, checksum): a crates.io entry
+//!     must also pin the checksum crates.io publishes; another source is refused, and so is a
+//!     path entry under a name the starting lock did not carry as one, unless it is accepted
+//!     like a new package name (a `lock-shape` statement plus --accept-new-package);
 //!   * the advisory delta is computed at ONE DB state (before vs after, same instrument);
 //!   * a freeze that introduces a GENUINELY NEW advisory — a new (advisory, package) key, or
 //!     a second vulnerable resident version — is refused by default (#255 §4). The same
@@ -311,7 +316,7 @@ pub fn foreign_sources(
 pub fn published_by(pkg: &str, version: &str) -> Result<Option<String>, String> {
     let url = format!("https://crates.io/api/v1/crates/{pkg}/{version}");
     let out = Command::new("curl")
-        .args(["-sSfL", "-H", "User-Agent: hp-thermal-freeze", &url])
+        .args(["-q", "-sSfL", "-H", "User-Agent: hp-thermal-freeze", &url])
         .output()
         .map_err(|e| format!("curl: {e}"))?;
     if !out.status.success() {
@@ -474,45 +479,183 @@ pub fn added_package_names(before: &BTreeSet<String>, after: &BTreeSet<String>) 
     after.difference(before).cloned().collect()
 }
 
-pub fn check_target(d: &Directive, now_epoch: i64, soak_days: i64) -> Result<i64, String> {
-    let url = format!(
-        "https://crates.io/api/v1/crates/{}/{}",
-        d.package, d.version
+/// One `[[package]]` entry in full. All four fields are its identity: the same name and version
+/// from another source, or with other bytes, is a different entry.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct LockRecord {
+    pub name: String,
+    pub version: String,
+    pub source: Option<String>,
+    pub checksum: Option<String>,
+}
+
+/// Every `[[package]]` entry of a Cargo.lock, twins included (`lock_entries` keys on name and
+/// version, so two sources of one version collapse there).
+pub fn lock_records(text: &str) -> BTreeSet<LockRecord> {
+    let mut out = BTreeSet::new();
+    let mut cur: Option<LockRecord> = None;
+    let field = |l: &str, k: &str| {
+        l.strip_prefix(k)
+            .and_then(|r| r.split('"').next())
+            .map(str::to_string)
+    };
+    for line in text.lines() {
+        let l = line.trim();
+        if l.starts_with('[') {
+            if let Some(r) = cur.take() {
+                out.insert(r);
+            }
+            if l == "[[package]]" {
+                cur = Some(LockRecord {
+                    name: String::new(),
+                    version: String::new(),
+                    source: None,
+                    checksum: None,
+                });
+            }
+            continue;
+        }
+        let Some(r) = cur.as_mut() else { continue };
+        if let Some(v) = field(l, "name = \"") {
+            r.name = v;
+        } else if let Some(v) = field(l, "version = \"") {
+            r.version = v;
+        } else if let Some(v) = field(l, "source = \"") {
+            r.source = Some(v);
+        } else if let Some(v) = field(l, "checksum = \"") {
+            r.checksum = Some(v);
+        }
+    }
+    if let Some(r) = cur.take() {
+        out.insert(r);
+    }
+    out
+}
+
+/// Entries a freeze added, sorted for judgment.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Additions {
+    /// crates.io entries with a checksum: the registry judges each (soak, yank, checksum).
+    pub registry: Vec<LockRecord>,
+    /// Path entries under a name the starting lock did not carry as one: refused unless
+    /// accepted like a new package name.
+    pub new_paths: Vec<LockRecord>,
+    /// Refused outright, with the reason.
+    pub refused: Vec<String>,
+}
+
+/// Entries present after a freeze and not before, compared in full: directive targets, carried
+/// versions and the resolver's own picks alike, so the registry vouches for the exact bytes the
+/// lock pins. A path entry (no source) passes under a name the starting lock already carried as
+/// a path entry (typically the checkout's own crates, whose version a rev or patch may move);
+/// under any other name it is returned in `new_paths` for the reviewed lock-shape exception.
+pub fn lock_additions(before: &BTreeSet<LockRecord>, after: &BTreeSet<LockRecord>) -> Additions {
+    let path_names: BTreeSet<&str> = before
+        .iter()
+        .filter(|r| r.source.is_none())
+        .map(|r| r.name.as_str())
+        .collect();
+    let mut out = Additions::default();
+    for r in after.difference(before) {
+        let (n, v) = (&r.name, &r.version);
+        match r.source.as_deref() {
+            None if path_names.contains(n.as_str()) => {}
+            None => out.new_paths.push(r.clone()),
+            Some(CRATES_IO_SOURCE) if r.checksum.is_some() => out.registry.push(r.clone()),
+            Some(CRATES_IO_SOURCE) => out
+                .refused
+                .push(format!("{n} {v}: a crates.io entry without a checksum")),
+            Some(s) => out.refused.push(format!(
+                "{n} {v} <- {s}: not crates.io, so the registry cannot vouch for it"
+            )),
+        }
+    }
+    out
+}
+
+/// Judge crates.io's record of one exact version (`/api/v1/crates/{package}/{version}`): it must
+/// echo the request, not be yanked, be at least `soak_days` old and carry a sha256 checksum.
+/// Returns (age in whole days, checksum). Every missing or malformed field refuses.
+pub fn judge_registry_version(
+    v: &serde_json::Value,
+    package: &str,
+    version: &str,
+    now_epoch: i64,
+    soak_days: i64,
+) -> Result<(i64, String), String> {
+    let field = |k: &str| v.pointer(&format!("/version/{k}"));
+    let echoed = (
+        field("crate").and_then(|x| x.as_str()),
+        field("num").and_then(|x| x.as_str()),
     );
-    let out = Command::new("curl")
-        .args(["-sSfL", "-H", "User-Agent: hp-thermal-freeze", &url])
-        .output()
-        .map_err(|e| format!("curl: {e}"))?;
-    if !out.status.success() {
+    if echoed != (Some(package), Some(version)) {
         return Err(format!(
-            "{} {} not found on crates.io",
-            d.package, d.version
+            "{package} {version}: crates.io answered for {echoed:?}, not the version asked"
         ));
     }
-    let v: serde_json::Value =
-        serde_json::from_slice(&out.stdout).map_err(|e| format!("crates.io JSON: {e}"))?;
-    if v.pointer("/version/yanked")
-        .and_then(|y| y.as_bool())
-        .unwrap_or(false)
-    {
-        return Err(format!(
-            "{} {} is YANKED — never a promotion target",
-            d.package, d.version
-        ));
+    match field("yanked").and_then(|y| y.as_bool()) {
+        Some(false) => {}
+        Some(true) => {
+            return Err(format!(
+                "{package} {version} is YANKED — never a promotion target"
+            ));
+        }
+        None => return Err(format!("{package} {version}: no yanked flag")),
     }
-    let created = v
-        .pointer("/version/created_at")
+    let created = field("created_at")
         .and_then(|c| c.as_str())
-        .ok_or_else(|| format!("{} {}: no publish date", d.package, d.version))?;
+        .ok_or_else(|| format!("{package} {version}: no publish date"))?;
     let age = age_days(created, now_epoch)
-        .ok_or_else(|| format!("{} {}: unparseable publish date", d.package, d.version))?;
+        .ok_or_else(|| format!("{package} {version}: unparseable publish date"))?;
     if age < soak_days {
         return Err(format!(
-            "{} {} is {age}d old — has not soaked ({soak_days}d required)",
-            d.package, d.version
+            "{package} {version} is {age}d old — has not soaked ({soak_days}d required)"
         ));
     }
-    Ok(age)
+    let sum = field("checksum")
+        .and_then(|c| c.as_str())
+        .filter(|c| c.len() == 64 && c.bytes().all(|b| b.is_ascii_hexdigit()))
+        .ok_or_else(|| format!("{package} {version}: no sha256 checksum"))?;
+    Ok((age, sum.to_ascii_lowercase()))
+}
+
+/// Fetch and judge crates.io's record of one exact version (see `judge_registry_version`).
+pub fn registry_version(
+    package: &str,
+    version: &str,
+    now_epoch: i64,
+    soak_days: i64,
+) -> Result<(i64, String), String> {
+    let url = format!("https://crates.io/api/v1/crates/{package}/{version}");
+    // -q first: no .curlrc. https only, and no redirects.
+    let out = Command::new("curl")
+        .args([
+            "-q",
+            "-sSf",
+            "--proto",
+            "=https",
+            "-H",
+            "User-Agent: hp-thermal-freeze",
+            &url,
+        ])
+        .output()
+        .map_err(|e| format!("curl: {e}"))?;
+    // An instrument failure is UNEVALUATED, never a verdict: freeze-propose pages on the marker.
+    if !out.status.success() {
+        return Err(format!(
+            "UNEVALUATED: {package} {version}: crates.io API request failed ({}): {}",
+            out.status,
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).map_err(|e| {
+        format!("UNEVALUATED: {package} {version}: crates.io answered unparseable JSON ({e})")
+    })?;
+    judge_registry_version(&v, package, version, now_epoch, soak_days)
+}
+
+pub fn check_target(d: &Directive, now_epoch: i64, soak_days: i64) -> Result<i64, String> {
+    registry_version(&d.package, &d.version, now_epoch, soak_days).map(|(age, _)| age)
 }
 
 /// A quality-passing `lock-shape` statement accepting package `name` for `tool`.
@@ -928,6 +1071,15 @@ pub fn run(args: &[String]) -> i32 {
         Ok(n) => n,
         Err(e) => {
             eprintln!("freeze: cannot read package names from the starting lock: {e}");
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+    };
+    // And every entry in full: whatever this run adds is judged against it, below.
+    let records_before = match std::fs::read_to_string(&lock) {
+        Ok(t) => lock_records(&t),
+        Err(e) => {
+            eprintln!("freeze: cannot read the starting lock: {e}");
             let _ = std::fs::remove_dir_all(&work);
             return 1;
         }
@@ -1386,6 +1538,71 @@ pub fn run(args: &[String]) -> i32 {
         }
     }
 
+    // Judge every entry this run added to the starting lock as staged: directive targets, carried versions, and whatever the
+    // resolver picked for their new requirements (`--precise` moves only the named package and
+    // resolves anything it newly needs at a release of cargo's choosing, typically the newest
+    // compatible one). Compared in full, so a source swap or other bytes count as additions too.
+    // The judged text is the text written: the work lock is re-read and compared before writing.
+    let judged = match std::fs::read_to_string(&lock) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("freeze: cannot read the updated lock: {e}");
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+    };
+    let adds = lock_additions(&records_before, &lock_records(&judged));
+    let mut bad = adds.refused;
+    if !adds.new_paths.is_empty() {
+        // The same reviewed exception the name invariant honors, never a flag alone.
+        let acks = crate::gate::load_acks(&evidence_dir.join(&tool).join("acks.jsonl"))
+            .unwrap_or_else(|e| {
+                eprintln!("  ack lattice unreadable ({e}) -- treating as NO acceptances");
+                crate::gate::Acks {
+                    entries: Vec::new(),
+                    rejected: Vec::new(),
+                }
+            });
+        for r in &adds.new_paths {
+            if accept_new.contains(&r.name) && lock_shape_accepted(&acks, &tool, &r.name) {
+                println!(
+                    "  ACCEPTED path entry {} {} under a reviewed lock-shape statement",
+                    r.name, r.version
+                );
+            } else {
+                bad.push(format!(
+                    "{} {}: a path entry under a name the starting lock did not carry as one; \
+                     accept it like a new package name (lock-shape statement and \
+                     --accept-new-package)",
+                    r.name, r.version
+                ));
+            }
+        }
+    }
+    for r in &adds.registry {
+        let pinned = r.checksum.as_deref().unwrap_or_default();
+        match registry_version(&r.name, &r.version, now_epoch, soak) {
+            Ok((age, sum)) if sum.eq_ignore_ascii_case(pinned) => println!(
+                "  added {} {} ({age}d old, not yanked, checksum as published)",
+                r.name, r.version
+            ),
+            Ok((_, sum)) => bad.push(format!(
+                "{} {}: the lock pins checksum {pinned}, crates.io publishes {sum}",
+                r.name, r.version
+            )),
+            Err(e) => bad.push(e),
+        }
+    }
+    if !bad.is_empty() {
+        eprintln!(
+            "  REFUSED: added entries not judged acceptable ({}):\n    {}",
+            bad.len(),
+            bad.join("\n    ")
+        );
+        let _ = std::fs::remove_dir_all(&work);
+        return 1;
+    }
+
     let after = match run_audit(&lock, true) {
         Ok(a) => extract_instances(&a),
         Err(e) => {
@@ -1495,7 +1712,20 @@ pub fn run(args: &[String]) -> i32 {
         return 1;
     }
     let dest = out_dir.join(format!("{tool}.lock"));
-    if let Err(e) = std::fs::copy(&lock, &dest) {
+    match std::fs::read_to_string(&lock) {
+        Ok(now) if now == judged => {}
+        Ok(_) => {
+            eprintln!("freeze: REFUSED — the work lock changed on disk after it was judged");
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+        Err(e) => {
+            eprintln!("freeze: cannot re-read the work lock: {e}");
+            let _ = std::fs::remove_dir_all(&work);
+            return 1;
+        }
+    }
+    if let Err(e) = std::fs::write(&dest, &judged) {
         eprintln!("freeze: write {}: {e}", dest.display());
         let _ = std::fs::remove_dir_all(&work);
         return 1;
@@ -1519,6 +1749,127 @@ mod tests {
             package: pkg.into(),
             version: ver.into(),
             kind: "vulnerability".into(),
+        }
+    }
+
+    fn rec(name: &str, version: &str, source: Option<&str>, sum: Option<&str>) -> LockRecord {
+        LockRecord {
+            name: name.into(),
+            version: version.into(),
+            source: source.map(str::to_string),
+            checksum: sum.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn lock_records_keep_twins_that_lock_entries_collapses() {
+        let reg = CRATES_IO_SOURCE;
+        let text = format!(
+            "version = 4\n\n[[package]]\nname = \"foo\"\nversion = \"1.0.0\"\n\
+             source = \"git+https://example.invalid/foo#abc\"\n\n\
+             [[package]]\nname = \"foo\"\nversion = \"1.0.0\"\nsource = \"{reg}\"\n\
+             checksum = \"aa\"\n\n[[package]]\nname = \"tool\"\nversion = \"0.1.0\"\n\n\
+             [metadata]\nx = \"y\"\n"
+        );
+        assert_eq!(
+            lock_entries(&text).len(),
+            2,
+            "foo's two sources collapse there"
+        );
+        let r = lock_records(&text);
+        assert_eq!(r.len(), 3);
+        assert!(r.contains(&rec(
+            "foo",
+            "1.0.0",
+            Some("git+https://example.invalid/foo#abc"),
+            None
+        )));
+        assert!(r.contains(&rec("foo", "1.0.0", Some(reg), Some("aa"))));
+        assert!(r.contains(&rec("tool", "0.1.0", None, None)));
+    }
+
+    #[test]
+    fn every_added_entry_is_judged_in_full() {
+        let reg = Some(CRATES_IO_SOURCE);
+        let git = Some("git+https://example.invalid/foo#abc");
+        let before: BTreeSet<LockRecord> = [
+            rec("env_logger", "0.11.2", reg, Some("e1")),
+            rec("quote", "1.0.35", reg, Some("q1")),
+            rec("foo", "1.2.3", reg, Some("f1")),
+            rec("tool", "0.1.0", None, None),
+        ]
+        .into();
+        let after: BTreeSet<LockRecord> = [
+            rec("env_logger", "0.11.8", reg, Some("e2")), // a directive target: judged too
+            rec("quote", "1.0.35", reg, Some("q1")),      // resident, unchanged
+            rec("quote", "1.0.40", reg, Some("q2")),      // the resolver's own pick
+            rec("jiff", "0.2.46", reg, Some("j1")),       // a new name
+            rec("foo", "1.2.3", reg, Some("f9")),         // same version, other bytes
+            rec("foo", "1.2.3", git, None),               // same version, other source
+            rec("side", "0.1.0", git, None),              // another source
+            rec("bare", "1.0.0", reg, None),              // crates.io without a checksum
+            rec("tool", "0.2.0", None, None),             // the checkout's own crate, moved
+            rec("vendored", "2.0.0", None, None),         // a path entry under a new name
+        ]
+        .into();
+        let a = lock_additions(&before, &after);
+        let judged: Vec<(&str, &str)> = a
+            .registry
+            .iter()
+            .map(|r| (r.name.as_str(), r.version.as_str()))
+            .collect();
+        assert_eq!(
+            judged,
+            [
+                ("env_logger", "0.11.8"),
+                ("foo", "1.2.3"),
+                ("jiff", "0.2.46"),
+                ("quote", "1.0.40")
+            ]
+        );
+        assert_eq!(a.registry[1].checksum.as_deref(), Some("f9"));
+        let refused = a.refused.join("\n");
+        for who in ["bare 1.0.0", "foo 1.2.3 <- git+", "side 0.1.0 <- git+"] {
+            assert!(refused.contains(who), "{who} not refused: {refused}");
+        }
+        assert_eq!(a.refused.len(), 3);
+        // a path entry under a new name waits for the lock-shape exception; the moved one passes
+        assert_eq!(a.new_paths, [rec("vendored", "2.0.0", None, None)]);
+        assert_eq!(lock_additions(&before, &before), Additions::default());
+    }
+
+    #[test]
+    fn the_registry_record_must_answer_for_the_exact_version() {
+        let now = 1_787_356_800; // 2026-08-22T00:00:00Z
+        let sum = "ab".repeat(32);
+        let rec = |c: &str, n: &str, y: serde_json::Value, at: &str, s: &str| serde_json::json!({"version": {"crate": c, "num": n, "yanked": y, "created_at": at, "checksum": s}});
+        let ok = rec("foo", "1.0.0", false.into(), "2026-08-01T00:00:00Z", &sum);
+        assert_eq!(
+            judge_registry_version(&ok, "foo", "1.0.0", now, 7),
+            Ok((21, sum.clone()))
+        );
+        let refuse = [
+            rec("bar", "1.0.0", false.into(), "2026-08-01T00:00:00Z", &sum),
+            rec("foo", "1.0.1", false.into(), "2026-08-01T00:00:00Z", &sum),
+            rec("foo", "1.0.0", true.into(), "2026-08-01T00:00:00Z", &sum),
+            rec(
+                "foo",
+                "1.0.0",
+                serde_json::Value::Null,
+                "2026-08-01T00:00:00Z",
+                &sum,
+            ),
+            rec("foo", "1.0.0", "false".into(), "2026-08-01T00:00:00Z", &sum),
+            rec("foo", "1.0.0", false.into(), "2026-08-20T00:00:00Z", &sum),
+            rec("foo", "1.0.0", false.into(), "yesterday", &sum),
+            rec("foo", "1.0.0", false.into(), "2026-08-01T00:00:00Z", "ab"),
+            serde_json::json!({}),
+        ];
+        for v in refuse {
+            assert!(
+                judge_registry_version(&v, "foo", "1.0.0", now, 7).is_err(),
+                "{v}"
+            );
         }
     }
 

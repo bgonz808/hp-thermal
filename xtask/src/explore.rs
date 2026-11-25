@@ -128,26 +128,45 @@ impl Candidate {
     /// re-classifies everything on the next run instead of grandfathering stale decisions, and
     /// there is no state file to drift from reality or be tampered with.
     ///
-    /// Window is `[soak_days, soak_days + cadence_days)`: wide enough that a fix cannot slip
-    /// between two monitor ticks unnoticed, narrow enough that it stops shouting afterwards.
+    /// Window is `[soak_days, soak_days + cadence_days + 1)` whole days of elapsed time: a
+    /// cadence-wide window plus one day of slack, so ticks a cadence apart that start late by
+    /// different amounts (scheduler delay) cannot step over it. A fix may be announced on two
+    /// ticks; that is preferable to never. Narrow enough that it stops shouting afterwards.
     ///
     /// This SURFACES a candidate; it never promotes one. A newly-soaked fix still travels
     /// freeze -> 3-axis gate -> human sign-off (#241). Auto-admit stays gated on the sunny-day
     /// predicate (nothing added on any axis), which a newly-adopted version cannot satisfy
     /// unexamined.
     pub fn newly_soaked(&self, soak_days: i64, cadence_days: i64) -> bool {
-        self.soaked && self.age_days < soak_days.saturating_add(cadence_days)
+        self.soaked && self.age_days < soak_days.saturating_add(cadence_days).saturating_add(1)
     }
 }
 
-/// Days between an RFC3339 timestamp and `now_epoch`. Pure integer date math (no chrono):
-/// parse YYYY-MM-DD, convert to days-since-epoch via the civil-date algorithm.
+/// Whole days elapsed between an RFC 3339 publish time and `now_epoch`, floored, so "7 days"
+/// means at least 7×24h. Pure integer date math (no chrono); see `published_epoch`.
 pub fn age_days(published: &str, now_epoch: i64) -> Option<i64> {
-    let d = published.get(..10)?;
-    let mut p = d.split('-');
-    let y: i64 = p.next()?.parse().ok()?;
-    let m: i64 = p.next()?.parse().ok()?;
-    let day: i64 = p.next()?.parse().ok()?;
+    let at = published_epoch(published)?;
+    Some((now_epoch - at).div_euclid(86_400))
+}
+
+/// An RFC 3339 publish time as Unix seconds, rounded LATER wherever it is imprecise, so an age
+/// derived from it never overstates the soak: a fraction of a second counts as the next second,
+/// and a bare date counts as its last second. A time without a zone is ambiguous: `None`.
+fn published_epoch(s: &str) -> Option<i64> {
+    let num = |r: &str| -> Option<i64> {
+        r.bytes()
+            .all(|b| b.is_ascii_digit())
+            .then(|| r.parse().ok())
+            .flatten()
+    };
+    let (y, m, day) = (num(s.get(..4)?)?, num(s.get(5..7)?)?, num(s.get(8..10)?)?);
+    if s.get(4..5)? != "-"
+        || s.get(7..8)? != "-"
+        || !(1..=12).contains(&m)
+        || !(1..=31).contains(&day)
+    {
+        return None;
+    }
     // days_from_civil (Howard Hinnant)
     let y2 = if m <= 2 { y - 1 } else { y };
     let era = if y2 >= 0 { y2 } else { y2 - 399 } / 400;
@@ -156,7 +175,55 @@ pub fn age_days(published: &str, now_epoch: i64) -> Option<i64> {
     let doy = (153 * mp + 2) / 5 + day - 1;
     let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     let days = era * 146_097 + doe - 719_468;
-    Some((now_epoch / 86_400) - days)
+    let rest = &s[10..];
+    if rest.is_empty() {
+        return Some(days * 86_400 + 86_399);
+    }
+    if !matches!(rest.get(..1)?, "T" | "t" | " ")
+        || rest.get(3..4)? != ":"
+        || rest.get(6..7)? != ":"
+    {
+        return None;
+    }
+    let (h, mi, se) = (
+        num(rest.get(1..3)?)?,
+        num(rest.get(4..6)?)?,
+        num(rest.get(7..9)?)?,
+    );
+    if h > 23 || mi > 59 || se > 60 {
+        return None;
+    }
+    let mut tail = &rest[9..];
+    let mut round_up = 0;
+    if let Some(f) = tail.strip_prefix('.') {
+        let digits = f.bytes().take_while(u8::is_ascii_digit).count();
+        if digits == 0 {
+            return None;
+        }
+        if f[..digits].bytes().any(|b| b != b'0') {
+            round_up = 1;
+        }
+        tail = &f[digits..];
+    }
+    let offset = match tail {
+        "Z" | "z" => 0,
+        _ => {
+            let sign = match tail.get(..1)? {
+                "+" => 1,
+                "-" => -1,
+                _ => return None,
+            };
+            if tail.len() != 6 || tail.get(3..4)? != ":" {
+                return None;
+            }
+            let (oh, om) = (num(tail.get(1..3)?)?, num(tail.get(4..6)?)?);
+            if oh > 23 || om > 59 {
+                return None;
+            }
+            sign * (oh * 3_600 + om * 60)
+        }
+    };
+    Some(days * 86_400 + h * 3_600 + mi * 60 + se + round_up - offset)
 }
 
 /// Build the candidate set for one dependency: every non-yanked, non-prerelease version
@@ -776,6 +843,39 @@ mod tests {
     }
 
     #[test]
+    fn age_is_elapsed_time_never_rounded_up() {
+        // NOW = 2026-08-22T00:00:00Z. Published late on the 15th is not yet 7 days old.
+        assert_eq!(age_days("2026-08-15T23:59:00Z", NOW), Some(6));
+        assert_eq!(age_days("2026-08-14T23:59:00Z", NOW), Some(7));
+        // a fraction counts as the next second; a bare date as its last second
+        assert_eq!(age_days("2026-08-15T00:00:00Z", NOW), Some(7));
+        assert_eq!(age_days("2026-08-15T00:00:00.000001Z", NOW), Some(6));
+        assert_eq!(age_days("2026-08-15T00:00:00.000000Z", NOW), Some(7));
+        assert_eq!(age_days("2026-08-15", NOW), Some(6));
+        // zones: crates.io writes +00:00
+        assert_eq!(age_days("2026-08-15T00:00:00+00:00", NOW), Some(7));
+        assert_eq!(age_days("2026-08-15T01:00:00+01:00", NOW), Some(7));
+        assert_eq!(age_days("2026-08-14T23:00:00-01:00", NOW), Some(7));
+        assert_eq!(age_days("2026-08-14T23:30:00-01:00", NOW), Some(6));
+        // future publish dates are negative, never soaked
+        assert_eq!(age_days("2026-08-22T00:00:01Z", NOW), Some(-1));
+        for bad in [
+            "",
+            "2026-08-15T00:00:00",
+            "2026-08-15T00:00Z",
+            "2026-8-15T00:00:00Z",
+            "2026-13-01T00:00:00Z",
+            "2026-08-15T24:00:00Z",
+            "2026-08-15T00:00:00.Z",
+            "2026-08-15T00:00:00+0000",
+            "+2026-08-15T00:00:00Z",
+            "yesterday",
+        ] {
+            assert_eq!(age_days(bad, NOW), None, "{bad}");
+        }
+    }
+
+    #[test]
     fn findings_include_warnings_and_vulns() {
         let a: Value = serde_json::from_str(
             r#"{"vulnerabilities":{"list":[{"advisory":{"id":"RUSTSEC-1"},"package":{"name":"a","version":"1.0.0"}}]},
@@ -813,12 +913,12 @@ mod newly_soaked_tests {
             "age == soak must be newly soaked"
         );
         assert!(
-            cand(13, 7).newly_soaked(7, 7),
-            "last day of the window still counts"
+            cand(14, 7).newly_soaked(7, 7),
+            "the slack day still counts: a late tick must not step over the window"
         );
         assert!(
-            !cand(14, 7).newly_soaked(7, 7),
-            "soak+cadence is EXCLUSIVE: it has been adoptable a full cycle, stop shouting"
+            !cand(15, 7).newly_soaked(7, 7),
+            "soak+cadence+1 is EXCLUSIVE: it has been adoptable a full cycle, stop shouting"
         );
     }
 

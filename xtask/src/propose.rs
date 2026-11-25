@@ -11,9 +11,11 @@
 //! (frozen lock or upstream's, #255 §5); for each advisory instance whose RustSec entry names a
 //! `patched` range, pick the LOWEST soaked, non-yanked version newer than the resident one that
 //! satisfies every patched range for that package; run the existing `xtask freeze` with those
-//! directives, `--require-improvement`, atop the frozen lock and the tool's patches; then — the
-//! check freeze itself does not do — soak/yank-check every TRANSITIVE package the resolver moved
-//! along (seen in #404: libc, linux-raw-sys). Accepted locks land in `<out>/locks/`, with a
+//! directives, `--require-improvement`, atop the frozen lock and the tool's patches; then
+//! soak/yank-check every TRANSITIVE package the resolver moved along (seen in #404: libc,
+//! linux-raw-sys) and list each with its age; a failure drops the proposal. freeze itself
+//! judges every entry it adds (soak, yank, source, checksum); this pass judges name and version
+//! again, independently. Accepted locks land in `<out>/locks/`, with a
 //! report and `proposals.json`; the workflow reports them in ONE issue, and the maintainer applies
 //! them with `xtask freeze-apply` (freeze_apply.rs). Refusals are reported, never papered over: a
 //! freeze refusal proposes nothing.
@@ -435,6 +437,11 @@ pub fn run(args: &[String]) -> i32 {
         let written = locks_out.join(format!("{}.lock", p.name));
         if !ok {
             let _ = std::fs::remove_file(&written);
+            // freeze marks an instrument failure (crates.io unreachable, unparseable answer)
+            // UNEVALUATED: that is no verdict, and the schedule must page on it.
+            if report.contains("UNEVALUATED") {
+                infra_failure = true;
+            }
             let tail: Vec<&str> = report
                 .lines()
                 .rev()
@@ -457,8 +464,9 @@ pub fn run(args: &[String]) -> i32 {
             });
             continue;
         }
-        // The check freeze does not do (#405 tier 1): every transitive move must pass the
-        // same soak/yank bar as a directive target.
+        // Every transitive move must pass the same soak/yank bar as a directive target. freeze
+        // judges each added entry in full itself; this pass judges name and version again,
+        // drops the proposal on a failure, and records the ages for the report.
         let before = std::fs::read_to_string(&lock)
             .map(|t| lock_packages(&t))
             .unwrap_or_default();
