@@ -1,0 +1,3878 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "artifacts": [
+        {
+          "location": {
+            "uri": "https://github.com/rustsec/rustsec/tree/281452c35cf0870969042374110f099a411bc185"
+          },
+          "properties": {
+            "files": 348,
+            "gitCommit": "281452c35cf0870969042374110f099a411bc185",
+            "gitTree": "62833baf6c7ae4ac676f00bb52687e62cd5bed4c"
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "04839bdf9d8c10f66806fad16b852fc72aab80873aebc3cb69d85b4fa41543ed"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/faster-hex/faster-hex-0.10.1.crate"
+          },
+          "properties": {
+            "files": 17
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "ae54ae0ebd1a5a3c3f8d95dd3b5ca6e63f4fed9bfd585e13801a97d7bde8f9ce"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix/gix-0.84.0.crate"
+          },
+          "properties": {
+            "files": 196
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7f675d0df484a7f6a47e64bd6f311af489d947c0323b0564f36d14f3d7762abb"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-commitgraph/gix-commitgraph-0.37.1.crate"
+          },
+          "properties": {
+            "files": 15
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4f2372d4b49ca28431e7d150cab9d25edc1890f0184bd57eb0e917c7799e63de"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-config/gix-config-0.57.0.crate"
+          },
+          "properties": {
+            "files": 49
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "3b6d9528f32d94cef2edf39a1ac01fe5a0fc44ddbb18d9e44099936047c3302b"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-diff/gix-diff-0.64.0.crate"
+          },
+          "properties": {
+            "files": 24
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "77bacdd12b7879d2178a80c58c2f319995e4654e1a7a23e3181e5c8a12b824f7"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-discover/gix-discover-0.52.0.crate"
+          },
+          "properties": {
+            "files": 14
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "ecf74b7d16f6694ce4a3049074c41be0c7987105743674f1671807bd6dce09fa"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-filter/gix-filter-0.31.0.crate"
+          },
+          "properties": {
+            "files": 27
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "cb0926d3819c837750b4e03c7754901e73f68b8c9b690753a6372a1bed4eedce"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-hash/gix-hash-0.25.1.crate"
+          },
+          "properties": {
+            "files": 14
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "b0e30b93eea8718baf7d8153fcb938e2926175bbf18097c09f1c01b6f0be0563"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-hashtable/gix-hashtable-0.15.1.crate"
+          },
+          "properties": {
+            "files": 7
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4e6b28cc592dc753adb58302bb14a64e412ee591a3bec77aa4df87bff74fa80d"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-index/gix-index-0.52.0.crate"
+          },
+          "properties": {
+            "files": 42
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "890c936a215bae25818c076cb881cb2e54d2c66ba947ba58b8dd47cff921bf55"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-negotiate/gix-negotiate-0.32.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "d5cd857e29429c7213bdef3f5aef83f8cc124774fe8ae0d27b1607d218d6d525"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-object/gix-object-0.61.0.crate"
+          },
+          "properties": {
+            "files": 34
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7d004c32858b1556f2d7874405edb3c97dc78fc09beaa87d57bb077ee2858a7d"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-odb/gix-odb-0.81.0.crate"
+          },
+          "properties": {
+            "files": 35
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "e43626f2a27d1033674ec1a196b845614231e6bbd949d5e21c133045ff56b174"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-pack/gix-pack-0.71.0.crate"
+          },
+          "properties": {
+            "files": 73
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "bb18337ba2830bb43367d1af43819c8c78f31337f079fc76d0f1f1750a173126"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-packetline/gix-packetline-0.21.4.crate"
+          },
+          "properties": {
+            "files": 18
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "51dea3acb390707ab868f1f9584f18449eb95d869deffae96768e47d303595ee"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-protocol/gix-protocol-0.62.0.crate"
+          },
+          "properties": {
+            "files": 30
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4c04f64c37eb7e6feb73c7060f8dc6f381cc5de5d53249bfd450bc48a86b2e8b"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-ref/gix-ref-0.64.0.crate"
+          },
+          "properties": {
+            "files": 47
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "b216ae06ec74b5f24ad0142026a997fb0a935b7410eaf9c1616fc3f0e6c5a6d3"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-refspec/gix-refspec-0.42.0.crate"
+          },
+          "properties": {
+            "files": 17
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "0b47c88884dd3c1a19a39da19d10211fcdea2809aadc86869b6e824a1774340f"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-revision/gix-revision-0.46.0.crate"
+          },
+          "properties": {
+            "files": 15
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "85f5756abffe0917827aac683b13684ed99875bc398fa1f9b8f479b0681ef9e6"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-revwalk/gix-revwalk-0.32.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "a292fc2fe548c5dfa575479d16b445b0ddf1dd2f56f1fec6aed386f82553cd97"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-shallow/gix-shallow-0.12.1.crate"
+          },
+          "properties": {
+            "files": 7
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "3059890ef054066c22a94bfc6a3eaba0d806aedcd630a0bc9e5783fd88884781"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-submodule/gix-submodule-0.31.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7cd0e34995b1aab0fa8dff2af8db726a0bfad3e119c89302604463264046e7ff"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-transport/gix-transport-0.57.1.crate"
+          },
+          "properties": {
+            "files": 35
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "e8de590ecc86a3b2870665f2288324fa9f7f8672c7fc2d4e020fdd81cd1f7aed"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-traverse/gix-traverse-0.58.0.crate"
+          },
+          "properties": {
+            "files": 16
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "cef414ed275e8407cd5d53d301e83be19700b0dd3f859d2434417b58f454a2d1"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree/gix-worktree-0.53.0.crate"
+          },
+          "properties": {
+            "files": 13
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4bffae8b3ca258fdd50370cd51f06deb4c76a3b43db3868bc28dde45ffa77d69"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree-state/gix-worktree-state-0.31.0.crate"
+          },
+          "properties": {
+            "files": 11
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "d25e9ed30100c63f7590bc581c225e53f731a53e06aa79a245739c07f7dcc557"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree-stream/gix-worktree-stream-0.33.0.crate"
+          },
+          "properties": {
+            "files": 11
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/heapless/heapless-0.8.0.crate"
+          },
+          "properties": {
+            "files": 42
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "d0ef1c0dfe91c129e65059b07f33ecca1f784fbea8a1241b0f10f0352ae9be58"
+          },
+          "location": {
+            "uri": "cargo-audit/src/presenter.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "24ca1deb34f2329d8f59933756cb99177d80174894d84a44fc659d2a7afb9a3c"
+          },
+          "location": {
+            "uri": "cargo-audit/tests/support/binaries/vulnerable-binary-with-affected-functions/src/main.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "2475c448fa61ceaf1fbbc44d8a036b1258471cf775f3ef7b6f5ee9c8f38a5a7d"
+          },
+          "location": {
+            "uri": "faster-hex-0.10.1/Cargo.toml"
+          },
+          "parentIndex": 1
+        },
+        {
+          "hashes": {
+            "sha-256": "d73d4545a2fb2db2c9f04633e8781ac1b708b87e813aef2c027945409340c4d4"
+          },
+          "location": {
+            "uri": "faster-hex-0.10.1/src/encode.rs"
+          },
+          "parentIndex": 1
+        },
+        {
+          "hashes": {
+            "sha-256": "303361cb4bc0feef16dc329b4be571a77192fbaf03afe3371b42f2ca861010c5"
+          },
+          "location": {
+            "uri": "gix-index-0.52.0/src/decode/mod.rs"
+          },
+          "parentIndex": 10
+        },
+        {
+          "hashes": {
+            "sha-256": "8cb62c2b9e610641d1af904eea8ac0c1d6af3b1a325277c9568b466e123a60f8"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/lib.rs"
+          },
+          "parentIndex": 28
+        },
+        {
+          "hashes": {
+            "sha-256": "9e3048f3fa080fc0fb17eb69e450067236a4596534050ebcd8938455d18b0078"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/pool.rs"
+          },
+          "parentIndex": 28
+        },
+        {
+          "hashes": {
+            "sha-256": "39fb2b89ea8ae5dfd2e3a1cfaf712a5ba2fd445684e50b559d1295faeb824da8"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/pool/arc.rs"
+          },
+          "parentIndex": 28
+        },
+        {
+          "hashes": {
+            "sha-256": "908646623bbfd2c40152ba3e2702a1665707b07d9bf7e6a31abd02f3d22f3b67"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/pool/boxed.rs"
+          },
+          "parentIndex": 28
+        },
+        {
+          "hashes": {
+            "sha-256": "8a4dda54b0624bca9322f7df8426b2d16daa6f7f25a7420e4489788fc64e32a8"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/pool/object.rs"
+          },
+          "parentIndex": 28
+        }
+      ],
+      "properties": {
+        "advisory": "RUSTSEC-2026-0580",
+        "digest": "848947084d7746511b2d6ab67ec0130cc5e2dbfec7b7568c1bb1254ec8e405ba",
+        "format": "reach-v1",
+        "gitlinks": [
+          "cvss/tests/cvss-redhat"
+        ],
+        "lockSha256": "5660005ab7ac06eef642d1ca33dda255d67d6932802d2794716b92e3caa119bd",
+        "package": "heapless",
+        "patches": [],
+        "registryPackages": [
+          "faster-hex@0.10.1",
+          "gix@0.84.0",
+          "gix-commitgraph@0.37.1",
+          "gix-config@0.57.0",
+          "gix-diff@0.64.0",
+          "gix-discover@0.52.0",
+          "gix-filter@0.31.0",
+          "gix-hash@0.25.1",
+          "gix-hashtable@0.15.1",
+          "gix-index@0.52.0",
+          "gix-negotiate@0.32.0",
+          "gix-object@0.61.0",
+          "gix-odb@0.81.0",
+          "gix-pack@0.71.0",
+          "gix-packetline@0.21.4",
+          "gix-protocol@0.62.0",
+          "gix-ref@0.64.0",
+          "gix-refspec@0.42.0",
+          "gix-revision@0.46.0",
+          "gix-revwalk@0.32.0",
+          "gix-shallow@0.12.1",
+          "gix-submodule@0.31.0",
+          "gix-transport@0.57.1",
+          "gix-traverse@0.58.0",
+          "gix-worktree@0.53.0",
+          "gix-worktree-state@0.31.0",
+          "gix-worktree-stream@0.33.0",
+          "heapless@0.8.0"
+        ],
+        "searched": {
+          "manifests": 48,
+          "rustFiles": 833
+        },
+        "symlinks": [
+          "cargo-lock/tests/examples/Cargo.lock -> Cargo.lock.v3"
+        ],
+        "tool": "cargo-audit",
+        "version": "0.8.0"
+      },
+      "results": [
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 29
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        (\"RUSTSEC-2024-0018\", &[\"crayon::utils::object_pool::ObjectPool<H,T>::free\"]),"
+                  },
+                  "startLine": 558
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 49
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 30
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    let _ = crayon::utils::object_pool::ObjectPool::<_, ()>::default()"
+                  },
+                  "startLine": 16
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 28
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 31
+                },
+                "region": {
+                  "snippet": {
+                    "text": "[target.'cfg(not(feature = \"alloc\"))'.dependencies.heapless]"
+                  },
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`heapless`"
+          },
+          "properties": {
+            "byteColumn": 52
+          },
+          "ruleId": "RUSTSEC-2026-0580/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 32
+                },
+                "region": {
+                  "snippet": {
+                    "text": "use heapless::{String, Vec};"
+                  },
+                  "startLine": 13
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`heapless`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0580/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 33
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                            // NOTE: one day, we might use a memory pool for paths. We could encode the block of memory"
+                  },
+                  "startLine": 180
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 69
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    doc = \"- [`Arc`](pool::arc::Arc) -- like `std::sync::Arc` but backed by a lock-free memory pool rather than `#[global_allocator]`\""
+                  },
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 22
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    doc = \"- [`Arc`](pool::arc::Arc) -- like `std::sync::Arc` but backed by a lock-free memory pool rather than `#[global_allocator]`\""
+                  },
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 96
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    doc = \"- [`Box`](pool::boxed::Box) -- like `std::boxed::Box` but backed by a lock-free memory pool rather than `#[global_allocator]`\""
+                  },
+                  "startLine": 52
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 22
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    doc = \"- [`Box`](pool::boxed::Box) -- like `std::boxed::Box` but backed by a lock-free memory pool rather than `#[global_allocator]`\""
+                  },
+                  "startLine": 52
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 99
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    doc = \"- [`Object`](pool::object::Object) -- objects managed by an object pool\""
+                  },
+                  "startLine": 60
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 25
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    doc = \"- [`Object`](pool::object::Object) -- objects managed by an object pool\""
+                  },
+                  "startLine": 60
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 79
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "pub mod pool;"
+                  },
+                  "startLine": 129
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::box_pool;"
+                  },
+                  "startLine": 23
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! box_pool!(P: ()); // or `arc_pool!` or `object_pool!`"
+                  },
+                  "startLine": 25
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! box_pool!(P: ()); // or `arc_pool!` or `object_pool!`"
+                  },
+                  "startLine": 25
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! box_pool!(P: ()); // or `arc_pool!` or `object_pool!`"
+                  },
+                  "startLine": 25
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 45
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! | `pool::boxed::Box::drop`     | 23           |"
+                  },
+                  "startLine": 46
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! | `pool::arc::Arc::drop`       | 59           |"
+                  },
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! | `pool::object::Object::drop` | 23           |"
+                  },
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 8
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! `std::sync::Arc`-like API on top of a lock-free memory pool"
+                  },
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 60
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{arc_pool, pool::arc::{Arc, ArcBlock}};"
+                  },
+                  "startLine": 6
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{arc_pool, pool::arc::{Arc, ArcBlock}};"
+                  },
+                  "startLine": 6
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! arc_pool!(P: u128);"
+                  },
+                  "startLine": 8
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // cannot allocate without first giving memory blocks to the pool"
+                  },
+                  "startLine": 10
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 66
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // number of smart pointers is limited to the number of blocks managed by the pool"
+                  },
+                  "startLine": 23
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 83
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // `arc`'s destructor returns the memory block to the pool"
+                  },
+                  "startLine": 32
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 59
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{arc_pool, pool::arc::ArcBlock};"
+                  },
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{arc_pool, pool::arc::ArcBlock};"
+                  },
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! arc_pool!(P: u128);"
+                  },
+                  "startLine": 50
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// For more extensive documentation see the [module level documentation](crate::pool::arc)"
+                  },
+                  "startLine": 82
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 82
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "macro_rules! arc_pool {"
+                  },
+                  "startLine": 84
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 14
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        impl $crate::pool::arc::ArcPool for $name {"
+                  },
+                  "startLine": 88
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 22
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            fn singleton() -> &'static $crate::pool::arc::ArcPoolImpl<$data_type> {"
+                  },
+                  "startLine": 91
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 48
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                static $name: $crate::pool::arc::ArcPoolImpl<$data_type> ="
+                  },
+                  "startLine": 92
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 39
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    $crate::pool::arc::ArcPoolImpl::new();"
+                  },
+                  "startLine": 93
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            ) -> Result<$crate::pool::arc::Arc<$name>, $data_type> {"
+                  },
+                  "startLine": 105
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                <$name as $crate::pool::arc::ArcPool>::alloc(value)"
+                  },
+                  "startLine": 106
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            pub fn manage(&self, block: &'static mut $crate::pool::arc::ArcBlock<$data_type>) {"
+                  },
+                  "startLine": 111
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 62
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                <$name as $crate::pool::arc::ArcPool>::manage(block)"
+                  },
+                  "startLine": 112
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// A singleton that manages `pool::arc::Arc` smart pointers"
+                  },
+                  "startLine": 118
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 31
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// The data type managed by the memory pool"
+                  },
+                  "startLine": 120
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 45
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// `arc_pool!` implementation detail"
+                  },
+                  "startLine": 123
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 10
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// The `Err`or variant is returned when the memory pool has run out of memory blocks"
+                  },
+                  "startLine": 133
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 57
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Add a statically allocated memory block to the memory pool"
+                  },
+                  "startLine": 140
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 63
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// `arc_pool!` implementation detail"
+                  },
+                  "startLine": 146
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 6
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// `arc_pool!` implementation detail"
+                  },
+                  "startLine": 154
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 10
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Like `std::sync::Arc` but managed by memory pool `P`"
+                  },
+                  "startLine": 185
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 49
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        // return memory to pool"
+                  },
+                  "startLine": 214
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        arc_pool!(P: i32);"
+                  },
+                  "startLine": 387
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        arc_pool!(P: i32);"
+                  },
+                  "startLine": 394
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        arc_pool!(P: i32);"
+                  },
+                  "startLine": 407
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        arc_pool!(P: i32);"
+                  },
+                  "startLine": 424
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        arc_pool!(P: i32);"
+                  },
+                  "startLine": 439
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        arc_pool!(P: i32);"
+                  },
+                  "startLine": 460
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        arc_pool!(P: S);"
+                  },
+                  "startLine": 491
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        arc_pool!(P: Zst4096);"
+                  },
+                  "startLine": 513
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`arc_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! `std::boxed::Box`-like API on top of a lock-free memory pool"
+                  },
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 61
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{box_pool, pool::boxed::{Box, BoxBlock}};"
+                  },
+                  "startLine": 6
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{box_pool, pool::boxed::{Box, BoxBlock}};"
+                  },
+                  "startLine": 6
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! box_pool!(P: u128);"
+                  },
+                  "startLine": 8
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // cannot allocate without first giving memory blocks to the pool"
+                  },
+                  "startLine": 10
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 66
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // give block of memory to the pool"
+                  },
+                  "startLine": 19
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 36
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // number of boxes is limited to the number of blocks managed by the pool"
+                  },
+                  "startLine": 29
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 74
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // give another memory block to the pool"
+                  },
+                  "startLine": 33
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 41
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // cloning also consumes a memory block from the pool"
+                  },
+                  "startLine": 39
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 54
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // `boxed`'s destructor returns the memory block to the pool"
+                  },
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 61
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{box_pool, pool::boxed::BoxBlock};"
+                  },
+                  "startLine": 63
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{box_pool, pool::boxed::BoxBlock};"
+                  },
+                  "startLine": 63
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! box_pool!(P: u128);"
+                  },
+                  "startLine": 65
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// For more extensive documentation see the [module level documentation](crate::pool::boxed)"
+                  },
+                  "startLine": 93
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 82
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "macro_rules! box_pool {"
+                  },
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 14
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        impl $crate::pool::boxed::BoxPool for $name {"
+                  },
+                  "startLine": 99
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 22
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            fn singleton() -> &'static $crate::pool::boxed::BoxPoolImpl<$data_type> {"
+                  },
+                  "startLine": 102
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 48
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                static $name: $crate::pool::boxed::BoxPoolImpl<$data_type> ="
+                  },
+                  "startLine": 103
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 39
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    $crate::pool::boxed::BoxPoolImpl::new();"
+                  },
+                  "startLine": 104
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            ) -> Result<$crate::pool::boxed::Box<$name>, $data_type> {"
+                  },
+                  "startLine": 116
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                <$name as $crate::pool::boxed::BoxPool>::alloc(value)"
+                  },
+                  "startLine": 117
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            pub fn manage(&self, block: &'static mut $crate::pool::boxed::BoxBlock<$data_type>) {"
+                  },
+                  "startLine": 122
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 62
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                <$name as $crate::pool::boxed::BoxPool>::manage(block)"
+                  },
+                  "startLine": 123
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// A singleton that manages `pool::boxed::Box`-es"
+                  },
+                  "startLine": 129
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 31
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Do not implement this trait yourself; instead use the `box_pool!` macro to create a type that"
+                  },
+                  "startLine": 133
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 60
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// The data type managed by the memory pool"
+                  },
+                  "startLine": 143
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 45
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// `box_pool!` implementation detail"
+                  },
+                  "startLine": 146
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 10
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// The `Err`or variant is returned when the memory pool has run out of memory blocks"
+                  },
+                  "startLine": 156
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 57
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Add a statically allocated memory block to the memory pool"
+                  },
+                  "startLine": 163
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 63
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// Like `std::boxed::Box` but managed by memory pool `P` rather than `#[global_allocator]`"
+                  },
+                  "startLine": 169
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// `box_pool!` implementation detail"
+                  },
+                  "startLine": 308
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 6
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        box_pool!(P: i32);"
+                  },
+                  "startLine": 366
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        box_pool!(P: i32);"
+                  },
+                  "startLine": 373
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        box_pool!(P: i32);"
+                  },
+                  "startLine": 386
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        box_pool!(P: S);"
+                  },
+                  "startLine": 413
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        box_pool!(P: Zst4096);"
+                  },
+                  "startLine": 435
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        box_pool!(P: S);"
+                  },
+                  "startLine": 463
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        box_pool!(P: S);"
+                  },
+                  "startLine": 497
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        box_pool!(P: S);"
+                  },
+                  "startLine": 532
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`box_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! Object pool API"
+                  },
+                  "startLine": 1
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{object_pool, pool::object::{Object, ObjectBlock}};"
+                  },
+                  "startLine": 6
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{object_pool, pool::object::{Object, ObjectBlock}};"
+                  },
+                  "startLine": 6
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! object_pool!(P: [u8; 128]);"
+                  },
+                  "startLine": 8
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // cannot request objects without first giving object blocks to the pool"
+                  },
+                  "startLine": 10
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 73
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//!     // unlike the memory pool APIs, an initial value must be specified here"
+                  },
+                  "startLine": 15
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 30
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // give object block to the pool"
+                  },
+                  "startLine": 20
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // unlike the memory pool APIs, no initial value is required here"
+                  },
+                  "startLine": 24
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 26
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // the number of live objects is limited to the number of blocks managed by the pool"
+                  },
+                  "startLine": 30
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 85
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! // `object`'s destructor returns the object to the pool"
+                  },
+                  "startLine": 34
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 56
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{object_pool, pool::object::ObjectBlock};"
+                  },
+                  "startLine": 49
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! use heapless::{object_pool, pool::object::ObjectBlock};"
+                  },
+                  "startLine": 49
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! object_pool!(P: [u8; 128]);"
+                  },
+                  "startLine": 51
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// For more extensive documentation see the [module level documentation](crate::pool::object)"
+                  },
+                  "startLine": 81
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 82
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "macro_rules! object_pool {"
+                  },
+                  "startLine": 83
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 14
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        impl $crate::pool::object::ObjectPool for $name {"
+                  },
+                  "startLine": 87
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 22
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            fn singleton() -> &'static $crate::pool::object::ObjectPoolImpl<$data_type> {"
+                  },
+                  "startLine": 90
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 48
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                static $name: $crate::pool::object::ObjectPoolImpl<$data_type> ="
+                  },
+                  "startLine": 91
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 39
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    $crate::pool::object::ObjectPoolImpl::new();"
+                  },
+                  "startLine": 92
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            pub fn request(&self) -> Option<$crate::pool::object::Object<$name>> {"
+                  },
+                  "startLine": 101
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 53
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                <$name as $crate::pool::object::ObjectPool>::request()"
+                  },
+                  "startLine": 102
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                block: &'static mut $crate::pool::object::ObjectBlock<$data_type>,"
+                  },
+                  "startLine": 109
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 45
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                <$name as $crate::pool::object::ObjectPool>::manage(block)"
+                  },
+                  "startLine": 111
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// A singleton that manages `pool::object::Object`s"
+                  },
+                  "startLine": 117
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 31
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// The data type of the objects managed by the object pool"
+                  },
+                  "startLine": 119
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 60
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// `object_pool!` implementation detail"
+                  },
+                  "startLine": 122
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 10
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Request a new object from the pool"
+                  },
+                  "startLine": 126
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 39
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Adds a statically allocate object to the pool"
+                  },
+                  "startLine": 133
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 50
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// `object_pool!` implementation detail"
+                  },
+                  "startLine": 139
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 6
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// `object_pool!` implementation detail"
+                  },
+                  "startLine": 146
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 10
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// An object managed by object pool `P`"
+                  },
+                  "startLine": 169
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`pool`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        object_pool!(P: i32);"
+                  },
+                  "startLine": 337
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        object_pool!(P: i32);"
+                  },
+                  "startLine": 344
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        object_pool!(P: i32);"
+                  },
+                  "startLine": 357
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        object_pool!(P: S);"
+                  },
+                  "startLine": 385
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        object_pool!(P: Zst4096);"
+                  },
+                  "startLine": 407
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`object_pool`"
+          },
+          "properties": {
+            "byteColumn": 9
+          },
+          "ruleId": "RUSTSEC-2026-0580"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/bgonz808/hp-thermal",
+          "name": "hp-thermal xtask reach",
+          "rules": [
+            {
+              "id": "RUSTSEC-2026-0580",
+              "properties": {
+                "functions": {
+                  "heapless::arc_pool": [
+                    "<0.9.4"
+                  ],
+                  "heapless::box_pool": [
+                    "<0.9.4"
+                  ],
+                  "heapless::object_pool": [
+                    "<0.9.4"
+                  ],
+                  "heapless::pool": [
+                    "<0.8.0"
+                  ]
+                },
+                "tokens": [
+                  "arc_pool",
+                  "box_pool",
+                  "object_pool",
+                  "pool"
+                ]
+              }
+            },
+            {
+              "id": "RUSTSEC-2026-0580/crate",
+              "properties": {
+                "crateIdent": "heapless",
+                "package": "heapless"
+              }
+            }
+          ]
+        }
+      },
+      "versionControlProvenance": [
+        {
+          "repositoryUri": "https://github.com/rustsec/rustsec",
+          "revisionId": "281452c35cf0870969042374110f099a411bc185"
+        }
+      ]
+    }
+  ],
+  "version": "2.1.0"
+}

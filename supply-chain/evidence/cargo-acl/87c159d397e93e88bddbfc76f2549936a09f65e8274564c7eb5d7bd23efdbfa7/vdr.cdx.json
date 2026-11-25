@@ -8894,7 +8894,7 @@
   },
   "serialNumber": "urn:uuid:95ac68f4-c3bd-455f-8709-4507732c062c",
   "specVersion": "1.6",
-  "version": 5,
+  "version": 6,
   "vulnerabilities": [
     {
       "advisories": [
@@ -8920,9 +8920,9 @@
       ],
       "analysis": {
         "detail": "Not in the shipped binary. MEASURED 2026-11-13: absent from the cargo-auditable dependency list (.dep-v0 section, runtime and build kinds, 73 packages) embedded in cargo-acl (linux-x86_64) sha256 87c159d397e93e88bddbfc76f2549936a09f65e8274564c7eb5d7bd23efdbfa7.",
-        "firstIssued": "2026-08-30T00:00:00Z",
+        "firstIssued": "2026-11-24T00:00:00Z",
         "justification": "code_not_present",
-        "lastUpdated": "2026-11-13T00:00:00Z",
+        "lastUpdated": "2026-11-24T00:00:00Z",
         "state": "not_affected"
       },
       "bom-ref": "vuln:RUSTSEC-2026-0253@lru@0.16.4",

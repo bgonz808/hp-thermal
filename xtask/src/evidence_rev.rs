@@ -314,20 +314,20 @@ pub fn select(root: &Path, tool: &str, digest: &str, lock_sha: &str) -> Result<R
 // ---------- strict subset of a Cargo.lock ----------
 
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
-struct Pkg {
-    source: Option<String>,
-    checksum: Option<String>,
-    deps: BTreeSet<String>,
+pub(crate) struct Pkg {
+    pub(crate) source: Option<String>,
+    pub(crate) checksum: Option<String>,
+    pub(crate) deps: BTreeSet<String>,
     /// Any key other than name/version/source/checksum/dependencies, verbatim.
     other: Vec<String>,
 }
 
 /// A lock package's identity: (name, version).
-type Key = (String, String);
-type Pkgs = BTreeMap<Key, Pkg>;
+pub(crate) type Key = (String, String);
+pub(crate) type Pkgs = BTreeMap<Key, Pkg>;
 
 /// `[[package]]` entries by (name, version), plus every line outside them, verbatim.
-fn parse_lock(text: &str) -> Result<(Pkgs, Vec<String>), String> {
+pub(crate) fn parse_lock(text: &str) -> Result<(Pkgs, Vec<String>), String> {
     let mut pkgs = BTreeMap::new();
     let mut outside = Vec::new();
     let mut cur: Option<(Option<String>, Option<String>, Pkg)> = None;
@@ -722,6 +722,11 @@ fn rev_files(root: &Path) -> (BTreeMap<String, Vec<u8>>, Vec<String>) {
                     continue;
                 }
                 for f in dirs(&l.path()) {
+                    // Reachability records are add-only on their own terms (gate::reach_changes,
+                    // #520); they arrive after a revision is admitted.
+                    if f.file_name() == "reach" && f.path().is_dir() {
+                        continue;
+                    }
                     let rel = format!("{rel_rev}/{lname}/{}", f.file_name().to_string_lossy());
                     match std::fs::read(f.path()) {
                         Ok(b) if f.path().is_file() => {

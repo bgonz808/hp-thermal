@@ -413,6 +413,9 @@ fn ack_quality(v: &Value) -> Result<(), String> {
             }
             _ => {}
         }
+        if v.get("product").and_then(|p| p.get("digest")).is_some() {
+            vuln_bound_quality(v)?;
+        }
     }
     // #380: a sign-off names WHAT it signs. A caps ack binds to the sha256 of the inventory
     // bytes; a mal ack binds to the engine AND its verdict string. Without those fields the
@@ -456,6 +459,67 @@ fn ack_quality(v: &Value) -> Result<(), String> {
     Ok(())
 }
 
+/// A digest-bound vuln statement is a claim about one binary's bytes: it names the digest, an
+/// OpenVEX status that can be true of immutable bytes, and the native CycloneDX ruling the VDR
+/// copies, pointing the same way. Lines without a digest govern nothing (`last_vuln_ack`); the
+/// record is append-only, so they are not re-judged here.
+fn vuln_bound_quality(v: &Value) -> Result<(), String> {
+    let d = s(v, &["product", "digest"]);
+    if d.len() != 64
+        || !d
+            .bytes()
+            .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    {
+        return Err("vuln ack `product.digest` is not 64 lowercase hex".into());
+    }
+    let status = s(v, &["status"]);
+    let state = s(v, &["cyclonedx", "state"]);
+    let agree: &[&str] = match status {
+        "not_affected" => &["not_affected", "false_positive"],
+        "affected" => &["exploitable", "in_triage"],
+        "under_investigation" => &["in_triage"],
+        other => {
+            return Err(format!(
+                "vuln ack status `{other}`: a digest-bound statement is not_affected, affected \
+                 or under_investigation"
+            ));
+        }
+    };
+    if !agree.contains(&state) {
+        return Err(format!(
+            "vuln ack status `{status}` with cyclonedx.state `{state}`: the CycloneDX ruling the \
+             VDR publishes must agree ({})",
+            agree.join(" | ")
+        ));
+    }
+    if status == "not_affected" {
+        let j = s(v, &["justification"]);
+        let cj = s(v, &["cyclonedx", "justification"]);
+        let Some((_, allowed)) = JUSTIFICATIONS.iter().find(|(o, _)| *o == j) else {
+            return Err(format!(
+                "vuln ack justification `{j}`: a digest-bound not_affected names one of OpenVEX's five"
+            ));
+        };
+        // `false_positive` may carry no CycloneDX justification; one it carries must agree.
+        if !(allowed.contains(&cj) || state == "false_positive" && cj.is_empty()) {
+            return Err(format!(
+                "vuln ack justification `{j}` with cyclonedx.justification `{cj}`: they must say \
+                 the same thing ({})",
+                allowed.join(" | ")
+            ));
+        }
+    }
+    if status != "not_affected"
+        && (!s(v, &["justification"]).is_empty()
+            || !s(v, &["cyclonedx", "justification"]).is_empty())
+    {
+        return Err(format!(
+            "vuln ack status `{status}` carries a not_affected justification"
+        ));
+    }
+    Ok(())
+}
+
 fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     let mut cur = v;
     for p in path {
@@ -467,16 +531,38 @@ fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     cur.as_str().unwrap_or("")
 }
 
-/// The LAST quality-passing vuln statement for this instance, in file order. acks.jsonl is
-/// append-only, so file order is statement order — the OpenVEX sequence model (#251): a later
-/// statement supersedes an earlier one for the same product + vulnerability.
-pub(crate) fn last_vuln_ack<'a>(acks: &'a Acks, inst: &Instance) -> Option<&'a Value> {
-    acks.entries.iter().rev().find(|a| {
-        s(a, &["axis"]) == "vuln"
-            && s(a, &["vulnerability", "name"]) == inst.id
-            && s(a, &["product", "package"]) == inst.package
-            && s(a, &["product", "version"]) == inst.version
-    })
+/// The LAST quality-passing vuln statement for this instance in the binary `digest`, in file
+/// order. acks.jsonl is append-only, so file order is statement order — the OpenVEX sequence
+/// model (#251): a later statement supersedes an earlier one for the same product +
+/// vulnerability. The product is the binary: a statement names the digest it was made about and
+/// governs nothing else, so a new build of the same package version is judged afresh.
+pub(crate) fn last_vuln_ack<'a>(
+    acks: &'a Acks,
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    last_vuln_statement(&acks.entries, inst, digest)
+}
+
+pub(crate) fn last_vuln_statement<'a>(
+    entries: &'a [Value],
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    entries
+        .iter()
+        .rev()
+        .find(|a| is_vuln_statement(a, inst, digest))
+}
+
+/// A vuln statement about this instance in the binary `digest`.
+pub(crate) fn is_vuln_statement(a: &Value, inst: &Instance, digest: &str) -> bool {
+    s(a, &["axis"]) == "vuln"
+        && !digest.is_empty()
+        && s(a, &["product", "digest"]) == digest
+        && s(a, &["vulnerability", "name"]) == inst.id
+        && s(a, &["product", "package"]) == inst.package
+        && s(a, &["product", "version"]) == inst.version
 }
 
 /// CycloneDX-style property (`properties: [{name, value}]`) naming the advisory-DB commit at
@@ -497,8 +583,144 @@ pub(crate) fn observed_absent_at_db(a: &Value) -> Option<&str> {
 /// only ever asked about an instance the DB reports NOW, so a last statement that says "the DB
 /// did not report it" is contradicted by the measurement and void: the reappearance is RAISE
 /// uncovered until signed afresh (fail-closed, #251). Nothing is committed from CI for this.
-pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance) -> bool {
-    last_vuln_ack(acks, inst).is_some_and(|a| observed_absent_at_db(a).is_none())
+pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance, digest: &str) -> bool {
+    governing_vuln_ack(acks, inst, digest).is_some()
+}
+
+/// OpenVEX `not_affected` justifications, each with the CycloneDX justifications that say the
+/// same thing. A digest-bound statement's two rulings must correspond (the VDR publishes the
+/// CycloneDX one, the gate reads the OpenVEX one).
+pub(crate) const JUSTIFICATIONS: &[(&str, &[&str])] = &[
+    ("component_not_present", &["code_not_present"]),
+    ("vulnerable_code_not_present", &["code_not_present"]),
+    (
+        "vulnerable_code_not_in_execute_path",
+        &["code_not_reachable"],
+    ),
+    (
+        "vulnerable_code_cannot_be_controlled_by_adversary",
+        &[
+            "requires_configuration",
+            "requires_dependency",
+            "requires_environment",
+            "protected_at_perimeter",
+        ],
+    ),
+    (
+        "inline_mitigations_already_exist",
+        &[
+            "protected_by_compiler",
+            "protected_at_runtime",
+            "protected_at_perimeter",
+            "protected_by_mitigating_control",
+        ],
+    ),
+];
+
+/// The statement's claim rests on a reachability record (#520): every `not_affected` except
+/// `component_not_present`, which claims the package is absent (the VDR measures that from the
+/// binary). Anything else, including a missing or unknown justification, needs the record.
+pub(crate) fn needs_record(a: &Value) -> bool {
+    s(a, &["status"]) == "not_affected" && s(a, &["justification"]) != "component_not_present"
+}
+
+/// Whether an instance in a binary is covered.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum Cover {
+    Yes,
+    /// Not covered; the reason when a statement exists but cannot cover.
+    No(Option<String>),
+    /// Cannot be told (a record that does not reproduce, a fetch that failed): never acked past.
+    Unknown(String),
+}
+
+/// Coverage of `inst` in `digest`: the governing statement, and for every `not_affected` the
+/// evidence under it, judged by `record`: the reachability record a claim about the code names,
+/// or the binary's own measurement for `component_not_present`.
+pub(crate) fn coverage(
+    acks: &Acks,
+    inst: &Instance,
+    digest: &str,
+    record: &mut dyn FnMut(&Value, &Instance) -> Cover,
+) -> Cover {
+    match governing_vuln_ack(acks, inst, digest) {
+        None => Cover::No(None),
+        // A claim about the code rests on its record; `component_not_present` on the binary's
+        // own measurement. Neither is taken on the statement's word.
+        Some(a) if s(a, &["status"]) == "not_affected" => record(a, inst),
+        Some(_) => Cover::Yes,
+    }
+}
+
+/// Rebuilds a record's bytes from the checkout for a query (affected functions).
+pub(crate) type Regenerate<'a> =
+    &'a mut dyn FnMut(&BTreeMap<String, Vec<String>>) -> Result<String, String>;
+
+/// The gate's record check: the record named for this instance and the scan's query must be
+/// committed in `dir`, hash to the statement's `evidence_sha256`, and reproduce byte for byte
+/// from the checkout (`regenerate`). A record that is there and does not reproduce cannot be
+/// acked past.
+pub(crate) fn record_cover(
+    a: &Value,
+    inst: &Instance,
+    scan: &Value,
+    dir: &Path,
+    regenerate: Option<Regenerate<'_>>,
+) -> Cover {
+    let functions =
+        match crate::reach::affected_functions(scan, &inst.id, &inst.package, &inst.version) {
+            Ok(f) => f,
+            Err(e) => return Cover::Unknown(e),
+        };
+    let name = match crate::reach::record_name(&inst.id, &inst.package, &inst.version, &functions) {
+        Ok(n) => n,
+        Err(e) => return Cover::No(Some(format!("{}: {e}", inst.id))),
+    };
+    let path = dir.join("reach").join(&name);
+    let Ok(bytes) = std::fs::read(&path) else {
+        return Cover::No(Some(format!(
+            "{} {} {}: the statement's claim needs reachability record `reach/{name}`, not committed \
+             (`cargo xtask reach emit`)",
+            inst.id, inst.package, inst.version
+        )));
+    };
+    let sha = crate::sha256::sha256_hex(&bytes);
+    if s(a, &["evidence_sha256"]) != sha {
+        return Cover::No(Some(format!(
+            "{} {} {}: the statement's `evidence_sha256` is not the sha256 of `reach/{name}` ({sha})",
+            inst.id, inst.package, inst.version
+        )));
+    }
+    let Some(regenerate) = regenerate else {
+        return Cover::Yes;
+    };
+    match regenerate(&functions) {
+        Ok(text) if text.as_bytes() == bytes.as_slice() => Cover::Yes,
+        Ok(_) => Cover::Unknown(format!(
+            "reach/{name} does not reproduce from the checkout: a record that does not reproduce \
+             cannot be acked past"
+        )),
+        Err(e) => Cover::Unknown(format!("reach/{name}: {e}")),
+    }
+}
+
+/// The statement that covers this instance in `digest`, if one does: the gate, the monitor and
+/// the VDR's `analysis` all read coverage through here.
+pub(crate) fn governing_vuln_ack<'a>(
+    acks: &'a Acks,
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    governing_vuln_statement(&acks.entries, inst, digest)
+}
+
+/// `governing_vuln_ack` over quality-passing entries already loaded.
+pub(crate) fn governing_vuln_statement<'a>(
+    entries: &'a [Value],
+    inst: &Instance,
+    digest: &str,
+) -> Option<&'a Value> {
+    last_vuln_statement(entries, inst, digest).filter(|a| observed_absent_at_db(a).is_none())
 }
 
 /// A mal ack covers one FINDING: (digest, engine, result). The result string is part of the
@@ -618,14 +840,15 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
 /// CycloneDX `state` / `justification` / `response` the VDR copies. It starts at `in_triage`, the
 /// one state that claims nothing. Measured facts (binary presence, version ranges, digests,
 /// dependency paths) live in the VDR's own fields and are not restated in the notes. Caps acks use `reviewed`: a caps ack signs an inventory, not a
-/// vulnerability status, so the OpenVEX statuses do not apply there. The gate reads `status` for
-/// exactly one thing: a vuln statement whose status is `fixed` withdraws coverage (#251).
-pub(crate) fn ack_template_vuln(tool: &str, inst: &Instance) -> String {
+/// vulnerability status, so the OpenVEX statuses do not apply there. The statement names the
+/// binary it is about (`product.digest`) and covers that binary only; the quality bar holds the
+/// OpenVEX status and the CycloneDX state to the same direction (`vuln_bound_quality`).
+pub(crate) fn ack_template_vuln(tool: &str, digest: &str, inst: &Instance) -> String {
     serde_json::json!({
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "vuln",
         "vulnerability": {"name": inst.id},
-        "product": {"name": tool, "package": inst.package, "version": inst.version},
+        "product": {"name": tool, "digest": digest, "package": inst.package, "version": inst.version},
         "status": "affected",
         "cyclonedx": {"state": "in_triage"},
         "status_notes": "",
@@ -653,6 +876,7 @@ pub(crate) enum GoneMechanism {
 /// quality bar still demands a signer. Appended, never replacing — the sequence is the record.
 pub(crate) fn ack_template_vuln_not_affected_observed(
     tool: &str,
+    digest: &str,
     inst: &Instance,
     db: &str,
     how: &GoneMechanism,
@@ -668,9 +892,10 @@ pub(crate) fn ack_template_vuln_not_affected_observed(
         "schema": "hp-thermal/evidence-ack/v1",
         "axis": "vuln",
         "vulnerability": {"name": inst.id},
-        "product": {"name": tool, "package": inst.package, "version": inst.version},
+        "product": {"name": tool, "digest": digest, "package": inst.package, "version": inst.version},
         "status": "not_affected",
         "justification": "vulnerable_code_not_present",
+        "cyclonedx": {"state": "not_affected", "justification": "code_not_present"},
         "status_notes": format!(
             "not reported by RustSec against {} {} at advisory DB {}: {mechanism} (monitor-vuln); supersedes the earlier statement for this instance",
             inst.package,
@@ -730,6 +955,8 @@ enum Verdict {
     RaiseUncovered {
         covered: Vec<String>,
         needed: Vec<String>,
+        /// Why an item that has a statement is still uncovered (e.g. its record is missing).
+        notes: Vec<String>,
     },
     /// Missing/failed/partial data — blocks, and CANNOT be acked (#241 §3).
     Unevaluated(String),
@@ -754,29 +981,44 @@ impl Verdict {
 
 fn vuln_verdict(
     tool: &str,
+    digest: &str,
     added: &[Instance],
     carried: &[Instance],
     fixed_count: usize,
     acks: &Acks,
+    record: &mut dyn FnMut(&Value, &Instance) -> Cover,
 ) -> Verdict {
     let mut covered = Vec::new();
     let mut needed = Vec::new();
+    let mut notes = Vec::new();
+    let mut unknown = Vec::new();
     for (label, set) in [("added", added), ("carried-unacked", carried)] {
         for i in set {
-            if ack_covers_vuln(acks, i) {
-                covered.push(format!("{label}: {} {} {}", i.id, i.package, i.version));
-            } else {
-                needed.push(ack_template_vuln(tool, i));
+            match coverage(acks, i, digest, record) {
+                Cover::Yes => {
+                    covered.push(format!("{label}: {} {} {}", i.id, i.package, i.version))
+                }
+                Cover::No(why) => {
+                    notes.extend(why);
+                    needed.push(ack_template_vuln(tool, digest, i));
+                }
+                Cover::Unknown(why) => {
+                    unknown.push(format!("{} {} {}: {why}", i.id, i.package, i.version))
+                }
             }
         }
     }
-    if !needed.is_empty() {
-        return Verdict::RaiseUncovered { covered, needed };
+    if !unknown.is_empty() {
+        return Verdict::Unevaluated(unknown.join("\n  - "));
     }
-    if added.is_empty()
-        && carried.iter().all(|i| ack_covers_vuln(acks, i))
-        && covered.len() == carried.len()
-    {
+    if !needed.is_empty() {
+        return Verdict::RaiseUncovered {
+            covered,
+            needed,
+            notes,
+        };
+    }
+    if added.is_empty() && covered.len() == carried.len() {
         // added = ∅ and every carried instance acked -> the §4 relative ∧ absolute ALLOW.
         return Verdict::Allow(format!(
             "no added instances; {} carried all acked; {fixed_count} fixed",
@@ -784,6 +1026,167 @@ fn vuln_verdict(
         ));
     }
     Verdict::RaiseCovered(covered)
+}
+
+/// The gate's record judge for one pinned or candidate row (#520): the record directory the
+/// checkout selects for (tool, digest), and regeneration from the checkout's inputs — the frozen
+/// lock, the row's repo and rev, the tool's patches — with the query from the asking scan.
+fn gate_record_judge<'a>(
+    row: &'a ToolLine,
+    evidence_dir: &'a Path,
+    locks_dir: &'a Path,
+) -> impl FnMut(&Value, &Instance, &Value) -> Cover + 'a {
+    move |a, inst, scan| {
+        let dir = match crate::evidence_rev::current(evidence_dir, locks_dir, &row.name, &row.sha) {
+            Ok(r) => r.dir,
+            Err(e) => return Cover::Unknown(e),
+        };
+        if !needs_record(a) {
+            return measured_absent(&row.name, &row.sha, &dir, inst);
+        }
+        let lock = locks_dir.join(format!("{}.lock", row.name));
+        let mut regen = |functions: &BTreeMap<String, Vec<String>>| -> Result<String, String> {
+            let i = crate::reach::Inputs {
+                tool: row.name.clone(),
+                digest: row.sha.clone(),
+                repo: row.repo.clone(),
+                rev: row.rev.clone(),
+                lock: std::fs::read_to_string(&lock).map_err(|e| {
+                    format!("{}: {e} (a record needs the frozen lock)", lock.display())
+                })?,
+                patches: crate::reach::patches_for(&row.name)?,
+                id: inst.id.clone(),
+                package: inst.package.clone(),
+                version: inst.version.clone(),
+                functions: functions.clone(),
+            };
+            Ok(crate::reach::generate(&i)?.1)
+        };
+        record_cover(a, inst, scan, &dir, Some(&mut regen))
+    }
+}
+
+/// A `component_not_present` statement against the binary itself (#520): the package must be
+/// `excluded` by the same measurement the VDR's scope comes from (the pinned binary's `.dep-v0`
+/// and its custody-verified build record). A record directory without a build record cannot
+/// tell a standard-library copy apart, so it cannot be judged. One measurement per digest per run.
+pub(crate) fn measured_absent(tool: &str, digest: &str, dir: &Path, inst: &Instance) -> Cover {
+    use std::sync::{Arc, Mutex, OnceLock};
+    type Scoped = Arc<Result<Vec<Value>, String>>;
+    static SCOPES: OnceLock<Mutex<BTreeMap<String, Scoped>>> = OnceLock::new();
+    if !dir.join(crate::build_record::FILE).is_file() {
+        return Cover::Unknown(format!(
+            "{} {}: no build record under {}; presence cannot be measured",
+            inst.package,
+            inst.version,
+            dir.display()
+        ));
+    }
+    let key = format!("{tool}@{digest}@{}", dir.display());
+    let cache = SCOPES.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let cached = cache.lock().ok().and_then(|c| c.get(&key).cloned());
+    let comps = match cached {
+        Some(c) => c,
+        None => {
+            let c: Scoped =
+                Arc::new(crate::vdr::tool_components(tool, digest, dir).map(|(c, _)| c));
+            if let Ok(mut m) = cache.lock() {
+                m.insert(key, c.clone());
+            }
+            c
+        }
+    };
+    let comps = match comps.as_ref() {
+        Ok(c) => c,
+        Err(e) => {
+            return Cover::Unknown(format!(
+                "presence of {} {}: {e}",
+                inst.package, inst.version
+            ));
+        }
+    };
+    let scope = comps
+        .iter()
+        .find(|c| s(c, &["name"]) == inst.package && s(c, &["version"]) == inst.version)
+        .map(|c| s(c, &["scope"]));
+    match scope {
+        Some("excluded") => Cover::Yes,
+        Some(other) => Cover::No(Some(format!(
+            "{} {} {}: the statement says the component is not present; the binary's measurement \
+             scopes it `{}`",
+            inst.id,
+            inst.package,
+            inst.version,
+            if other.is_empty() { "listed" } else { other }
+        ))),
+        None => Cover::Unknown(format!(
+            "{} {} is not among the lock's components",
+            inst.package, inst.version
+        )),
+    }
+}
+
+/// The pinned rows of `tool` an acks edit re-judges (#519): every row TOOLS.lock pins for it,
+/// except one the candidate path judges with the same statements (same name, target, digest).
+/// Evidence-edit rows and a multi-target tool's other targets are included.
+fn rows_to_rejudge<'a>(
+    tool: &str,
+    head: &'a [ToolLine],
+    cands: &[(Option<ToolLine>, ToolLine)],
+) -> Vec<&'a ToolLine> {
+    head.iter()
+        .filter(|l| {
+            l.name == tool
+                && !cands
+                    .iter()
+                    .any(|(_, h)| h.name == l.name && h.target == l.target && h.sha == l.sha)
+        })
+        .collect()
+}
+
+/// The vuln axis of one pinned row whose statements changed (#519): its current instances are
+/// judged with the edited statements. Instances in the row's recorded baseline are carried; any
+/// other is added (signed RAISE when covered, never ALLOW). Without a baseline every instance
+/// is added. A row the bless flow has not produced cannot be judged.
+fn judge_pinned_row(
+    row: &ToolLine,
+    acks: &Acks,
+    baseline: Option<&BTreeSet<Instance>>,
+    scan: &mut dyn FnMut(&ToolLine) -> Result<Value, String>,
+    floors: &crate::floors::Floors,
+    record: &mut dyn FnMut(&Value, &Instance, &Value) -> Cover,
+) -> Verdict {
+    if row.sha == ZERO_DIGEST || row.sha.len() != 64 {
+        return Verdict::Unevaluated(format!(
+            "{} [{}]: digest is unset/malformed — nothing blessed to judge",
+            row.name, row.target
+        ));
+    }
+    let json = match scan(row) {
+        Ok(j) => j,
+        Err(e) => return Verdict::Unevaluated(e),
+    };
+    let inst = extract_instances(&json);
+    let stops = floors.vuln_stops(&inst, &crate::floors::extract_cvss(&json));
+    if !stops.is_empty() {
+        return Verdict::HardStop(stops.join("\n  - "));
+    }
+    let (added, carried) = match baseline {
+        Some(b) => {
+            let (new, carried, _gone) = crate::monitor::classify(b, &inst);
+            (new, carried)
+        }
+        None => (inst.into_iter().collect(), Vec::new()),
+    };
+    vuln_verdict(
+        &row.name,
+        &row.sha,
+        &added,
+        &carried,
+        0,
+        acks,
+        &mut |a, i| record(a, i, &json),
+    )
 }
 
 fn mal_verdict(
@@ -877,7 +1280,11 @@ fn mal_verdict(
             if needed.is_empty() {
                 Verdict::RaiseCovered(covered)
             } else {
-                Verdict::RaiseUncovered { covered, needed }
+                Verdict::RaiseUncovered {
+                    covered,
+                    needed,
+                    notes: Vec::new(),
+                }
             }
         }
         None => Verdict::Unevaluated(format!("{}: no detections.malicious field", path.display())),
@@ -958,6 +1365,7 @@ fn caps_verdict(
             Verdict::RaiseUncovered {
                 covered: Vec::new(),
                 needed: vec![ack_template_caps(tool, digest, &caps_sha)],
+                notes: Vec::new(),
             }
         }
     } else if dir.join("caps.UNEVALUATED").exists() {
@@ -1160,6 +1568,7 @@ fn build_verdict(
         Verdict::RaiseUncovered {
             covered: Vec::new(),
             needed: vec![template.to_string()],
+            notes: Vec::new(),
         }
     }
 }
@@ -1287,6 +1696,169 @@ pub(crate) fn evidence_candidates(
         }
     }
     out
+}
+
+/// Every entry of every `reach/` directory under `root` (a digest's, or a revision's), by path
+/// relative to `root`: a file's bytes, or `None` for anything that is not a regular file.
+fn reach_entries(root: &Path) -> BTreeMap<PathBuf, Option<Vec<u8>>> {
+    let mut out = BTreeMap::new();
+    let subdirs = |p: &Path| -> Vec<PathBuf> {
+        std::fs::read_dir(p)
+            .map(|r| {
+                r.flatten()
+                    .map(|e| e.path())
+                    .filter(|p| p.is_dir())
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+    for tool in subdirs(root) {
+        for digest in subdirs(&tool) {
+            let mut dirs = vec![digest.join("reach")];
+            dirs.extend(
+                subdirs(&digest.join(crate::evidence_rev::REV_DIR))
+                    .into_iter()
+                    .map(|r| r.join("reach")),
+            );
+            for d in dirs {
+                for e in std::fs::read_dir(&d).into_iter().flatten().flatten() {
+                    let path = e.path();
+                    let Ok(rel) = path.strip_prefix(root) else {
+                        continue;
+                    };
+                    let bytes = path.is_file().then(|| std::fs::read(&path).ok()).flatten();
+                    out.insert(rel.to_path_buf(), bytes);
+                }
+            }
+        }
+    }
+    out
+}
+
+/// `RUSTSEC-YYYY-NNNN-<12 hex>.sarif`, the only name a record has (`reach::record_name`).
+fn is_record_name(name: &str) -> bool {
+    name.len() == 17 + 1 + 12 + 6
+        && crate::reach::is_rustsec_id(&name[..17])
+        && name.as_bytes()[17] == b'-'
+        && name[18..30]
+            .bytes()
+            .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+        && name.ends_with(".sarif")
+}
+
+/// Reachability records (#520) this change touches. Records are add-only: an edited or deleted
+/// record, or anything in a `reach/` directory that is not a record file, is refused. Returns the
+/// added records (relative to the evidence root) and the refusals.
+pub(crate) fn reach_changes(
+    evidence_dir: &Path,
+    base_evidence_dir: &Path,
+) -> (Vec<PathBuf>, Vec<String>) {
+    let head = reach_entries(evidence_dir);
+    let base = reach_entries(base_evidence_dir);
+    let mut refused = Vec::new();
+    for (rel, b) in &base {
+        // Pruning a digest's whole evidence directory takes its records with it.
+        let digest_dir: PathBuf = rel.iter().take(2).collect();
+        match head.get(rel) {
+            None if !evidence_dir.join(&digest_dir).is_dir() => {}
+            None => refused.push(format!("{}: a committed record was deleted", rel.display())),
+            Some(h) if h != b => {
+                refused.push(format!("{}: a committed record was edited", rel.display()))
+            }
+            _ => {}
+        }
+    }
+    let mut added = Vec::new();
+    for (rel, h) in &head {
+        if base.contains_key(rel) {
+            continue;
+        }
+        let name = rel
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if h.is_none() || !is_record_name(&name) {
+            refused.push(format!(
+                "{}: not a record file (reach/ holds only RUSTSEC-YYYY-NNNN-<h12>.sarif)",
+                rel.display()
+            ));
+        } else {
+            added.push(rel.clone());
+        }
+    }
+    (added, refused)
+}
+
+/// An added record must be what the checkout reproduces: it sits in the record directory the
+/// checkout selects for its (tool, digest), its name is the one its stated instance and query
+/// give, and regenerating it from the checkout's inputs with that query gives the same bytes.
+fn verify_added_record(
+    rel: &Path,
+    evidence_dir: &Path,
+    locks_dir: &Path,
+    head: &[ToolLine],
+    scan: &mut dyn FnMut(&str) -> Result<Value, String>,
+) -> Result<String, String> {
+    let bytes =
+        std::fs::read(evidence_dir.join(rel)).map_err(|e| format!("{}: {e}", rel.display()))?;
+    let v: Value = serde_json::from_slice(&bytes).map_err(|e| format!("not JSON: {e}"))?;
+    let props = &v["runs"][0]["properties"];
+    let (tool, digest) = (s(props, &["tool"]), s(props, &["digest"]));
+    let functions: BTreeMap<String, Vec<String>> = serde_json::from_value(
+        v["runs"][0]["tool"]["driver"]["rules"][0]["properties"]["functions"].clone(),
+    )
+    .map_err(|e| format!("no query: {e}"))?;
+    let (id, package, version) = (
+        s(props, &["advisory"]),
+        s(props, &["package"]),
+        s(props, &["version"]),
+    );
+    let row = head
+        .iter()
+        .find(|l| l.name == tool && l.sha == digest)
+        .ok_or_else(|| format!("states {tool} {digest}, which TOOLS.lock does not pin"))?;
+    // The query is the advisory's as the gate's own scan states it, not the record's word.
+    let now =
+        crate::reach::affected_functions(&scan(tool)?, id, package, version).map_err(|e| {
+            format!("{e}: a record can only be checked for an instance the scan reports")
+        })?;
+    if now != functions {
+        return Err(format!(
+            "states a query other than the advisory's affected functions in the scan ({})",
+            now.keys().cloned().collect::<Vec<_>>().join(", ")
+        ));
+    }
+    let dir = crate::evidence_rev::current(evidence_dir, locks_dir, tool, digest)?
+        .dir
+        .join("reach");
+    let name = crate::reach::record_name(id, package, version, &functions)?;
+    if evidence_dir.join(rel) != dir.join(&name) {
+        return Err(format!(
+            "its instance and query name it {}/{name}",
+            dir.strip_prefix(evidence_dir).unwrap_or(&dir).display()
+        ));
+    }
+    let i = crate::reach::Inputs {
+        tool: tool.into(),
+        digest: digest.into(),
+        repo: row.repo.clone(),
+        rev: row.rev.clone(),
+        lock: std::fs::read_to_string(locks_dir.join(format!("{tool}.lock")))
+            .map_err(|e| format!("frozen lock: {e}"))?,
+        patches: crate::reach::patches_for(tool)?,
+        id: id.into(),
+        package: package.into(),
+        version: version.into(),
+        functions,
+    };
+    let (_, text) = crate::reach::generate(&i)?;
+    if text.as_bytes() != bytes.as_slice() {
+        return Err("does not reproduce from the checkout".into());
+    }
+    Ok(format!(
+        "{id} {package} {version}: reproduces from the checkout (sha256 {})",
+        crate::sha256::sha256_hex(&bytes)
+    ))
 }
 
 /// Tools whose acks.jsonl differs from the base commit's — loaded and quality-checked even
@@ -2150,6 +2722,7 @@ pub fn run(args: &[String]) -> i32 {
         .collect();
     let ev_cands = evidence_candidates(&head, &cands, &evidence_dir, &base_evidence_dir);
     let changed_acks = changed_ack_files(&head, &evidence_dir, &base_evidence_dir);
+    let (reach_added, reach_refused) = reach_changes(&evidence_dir, &base_evidence_dir);
     let historical = non_frontier_changes(&head, &evidence_dir, &base_evidence_dir);
 
     let mut reports = Vec::new();
@@ -2279,7 +2852,16 @@ pub fn run(args: &[String]) -> i32 {
                 return Ok(Verdict::HardStop(stops.join("
   - ")));
             }
-            Ok(vuln_verdict(&h.name, &added, &carried, fixed.len(), &acks))
+            let mut judge = gate_record_judge(h, &evidence_dir, &locks_dir);
+            Ok(vuln_verdict(
+                &h.name,
+                &h.sha,
+                &added,
+                &carried,
+                fixed.len(),
+                &acks,
+                &mut |a, i| judge(a, i, &head_json),
+            ))
         })()
         .unwrap_or_else(Verdict::Unevaluated);
         axes.push(("vuln", vuln));
@@ -2540,47 +3122,150 @@ pub fn run(args: &[String]) -> i32 {
                 axes,
             });
         }
-        // Ack-file edits with nothing else to evaluate: the quality bar still applies.
+        // A statement edit changes what covers the pinned binaries (#519): every pinned row of a
+        // tool whose acks.jsonl changed is judged again with the edited statements, except a row
+        // the candidate path above already judged with them (same name, target and digest). An
+        // evidence-edit row is judged here: that path does not re-scan.
         for tool in &changed_acks {
-            if ev_cands.iter().any(|(h, _)| &h.name == tool)
-                || cands.iter().any(|(_, h)| &h.name == tool)
-            {
-                continue; // already loaded and reported above
+            let reported = ev_cands.iter().any(|(h, _)| &h.name == tool)
+                || cands.iter().any(|(_, h)| &h.name == tool);
+            let acks = match load_acks(&evidence_dir.join(tool).join("acks.jsonl")) {
+                Ok(a) => a,
+                Err(e) => {
+                    if !reported {
+                        reports.push(CandidateReport {
+                            name: format!("{tool} (acks edit)"),
+                            tool: tool.clone(),
+                            summary: String::new(),
+                            axes: vec![("acks", Verdict::Unevaluated(e))],
+                        });
+                    }
+                    continue;
+                }
+            };
+            if !acks.rejected.is_empty() {
+                if !reported {
+                    reports.push(CandidateReport {
+                        name: format!("{tool} (acks edit)"),
+                        tool: tool.clone(),
+                        summary: String::new(),
+                        axes: vec![(
+                            "ack-quality",
+                            Verdict::Unevaluated(format!(
+                                "{} ack line(s) failed the quality bar:\n    {}",
+                                acks.rejected.len(),
+                                acks.rejected.join("\n    ")
+                            )),
+                        )],
+                    });
+                }
+                continue;
             }
-            match load_acks(&evidence_dir.join(tool).join("acks.jsonl")) {
-                Ok(a) if a.rejected.is_empty() => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
-                    tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![(
+            for row in rows_to_rejudge(tool, &head, &cands) {
+                // The baseline only splits added from carried (signed RAISE vs ALLOW, both
+                // passing); coverage is required for every instance either way.
+                let baseline = crate::monitor::load_baseline(&evidence_dir, &row.name, &row.sha)
+                    .map(|(set, _db)| set);
+                let mut scan = |r: &ToolLine| -> Result<Value, String> {
+                    let dest = std::env::temp_dir()
+                        .join(format!("gate-{}-{}-acks.lock", r.name, r.target));
+                    let (lock, _src) =
+                        resolve_lock(&r.name, &r.repo, &r.rev, Some(&locks_dir), &dest)?;
+                    let json = run_audit(&lock, !first_scan)?;
+                    first_scan = false;
+                    if db_stamp.is_empty() {
+                        db_stamp = format!(
+                            "advisory-db {} ({})",
+                            s(&json, &["database", "last-commit"]),
+                            s(&json, &["database", "last-updated"]),
+                        );
+                    }
+                    Ok(json)
+                };
+                let mut judge = gate_record_judge(row, &evidence_dir, &locks_dir);
+                let vuln =
+                    judge_pinned_row(row, &acks, baseline.as_ref(), &mut scan, floors, &mut judge);
+                let mut axes = Vec::new();
+                if !reported {
+                    axes.push((
                         "ack-quality",
                         Verdict::Allow(format!(
-                            "{} ack line(s) pass the quality bar; nothing to evaluate against",
-                            a.entries.len()
+                            "{} ack line(s) pass the quality bar",
+                            acks.entries.len()
                         )),
-                    )],
-                }),
-                Ok(a) => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
+                    ));
+                }
+                axes.push(("vuln", vuln));
+                reports.push(CandidateReport {
+                    name: format!("{tool} [{}] (acks edit)", row.target),
                     tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![(
-                        "ack-quality",
-                        Verdict::Unevaluated(format!(
-                            "{} ack line(s) failed the quality bar:\n    {}",
-                            a.rejected.len(),
-                            a.rejected.join("\n    ")
-                        )),
-                    )],
-                }),
-                Err(e) => reports.push(CandidateReport {
-                    name: format!("{tool} (acks edit)"),
-                    tool: tool.clone(),
-                    summary: String::new(),
-                    axes: vec![("acks", Verdict::Unevaluated(e))],
-                }),
+                    summary: format!(
+                        "statement edit: pinned digest {} judged with the edited statements{}",
+                        &row.sha[..12.min(row.sha.len())],
+                        if baseline.is_some() {
+                            ""
+                        } else {
+                            " (no recorded baseline: every instance added)"
+                        }
+                    ),
+                    axes,
+                });
             }
         }
+    }
+
+    // ---------- reachability records (#520): add-only, and each added one reproduces ----------
+    if !reach_refused.is_empty() {
+        reports.push(CandidateReport {
+            name: "reachability records".into(),
+            tool: String::new(),
+            summary: String::new(),
+            axes: vec![(
+                "reach",
+                Verdict::HardStop(format!(
+                    "records are add-only (#520):\n    {}",
+                    reach_refused.join("\n    ")
+                )),
+            )],
+        });
+    }
+    let mut tool_scans: BTreeMap<String, Value> = BTreeMap::new();
+    for rel in &reach_added {
+        let mut scan = |tool: &str| -> Result<Value, String> {
+            if let Some(v) = tool_scans.get(tool) {
+                return Ok(v.clone());
+            }
+            let json = run_audit(&locks_dir.join(format!("{tool}.lock")), !first_scan)?;
+            first_scan = false;
+            if db_stamp.is_empty() {
+                db_stamp = format!(
+                    "advisory-db {} ({})",
+                    s(&json, &["database", "last-commit"]),
+                    s(&json, &["database", "last-updated"]),
+                );
+            }
+            tool_scans.insert(tool.to_string(), json.clone());
+            Ok(json)
+        };
+        let verdict = match verify_added_record(rel, &evidence_dir, &locks_dir, &head, &mut scan) {
+            Ok(m) => Verdict::Allow(m),
+            Err(e) => Verdict::Unevaluated(format!("{}: {e}", rel.display())),
+        };
+        reports.push(CandidateReport {
+            name: format!(
+                "reach/{}",
+                rel.file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default()
+            ),
+            tool: rel
+                .iter()
+                .next()
+                .map(|c| c.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+            summary: format!("record added: {}", rel.display()),
+            axes: vec![("reach", verdict)],
+        });
     }
 
     let is_current = |dir: &Path| -> bool {
@@ -2634,12 +3319,20 @@ pub fn run(args: &[String]) -> i32 {
     // ---------- report ----------
     let mut md =
         String::from("<!-- candidate-eval -->\n## Candidate evaluation (3-axis gate, #241)\n\n");
-    if cands.is_empty() && ev_cands.is_empty() && changed_acks.is_empty() {
+    if cands.is_empty()
+        && ev_cands.is_empty()
+        && changed_acks.is_empty()
+        && reach_added.is_empty()
+        && reach_refused.is_empty()
+    {
         md.push_str(
             "No TOOLS.lock candidates, no frontier evidence changes, no ack changes in this change.\n",
         );
     } else if cands.is_empty() {
         md.push_str("No TOOLS.lock candidates; evidence/ack edits on the live frontier evaluated below (#380).\n");
+        if !db_stamp.is_empty() {
+            let _ = writeln!(md, "*vuln instrument: {db_stamp}*\n");
+        }
     } else if !db_stamp.is_empty() {
         let _ = writeln!(
             md,
@@ -2661,9 +3354,16 @@ pub fn run(args: &[String]) -> i32 {
                         let _ = writeln!(md, "  - signed: {i}");
                     }
                 }
-                Verdict::RaiseUncovered { covered, needed } => {
+                Verdict::RaiseUncovered {
+                    covered,
+                    needed,
+                    notes,
+                } => {
                     for i in covered {
                         let _ = writeln!(md, "  - signed: {i}");
+                    }
+                    for n in notes {
+                        let _ = writeln!(md, "  - {n}");
                     }
                     let _ = writeln!(
                         md,
@@ -2734,9 +3434,11 @@ mod tests {
             rejected: Vec::new(),
         }
     }
+    /// The binary the vuln tests' statements are about.
+    const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
     fn good_vuln_ack(id: &str, pkg: &str, ver: &str) -> String {
         format!(
-            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","package":"{pkg}","version":"{ver}"}},"status":"affected","status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","digest":"{D}","package":"{pkg}","version":"{ver}"}},"status":"affected","cyclonedx":{{"state":"in_triage"}},"status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
         )
     }
 
@@ -2810,7 +3512,15 @@ mod tests {
     #[test]
     fn vuln_allow_requires_added_empty_and_carried_acked() {
         let acks = ack(&good_vuln_ack("B", "q", "2"));
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 3, &acks);
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            3,
+            &acks,
+            &mut |_, _| Cover::Unknown("no record judge".into()),
+        );
         assert!(matches!(v, Verdict::Allow(_)));
     }
 
@@ -2819,7 +3529,15 @@ mod tests {
         // No exchange rate: fixes never buy an addition; an acked addition is
         // signed-RAISE, not ALLOW.
         let acks = ack(&good_vuln_ack("C", "r", "3"));
-        let v = vuln_verdict("t", &[inst("C", "r", "3")], &[], 99, &acks);
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[inst("C", "r", "3")],
+            &[],
+            99,
+            &acks,
+            &mut |_, _| Cover::Unknown("no record judge".into()),
+        );
         assert!(matches!(v, Verdict::RaiseCovered(_)));
     }
 
@@ -2831,6 +3549,7 @@ mod tests {
         let affected = good_vuln_ack("B", "q", "2");
         let observed = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("B", "q", "2"),
             "0123456789abcdef0123",
             &GoneMechanism::VersionsNarrowed,
@@ -2839,33 +3558,45 @@ mod tests {
         .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-10\"");
         let mut acks = ack(&affected);
         acks.entries.push(serde_json::from_str(&observed).unwrap());
-        assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2")));
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 0, &acks);
+        assert!(!ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::Unknown("no record judge".into()),
+        );
         assert!(matches!(v, Verdict::RaiseUncovered { .. }));
         acks.entries.push(serde_json::from_str(&affected).unwrap());
-        assert!(ack_covers_vuln(&acks, &inst("B", "q", "2")));
+        assert!(ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
         // a maintainer-reviewed not_affected (no grounding property) IS coverage
-        let reviewed = affected.replace(
-            "\"status\":\"affected\"",
-            "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
-        );
-        assert!(ack_covers_vuln(&ack(&reviewed), &inst("B", "q", "2")));
+        let reviewed = affected
+            .replace(
+                "\"status\":\"affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+            )
+            .replace("in_triage", "not_affected");
+        assert!(ack_covers_vuln(&ack(&reviewed), &inst("B", "q", "2"), D));
         // a grounded statement for ANOTHER instance changes nothing
         let other = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("B", "q", "3"),
             "0123456789abcdef0123",
             &GoneMechanism::Withdrawn("2026-01-01".into()),
         );
         let mut acks2 = ack(&affected);
         acks2.entries.push(serde_json::from_str(&other).unwrap());
-        assert!(ack_covers_vuln(&acks2, &inst("B", "q", "2")));
+        assert!(ack_covers_vuln(&acks2, &inst("B", "q", "2"), D));
     }
 
     #[test]
     fn not_affected_observed_template_is_grounded_and_needs_a_signer() {
         let t = ack_template_vuln_not_affected_observed(
             "t",
+            D,
             &inst("A", "p", "1"),
             "0123456789abcdef0123",
             &GoneMechanism::Withdrawn("2026-02-03".into()),
@@ -2891,11 +3622,147 @@ mod tests {
         let bare = good_vuln_ack("A", "p", "1")
             .replace("\"status\":\"affected\"", "\"status\":\"not_affected\"");
         assert!(ack_quality(&serde_json::from_str(&bare).unwrap()).is_err());
-        let justified = bare.replace(
-            "\"status\":\"not_affected\"",
+        let justified = bare
+            .replace(
+                "\"status\":\"not_affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+            )
+            .replace(
+                "{\"state\":\"in_triage\"}",
+                "{\"state\":\"not_affected\",\"justification\":\"code_not_present\"}",
+            );
+        assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
+    }
+
+    #[test]
+    fn a_vuln_statement_covers_only_the_binary_it_names() {
+        let i = inst("B", "q", "2");
+        let other = "e".repeat(64);
+        let mut acks = ack(&good_vuln_ack("B", "q", "2"));
+        assert!(ack_covers_vuln(&acks, &i, D));
+        assert!(
+            !ack_covers_vuln(&acks, &i, &other),
+            "a new build is judged afresh"
+        );
+        assert!(!ack_covers_vuln(&acks, &i, ""), "no binary, no coverage");
+        // a statement without a digest governs nothing, before or after a bound one
+        let legacy = good_vuln_ack("B", "q", "2").replace(&format!("\"digest\":\"{D}\","), "");
+        assert!(!ack_covers_vuln(&ack(&legacy), &i, D));
+        // a later statement about another binary does not supersede this binary's
+        let observed_other = ack_template_vuln_not_affected_observed(
+            "t",
+            &other,
+            &i,
+            "0123456789abcdef0123",
+            &GoneMechanism::VersionsNarrowed,
+        );
+        acks.entries
+            .push(serde_json::from_str(&observed_other).unwrap());
+        assert!(ack_covers_vuln(&acks, &i, D));
+        assert!(!ack_covers_vuln(&acks, &i, &other));
+        // the template names the binary
+        let t: Value = serde_json::from_str(&ack_template_vuln("t", D, &i)).unwrap();
+        assert_eq!(t["product"]["digest"], D);
+    }
+
+    #[test]
+    fn digest_bound_vuln_statements_must_agree_with_their_cyclonedx_ruling() {
+        let ok = |j: &str| ack_quality(&serde_json::from_str(j).unwrap()).is_ok();
+        let base = good_vuln_ack("A", "p", "1");
+        assert!(ok(&base));
+        // affected cannot publish a not_affected CycloneDX ruling
+        assert!(!ok(&base.replace("in_triage", "not_affected")));
+        // not_affected cannot ride an in_triage / exploitable ruling
+        let na = base.replace(
+            "\"status\":\"affected\"",
             "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
         );
-        assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
+        assert!(!ok(&na));
+        assert!(!ok(&na.replace("in_triage", "exploitable")));
+        let ruled = |cj: &str| {
+            na.replace(
+                "{\"state\":\"in_triage\"}",
+                &format!("{{\"state\":\"not_affected\",\"justification\":\"{cj}\"}}"),
+            )
+        };
+        assert!(ok(&ruled("code_not_present")));
+        // the two rulings must say the same thing, and the OpenVEX one is from the five
+        assert!(
+            !ok(&na.replace("in_triage", "not_affected")),
+            "no CycloneDX justification"
+        );
+        assert!(!ok(&ruled("code_not_reachable")));
+        let reach = ruled("code_not_reachable").replace(
+            "component_not_present",
+            "vulnerable_code_not_in_execute_path",
+        );
+        assert!(ok(&reach));
+        assert!(!ok(&reach.replace(
+            "vulnerable_code_not_in_execute_path",
+            "not_reachable_really"
+        )));
+        assert!(!ok(&reach.replace(
+            ",\"justification\":\"vulnerable_code_not_in_execute_path\"",
+            ",\"impact_statement\":\"x\""
+        )));
+        // a ruling is required, and the status must be one immutable bytes can carry
+        assert!(!ok(
+            &base.replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "")
+        ));
+        assert!(!ok(
+            &base.replace("\"status\":\"affected\"", "\"status\":\"reviewed\"")
+        ));
+        // affected carries no not_affected justification
+        assert!(!ok(&base.replace(
+            "\"status\":\"affected\"",
+            "\"status\":\"affected\",\"justification\":\"component_not_present\""
+        )));
+        // the digest is 64 lowercase hex
+        assert!(!ok(&base.replace(D, &D.to_uppercase())));
+        assert!(!ok(&base.replace(D, "dd")));
+        // a false_positive ruling still names one of the five, and any CycloneDX justification
+        // it carries must agree
+        let fp = |j: &str, cj: &str| {
+            base.replace(
+                "\"status\":\"affected\"",
+                &format!("\"status\":\"not_affected\",\"justification\":\"{j}\""),
+            )
+            .replace(
+                "{\"state\":\"in_triage\"}",
+                &if cj.is_empty() {
+                    "{\"state\":\"false_positive\"}".to_string()
+                } else {
+                    format!("{{\"state\":\"false_positive\",\"justification\":\"{cj}\"}}")
+                },
+            )
+        };
+        assert!(ok(&fp("component_not_present", "")));
+        assert!(ok(&fp("component_not_present", "code_not_present")));
+        assert!(!ok(&fp("component_not_present", "code_not_reachable")));
+        assert!(!ok(&fp("made_up", "")));
+        // under_investigation is in_triage
+        let ui = base.replace(
+            "\"status\":\"affected\"",
+            "\"status\":\"under_investigation\"",
+        );
+        assert!(ok(&ui));
+        assert!(!ok(&ui.replace("in_triage", "exploitable")));
+        // a line without a digest is not re-judged (append-only history): it passes, inert
+        let legacy = base
+            .replace(&format!("\"digest\":\"{D}\","), "")
+            .replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "");
+        assert!(ok(&legacy));
+        // the monitor's observation template passes once signed
+        let obs = ack_template_vuln_not_affected_observed(
+            "t",
+            D,
+            &inst("A", "p", "1"),
+            "0123456789abcdef0123",
+            &GoneMechanism::Withdrawn("2026-02-03".into()),
+        )
+        .replace("\"author\":\"\"", "\"author\":\"a\"")
+        .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-24\"");
+        assert!(ok(&obs));
     }
 
     #[test]
@@ -2904,10 +3771,399 @@ mod tests {
             entries: vec![],
             rejected: vec![],
         };
-        let v = vuln_verdict("t", &[], &[inst("B", "q", "2")], 0, &acks);
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::Unknown("no record judge".into()),
+        );
         match v {
             Verdict::RaiseUncovered { needed, .. } => assert_eq!(needed.len(), 1),
             other => panic!("expected uncovered, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn an_acks_edit_judges_each_pinned_row_with_the_edited_statements() {
+        let floors =
+            crate::floors::parse(include_str!("../../supply-chain/policy/floors.json")).unwrap();
+        let row = ToolLine {
+            name: "t".into(),
+            repo: "r".into(),
+            rev: "a".into(),
+            target: "x".into(),
+            sha: D.into(),
+        };
+        let audit = serde_json::json!({"vulnerabilities": {"list": [
+            {"advisory": {"id": "B"}, "package": {"name": "q", "version": "2"}},
+            {"advisory": {"id": "C"}, "package": {"name": "r", "version": "3"}}
+        ]}});
+        let mut scan = |_: &ToolLine| -> Result<Value, String> { Ok(audit.clone()) };
+        let mut both = ack(&good_vuln_ack("B", "q", "2"));
+        both.entries
+            .push(serde_json::from_str(&good_vuln_ack("C", "r", "3")).unwrap());
+        let baseline: BTreeSet<Instance> = [inst("B", "q", "2"), inst("C", "r", "3")].into();
+        let judge = |r: &ToolLine,
+                     a: &Acks,
+                     b: Option<&BTreeSet<Instance>>,
+                     s: &mut dyn FnMut(&ToolLine) -> Result<Value, String>| {
+            judge_pinned_row(r, a, b, s, &floors, &mut |_, _, _| {
+                Cover::Unknown("no record judge".into())
+            })
+        };
+        // every instance carried and covered in this digest: ALLOW
+        assert!(matches!(
+            judge(&row, &both, Some(&baseline), &mut scan),
+            Verdict::Allow(_)
+        ));
+        // an instance that appeared since bless, covered: signed RAISE, never ALLOW
+        let only_b: BTreeSet<Instance> = [inst("B", "q", "2")].into();
+        assert!(matches!(
+            judge(&row, &both, Some(&only_b), &mut scan),
+            Verdict::RaiseCovered(_)
+        ));
+        // no recorded baseline: every instance is added
+        assert!(matches!(
+            judge(&row, &both, None, &mut scan),
+            Verdict::RaiseCovered(_)
+        ));
+        // a statement withdrawn by the edit: uncovered
+        let one = ack(&good_vuln_ack("B", "q", "2"));
+        assert!(matches!(
+            judge(&row, &one, Some(&baseline), &mut scan),
+            Verdict::RaiseUncovered { .. }
+        ));
+        // statements about another binary cover nothing here
+        let other = ToolLine {
+            sha: "e".repeat(64),
+            ..row.clone()
+        };
+        assert!(matches!(
+            judge(&other, &both, Some(&baseline), &mut scan),
+            Verdict::RaiseUncovered { .. }
+        ));
+        // an unblessed row, or a scan that failed, cannot be judged
+        let zero = ToolLine {
+            sha: ZERO_DIGEST.into(),
+            ..row.clone()
+        };
+        assert!(matches!(
+            judge(&zero, &both, Some(&baseline), &mut scan),
+            Verdict::Unevaluated(_)
+        ));
+        let mut broken = |_: &ToolLine| -> Result<Value, String> { Err("no DB".into()) };
+        assert!(matches!(
+            judge(&row, &both, Some(&baseline), &mut broken),
+            Verdict::Unevaluated(_)
+        ));
+    }
+
+    #[test]
+    fn an_added_record_states_a_pinned_digest_and_the_scans_query() {
+        let root = std::env::temp_dir().join(format!("gate-reach-added-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let d = "d".repeat(64);
+        let rel = PathBuf::from("t")
+            .join(&d)
+            .join("reach")
+            .join("RUSTSEC-2026-0001-0123456789ab.sarif");
+        std::fs::create_dir_all(root.join(rel.parent().unwrap())).unwrap();
+        let record = |tool: &str, f: &str| {
+            serde_json::json!({"runs": [{
+                "tool": {"driver": {"rules": [{"id": "RUSTSEC-2026-0001", "properties": {"functions": {f: ["< 2"]}}}]}},
+                "properties": {"tool": tool, "digest": d, "advisory": "RUSTSEC-2026-0001", "package": "p", "version": "1.0.0"}
+            }]})
+            .to_string()
+        };
+        let head = [ToolLine {
+            name: "t".into(),
+            repo: "o/r".into(),
+            rev: "a".repeat(40),
+            target: "x".into(),
+            sha: d.clone(),
+        }];
+        let scan_json = serde_json::json!({"vulnerabilities": {"list": [{
+            "advisory": {"id": "RUSTSEC-2026-0001"},
+            "package": {"name": "p", "version": "1.0.0"},
+            "affected": {"functions": {"p::f": ["< 2"]}}
+        }]}});
+        let mut scan = |_: &str| -> Result<Value, String> { Ok(scan_json.clone()) };
+        let check = |body: &str, scan: &mut dyn FnMut(&str) -> Result<Value, String>| {
+            std::fs::write(root.join(&rel), body).unwrap();
+            verify_added_record(&rel, &root, &root.join("locks"), &head, scan).unwrap_err()
+        };
+        assert!(check("not json", &mut scan).contains("not JSON"));
+        assert!(check(&record("other", "p::f"), &mut scan).contains("does not pin"));
+        let e = check(&record("t", "p::g"), &mut scan);
+        assert!(e.contains("query other than"), "{e}");
+        let mut silent = |_: &str| -> Result<Value, String> { Ok(serde_json::json!({})) };
+        let e = check(&record("t", "p::f"), &mut silent);
+        assert!(e.contains("an instance the scan reports"), "{e}");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn records_are_add_only_and_only_records_live_in_reach() {
+        let root = std::env::temp_dir().join(format!("gate-reach-ledger-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let (base, head) = (root.join("base"), root.join("head"));
+        let d = "d".repeat(64);
+        let l = "1".repeat(64);
+        let rec = |r: &Path, sub: &str, name: &str, body: &str| {
+            let dir = r.join("t").join(&d).join(sub).join("reach");
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(dir.join(name), body).unwrap();
+        };
+        let a = "RUSTSEC-2026-0001-0123456789ab.sarif";
+        let b = "RUSTSEC-2026-0002-0123456789ab.sarif";
+        for r in [&base, &head] {
+            rec(r, "", a, "{}\n");
+        }
+        // unchanged: nothing to report
+        assert_eq!(reach_changes(&head, &base), (Vec::new(), Vec::new()));
+        // an addition at the digest and under a revision
+        rec(&head, "", b, "{}\n");
+        rec(&head, &format!("rev/{l}"), a, "{}\n");
+        let (added, refused) = reach_changes(&head, &base);
+        assert!(refused.is_empty(), "{refused:?}");
+        assert_eq!(added.len(), 2);
+        // an edit, and a file that is not a record
+        rec(&head, "", a, "{\"edited\": 1}\n");
+        rec(&head, "", "notes.txt", "x");
+        let (_, refused) = reach_changes(&head, &base);
+        assert_eq!(refused.len(), 2, "{refused:?}");
+        // a deletion
+        std::fs::remove_file(head.join("t").join(&d).join("reach").join(a)).unwrap();
+        let (_, refused) = reach_changes(&head, &base);
+        assert!(refused.iter().any(|r| r.contains("deleted")), "{refused:?}");
+        // pruning the digest's whole evidence directory takes its records with it
+        std::fs::remove_dir_all(head.join("t").join(&d)).unwrap();
+        let (added, refused) = reach_changes(&head, &base);
+        assert!(
+            refused.is_empty() && added.is_empty(),
+            "{refused:?} {added:?}"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+        // names
+        assert!(is_record_name(a));
+        for bad in [
+            "RUSTSEC-2026-0001-0123456789AB.sarif",
+            "RUSTSEC-2026-0001-0123456789a.sarif",
+            "yanked-0123456789ab.sarif",
+            "RUSTSEC-2026-0001-0123456789ab.json",
+        ] {
+            assert!(!is_record_name(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn an_acks_edit_rejudges_every_pinned_row_the_candidate_path_did_not() {
+        let tl = |name: &str, target: &str, sha: &str| ToolLine {
+            name: name.into(),
+            repo: "r".into(),
+            rev: "a".into(),
+            target: target.into(),
+            sha: sha.into(),
+        };
+        let (win, lin) = ("1".repeat(64), "2".repeat(64));
+        let head = vec![
+            tl("t", "windows", &win),
+            tl("t", "linux", &lin),
+            tl("u", "windows", &"3".repeat(64)),
+        ];
+        let picked = |c: &[(Option<ToolLine>, ToolLine)]| -> Vec<String> {
+            rows_to_rejudge("t", &head, c)
+                .iter()
+                .map(|r| r.target.clone())
+                .collect()
+        };
+        // no candidate (acks-only, or evidence-only edit): every pinned row of the tool
+        assert_eq!(picked(&[]), ["windows", "linux"]);
+        // one target is a candidate: the other target is still judged, the candidate is not
+        // judged twice
+        assert_eq!(picked(&[(None, tl("t", "windows", &win))]), ["linux"]);
+        // a candidate with another digest on the same target does not shield the pinned row
+        assert_eq!(
+            picked(&[(None, tl("t", "windows", &"9".repeat(64)))]),
+            ["windows", "linux"]
+        );
+        // another tool's candidate changes nothing
+        assert_eq!(
+            picked(&[(None, tl("u", "windows", &"3".repeat(64)))]),
+            ["windows", "linux"]
+        );
+    }
+
+    #[test]
+    fn a_claim_about_the_code_is_covered_only_by_a_record_that_reproduces() {
+        let i = Instance {
+            id: "RUSTSEC-2026-0592".into(),
+            package: "url".into(),
+            version: "2.5.8".into(),
+            kind: "vulnerability".into(),
+        };
+        let scan = serde_json::json!({"vulnerabilities": {"list": [{
+            "advisory": {"id": "RUSTSEC-2026-0592"},
+            "package": {"name": "url", "version": "2.5.8"},
+            "affected": {"functions": {"url::Url::origin": ["<=2.5.8"]}}
+        }]}});
+        let functions =
+            crate::reach::affected_functions(&scan, &i.id, &i.package, &i.version).unwrap();
+        let name = crate::reach::record_name(&i.id, &i.package, &i.version, &functions).unwrap();
+        let dir = std::env::temp_dir().join(format!("gate-reach-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("reach")).unwrap();
+        let record = "{\"record\": 1}\n";
+        let sha = crate::sha256::sha256_hex(record.as_bytes());
+        let ack = |e: &str| -> Value {
+            serde_json::json!({"axis": "vuln", "status": "not_affected",
+                "justification": "vulnerable_code_not_in_execute_path", "evidence_sha256": e})
+        };
+        let same =
+            |_: &BTreeMap<String, Vec<String>>| -> Result<String, String> { Ok(record.into()) };
+        // not committed yet
+        assert!(matches!(
+            record_cover(&ack(&sha), &i, &scan, &dir, Some(&mut { same })),
+            Cover::No(Some(_))
+        ));
+        std::fs::write(dir.join("reach").join(&name), record).unwrap();
+        assert_eq!(
+            record_cover(&ack(&sha), &i, &scan, &dir, Some(&mut { same })),
+            Cover::Yes
+        );
+        // the statement names other bytes
+        assert!(matches!(
+            record_cover(&ack(&"0".repeat(64)), &i, &scan, &dir, Some(&mut { same })),
+            Cover::No(Some(_))
+        ));
+        // committed and named, but the checkout does not reproduce it: cannot be acked past
+        let other =
+            |_: &BTreeMap<String, Vec<String>>| -> Result<String, String> { Ok("{}\n".into()) };
+        assert!(matches!(
+            record_cover(&ack(&sha), &i, &scan, &dir, Some(&mut { other })),
+            Cover::Unknown(_)
+        ));
+        let down =
+            |_: &BTreeMap<String, Vec<String>>| -> Result<String, String> { Err("offline".into()) };
+        assert!(matches!(
+            record_cover(&ack(&sha), &i, &scan, &dir, Some(&mut { down })),
+            Cover::Unknown(_)
+        ));
+        // the advisory's function list changed: another file is expected
+        let changed = serde_json::json!({"vulnerabilities": {"list": [{
+            "advisory": {"id": "RUSTSEC-2026-0592"},
+            "package": {"name": "url", "version": "2.5.8"},
+            "affected": {"functions": {"url::Url::origin": ["<=2.5.8"], "url::quirks::origin": ["<=2.5.8"]}}
+        }]}});
+        assert!(matches!(
+            record_cover(&ack(&sha), &i, &changed, &dir, Some(&mut { same })),
+            Cover::No(Some(_))
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_verdict_carries_why_a_signed_claim_does_not_cover_and_never_passes_an_unknown() {
+        let reach = good_vuln_ack("B", "q", "2")
+            .replace(
+                "\"status\":\"affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"vulnerable_code_not_in_execute_path\"",
+            )
+            .replace("in_triage", "not_affected");
+        let acks = ack(&reach);
+        assert!(needs_record(&acks.entries[0]));
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::No(Some("record missing".into())),
+        );
+        match v {
+            Verdict::RaiseUncovered { needed, notes, .. } => {
+                assert_eq!(needed.len(), 1);
+                assert_eq!(notes, ["record missing"]);
+            }
+            other => panic!("expected uncovered, got {other:?}"),
+        }
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::Unknown("does not reproduce".into()),
+        );
+        assert!(matches!(v, Verdict::Unevaluated(_)));
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &acks,
+            &mut |_, _| Cover::Yes,
+        );
+        assert!(matches!(v, Verdict::Allow(_)));
+        // a claim about the component needs no record, but is still judged (measured), never
+        // taken on its word; an accepted risk is not judged
+        let absent = reach.replace(
+            "vulnerable_code_not_in_execute_path",
+            "component_not_present",
+        );
+        assert!(!needs_record(&serde_json::from_str(&absent).unwrap()));
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &ack(&absent),
+            &mut |_, _| Cover::No(Some("measured present".into())),
+        );
+        assert!(matches!(v, Verdict::RaiseUncovered { .. }));
+        let mut judged = false;
+        let v = vuln_verdict(
+            "t",
+            D,
+            &[],
+            &[inst("B", "q", "2")],
+            0,
+            &ack(&good_vuln_ack("B", "q", "2")),
+            &mut |_, _| {
+                judged = true;
+                Cover::No(None)
+            },
+        );
+        assert!(matches!(v, Verdict::Allow(_)) && !judged);
+        // without a build record, presence cannot be measured
+        let empty = std::env::temp_dir().join(format!("gate-noabsent-{}", std::process::id()));
+        std::fs::create_dir_all(&empty).unwrap();
+        assert!(matches!(
+            measured_absent("t", D, &empty, &inst("B", "q", "2")),
+            Cover::Unknown(_)
+        ));
+        let _ = std::fs::remove_dir_all(&empty);
+        assert!(!needs_record(
+            &serde_json::from_str(&good_vuln_ack("B", "q", "2")).unwrap()
+        ));
+    }
+
+    #[test]
+    fn a_vuln_digest_that_is_not_a_digest_fails_the_quality_bar() {
+        let base = good_vuln_ack("A", "p", "1");
+        for bad in ["null", "\"\"", "7", "[]"] {
+            let line = base.replace(&format!("\"{D}\""), bad);
+            assert!(
+                ack_quality(&serde_json::from_str(&line).unwrap()).is_err(),
+                "digest {bad} must fail"
+            );
         }
     }
 

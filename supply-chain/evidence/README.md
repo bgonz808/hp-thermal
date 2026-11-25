@@ -65,8 +65,18 @@ parseable. The schema borrows established vocabularies rather than inventing one
   field were bound (2026-11-11) to the `caps.toml` content at the commit each ack first appeared in;
   five of them signed inventories the Bubblewrap refresh (#381) rewrote a day later, and each of
   those digests carries a fresh ack for the rewritten content.
-  Statements are a sequence, never edited or deleted; the LAST statement for an instance is the
-  one that counts (#251). When `monitor-vuln` classifies an instance as GONE (RustSec withdrew the
+  A vuln ack names the binary it is about, `product.digest`, and covers that binary only: a new
+  build of the same package version is judged afresh, so a reachability ruling made for one
+  build never carries into a build that might link a caller. A digest-bound vuln ack carries an
+  OpenVEX status that immutable bytes can carry (`not_affected`, `affected`,
+  `under_investigation`) and a `cyclonedx.state` pointing the same way (`not_affected` or
+  `false_positive`; `exploitable` or `in_triage`; `in_triage`), and only `not_affected` carries a
+  justification. Vuln acks without a digest are history: they pass the quality bar as before and
+  cover nothing. A multi-target tool signs each target's digest. An `acks.jsonl` edit makes the
+  gate judge every pinned digest of that tool with the edited statements, and the monitor
+  re-checks coverage of every carried instance on each run, so a withdrawn statement surfaces.
+  Statements are a sequence, never edited or deleted; for an instance in a binary, the LAST
+  statement naming that binary is the one that counts (#251). When `monitor-vuln` classifies an instance as GONE (RustSec withdrew the
   advisory or narrowed its `[versions]`; the bytes did not change, so never `fixed`) it prints a
   `not_affected` / `vulnerable_code_not_present` statement to append, carrying the DB commit as a
   CycloneDX-style property `hp-thermal:observed-absent-at-db`. A statement grounded that way is
@@ -115,7 +125,10 @@ release SBOM for the app), every RustSec finding from the custody-verified raw p
 `affects` by component bom-ref), the instruments in `metadata.tools.components` with hashes.
 `analysis` is filled only from an ack's native `cyclonedx` ruling (state, justification,
 response), never mapped from OpenVEX fields; acks without one are reported as burn-down.
-`firstIssued` / `lastUpdated` are the earliest and latest ack for the instance. Each finding's
+`analysis` comes from the statement the gate takes as covering the finding in this digest
+(`gate::governing_vuln_statement`), read through the gate's quality bar; a statement about another
+digest supplies nothing. `firstIssued` / `lastUpdated` are the earliest and latest ack for the
+instance in this digest. Each finding's
 `affects[].versions` lists the measured version as `affected` and every patched or unaffected
 requirement from the advisory as an `unaffected` Package URL `vers` range. Facts go in fields,
 not prose: `analysis.detail` is a one-line summary, never a second copy of what the fields say. The
@@ -147,6 +160,54 @@ and takes a higher version, a new one is a current subject's, and each carries t
 A release's report is published by `release-vdr.yml` as an attestation to the shipped exe, never
 as a release asset (a published release is immutable); `release-advance anchor` records each
 revision's bundle beside the report as `vdr.v<version>.sigstore.jsonl`.
+
+## Reachability records — `cargo xtask reach emit|check` (#520)
+
+A `not_affected` vuln ack whose justification is about the code (`vulnerable_code_not_in_execute_path`,
+`vulnerable_code_not_present`, `vulnerable_code_cannot_be_controlled_by_adversary`,
+`inline_mitigations_already_exist`) covers only with `evidence_sha256`, the sha256 of the search
+it rests on: `reach/<advisory>-<h12>.sarif` in the record directory the frozen lock selects
+(the digest's, or `rev/<lock>/`). `h12` hashes the emitter format, the instance and the
+advisory's affected functions as the asking scan states them, so a changed function list or
+emitter names a new file. `component_not_present` needs no record: the VDR measures presence
+from the binary.
+
+The record is SARIF 2.1.0, built only from checkout inputs: the TOOLS.lock repo and rev, the
+`tools/patches/<tool>` patches applied as the producer applies them (to git objects, not a
+working tree), and every registry package in the reverse-dependency closure of the affected
+package in the frozen lock, each `.crate` refused unless its sha256 is the lock checksum and read
+in memory. Searched: Rust files outside each package's `tests/`, `benches/` and `examples/`, and
+each `Cargo.toml`. Rule `<A>` lists every occurrence of an affected function's name; rule
+`<A>/crate` lists every reference to the affected package from another package (a `p::` path,
+`extern crate p`, or the name in a manifest).
+
+The gate covers such an ack only when that file is committed, hashes to `evidence_sha256`, and
+regenerates byte for byte; one that does not reproduce, or a regeneration that cannot run, is
+UNEVALUATED and cannot be acked past. Records are add-only: the gate refuses an edited or deleted
+record or any other file under `reach/`, and reproduces every record a change adds. The monitor
+checks the record is present, hashes to the ack, and is named for the advisory's current
+functions; the VDR publishes a code claim only with the record it names.
+
+Every `not_affected` statement except `component_not_present` needs a record, whatever its
+justification; a digest-bound one names one of OpenVEX's five justifications and the CycloneDX
+justification that says the same thing. `component_not_present` is measured, not taken on its
+word: the gate and the monitor cover it, and the VDR publishes it, only where the pinned binary's
+`.dep-v0` and its custody-verified build record scope the component `excluded`.
+
+A text search is not a call graph: it misses calls through trait dispatch, generic or trait-object
+code in crates that do not depend on the package, macro- and build.rs-generated code, symbol
+renames and std. The file filter goes by position: a target moved by `path = "..."` into
+`tests/`, `benches/` or `examples/`, a `#[path]` module there, a non-`.rs` file pulled in by
+`include!`, or a `Cargo.toml` inside a source directory can put compiled code outside what is
+searched. A symlink in the tool tree is followed as a checkout presents it (a link to a file is
+searched at the link's path with the file's content, a link to a directory with its files); a
+link out of the tree, to nothing or to another link fails the record, as do a crate file outside
+its `name-version/` root, a pax path together with a GNU long name, and a lock package from a
+source other than crates.io or a path. An advisory without affected functions yields a record of the dependents only.
+Regeneration needs github.com and static.crates.io through ambient `git` and `curl`; an outage
+makes such acks UNEVALUATED. Records are never edited or removed on their own; the gate
+admits a record's removal only together with its digest's whole evidence directory, which the
+VDR ledger and the revision rules refuse while that directory holds a report or a revision.
 
 ## Rules
 

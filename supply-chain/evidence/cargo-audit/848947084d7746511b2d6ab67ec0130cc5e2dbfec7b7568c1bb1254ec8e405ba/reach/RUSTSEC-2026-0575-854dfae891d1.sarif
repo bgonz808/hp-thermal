@@ -1,0 +1,2683 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "runs": [
+    {
+      "artifacts": [
+        {
+          "location": {
+            "uri": "https://github.com/rustsec/rustsec/tree/281452c35cf0870969042374110f099a411bc185"
+          },
+          "properties": {
+            "files": 348,
+            "gitCommit": "281452c35cf0870969042374110f099a411bc185",
+            "gitTree": "62833baf6c7ae4ac676f00bb52687e62cd5bed4c"
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "04839bdf9d8c10f66806fad16b852fc72aab80873aebc3cb69d85b4fa41543ed"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/faster-hex/faster-hex-0.10.1.crate"
+          },
+          "properties": {
+            "files": 17
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "ae54ae0ebd1a5a3c3f8d95dd3b5ca6e63f4fed9bfd585e13801a97d7bde8f9ce"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix/gix-0.84.0.crate"
+          },
+          "properties": {
+            "files": 196
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7f675d0df484a7f6a47e64bd6f311af489d947c0323b0564f36d14f3d7762abb"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-commitgraph/gix-commitgraph-0.37.1.crate"
+          },
+          "properties": {
+            "files": 15
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4f2372d4b49ca28431e7d150cab9d25edc1890f0184bd57eb0e917c7799e63de"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-config/gix-config-0.57.0.crate"
+          },
+          "properties": {
+            "files": 49
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "3b6d9528f32d94cef2edf39a1ac01fe5a0fc44ddbb18d9e44099936047c3302b"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-diff/gix-diff-0.64.0.crate"
+          },
+          "properties": {
+            "files": 24
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "77bacdd12b7879d2178a80c58c2f319995e4654e1a7a23e3181e5c8a12b824f7"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-discover/gix-discover-0.52.0.crate"
+          },
+          "properties": {
+            "files": 14
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "ecf74b7d16f6694ce4a3049074c41be0c7987105743674f1671807bd6dce09fa"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-filter/gix-filter-0.31.0.crate"
+          },
+          "properties": {
+            "files": 27
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "cb0926d3819c837750b4e03c7754901e73f68b8c9b690753a6372a1bed4eedce"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-hash/gix-hash-0.25.1.crate"
+          },
+          "properties": {
+            "files": 14
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "b0e30b93eea8718baf7d8153fcb938e2926175bbf18097c09f1c01b6f0be0563"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-hashtable/gix-hashtable-0.15.1.crate"
+          },
+          "properties": {
+            "files": 7
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4e6b28cc592dc753adb58302bb14a64e412ee591a3bec77aa4df87bff74fa80d"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-index/gix-index-0.52.0.crate"
+          },
+          "properties": {
+            "files": 42
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "890c936a215bae25818c076cb881cb2e54d2c66ba947ba58b8dd47cff921bf55"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-negotiate/gix-negotiate-0.32.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "d5cd857e29429c7213bdef3f5aef83f8cc124774fe8ae0d27b1607d218d6d525"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-object/gix-object-0.61.0.crate"
+          },
+          "properties": {
+            "files": 34
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7d004c32858b1556f2d7874405edb3c97dc78fc09beaa87d57bb077ee2858a7d"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-odb/gix-odb-0.81.0.crate"
+          },
+          "properties": {
+            "files": 35
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "e43626f2a27d1033674ec1a196b845614231e6bbd949d5e21c133045ff56b174"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-pack/gix-pack-0.71.0.crate"
+          },
+          "properties": {
+            "files": 73
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "bb18337ba2830bb43367d1af43819c8c78f31337f079fc76d0f1f1750a173126"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-packetline/gix-packetline-0.21.4.crate"
+          },
+          "properties": {
+            "files": 18
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "51dea3acb390707ab868f1f9584f18449eb95d869deffae96768e47d303595ee"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-protocol/gix-protocol-0.62.0.crate"
+          },
+          "properties": {
+            "files": 30
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4c04f64c37eb7e6feb73c7060f8dc6f381cc5de5d53249bfd450bc48a86b2e8b"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-ref/gix-ref-0.64.0.crate"
+          },
+          "properties": {
+            "files": 47
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "b216ae06ec74b5f24ad0142026a997fb0a935b7410eaf9c1616fc3f0e6c5a6d3"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-refspec/gix-refspec-0.42.0.crate"
+          },
+          "properties": {
+            "files": 17
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "0b47c88884dd3c1a19a39da19d10211fcdea2809aadc86869b6e824a1774340f"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-revision/gix-revision-0.46.0.crate"
+          },
+          "properties": {
+            "files": 15
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "85f5756abffe0917827aac683b13684ed99875bc398fa1f9b8f479b0681ef9e6"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-revwalk/gix-revwalk-0.32.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "a292fc2fe548c5dfa575479d16b445b0ddf1dd2f56f1fec6aed386f82553cd97"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-shallow/gix-shallow-0.12.1.crate"
+          },
+          "properties": {
+            "files": 7
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "3059890ef054066c22a94bfc6a3eaba0d806aedcd630a0bc9e5783fd88884781"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-submodule/gix-submodule-0.31.0.crate"
+          },
+          "properties": {
+            "files": 10
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "7cd0e34995b1aab0fa8dff2af8db726a0bfad3e119c89302604463264046e7ff"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-transport/gix-transport-0.57.1.crate"
+          },
+          "properties": {
+            "files": 35
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "e8de590ecc86a3b2870665f2288324fa9f7f8672c7fc2d4e020fdd81cd1f7aed"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-traverse/gix-traverse-0.58.0.crate"
+          },
+          "properties": {
+            "files": 16
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "cef414ed275e8407cd5d53d301e83be19700b0dd3f859d2434417b58f454a2d1"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree/gix-worktree-0.53.0.crate"
+          },
+          "properties": {
+            "files": 13
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "4bffae8b3ca258fdd50370cd51f06deb4c76a3b43db3868bc28dde45ffa77d69"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree-state/gix-worktree-state-0.31.0.crate"
+          },
+          "properties": {
+            "files": 11
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "d25e9ed30100c63f7590bc581c225e53f731a53e06aa79a245739c07f7dcc557"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/gix-worktree-stream/gix-worktree-stream-0.33.0.crate"
+          },
+          "properties": {
+            "files": 11
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "0bfb9eb618601c89945a70e254898da93b13be0388091d42117462b265bb3fad"
+          },
+          "location": {
+            "uri": "https://static.crates.io/crates/heapless/heapless-0.8.0.crate"
+          },
+          "properties": {
+            "files": 42
+          },
+          "roles": [
+            "analysisTarget"
+          ]
+        },
+        {
+          "hashes": {
+            "sha-256": "d0ef1c0dfe91c129e65059b07f33ecca1f784fbea8a1241b0f10f0352ae9be58"
+          },
+          "location": {
+            "uri": "cargo-audit/src/presenter.rs"
+          },
+          "parentIndex": 0
+        },
+        {
+          "hashes": {
+            "sha-256": "2475c448fa61ceaf1fbbc44d8a036b1258471cf775f3ef7b6f5ee9c8f38a5a7d"
+          },
+          "location": {
+            "uri": "faster-hex-0.10.1/Cargo.toml"
+          },
+          "parentIndex": 1
+        },
+        {
+          "hashes": {
+            "sha-256": "d73d4545a2fb2db2c9f04633e8781ac1b708b87e813aef2c027945409340c4d4"
+          },
+          "location": {
+            "uri": "faster-hex-0.10.1/src/encode.rs"
+          },
+          "parentIndex": 1
+        },
+        {
+          "hashes": {
+            "sha-256": "a01d97ea506543cf094bce7daeb28d0eed8de22eb7031fd69acafb85996442e8"
+          },
+          "location": {
+            "uri": "gix-config-0.57.0/src/file/mutable/section.rs"
+          },
+          "parentIndex": 4
+        },
+        {
+          "hashes": {
+            "sha-256": "458f34efe36bfe1e9b0c9b285a13a98f9a2cdd19e896538d41a03d0bb35917f7"
+          },
+          "location": {
+            "uri": "gix-diff-0.64.0/src/tree/function.rs"
+          },
+          "parentIndex": 5
+        },
+        {
+          "hashes": {
+            "sha-256": "f48669b40bf00c98de6ddb71ab00bfbadbbc95261750bd3e6abef25042c02c50"
+          },
+          "location": {
+            "uri": "gix-filter-0.31.0/src/eol/convert_to_git.rs"
+          },
+          "parentIndex": 7
+        },
+        {
+          "hashes": {
+            "sha-256": "bb01120e0d976a8322c3499e5adf47900185a859f881351473e326b25919098a"
+          },
+          "location": {
+            "uri": "gix-filter-0.31.0/src/eol/utils.rs"
+          },
+          "parentIndex": 7
+        },
+        {
+          "hashes": {
+            "sha-256": "2cbbec2f0fc000a06be2d998e5cc770f84d8fa8b5499484dd43a876acb2dc48b"
+          },
+          "location": {
+            "uri": "gix-object-0.61.0/src/commit/message/body.rs"
+          },
+          "parentIndex": 12
+        },
+        {
+          "hashes": {
+            "sha-256": "36558b5acb2508f96262fd794764d9a499324de51e0b89fe6c913dec797b7488"
+          },
+          "location": {
+            "uri": "gix-object-0.61.0/src/tree/editor.rs"
+          },
+          "parentIndex": 12
+        },
+        {
+          "hashes": {
+            "sha-256": "669187031fa5ed26b077fc6c6658a3a0dd18f2f736a130f81213c0a267f569b0"
+          },
+          "location": {
+            "uri": "gix-object-0.61.0/src/tree/ref_iter.rs"
+          },
+          "parentIndex": 12
+        },
+        {
+          "hashes": {
+            "sha-256": "1e58b0f581fd2445aee6eb43968fa23d2da227034ad4ce1590640f4f700545fe"
+          },
+          "location": {
+            "uri": "gix-pack-0.71.0/src/data/input/entries_to_bytes.rs"
+          },
+          "parentIndex": 14
+        },
+        {
+          "hashes": {
+            "sha-256": "e6ff6753a4fd9521c795056f426b38f82d55266cd169b748a5d911c951cda68b"
+          },
+          "location": {
+            "uri": "gix-packetline-0.21.4/src/async_io/read.rs"
+          },
+          "parentIndex": 15
+        },
+        {
+          "hashes": {
+            "sha-256": "a92dae8f1d5e7124b30414f37d8c8f584a80923037bc40ed7dc0164c20e14273"
+          },
+          "location": {
+            "uri": "gix-packetline-0.21.4/src/blocking_io/read.rs"
+          },
+          "parentIndex": 15
+        },
+        {
+          "hashes": {
+            "sha-256": "7e67035bd54503fb75afc2f05ff5ebad7dd716958e2d920ce88e5333c4952b5d"
+          },
+          "location": {
+            "uri": "gix-packetline-0.21.4/src/read.rs"
+          },
+          "parentIndex": 15
+        },
+        {
+          "hashes": {
+            "sha-256": "3f475b7ddb9a673820fd3f0ef6df0df05cd874ab6fee5cc0845f34946b2885bc"
+          },
+          "location": {
+            "uri": "gix-protocol-0.62.0/src/fetch/negotiate.rs"
+          },
+          "parentIndex": 16
+        },
+        {
+          "hashes": {
+            "sha-256": "24208fda5479d38f036d3a10bb9a9a9d3ba8e40a5ae3537ef8f141df22b3c7cd"
+          },
+          "location": {
+            "uri": "gix-ref-0.64.0/src/store/file/overlay_iter.rs"
+          },
+          "parentIndex": 17
+        },
+        {
+          "hashes": {
+            "sha-256": "690e6ce08bc4106d51595a4ef79bb58bf02462399a96cd1bf739fa1c3967aba3"
+          },
+          "location": {
+            "uri": "gix-ref-0.64.0/src/store/packed/transaction.rs"
+          },
+          "parentIndex": 17
+        },
+        {
+          "hashes": {
+            "sha-256": "d08a86bd37b206cf460fb51611857bb3fa1a9747ebca27441bc887fde25b1313"
+          },
+          "location": {
+            "uri": "gix-revision-0.46.0/src/spec/parse/function.rs"
+          },
+          "parentIndex": 19
+        },
+        {
+          "hashes": {
+            "sha-256": "2e33f458a115fdbede8345bf051fd185b3ce2327f04d17aa08b13dfb5a7f8754"
+          },
+          "location": {
+            "uri": "gix-revwalk-0.32.0/src/queue.rs"
+          },
+          "parentIndex": 20
+        },
+        {
+          "hashes": {
+            "sha-256": "eefbfadf968edd6ade4a0e81eed7fbb64ac82b3fe829b509db1dfbd7399f293b"
+          },
+          "location": {
+            "uri": "gix-traverse-0.58.0/src/commit/topo/iter.rs"
+          },
+          "parentIndex": 24
+        },
+        {
+          "hashes": {
+            "sha-256": "bca69dbeda50579adc7125c0f2e5a8985a8f5645a39a699b5785031e454eaee8"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/binary_heap.rs"
+          },
+          "parentIndex": 28
+        },
+        {
+          "hashes": {
+            "sha-256": "6c9c4635a7f7961a0411258bd720195a2b9a32e519095b929bbbc190abd4e7f7"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/sorted_linked_list.rs"
+          },
+          "parentIndex": 28
+        },
+        {
+          "hashes": {
+            "sha-256": "1d0148218cb61368e5099c83d8fcb961f839e67c353dc1531d5dc687786de1ba"
+          },
+          "location": {
+            "uri": "heapless-0.8.0/src/spsc.rs"
+          },
+          "parentIndex": 28
+        }
+      ],
+      "properties": {
+        "advisory": "RUSTSEC-2026-0575",
+        "digest": "848947084d7746511b2d6ab67ec0130cc5e2dbfec7b7568c1bb1254ec8e405ba",
+        "format": "reach-v1",
+        "gitlinks": [
+          "cvss/tests/cvss-redhat"
+        ],
+        "lockSha256": "5660005ab7ac06eef642d1ca33dda255d67d6932802d2794716b92e3caa119bd",
+        "package": "heapless",
+        "patches": [],
+        "registryPackages": [
+          "faster-hex@0.10.1",
+          "gix@0.84.0",
+          "gix-commitgraph@0.37.1",
+          "gix-config@0.57.0",
+          "gix-diff@0.64.0",
+          "gix-discover@0.52.0",
+          "gix-filter@0.31.0",
+          "gix-hash@0.25.1",
+          "gix-hashtable@0.15.1",
+          "gix-index@0.52.0",
+          "gix-negotiate@0.32.0",
+          "gix-object@0.61.0",
+          "gix-odb@0.81.0",
+          "gix-pack@0.71.0",
+          "gix-packetline@0.21.4",
+          "gix-protocol@0.62.0",
+          "gix-ref@0.64.0",
+          "gix-refspec@0.42.0",
+          "gix-revision@0.46.0",
+          "gix-revwalk@0.32.0",
+          "gix-shallow@0.12.1",
+          "gix-submodule@0.31.0",
+          "gix-transport@0.57.1",
+          "gix-traverse@0.58.0",
+          "gix-worktree@0.53.0",
+          "gix-worktree-state@0.31.0",
+          "gix-worktree-stream@0.33.0",
+          "heapless@0.8.0"
+        ],
+        "searched": {
+          "manifests": 48,
+          "rustFiles": 833
+        },
+        "symlinks": [
+          "cargo-lock/tests/examples/Cargo.lock -> Cargo.lock.v3"
+        ],
+        "tool": "cargo-audit",
+        "version": "0.8.0"
+      },
+      "results": [
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 29
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        if funcs.peek().is_none() {"
+                  },
+                  "startLine": 429
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 18
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 30
+                },
+                "region": {
+                  "snippet": {
+                    "text": "[target.'cfg(not(feature = \"alloc\"))'.dependencies.heapless]"
+                  },
+                  "startLine": 95
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`heapless`"
+          },
+          "properties": {
+            "byteColumn": 52
+          },
+          "ruleId": "RUSTSEC-2026-0575/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 31
+                },
+                "region": {
+                  "snippet": {
+                    "text": "use heapless::{String, Vec};"
+                  },
+                  "startLine": 13
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`heapless`"
+          },
+          "properties": {
+            "byteColumn": 5
+          },
+          "ruleId": "RUSTSEC-2026-0575/crate"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 32
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    if !bytes.peek().is_none_or(|b| b.is_ascii_whitespace()) {"
+                  },
+                  "startLine": 73
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 31
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 33
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        match rhs_entries.peek() {"
+                  },
+                  "startLine": 207
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 33
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        match lhs_entries.peek() {"
+                  },
+                  "startLine": 256
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 34
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                if !(*b == b'\\r' && bytes.peek() == Some(&&b'\\n')) {"
+                  },
+                  "startLine": 158
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 43
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 35
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                match bytes.peek() {"
+                  },
+                  "startLine": 54
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 36
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    if physical_lines.peek().is_none() {"
+                  },
+                  "startLine": 141
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            let is_last = rela_path.peek().is_none();"
+                  },
+                  "startLine": 146
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 37
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 37
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            let is_last = rela_path.peek().is_none();"
+                  },
+                  "startLine": 272
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 37
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 38
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    if components.peek().is_none() {"
+                  },
+                  "startLine": 48
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 39
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                        if self.input.peek().is_none() {"
+                  },
+                  "startLine": 129
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 39
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 40
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// It contains a bunch of logic shared between peek and `read_line` invocations."
+                  },
+                  "startLine": 64
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 53
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 40
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            Some(Ok(Ok(crate::decode(&state.buf).expect(\"only valid data in peek buf\"))))"
+                  },
+                  "startLine": 143
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 77
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 40
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Multiple calls to peek will return the same packet line, if there is one."
+                  },
+                  "startLine": 166
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 41
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// It contains a bunch of logic shared between peek and `read_line` invocations."
+                  },
+                  "startLine": 59
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 53
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 41
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            Some(Ok(Ok(crate::decode(&state.buf).expect(\"only valid data in peek buf\"))))"
+                  },
+                  "startLine": 139
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 77
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 41
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Multiple calls to peek will return the same packet line, if there is one."
+                  },
+                  "startLine": 161
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 42
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// Modify the peek buffer, overwriting the byte at `position` with the given byte to `replace_with` while truncating"
+                  },
+                  "startLine": 72
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 20
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 43
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        .peek()"
+                  },
+                  "startLine": 345
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 10
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            while let Some(Ok((_path, name))) = iter.peek() {"
+                  },
+                  "startLine": 123
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 54
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                Some(common_dir) => match (git_dir.peek(), {"
+                  },
+                  "startLine": 137
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 52
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    common_dir.peek()"
+                  },
+                  "startLine": 139
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                None => git_dir.peek().map(|r| (r, IterKind::Git)),"
+                  },
+                  "startLine": 152
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 33
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                packed_iter.peek(),"
+                  },
+                  "startLine": 158
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 29
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                    let res = self.loose_iter(kind).next().expect(\"prior peek\");"
+                  },
+                  "startLine": 166
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 74
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                        let res = self.loose_iter(kind).next().expect(\"prior peek\");"
+                  },
+                  "startLine": 171
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 78
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 44
+                },
+                "region": {
+                  "snippet": {
+                    "text": "                        let res = self.loose_iter(kind).next().expect(\"prior peek\");"
+                  },
+                  "startLine": 176
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 78
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 45
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            match (refs_sorted.peek(), peekable_sorted_edits.peek()) {"
+                  },
+                  "startLine": 179
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 32
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 45
+                },
+                "region": {
+                  "snippet": {
+                    "text": "            match (refs_sorted.peek(), peekable_sorted_edits.peek()) {"
+                  },
+                  "startLine": 179
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 62
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 46
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    if bytes.peek().filter(|&&&b| b == b'-' || b == b'+').is_some() {"
+                  },
+                  "startLine": 740
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 14
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 46
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    if bytes.peek().filter(|&&&b| b == b'+').is_some() {"
+                  },
+                  "startLine": 757
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 14
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 46
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    let negative = bytes.peek() == Some(&&b'-');"
+                  },
+                  "startLine": 763
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 26
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 47
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    pub fn peek(&self) -> Option<(&K, &T)> {"
+                  },
+                  "startLine": 106
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 47
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        self.0.peek().map(|e| (&e.key, &e.value))"
+                  },
+                  "startLine": 107
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 16
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 48
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        while let Some(((generation, _), _)) = self.indegree_queue.peek() {"
+                  },
+                  "startLine": 56
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 68
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 48
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        while let Some(((generation, _), _)) = self.explore_queue.peek() {"
+                  },
+                  "startLine": 86
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 67
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// // We can use peek to look at the next item in the heap. In this case,"
+                  },
+                  "startLine": 67
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// assert_eq!(heap.peek(), None);"
+                  },
+                  "startLine": 69
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 21
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// // Now peek shows the most important item in the heap."
+                  },
+                  "startLine": 76
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "/// assert_eq!(heap.peek(), Some(&5));"
+                  },
+                  "startLine": 77
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 21
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(heap.peek(), None);"
+                  },
+                  "startLine": 228
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 25
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(heap.peek(), Some(&5));"
+                  },
+                  "startLine": 233
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 25
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    pub fn peek(&self) -> Option<&T> {"
+                  },
+                  "startLine": 235
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(heap.peek(), Some(&2));"
+                  },
+                  "startLine": 263
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 25
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 49
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(heap.peek(), Some(&5));"
+                  },
+                  "startLine": 321
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 25
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! assert_eq!(ll.peek(), Some(&1));"
+                  },
+                  "startLine": 14
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! assert_eq!(ll.peek(), Some(&2));"
+                  },
+                  "startLine": 17
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "//! assert_eq!(ll.peek(), Some(&3));"
+                  },
+                  "startLine": 20
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 19
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll.peek(), Some(&1));"
+                  },
+                  "startLine": 300
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll.peek(), Some(&2));"
+                  },
+                  "startLine": 303
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll.peek(), Some(&3));"
+                  },
+                  "startLine": 306
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll_max.peek(), Some(&1));"
+                  },
+                  "startLine": 411
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll_max.peek(), Some(&2));"
+                  },
+                  "startLine": 413
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll_max.peek(), Some(&3));"
+                  },
+                  "startLine": 415
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll_min.peek(), Some(&3));"
+                  },
+                  "startLine": 421
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll_min.peek(), Some(&2));"
+                  },
+                  "startLine": 423
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(ll_min.peek(), Some(&1));"
+                  },
+                  "startLine": 425
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 27
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    pub fn peek(&self) -> Option<&T> {"
+                  },
+                  "startLine": 427
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &1);"
+                  },
+                  "startLine": 759
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &2);"
+                  },
+                  "startLine": 762
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &3);"
+                  },
+                  "startLine": 765
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &2);"
+                  },
+                  "startLine": 770
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &1);"
+                  },
+                  "startLine": 773
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &1);"
+                  },
+                  "startLine": 776
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &1002);"
+                  },
+                  "startLine": 829
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &1003);"
+                  },
+                  "startLine": 836
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &1002);"
+                  },
+                  "startLine": 841
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 50
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        assert_eq!(ll.peek().unwrap(), &1001);"
+                  },
+                  "startLine": 864
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 23
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(None, consumer.peek());"
+                  },
+                  "startLine": 209
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(Some(&1), consumer.peek());"
+                  },
+                  "startLine": 211
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 39
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(None, consumer.peek());"
+                  },
+                  "startLine": 213
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    pub fn peek(&self) -> Option<&T> {"
+                  },
+                  "startLine": 215
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(None, consumer.peek());"
+                  },
+                  "startLine": 544
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(Some(&1), consumer.peek());"
+                  },
+                  "startLine": 546
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 39
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    /// assert_eq!(None, consumer.peek());"
+                  },
+                  "startLine": 548
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 35
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "    pub fn peek(&self) -> Option<&T> {"
+                  },
+                  "startLine": 551
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 12
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        },
+        {
+          "level": "note",
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "index": 51
+                },
+                "region": {
+                  "snippet": {
+                    "text": "        self.rb.peek()"
+                  },
+                  "startLine": 552
+                }
+              }
+            }
+          ],
+          "message": {
+            "text": "`peek`"
+          },
+          "properties": {
+            "byteColumn": 17
+          },
+          "ruleId": "RUSTSEC-2026-0575"
+        }
+      ],
+      "tool": {
+        "driver": {
+          "informationUri": "https://github.com/bgonz808/hp-thermal",
+          "name": "hp-thermal xtask reach",
+          "rules": [
+            {
+              "id": "RUSTSEC-2026-0575",
+              "properties": {
+                "functions": {
+                  "heapless::spsc::Spsc::peek": [
+                    "<0.9.4"
+                  ]
+                },
+                "tokens": [
+                  "peek"
+                ]
+              }
+            },
+            {
+              "id": "RUSTSEC-2026-0575/crate",
+              "properties": {
+                "crateIdent": "heapless",
+                "package": "heapless"
+              }
+            }
+          ]
+        }
+      },
+      "versionControlProvenance": [
+        {
+          "repositoryUri": "https://github.com/rustsec/rustsec",
+          "revisionId": "281452c35cf0870969042374110f099a411bc185"
+        }
+      ]
+    }
+  ],
+  "version": "2.1.0"
+}
