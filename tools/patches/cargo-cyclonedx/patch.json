@@ -22,7 +22,8 @@
   "shed_when": "upstream's manifest satisfies an intent natively - git apply --check conflicts the moment that line changes upstream; drop that patch (or the directory, when none remain) in the same PR that adopts the newer rev",
   "refs": [
     "#255",
-    "#426"
+    "#426",
+    "#524"
   ],
   "author": "bgonz808",
   "timestamp": "2026-11-25"
