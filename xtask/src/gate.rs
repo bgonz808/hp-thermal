@@ -369,7 +369,7 @@ pub(crate) fn load_acks(path: &Path) -> Result<Acks, String> {
 
 fn ack_quality(v: &Value) -> Result<(), String> {
     let notes = v.get("status_notes").and_then(Value::as_str).unwrap_or("");
-    if notes.trim().is_empty() || notes.contains("TODO") {
+    if is_placeholder(notes) {
         return Err("status_notes empty or placeholder — a sign-off must say why".into());
     }
     if v.get("author")
@@ -474,9 +474,11 @@ fn vuln_bound_quality(v: &Value) -> Result<(), String> {
     }
     let status = s(v, &["status"]);
     let state = s(v, &["cyclonedx", "state"]);
+    // `affected` is a decision (OpenVEX: actions are recommended); `in_triage` says the
+    // investigation is open, which is `under_investigation`.
     let agree: &[&str] = match status {
         "not_affected" => &["not_affected", "false_positive"],
-        "affected" => &["exploitable", "in_triage"],
+        "affected" => &["exploitable"],
         "under_investigation" => &["in_triage"],
         other => {
             return Err(format!(
@@ -517,8 +519,71 @@ fn vuln_bound_quality(v: &Value) -> Result<(), String> {
             "vuln ack status `{status}` carries a not_affected justification"
         ));
     }
+    // OpenVEX: an `affected` statement MUST include an `action_statement` (the VDR publishes it
+    // as the vulnerability's `recommendation`), and only `affected` carries one. CycloneDX: a
+    // `response` is strongly encouraged where the state is `exploitable` (here, required); any
+    // response is from CycloneDX's own values.
+    let action = v.get("action_statement");
+    if status == "affected" && is_placeholder(action.and_then(Value::as_str).unwrap_or("")) {
+        return Err(
+            "vuln ack status `affected` without `action_statement` (OpenVEX: an affected \
+             statement MUST say what is done to remediate or mitigate)"
+                .into(),
+        );
+    }
+    if status != "affected" && action.is_some() {
+        return Err(format!(
+            "vuln ack status `{status}` carries `action_statement`; only an affected statement \
+             does"
+        ));
+    }
+    let response = v.get("cyclonedx").and_then(|c| c.get("response"));
+    if let Some(r) = response {
+        let items: Vec<&str> = r
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let distinct: BTreeSet<&str> = items.iter().copied().collect();
+        let valid = r
+            .as_array()
+            .is_some_and(|a| !a.is_empty() && a.len() == items.len())
+            && distinct.len() == items.len()
+            && items.iter().all(|i| RESPONSES.contains(i));
+        if !valid {
+            return Err(format!(
+                "vuln ack cyclonedx.response `{r}`: distinct values from {}",
+                RESPONSES.join(" | ")
+            ));
+        }
+    }
+    if state == "exploitable" && response.is_none() {
+        return Err(
+            "vuln ack cyclonedx.state `exploitable` without `response` (what is done about it)"
+                .into(),
+        );
+    }
     Ok(())
 }
+
+/// Text that says nothing: empty, or a placeholder in any case (`todo`, `TBD`, `n/a`, ...).
+/// Sign-off text is published (VDR `detail` / `recommendation`), so a stub never passes.
+fn is_placeholder(t: &str) -> bool {
+    let u = t.trim().to_ascii_uppercase();
+    u.is_empty()
+        || ["TODO", "TBD", "FIXME", "XXX"]
+            .iter()
+            .any(|p| u.contains(p))
+        || ["N/A", "NA", "NONE", "-", ".", "...", "?"].contains(&u.as_str())
+}
+
+/// CycloneDX 1.6 `vulnerability.analysis.response` values.
+pub(crate) const RESPONSES: &[&str] = &[
+    "can_not_fix",
+    "will_not_fix",
+    "update",
+    "rollback",
+    "workaround_available",
+];
 
 fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     let mut cur = v;
@@ -579,10 +644,12 @@ pub(crate) fn observed_absent_at_db(a: &Value) -> Option<&str> {
         .filter(|v| !v.is_empty())
 }
 
-/// Covered iff the instance's LAST statement is not grounded in the DB's silence. Coverage is
-/// only ever asked about an instance the DB reports NOW, so a last statement that says "the DB
-/// did not report it" is contradicted by the measurement and void: the reappearance is RAISE
-/// uncovered until signed afresh (fail-closed, #251). Nothing is committed from CI for this.
+/// Statement selection only (tests): the instance's LAST statement exists and is not grounded in
+/// the DB's silence. Coverage is only ever asked about an instance the DB reports NOW, so a last
+/// statement that says "the DB did not report it" is contradicted by the measurement and void:
+/// the reappearance is RAISE uncovered until signed afresh (fail-closed, #251). Whether the
+/// selected statement covers is `coverage`'s call (its record, measurement or status).
+#[cfg(test)]
 pub(crate) fn ack_covers_vuln(acks: &Acks, inst: &Instance, digest: &str) -> bool {
     governing_vuln_ack(acks, inst, digest).is_some()
 }
@@ -648,8 +715,35 @@ pub(crate) fn coverage(
         // A claim about the code rests on its record; `component_not_present` on the binary's
         // own measurement. Neither is taken on the statement's word.
         Some(a) if s(a, &["status"]) == "not_affected" => record(a, inst),
-        Some(_) => Cover::Yes,
+        // `affected` is a decision with an action (`vuln_bound_quality`).
+        Some(a) if s(a, &["status"]) == "affected" => Cover::Yes,
+        // `under_investigation` records that no decision is made yet: it covers nothing.
+        Some(a) => Cover::No(Some(format!(
+            "{} {} {}: the statement is `{}`; an open investigation is not a decision",
+            inst.id,
+            inst.package,
+            inst.version,
+            s(a, &["status"])
+        ))),
     }
+}
+
+/// Coverage without regenerating records (monitor, explore): a claim about the code needs its
+/// record committed in `dir`, hashing to the statement and named for the advisory as `audit`
+/// states it now; `component_not_present` needs the binary's measurement.
+pub(crate) fn coverage_at_rest(
+    acks: &Acks,
+    inst: &Instance,
+    tool: &str,
+    digest: &str,
+    dir: &Result<PathBuf, String>,
+    audit: &Value,
+) -> Cover {
+    coverage(acks, inst, digest, &mut |a, inst| match dir {
+        Ok(dir) if needs_record(a) => record_cover(a, inst, audit, dir, None),
+        Ok(dir) => measured_absent(tool, digest, dir, inst),
+        Err(e) => Cover::Unknown(e.clone()),
+    })
 }
 
 /// Rebuilds a record's bytes from the checkout for a query (affected functions).
@@ -837,8 +931,9 @@ pub(crate) fn mal_acks_run(args: &[String]) -> i32 {
 /// The exact line a maintainer commits to sign off — printed by the failing gate.
 /// status_notes is deliberately empty: the quality bar refuses it until a human writes the
 /// reason (no rubber-stamp path). The ack carries the RULING: the OpenVEX status and the native
-/// CycloneDX `state` / `justification` / `response` the VDR copies. It starts at `in_triage`, the
-/// one state that claims nothing. Measured facts (binary presence, version ranges, digests,
+/// CycloneDX `state` / `justification` / `response` the VDR copies. It starts as `affected` with
+/// an empty `action_statement` and `response`, refused until a human says what is done about it,
+/// or replaces it with a `not_affected` and its evidence. Measured facts (binary presence, version ranges, digests,
 /// dependency paths) live in the VDR's own fields and are not restated in the notes. Caps acks use `reviewed`: a caps ack signs an inventory, not a
 /// vulnerability status, so the OpenVEX statuses do not apply there. The statement names the
 /// binary it is about (`product.digest`) and covers that binary only; the quality bar holds the
@@ -850,7 +945,8 @@ pub(crate) fn ack_template_vuln(tool: &str, digest: &str, inst: &Instance) -> St
         "vulnerability": {"name": inst.id},
         "product": {"name": tool, "digest": digest, "package": inst.package, "version": inst.version},
         "status": "affected",
-        "cyclonedx": {"state": "in_triage"},
+        "action_statement": "",
+        "cyclonedx": {"state": "exploitable", "response": []},
         "status_notes": "",
         "author": "",
         "timestamp": "",
@@ -3436,10 +3532,23 @@ mod tests {
     }
     /// The binary the vuln tests' statements are about.
     const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+    /// The base fixture's CycloneDX ruling and action: an `affected` decision.
+    const RULING: &str = r#"{"state":"exploitable","response":["update"]}"#;
+    const ACTION: &str = r#","action_statement":"act""#;
     fn good_vuln_ack(id: &str, pkg: &str, ver: &str) -> String {
         format!(
-            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","digest":"{D}","package":"{pkg}","version":"{ver}"}},"status":"affected","cyclonedx":{{"state":"in_triage"}},"status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","digest":"{D}","package":"{pkg}","version":"{ver}"}},"status":"affected"{ACTION},"cyclonedx":{RULING},"status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
         )
+    }
+    /// `line` (a `good_vuln_ack`) restated as `not_affected` with OpenVEX justification `j` and
+    /// CycloneDX ruling `cdx`.
+    fn as_not_affected(line: &str, j: &str, cdx: &str) -> String {
+        line.replace(ACTION, "")
+            .replace(
+                "\"status\":\"affected\"",
+                &format!("\"status\":\"not_affected\",\"justification\":\"{j}\""),
+            )
+            .replace(RULING, cdx)
     }
 
     #[test]
@@ -3572,12 +3681,11 @@ mod tests {
         acks.entries.push(serde_json::from_str(&affected).unwrap());
         assert!(ack_covers_vuln(&acks, &inst("B", "q", "2"), D));
         // a maintainer-reviewed not_affected (no grounding property) IS coverage
-        let reviewed = affected
-            .replace(
-                "\"status\":\"affected\"",
-                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
-            )
-            .replace("in_triage", "not_affected");
+        let reviewed = as_not_affected(
+            &affected,
+            "component_not_present",
+            r#"{"state":"not_affected","justification":"code_not_present"}"#,
+        );
         assert!(ack_covers_vuln(&ack(&reviewed), &inst("B", "q", "2"), D));
         // a grounded statement for ANOTHER instance changes nothing
         let other = ack_template_vuln_not_affected_observed(
@@ -3620,17 +3728,15 @@ mod tests {
             good_vuln_ack("A", "p", "1").replace("\"status\":\"affected\"", "\"status\":\"fixed\"");
         assert!(ack_quality(&serde_json::from_str(&fixed).unwrap()).is_err());
         let bare = good_vuln_ack("A", "p", "1")
-            .replace("\"status\":\"affected\"", "\"status\":\"not_affected\"");
+            .replace(ACTION, "")
+            .replace("\"status\":\"affected\"", "\"status\":\"not_affected\"")
+            .replace(RULING, r#"{"state":"not_affected"}"#);
         assert!(ack_quality(&serde_json::from_str(&bare).unwrap()).is_err());
-        let justified = bare
-            .replace(
-                "\"status\":\"not_affected\"",
-                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
-            )
-            .replace(
-                "{\"state\":\"in_triage\"}",
-                "{\"state\":\"not_affected\",\"justification\":\"code_not_present\"}",
-            );
+        let justified = as_not_affected(
+            &good_vuln_ack("A", "p", "1"),
+            "component_not_present",
+            r#"{"state":"not_affected","justification":"code_not_present"}"#,
+        );
         assert!(ack_quality(&serde_json::from_str(&justified).unwrap()).is_ok());
     }
 
@@ -3670,25 +3776,26 @@ mod tests {
         let ok = |j: &str| ack_quality(&serde_json::from_str(j).unwrap()).is_ok();
         let base = good_vuln_ack("A", "p", "1");
         assert!(ok(&base));
-        // affected cannot publish a not_affected CycloneDX ruling
-        assert!(!ok(&base.replace("in_triage", "not_affected")));
+        // affected is a decision: it publishes neither a not_affected nor an in_triage ruling
+        assert!(!ok(&base.replace(RULING, r#"{"state":"not_affected"}"#)));
+        assert!(!ok(&base.replace(RULING, r#"{"state":"in_triage"}"#)));
+        assert!(!ok(&base.replace(
+            RULING,
+            r#"{"state":"in_triage","response":["update"]}"#
+        )));
         // not_affected cannot ride an in_triage / exploitable ruling
-        let na = base.replace(
-            "\"status\":\"affected\"",
-            "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
-        );
-        assert!(!ok(&na));
-        assert!(!ok(&na.replace("in_triage", "exploitable")));
+        let na = |cdx: &str| as_not_affected(&base, "component_not_present", cdx);
+        assert!(!ok(&na(r#"{"state":"in_triage"}"#)));
+        assert!(!ok(&na(RULING)));
         let ruled = |cj: &str| {
-            na.replace(
-                "{\"state\":\"in_triage\"}",
-                &format!("{{\"state\":\"not_affected\",\"justification\":\"{cj}\"}}"),
-            )
+            na(&format!(
+                r#"{{"state":"not_affected","justification":"{cj}"}}"#
+            ))
         };
         assert!(ok(&ruled("code_not_present")));
         // the two rulings must say the same thing, and the OpenVEX one is from the five
         assert!(
-            !ok(&na.replace("in_triage", "not_affected")),
+            !ok(&na(r#"{"state":"not_affected"}"#)),
             "no CycloneDX justification"
         );
         assert!(!ok(&ruled("code_not_reachable")));
@@ -3706,9 +3813,7 @@ mod tests {
             ",\"impact_statement\":\"x\""
         )));
         // a ruling is required, and the status must be one immutable bytes can carry
-        assert!(!ok(
-            &base.replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "")
-        ));
+        assert!(!ok(&base.replace(&format!(",\"cyclonedx\":{RULING}"), "")));
         assert!(!ok(
             &base.replace("\"status\":\"affected\"", "\"status\":\"reviewed\"")
         ));
@@ -3723,12 +3828,9 @@ mod tests {
         // a false_positive ruling still names one of the five, and any CycloneDX justification
         // it carries must agree
         let fp = |j: &str, cj: &str| {
-            base.replace(
-                "\"status\":\"affected\"",
-                &format!("\"status\":\"not_affected\",\"justification\":\"{j}\""),
-            )
-            .replace(
-                "{\"state\":\"in_triage\"}",
+            as_not_affected(
+                &base,
+                j,
                 &if cj.is_empty() {
                     "{\"state\":\"false_positive\"}".to_string()
                 } else {
@@ -3740,17 +3842,24 @@ mod tests {
         assert!(ok(&fp("component_not_present", "code_not_present")));
         assert!(!ok(&fp("component_not_present", "code_not_reachable")));
         assert!(!ok(&fp("made_up", "")));
-        // under_investigation is in_triage
-        let ui = base.replace(
-            "\"status\":\"affected\"",
-            "\"status\":\"under_investigation\"",
-        );
+        // under_investigation is in_triage, and carries no action statement
+        let ui = base
+            .replace(ACTION, "")
+            .replace(
+                "\"status\":\"affected\"",
+                "\"status\":\"under_investigation\"",
+            )
+            .replace(RULING, r#"{"state":"in_triage"}"#);
         assert!(ok(&ui));
         assert!(!ok(&ui.replace("in_triage", "exploitable")));
+        assert!(!ok(&ui.replace(
+            "\"status\":\"under_investigation\"",
+            "\"status\":\"under_investigation\",\"action_statement\":\"act\""
+        )));
         // a line without a digest is not re-judged (append-only history): it passes, inert
         let legacy = base
             .replace(&format!("\"digest\":\"{D}\","), "")
-            .replace(",\"cyclonedx\":{\"state\":\"in_triage\"}", "");
+            .replace(&format!(",\"cyclonedx\":{RULING}"), "");
         assert!(ok(&legacy));
         // the monitor's observation template passes once signed
         let obs = ack_template_vuln_not_affected_observed(
@@ -3763,6 +3872,109 @@ mod tests {
         .replace("\"author\":\"\"", "\"author\":\"a\"")
         .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-24\"");
         assert!(ok(&obs));
+    }
+
+    #[test]
+    fn an_open_investigation_covers_nothing() {
+        let i = inst("A", "p", "1");
+        let ui = good_vuln_ack("A", "p", "1")
+            .replace(ACTION, "")
+            .replace(
+                "\"status\":\"affected\"",
+                "\"status\":\"under_investigation\"",
+            )
+            .replace(RULING, r#"{"state":"in_triage"}"#);
+        assert!(ack_quality(&serde_json::from_str(&ui).unwrap()).is_ok());
+        let c = coverage(&ack(&ui), &i, D, &mut |_, _| panic!("nothing to judge"));
+        assert!(matches!(c, Cover::No(Some(_))), "{c:?}");
+        // a decision with an action covers; the verdict raises the open investigation
+        let decided = ack(&good_vuln_ack("A", "p", "1"));
+        assert_eq!(
+            coverage(&decided, &i, D, &mut |_, _| panic!("nothing to judge")),
+            Cover::Yes
+        );
+        let v = vuln_verdict(
+            "t",
+            D,
+            std::slice::from_ref(&i),
+            &[],
+            0,
+            &ack(&ui),
+            &mut |_, _| panic!("nothing to judge"),
+        );
+        assert!(matches!(v, Verdict::RaiseUncovered { .. }), "{v:?}");
+    }
+
+    #[test]
+    fn an_affected_statement_says_what_is_done_about_it() {
+        let ok = |j: &str| ack_quality(&serde_json::from_str(j).unwrap()).is_ok();
+        let base = good_vuln_ack("A", "p", "1");
+        assert!(ok(&base));
+        // OpenVEX: affected MUST carry an action statement; a placeholder is none
+        assert!(!ok(&base.replace(",\"action_statement\":\"act\"", "")));
+        assert!(!ok(&base.replace("\"act\"", "\" \"")));
+        for stub in ["TODO", "todo", "Tbd", "n/a", "None", "fixme later", "..."] {
+            assert!(
+                !ok(&base.replace("\"act\"", &format!("\"{stub}\""))),
+                "{stub}"
+            );
+        }
+        // CycloneDX: an exploitable ruling carries a response, from its own values, each once
+        let ruling = |r: &str| base.replace(RULING, r);
+        assert!(!ok(&ruling("{\"state\":\"exploitable\"}")));
+        assert!(ok(&ruling(
+            "{\"state\":\"exploitable\",\"response\":[\"update\"]}"
+        )));
+        assert!(ok(&ruling(
+            "{\"state\":\"exploitable\",\"response\":[\"can_not_fix\",\"workaround_available\"]}"
+        )));
+        for bad in [
+            "[]",
+            "[\"upgrade\"]",
+            "[\"update\",\"update\"]",
+            "\"update\"",
+            "[\"update\",1]",
+            "null",
+        ] {
+            assert!(
+                !ok(&ruling(&format!(
+                    "{{\"state\":\"exploitable\",\"response\":{bad}}}"
+                ))),
+                "{bad}"
+            );
+        }
+        // any status's response is held to the same values
+        let na_ruling = |r: &str| {
+            as_not_affected(
+                &base,
+                "component_not_present",
+                &format!(
+                    "{{\"state\":\"not_affected\",\"justification\":\"code_not_present\"{r}}}"
+                ),
+            )
+        };
+        assert!(ok(&na_ruling("")), "not_affected needs no action statement");
+        assert!(ok(&na_ruling(",\"response\":[\"will_not_fix\"]")));
+        assert!(!ok(&na_ruling(",\"response\":[\"ignore\"]")));
+        assert!(!ok(&na_ruling(",\"response\":null")));
+        // only an affected statement carries an action statement (the VDR publishes it)
+        let with_action = na_ruling("").replace(
+            "\"status\":\"not_affected\"",
+            "\"status\":\"not_affected\",\"action_statement\":\"TODO\"",
+        );
+        assert!(!ok(&with_action));
+        assert!(!ok(&with_action.replace("TODO", "a real sentence")));
+        // the template the gate and monitor print is refused until a human fills it
+        let t = ack_template_vuln("t", D, &inst("A", "p", "1"))
+            .replace("\"status_notes\":\"\"", "\"status_notes\":\"reason\"")
+            .replace("\"author\":\"\"", "\"author\":\"a\"")
+            .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-25\"");
+        assert!(!ok(&t), "no action statement or response yet");
+        let t = t.replace("\"action_statement\":\"\"", "\"action_statement\":\"act\"");
+        assert!(!ok(&t), "no response yet");
+        assert!(ok(
+            &t.replace("\"response\":[]", "\"response\":[\"update\"]")
+        ));
     }
 
     #[test]
@@ -4067,12 +4279,11 @@ mod tests {
 
     #[test]
     fn the_verdict_carries_why_a_signed_claim_does_not_cover_and_never_passes_an_unknown() {
-        let reach = good_vuln_ack("B", "q", "2")
-            .replace(
-                "\"status\":\"affected\"",
-                "\"status\":\"not_affected\",\"justification\":\"vulnerable_code_not_in_execute_path\"",
-            )
-            .replace("in_triage", "not_affected");
+        let reach = as_not_affected(
+            &good_vuln_ack("B", "q", "2"),
+            "vulnerable_code_not_in_execute_path",
+            r#"{"state":"not_affected","justification":"code_not_reachable"}"#,
+        );
         let acks = ack(&reach);
         assert!(needs_record(&acks.entries[0]));
         let v = vuln_verdict(
