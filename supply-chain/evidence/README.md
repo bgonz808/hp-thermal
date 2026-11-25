@@ -71,7 +71,11 @@ parseable. The schema borrows established vocabularies rather than inventing one
   OpenVEX status that immutable bytes can carry (`not_affected`, `affected`,
   `under_investigation`) and a `cyclonedx.state` pointing the same way (`not_affected` or
   `false_positive`; `exploitable` or `in_triage`; `in_triage`), and only `not_affected` carries a
-  justification. Vuln acks without a digest are history: they pass the quality bar as before and
+  justification. An `affected` statement carries OpenVEX's required `action_statement`, which the
+  VDR publishes as the vulnerability's `recommendation`; an `exploitable` ruling carries a
+  CycloneDX `response`, and every `response` holds distinct CycloneDX values (`can_not_fix`,
+  `will_not_fix`, `update`, `rollback`, `workaround_available`). Vuln acks without a digest are
+  history: they pass the quality bar as before and
   cover nothing. A multi-target tool signs each target's digest. An `acks.jsonl` edit makes the
   gate judge every pinned digest of that tool with the edited statements, and the monitor
   re-checks coverage of every carried instance on each run, so a withdrawn statement surfaces.

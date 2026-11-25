@@ -517,8 +517,53 @@ fn vuln_bound_quality(v: &Value) -> Result<(), String> {
             "vuln ack status `{status}` carries a not_affected justification"
         ));
     }
+    // OpenVEX: an `affected` statement MUST include an `action_statement` (the VDR publishes it
+    // as the vulnerability's `recommendation`). CycloneDX: a `response` is strongly encouraged
+    // where the state is `exploitable`; any response is from CycloneDX's own values.
+    let action = s(v, &["action_statement"]);
+    if status == "affected" && (action.trim().is_empty() || action.contains("TODO")) {
+        return Err(
+            "vuln ack status `affected` without `action_statement` (OpenVEX: an affected \
+             statement MUST say what is done to remediate or mitigate)"
+                .into(),
+        );
+    }
+    let response = v.get("cyclonedx").and_then(|c| c.get("response"));
+    if let Some(r) = response {
+        let items: Vec<&str> = r
+            .as_array()
+            .map(|a| a.iter().filter_map(Value::as_str).collect())
+            .unwrap_or_default();
+        let distinct: BTreeSet<&str> = items.iter().copied().collect();
+        let valid = r
+            .as_array()
+            .is_some_and(|a| !a.is_empty() && a.len() == items.len())
+            && distinct.len() == items.len()
+            && items.iter().all(|i| RESPONSES.contains(i));
+        if !valid {
+            return Err(format!(
+                "vuln ack cyclonedx.response `{r}`: distinct values from {}",
+                RESPONSES.join(" | ")
+            ));
+        }
+    }
+    if state == "exploitable" && response.is_none() {
+        return Err(
+            "vuln ack cyclonedx.state `exploitable` without `response` (what is done about it)"
+                .into(),
+        );
+    }
     Ok(())
 }
+
+/// CycloneDX 1.6 `vulnerability.analysis.response` values.
+pub(crate) const RESPONSES: &[&str] = &[
+    "can_not_fix",
+    "will_not_fix",
+    "update",
+    "rollback",
+    "workaround_available",
+];
 
 fn s<'a>(v: &'a Value, path: &[&str]) -> &'a str {
     let mut cur = v;
@@ -850,6 +895,7 @@ pub(crate) fn ack_template_vuln(tool: &str, digest: &str, inst: &Instance) -> St
         "vulnerability": {"name": inst.id},
         "product": {"name": tool, "digest": digest, "package": inst.package, "version": inst.version},
         "status": "affected",
+        "action_statement": "",
         "cyclonedx": {"state": "in_triage"},
         "status_notes": "",
         "author": "",
@@ -3438,7 +3484,7 @@ mod tests {
     const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
     fn good_vuln_ack(id: &str, pkg: &str, ver: &str) -> String {
         format!(
-            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","digest":"{D}","package":"{pkg}","version":"{ver}"}},"status":"affected","cyclonedx":{{"state":"in_triage"}},"status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
+            r#"{{"schema":"hp-thermal/evidence-ack/v1","axis":"vuln","vulnerability":{{"name":"{id}"}},"product":{{"name":"t","digest":"{D}","package":"{pkg}","version":"{ver}"}},"status":"affected","action_statement":"act","cyclonedx":{{"state":"in_triage"}},"status_notes":"reason","author":"a","timestamp":"2026-08-21","refs":[]}}"#
         )
     }
 
@@ -3763,6 +3809,68 @@ mod tests {
         .replace("\"author\":\"\"", "\"author\":\"a\"")
         .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-24\"");
         assert!(ok(&obs));
+    }
+
+    #[test]
+    fn an_affected_statement_says_what_is_done_about_it() {
+        let ok = |j: &str| ack_quality(&serde_json::from_str(j).unwrap()).is_ok();
+        let base = good_vuln_ack("A", "p", "1");
+        assert!(ok(&base));
+        // OpenVEX: affected MUST carry an action statement; a placeholder is none
+        assert!(!ok(&base.replace(",\"action_statement\":\"act\"", "")));
+        assert!(!ok(&base.replace("\"act\"", "\" \"")));
+        assert!(!ok(&base.replace("\"act\"", "\"TODO\"")));
+        // CycloneDX: an exploitable ruling carries a response, from its own values, each once
+        let ruling = |r: &str| base.replace("{\"state\":\"in_triage\"}", r);
+        assert!(!ok(&ruling("{\"state\":\"exploitable\"}")));
+        assert!(ok(&ruling(
+            "{\"state\":\"exploitable\",\"response\":[\"update\"]}"
+        )));
+        assert!(ok(&ruling(
+            "{\"state\":\"exploitable\",\"response\":[\"can_not_fix\",\"workaround_available\"]}"
+        )));
+        for bad in [
+            "[]",
+            "[\"upgrade\"]",
+            "[\"update\",\"update\"]",
+            "\"update\"",
+            "[\"update\",1]",
+        ] {
+            assert!(
+                !ok(&ruling(&format!(
+                    "{{\"state\":\"exploitable\",\"response\":{bad}}}"
+                ))),
+                "{bad}"
+            );
+        }
+        // any status's response is held to the same values
+        let na = base
+            .replace(
+                "\"status\":\"affected\"",
+                "\"status\":\"not_affected\",\"justification\":\"component_not_present\"",
+            )
+            .replace(",\"action_statement\":\"act\"", "");
+        let na_ruling = |r: &str| {
+            na.replace(
+                "{\"state\":\"in_triage\"}",
+                &format!(
+                    "{{\"state\":\"not_affected\",\"justification\":\"code_not_present\"{r}}}"
+                ),
+            )
+        };
+        assert!(ok(&na_ruling("")), "not_affected needs no action statement");
+        assert!(ok(&na_ruling(",\"response\":[\"will_not_fix\"]")));
+        assert!(!ok(&na_ruling(",\"response\":[\"ignore\"]")));
+        // the template the gate and monitor print is refused until a human fills it
+        let t = ack_template_vuln("t", D, &inst("A", "p", "1"))
+            .replace("\"status_notes\":\"\"", "\"status_notes\":\"reason\"")
+            .replace("\"author\":\"\"", "\"author\":\"a\"")
+            .replace("\"timestamp\":\"\"", "\"timestamp\":\"2026-11-25\"");
+        assert!(!ok(&t), "no action statement yet");
+        assert!(ok(&t.replace(
+            "\"action_statement\":\"\"",
+            "\"action_statement\":\"act\""
+        )));
     }
 
     #[test]

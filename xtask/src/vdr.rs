@@ -288,6 +288,26 @@ pub(crate) fn analysis_from_acks(
     Some(an)
 }
 
+/// The governing statement's OpenVEX `action_statement` ("actions to remediate or mitigate"),
+/// which CycloneDX carries as the vulnerability's `recommendation` ("how the vulnerability can be
+/// remediated or mitigated"). Read only where `analysis_from_acks` published that statement.
+fn recommendation_from_acks(
+    acks: &[Value],
+    digest: &str,
+    id: &str,
+    package: &str,
+    version: &str,
+) -> Option<String> {
+    let inst = crate::gate::Instance {
+        id: id.to_string(),
+        package: package.to_string(),
+        version: version.to_string(),
+        kind: String::new(),
+    };
+    let ack = crate::gate::governing_vuln_statement(acks, &inst, digest)?;
+    Some(s(ack, &["action_statement"])).filter(|a| !a.trim().is_empty())
+}
+
 /// All findings of a cargo-audit report as (kind, entry); the entry carries `advisory`,
 /// `package`, `versions` (patched / unaffected requirements) and `affected` (arch / os / functions).
 fn findings(raw: &Value) -> Vec<(String, Value)> {
@@ -435,7 +455,12 @@ pub(crate) fn build(
             .and_then(|c| c["scope"].as_str())
             == Some("excluded");
         match analysis_from_acks(acks, digest, &id, &pname, &pver, records, excluded) {
-            Some(an) => v["analysis"] = an,
+            Some(an) => {
+                v["analysis"] = an;
+                if let Some(r) = recommendation_from_acks(acks, digest, &id, &pname, &pver) {
+                    v["recommendation"] = Value::String(r);
+                }
+            }
             None => burn_down.push(format!("{id} {pname} {pver}")),
         }
         vulns.push(v);
@@ -1389,6 +1414,32 @@ mod tests {
                 true
             )
             .is_none()
+        );
+    }
+
+    #[test]
+    fn an_action_statement_is_published_as_the_recommendation() {
+        const D: &str = "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd";
+        let ack = json!({"axis":"vuln","vulnerability":{"name":"RUSTSEC-1"},"product":{"digest":D,"package":"a","version":"1.0.0"},"status":"affected","action_statement":"Update a to 2.0.0.","cyclonedx":{"state":"exploitable","response":["update"]},"timestamp":"2026-11-25","status_notes":"n","author":"x"});
+        let one = std::slice::from_ref(&ack);
+        let an =
+            analysis_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0", &Records::new(), false).unwrap();
+        assert_eq!(an["state"], "exploitable");
+        assert_eq!(an["response"], json!(["update"]));
+        assert_eq!(
+            recommendation_from_acks(one, D, "RUSTSEC-1", "a", "1.0.0").as_deref(),
+            Some("Update a to 2.0.0.")
+        );
+        // another binary's statement says nothing about this one
+        assert!(
+            recommendation_from_acks(one, &"e".repeat(64), "RUSTSEC-1", "a", "1.0.0").is_none()
+        );
+        // a statement without one publishes none
+        let mut silent = ack.clone();
+        silent["action_statement"] = json!("  ");
+        assert!(
+            recommendation_from_acks(std::slice::from_ref(&silent), D, "RUSTSEC-1", "a", "1.0.0")
+                .is_none()
         );
     }
 
