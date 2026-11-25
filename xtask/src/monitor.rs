@@ -530,13 +530,7 @@ pub fn run(args: &[String]) -> i32 {
             crate::evidence_rev::current(&evidence_dir, Path::new("tools/locks"), &p.name, &p.sha)
                 .map(|r| r.dir);
         let cover = |i: &Instance| -> crate::gate::Cover {
-            crate::gate::coverage(&acks, i, &p.sha, &mut |a, inst| match &record_dir {
-                Ok(dir) if crate::gate::needs_record(a) => {
-                    crate::gate::record_cover(a, inst, &audit, dir, None)
-                }
-                Ok(dir) => crate::gate::measured_absent(&p.name, &p.sha, dir, inst),
-                Err(e) => crate::gate::Cover::Unknown(e.clone()),
-            })
+            crate::gate::coverage_at_rest(&acks, i, &p.name, &p.sha, &record_dir, &audit)
         };
         for i in &carried {
             let c = cover(i);
@@ -588,7 +582,7 @@ pub fn run(args: &[String]) -> i32 {
                     p.name
                 );
                 println!(
-                    "      (fill status_notes / author / timestamp / refs), or bump — see the exploration report:"
+                    "      (fill action_statement / response / status_notes / author / timestamp / refs, or make it a not_affected with its evidence), or bump — see the exploration report:"
                 );
                 println!("      {}", ack_template_vuln(&p.name, &p.sha, i));
                 fail = true;

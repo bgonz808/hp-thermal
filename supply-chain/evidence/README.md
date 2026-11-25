@@ -70,9 +70,14 @@ parseable. The schema borrows established vocabularies rather than inventing one
   build never carries into a build that might link a caller. A digest-bound vuln ack carries an
   OpenVEX status that immutable bytes can carry (`not_affected`, `affected`,
   `under_investigation`) and a `cyclonedx.state` pointing the same way (`not_affected` or
-  `false_positive`; `exploitable` or `in_triage`; `in_triage`), and only `not_affected` carries a
-  justification. Vuln acks without a digest are history: they pass the quality bar as before and
-  cover nothing. A multi-target tool signs each target's digest. An `acks.jsonl` edit makes the
+  `false_positive`; `exploitable`; `in_triage`), and only `not_affected` carries a
+  justification. `affected` is a decision: it carries OpenVEX's required `action_statement`
+  (only `affected` does; the VDR publishes it as the vulnerability's `recommendation`) and a
+  CycloneDX `response` of distinct CycloneDX values (`can_not_fix`, `will_not_fix`, `update`,
+  `rollback`, `workaround_available`). `under_investigation` records that no decision is made
+  and covers nothing. Sign-off text that is empty or a placeholder in any case (`todo`, `TBD`,
+  `n/a`, ...) fails the quality bar. Vuln acks without a digest are history: they pass the
+  quality bar as before and cover nothing. A multi-target tool signs each target's digest. An `acks.jsonl` edit makes the
   gate judge every pinned digest of that tool with the edited statements, and the monitor
   re-checks coverage of every carried instance on each run, so a withdrawn statement surfaces.
   Statements are a sequence, never edited or deleted; for an instance in a binary, the LAST
