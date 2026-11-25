@@ -305,7 +305,8 @@ fn recommendation_from_acks(
         kind: String::new(),
     };
     let ack = crate::gate::governing_vuln_statement(acks, &inst, digest)?;
-    Some(s(ack, &["action_statement"])).filter(|a| !a.trim().is_empty())
+    Some(s(ack, &["action_statement"]))
+        .filter(|a| s(ack, &["status"]) == "affected" && !a.trim().is_empty())
 }
 
 /// All findings of a cargo-audit report as (kind, entry); the entry carries `advisory`,
@@ -1433,6 +1434,13 @@ mod tests {
         // another binary's statement says nothing about this one
         assert!(
             recommendation_from_acks(one, &"e".repeat(64), "RUSTSEC-1", "a", "1.0.0").is_none()
+        );
+        // only an affected statement's action is a recommendation
+        let mut other = ack.clone();
+        other["status"] = json!("not_affected");
+        assert!(
+            recommendation_from_acks(std::slice::from_ref(&other), D, "RUSTSEC-1", "a", "1.0.0")
+                .is_none()
         );
         // a statement without one publishes none
         let mut silent = ack.clone();

@@ -419,6 +419,12 @@ pub fn run(args: &[String]) -> i32 {
     let acks = tool
         .as_ref()
         .and_then(|t| crate::gate::load_acks(&evidence.join(t).join("acks.jsonl")).ok());
+    let record_dir = match (&tool, &digest) {
+        (Some(t), Some(d)) => {
+            crate::evidence_rev::current(&evidence, Path::new("tools/locks"), t, d).map(|r| r.dir)
+        }
+        _ => Err("no --tool and --digest".to_string()),
+    };
 
     println!("# Candidate exploration — {lockfile}");
     if now_overridden {
@@ -464,16 +470,22 @@ pub fn run(args: &[String]) -> i32 {
                     })
                     .unwrap_or(false);
                 // A statement covers the binary it names; without a digest there is no
-                // binary to ask about, so nothing reads as acked.
-                let is_acked = match (acks.as_ref(), digest.as_deref()) {
-                    (Some(a), Some(d)) => crate::gate::ack_covers_vuln(a, &inst, d),
-                    _ => false,
+                // binary to ask about, so nothing reads as acked. Coverage is the monitor's:
+                // a code claim's record and a `component_not_present` measurement are checked,
+                // and what cannot be checked reads as unevaluated, never as acked.
+                use crate::gate::Cover;
+                let cover = match (acks.as_ref(), tool.as_deref(), digest.as_deref()) {
+                    (Some(a), Some(t), Some(d)) => {
+                        crate::gate::coverage_at_rest(a, &inst, t, d, &record_dir, &audit)
+                    }
+                    _ => Cover::No(None),
                 };
-                match (baseline.is_some(), is_new, is_acked) {
-                    (true, true, false) => format!("{id} **NEW**"),
-                    (true, true, true) => format!("{id} NEW/acked"),
-                    (true, false, true) => format!("{id} acked"),
-                    (true, false, false) => format!("{id} carried"),
+                match (baseline.is_some(), is_new, cover) {
+                    (true, _, Cover::Unknown(_)) => format!("{id} UNEVALUATED"),
+                    (true, true, Cover::No(_)) => format!("{id} **NEW**"),
+                    (true, true, Cover::Yes) => format!("{id} NEW/acked"),
+                    (true, false, Cover::Yes) => format!("{id} acked"),
+                    (true, false, Cover::No(_)) => format!("{id} carried"),
                     _ => id.clone(),
                 }
             })
