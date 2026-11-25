@@ -2,18 +2,29 @@
   "schema": "hp-thermal/tool-patch/v1",
   "tool": "cargo-cyclonedx",
   "applies_to_rev": "769fa7dc5d23ac39d58b3c198421f7bd48d2ef5f",
-  "reason": "discharge manifest technical lag in a dev-dependency: cyclonedx-bom-macros pins ui_test ^0.27, whose indicatif ^0.17 carries the unmaintained number_prefix (RUSTSEC-2025-0119); ui_test 0.30.4+ requires indicatif ^0.18, which replaces it with unit-prefix. Manifest-only; generated with `cargo add --dev ui_test@0.30 --package cyclonedx-bom-macros` against the pinned rev.",
+  "reason": "discharge manifest technical lag in a dev-dependency: cyclonedx-bom-macros pins ui_test ^0.27, whose indicatif ^0.17 carries the unmaintained number_prefix (RUSTSEC-2025-0119); ui_test 0.30.4+ requires indicatif ^0.18, which replaces it with unit-prefix. Manifest-only; generated with `cargo add --dev ui_test@0.30 --package cyclonedx-bom-macros` against the pinned rev. 0002: env_logger without its default humantime feature, which only adds timestamps to log-line headers; cargo-cyclonedx calls Builder::new, filter_level, parse_default_env and try_init, none gated on it. humantime 2.1.0 (RUSTSEC-2026-0542, unmaintained) leaves the lock; nothing is added or moved.",
   "intents": [
     {
       "crate": "ui_test",
       "min": "0.30"
+    },
+    {
+      "crate": "env_logger",
+      "features": [
+        "auto-color",
+        "regex"
+      ],
+      "not": [
+        "humantime"
+      ]
     }
   ],
-  "shed_when": "upstream's manifest satisfies the intent natively - git apply --check conflicts the moment that line changes upstream; delete this directory in the same PR that adopts the newer rev",
+  "shed_when": "upstream's manifest satisfies an intent natively - git apply --check conflicts the moment that line changes upstream; drop that patch (or the directory, when none remain) in the same PR that adopts the newer rev",
   "refs": [
     "#255",
-    "#426"
+    "#426",
+    "#524"
   ],
   "author": "bgonz808",
-  "timestamp": "2026-11-12"
+  "timestamp": "2026-11-25"
 }
